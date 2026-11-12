@@ -9,6 +9,7 @@ namespace OPEN_LRD
     public partial class MainWindow : Window
     {
         private LRD_Core? thunderCore = LRD_Core.Instance;
+        private NlpWorkbenchWindow? nlpWorkbenchWindow;
 
         public MainWindow()
         {
@@ -25,6 +26,7 @@ namespace OPEN_LRD
                 {
                     WelcomeBox.Text = "Core Running";
                     LaunchButton.Visibility = Visibility.Hidden;
+                    NlpWorkbenchButton.IsEnabled = true;
                 }
             }
             catch (Exception ex)
@@ -40,6 +42,31 @@ namespace OPEN_LRD
             Tools ToolsPage = new Tools();
             ToolsPage.Show();
             return;
+        }
+
+        private void NlpWorkbench_Button_Click(object sender, RoutedEventArgs e)
+        {
+            if (thunderCore is null || !thunderCore.initialized)
+            {
+                MessageBox.Show("Launch Core before opening the NLP Workbench.");
+                return;
+            }
+
+            if (nlpWorkbenchWindow is not null)
+            {
+                if (nlpWorkbenchWindow.WindowState == WindowState.Minimized)
+                    nlpWorkbenchWindow.WindowState = WindowState.Normal;
+
+                nlpWorkbenchWindow.Activate();
+                return;
+            }
+
+            nlpWorkbenchWindow = new NlpWorkbenchWindow
+            {
+                Owner = this
+            };
+            nlpWorkbenchWindow.Closed += (_, _) => nlpWorkbenchWindow = null;
+            nlpWorkbenchWindow.Show();
         }
     }
     

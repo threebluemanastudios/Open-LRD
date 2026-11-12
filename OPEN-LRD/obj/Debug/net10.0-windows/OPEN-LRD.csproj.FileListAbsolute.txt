@@ -20,3 +20,6 @@ C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\OPEN-LRD
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\ref\OPEN-LRD.dll
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\Tools.g.cs
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\Tools.baml
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\NlpWorkbenchWindow.g.cs
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\NlpWorkbenchWindow.baml
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\OPEN-LRD.csproj.Up2Date

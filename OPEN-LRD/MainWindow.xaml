@@ -39,6 +39,17 @@
                 Width="103" 
                 Click="Tools_Button_Click"
                 />
+        <Button x:Name="NlpWorkbenchButton"
+                Content="NLP Workbench"
+                HorizontalAlignment="Right"
+                Height="59"
+                Margin="0,308,88,0"
+                VerticalAlignment="Top"
+                Width="130"
+                IsEnabled="False"
+                ToolTip="Launch Core before opening the NLP Workbench."
+                Click="NlpWorkbench_Button_Click"
+                />
 
     </Grid>
 </Window>

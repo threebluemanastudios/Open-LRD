@@ -2,7 +2,7 @@ OPEN-LRD
 MODULE 3: THE NLP PIPELINE
 IMPLEMENTATION PLAN
 
-Status: Approved. Phase 3 parsing and NER complete.
+Status: Approved. Phases 1-7 implemented; manual WPF acceptance verification pending.
 Scope owner: Module 3 (README numbering).
 Reference design: README.md, ReadMe2.md, and Module_2_Plan.txt.
 Implementation constraint: Native C# with no external library dependencies.

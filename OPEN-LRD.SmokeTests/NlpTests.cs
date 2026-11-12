@@ -41,6 +41,9 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP session provenance", TestNlpSessionProvenance);
             Program.Run("NLP session provenance caveats", TestNlpSessionProvenanceCaveats);
             Program.Run("NLP conversation read-only and determinism", TestNlpConversationReadOnlyAndDeterminism);
+            Program.Run("NLP workbench lifecycle", TestNlpWorkbenchLifecycle);
+            Program.Run("NLP workbench operations", TestNlpWorkbenchOperations);
+            Program.Run("NLP workbench state and stale sessions", TestNlpWorkbenchStateAndStaleSessions);
         }
 
         private static LRD_Core NewCore()
@@ -1467,6 +1470,375 @@ namespace OPEN_LRD.SmokeTests
             Assert(isolated.Conversation.TurnIndex == 0, "a new conversation should start with a zero turn counter");
             Assert(isolated.Conversation.Mentions.Count == 0, "a new conversation should start with no mentions");
             Assert(isolated.Conversation.Provenance.Count == 0, "a new conversation should start with no provenance");
+        }
+
+        private static void TestNlpWorkbenchLifecycle()
+        {
+            LRD_Core uninitializedCore = LRD_Core.Instance;
+            uninitializedCore.initialized = false;
+
+            using (NlpWorkbench uninitialized = new NlpWorkbench(uninitializedCore))
+            {
+                Assert(!uninitialized.IsCoreInitialized, "an uninitialized core should be reported");
+                Assert(!uninitialized.HasSession, "an uninitialized workbench should not have a session");
+                Assert(!uninitialized.StartNewConversation(), "starting a session without a core should fail");
+                NlpWorkbenchState state = uninitialized.RefreshState();
+                Assert(!state.CoreInitialized && !state.HasSession, "refresh should report a no-session state");
+            }
+
+            LRD_Core core = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(core))
+            {
+                Assert(workbench.StartNewConversation(), "a new conversation should start");
+                NlpWorkbenchState state = workbench.RefreshState();
+                Assert(state.HasSession, "the state should report a session");
+                Assert(state.PipelineID.HasValue && state.PipelineID.Value != Guid.Empty, "the pipeline ID should be set");
+                Assert(state.ConversationID.HasValue && state.ConversationID.Value != Guid.Empty, "the conversation ID should be set");
+                Assert(workbench.PipelineID == state.PipelineID, "the workbench should expose the state pipeline ID");
+                Assert(workbench.ConversationID == state.ConversationID, "the workbench should expose the state conversation ID");
+                Assert(state.GraphNodeCount == 0 && state.GraphLinkCount == 0, "a fresh core should have no graph data");
+
+                Guid firstConversation = state.ConversationID!.Value;
+                Assert(workbench.StartNewConversation(), "a second conversation should start");
+                Assert(workbench.ConversationID != firstConversation, "a new conversation should have a new ID");
+                Assert(
+                    workbench.TryAttachConversation(firstConversation, out string? attachError),
+                    attachError ?? "attaching the first conversation should succeed");
+                Assert(workbench.ConversationID == firstConversation, "the attached conversation ID should match");
+
+                Guid currentConversation = workbench.ConversationID!.Value;
+                NlpWorkbenchState beforeUnknown = workbench.RefreshState();
+                Assert(
+                    !workbench.TryAttachConversation(Guid.NewGuid(), out string? unknownError),
+                    "an unknown conversation should not attach");
+                Assert(!string.IsNullOrWhiteSpace(unknownError), "an unknown conversation should report an error");
+                Assert(workbench.ConversationID == currentConversation, "a failed attach should keep the current conversation");
+                NlpWorkbenchState afterUnknown = workbench.RefreshState();
+                Assert(afterUnknown.ConversationID == beforeUnknown.ConversationID, "a failed attach should not change the state");
+                Assert(afterUnknown.TurnIndex == beforeUnknown.TurnIndex, "a failed attach should not change the turn count");
+
+                Guid pipelineID = workbench.PipelineID!.Value;
+                int nodeCount = CountNodes(core);
+                int linkCount = CountLinks(core);
+                Assert(workbench.RemoveCurrentConversation(), "the current conversation should be removed");
+                Assert(!workbench.HasSession, "removing a conversation should clear the session");
+                Assert(!core.TryGetConversation(currentConversation, out _), "the removed conversation should be gone");
+                Assert(!core.TryGetPipelineConversation(pipelineID, out _), "the removed pipeline should be gone");
+                Assert(CountNodes(core) == nodeCount && CountLinks(core) == linkCount, "removal should not change the graph");
+            }
+
+            LRD_Core clearCore = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(clearCore))
+            {
+                Assert(workbench.StartNewConversation(), "the workbench conversation should start");
+                clearCore.CreateConversation(new NlpOptions());
+                int nodeCount = CountNodes(clearCore);
+                int linkCount = CountLinks(clearCore);
+                workbench.ClearAllConversations();
+                Assert(!workbench.HasSession, "clearing conversations should clear the session");
+                Assert(clearCore.GetConversations()?.Count == 0, "clearing conversations should empty the registry");
+                Assert(
+                    CountNodes(clearCore) == nodeCount && CountLinks(clearCore) == linkCount,
+                    "clearing conversations should not change the graph");
+
+                Assert(workbench.StartNewConversation(), "a session should start after clearing");
+                Guid conversationID = workbench.ConversationID!.Value;
+                Guid pipelineID = workbench.PipelineID!.Value;
+                workbench.Dispose();
+                workbench.Dispose();
+                Assert(!clearCore.TryGetPipelineConversation(pipelineID, out _), "dispose should remove the pipeline");
+                Assert(clearCore.TryGetConversation(conversationID, out _), "dispose should keep the conversation");
+
+                using NlpWorkbench sibling = new NlpWorkbench(clearCore);
+                Assert(
+                    sibling.TryAttachConversation(conversationID, out string? siblingError),
+                    siblingError ?? "a sibling should reattach the conversation");
+            }
+        }
+
+        private static void TestNlpWorkbenchOperations()
+        {
+            LRD_Core core = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(core))
+            {
+                Assert(workbench.StartNewConversation(), "a conversation should start");
+                int nodeCount = CountNodes(core);
+                int linkCount = CountLinks(core);
+                NlpResult ingest = workbench.Ingest("Alice works at Acme.");
+                Assert(
+                    ingest.Status == NlpStatus.Ingested,
+                    $"expected Ingested but got {ingest.Status}: {string.Join("; ", ingest.Diagnostics)}");
+
+                NlpWorkbenchState afterIngest = workbench.RefreshState();
+                Assert(afterIngest.GraphNodeCount > nodeCount, "ingestion should add graph nodes");
+                Assert(afterIngest.GraphLinkCount > linkCount, "ingestion should add graph links");
+                Assert(
+                    afterIngest.Mentions.Any(mention => string.Equals(mention.Label, "Alice", StringComparison.OrdinalIgnoreCase)),
+                    "the session should mention Alice");
+                Assert(
+                    afterIngest.Mentions.Any(mention => string.Equals(mention.Label, "Acme", StringComparison.OrdinalIgnoreCase)),
+                    "the session should mention Acme");
+                Assert(afterIngest.ProvenanceCount > 0, "ingestion should record provenance");
+
+                int nodesBeforeAsk = afterIngest.GraphNodeCount;
+                int linksBeforeAsk = afterIngest.GraphLinkCount;
+                int turnBeforeAsk = afterIngest.TurnIndex;
+                NlpResult ask = workbench.Ask("Where does she work?");
+                Assert(
+                    ask.Status == NlpStatus.Answered,
+                    $"expected Answered but got {ask.Status}: {string.Join("; ", ask.Diagnostics)}");
+                Assert(
+                    string.Equals(ask.Answer?.ShortAnswer, "Acme", StringComparison.OrdinalIgnoreCase),
+                    $"expected short answer Acme but got {ask.Answer?.ShortAnswer}");
+
+                NlpWorkbenchState afterAsk = workbench.RefreshState();
+                Assert(afterAsk.TurnIndex == turnBeforeAsk + 1, "Ask should advance the turn counter");
+                Assert(afterAsk.GraphNodeCount == nodesBeforeAsk, "Ask must not add graph nodes");
+                Assert(afterAsk.GraphLinkCount == linksBeforeAsk, "Ask must not add graph links");
+            }
+
+            LRD_Core sourcedCore = NewCore();
+            Guid source = AddNode(sourcedCore, NodeTypes.Sources, "WorkbenchSource", NodeLifetime.Permanent);
+            Guid topic = AddNode(sourcedCore, NodeTypes.Entities, "WorkbenchTopic", NodeLifetime.Permanent);
+            using (NlpWorkbench workbench = new NlpWorkbench(sourcedCore))
+            {
+                Assert(workbench.StartNewConversation(), "the sourced conversation should start");
+                NlpResult ingest = workbench.Ingest("Alice works at Acme.", source, topic);
+                Assert(
+                    ingest.Status == NlpStatus.Ingested,
+                    $"expected Ingested but got {ingest.Status}: {string.Join("; ", ingest.Diagnostics)}");
+                Assert(
+                    ingest.Provenance.Any(entry => entry.TrustSourceNodeID == source && entry.TopicNodeID == topic),
+                    "the result should record the source and topic");
+
+                NlpWorkbenchState state = workbench.RefreshState();
+                Assert(
+                    state.Provenance.Any(entry => entry.TrustSourceNodeID == source && entry.TopicNodeID == topic),
+                    "the state should expose source and topic provenance");
+            }
+
+            LRD_Core invalidCore = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(invalidCore))
+            {
+                Assert(workbench.StartNewConversation(), "the invalid-input conversation should start");
+                int nodeCount = CountNodes(invalidCore);
+                int linkCount = CountLinks(invalidCore);
+                int turnIndex = workbench.RefreshState().TurnIndex;
+
+                foreach (string? text in new string?[] { null, string.Empty, "   " })
+                {
+                    NlpResult result = workbench.Ingest(text);
+                    Assert(result.Status == NlpStatus.InvalidInput, "blank ingest should be InvalidInput");
+                }
+
+                NlpResult ask = workbench.Ask(null);
+                Assert(ask.Status == NlpStatus.InvalidInput, "blank ask should be InvalidInput");
+
+                NlpWorkbenchState state = workbench.RefreshState();
+                Assert(state.TurnIndex == turnIndex, "invalid input should not advance the turn counter");
+                Assert(state.MentionCount == 0 && state.ProvenanceCount == 0, "invalid input should not add session data");
+                Assert(
+                    CountNodes(invalidCore) == nodeCount && CountLinks(invalidCore) == linkCount,
+                    "invalid input should not change the graph");
+            }
+
+            LRD_Core failedCore = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(failedCore))
+            {
+                Assert(workbench.StartNewConversation(), "the failed-pronoun conversation should start");
+                int nodeCount = CountNodes(failedCore);
+                int linkCount = CountLinks(failedCore);
+
+                NlpResult ingest = workbench.Ingest("She works at Acme.");
+                Assert(ingest.Status == NlpStatus.Unsupported, $"expected Unsupported but got {ingest.Status}");
+                NlpWorkbenchState afterIngest = workbench.RefreshState();
+                Assert(afterIngest.MentionCount == 0, "failed pronoun ingestion should not add mentions");
+                Assert(
+                    CountNodes(failedCore) == nodeCount && CountLinks(failedCore) == linkCount,
+                    "failed pronoun ingestion should not change the graph");
+
+                NlpResult ask = workbench.Ask("Where does she work?");
+                Assert(ask.Status == NlpStatus.Unsupported, $"expected Unsupported but got {ask.Status}");
+                NlpWorkbenchState afterAsk = workbench.RefreshState();
+                Assert(afterAsk.MentionCount == 0, "failed pronoun questions should not add mentions");
+                Assert(afterAsk.FocusNodeID is null, "failed pronoun questions should not set focus");
+                Assert(
+                    CountNodes(failedCore) == nodeCount && CountLinks(failedCore) == linkCount,
+                    "failed pronoun questions should not change the graph");
+            }
+
+            LRD_Core sharedCore = NewCore();
+            using NlpWorkbench first = new NlpWorkbench(sharedCore);
+            using NlpWorkbench second = new NlpWorkbench(sharedCore);
+            Assert(first.StartNewConversation(), "the shared conversation should start");
+            Assert(
+                first.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested,
+                "the shared ingestion should succeed");
+            Guid sharedID = first.ConversationID!.Value;
+            NlpWorkbenchState firstState = first.RefreshState();
+            Assert(second.TryAttachConversation(sharedID, out string? attachError), attachError ?? "the second workbench should attach");
+            NlpWorkbenchState secondState = second.RefreshState();
+            Assert(secondState.MentionCount == firstState.MentionCount, "sibling workbenches should share mentions");
+            Assert(secondState.ProvenanceCount == firstState.ProvenanceCount, "sibling workbenches should share provenance");
+
+            int turnBeforeSharedAsk = firstState.TurnIndex;
+            NlpResult sharedAsk = second.Ask("Where does she work?");
+            Assert(
+                sharedAsk.Status == NlpStatus.Answered,
+                $"expected Answered but got {sharedAsk.Status}: {string.Join("; ", sharedAsk.Diagnostics)}");
+            NlpWorkbenchState firstAfter = first.RefreshState();
+            Assert(firstAfter.TurnIndex > turnBeforeSharedAsk, "the first workbench should observe the shared turn");
+            Assert(firstAfter.Mentions.Any(mention => mention.FromAnswer), "the first workbench should observe answer mentions");
+
+            LRD_Core resetCore = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(resetCore))
+            {
+                Assert(workbench.StartNewConversation(), "the reset conversation should start");
+                Assert(workbench.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "reset ingestion failed");
+                Assert(workbench.Ask("Where does she work?").Status == NlpStatus.Answered, "reset question failed");
+                int nodeCount = CountNodes(resetCore);
+                int linkCount = CountLinks(resetCore);
+
+                Assert(workbench.ResetCurrentConversation(), "reset should succeed");
+                NlpWorkbenchState state = workbench.RefreshState();
+                Assert(state.TurnIndex == 0, "reset should clear the turn counter");
+                Assert(state.MentionCount == 0 && state.ProvenanceCount == 0, "reset should clear session data");
+                Assert(state.FocusNodeID is null, "reset should clear focus");
+                Assert(state.LastSubjectNodeID is null, "reset should clear the last subject");
+                Assert(state.LastObjectNodeID is null, "reset should clear the last object");
+                Assert(state.LastQualifierNodeID is null, "reset should clear the last qualifier");
+                Assert(state.LastAnswerNodeID is null, "reset should clear the last answer");
+                Assert(
+                    CountNodes(resetCore) == nodeCount && CountLinks(resetCore) == linkCount,
+                    "reset should not change the graph");
+
+                Assert(workbench.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "post-reset ingestion failed");
+                Assert(workbench.Ask("Where does she work?").Status == NlpStatus.Answered, "post-reset question failed");
+            }
+
+            LRD_Core readOnlyCore = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(readOnlyCore))
+            {
+                Assert(workbench.StartNewConversation(), "the read-only conversation should start");
+                Assert(workbench.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "read-only ingestion failed");
+                int nodeCount = CountNodes(readOnlyCore);
+                int linkCount = CountLinks(readOnlyCore);
+                NlpResult result = workbench.Ask("Where does she work?");
+                Assert(result.Status == NlpStatus.Answered, $"expected Answered but got {result.Status}");
+                Assert(CountNodes(readOnlyCore) == nodeCount, "workbench Ask must not add graph nodes");
+                Assert(CountLinks(readOnlyCore) == linkCount, "workbench Ask must not add graph links");
+
+                foreach (QuestionVariant variant in result.Question!.Variants)
+                {
+                    if (variant.IsAnchorOnly)
+                        continue;
+
+                    Assert(
+                        !readOnlyCore.TryGetNode(variant.Chain.First!.Value.ID, out _),
+                        "workbench query-only IDs must not be inserted into the graph");
+                }
+            }
+        }
+
+        private static void TestNlpWorkbenchStateAndStaleSessions()
+        {
+            LRD_Core core = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(core))
+            {
+                Assert(workbench.StartNewConversation(), "the snapshot conversation should start");
+                Assert(workbench.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "snapshot ingestion failed");
+                Assert(workbench.Ask("Where does she work?").Status == NlpStatus.Answered, "snapshot question failed");
+
+                NlpWorkbenchState state = workbench.RefreshState();
+                ConversationContext context = core.GetConversation(workbench.ConversationID!.Value);
+                Assert(state.GraphNodeCount == CountNodes(core), "state should report the graph node count");
+                Assert(state.GraphLinkCount == CountLinks(core), "state should report the directed link count");
+                Assert(state.TurnIndex == context.TurnIndex, "state should report the turn index");
+                Assert(state.FocusNodeID == context.FocusNodeID, "state should report focus");
+                Assert(state.LastSubjectNodeID == context.LastSubjectNodeID, "state should report the last subject");
+                Assert(state.LastObjectNodeID == context.LastObjectNodeID, "state should report the last object");
+                Assert(state.LastQualifierNodeID == context.LastQualifierNodeID, "state should report the last qualifier");
+                Assert(state.LastAnswerNodeID == context.LastAnswerNodeID, "state should report the last answer");
+                Assert(state.MentionCount == context.Mentions.Count, "state should report the mention count");
+                Assert(state.ProvenanceCount == context.Provenance.Count, "state should report the provenance count");
+                Assert(state.Mentions.SequenceEqual(context.Mentions), "state mentions should preserve context order");
+                Assert(state.Provenance.SequenceEqual(context.Provenance), "state provenance should preserve context order");
+
+                Assert(workbench.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "stale ingestion failed");
+                Guid pipelineID = workbench.PipelineID!.Value;
+                core.InitializeCore();
+                NlpWorkbenchState stale = workbench.RefreshState();
+                Assert(!stale.CoreInitialized || !stale.HasSession, "a reinitialized core should invalidate the session");
+                Assert(!stale.HasSession, "the stale session should be cleared");
+                Assert(!core.TryGetPipelineConversation(pipelineID, out _), "the stale pipeline mapping should be absent");
+                Assert(stale.GraphNodeCount == 0 && stale.GraphLinkCount == 0, "the new core should be empty");
+
+                AssertThrows<InvalidOperationException>(
+                    () => workbench.Ingest("Alice works at Acme."),
+                    "ingest after stale detection should be rejected");
+                AssertThrows<InvalidOperationException>(
+                    () => workbench.Ask("Who works at Acme?"),
+                    "ask after stale detection should be rejected");
+            }
+
+            LRD_Core stableCore = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(stableCore))
+            {
+                Assert(workbench.StartNewConversation(), "the stable conversation should start");
+                Assert(workbench.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "stable ingestion failed");
+                NlpWorkbenchState before = workbench.RefreshState();
+                int nodeCount = CountNodes(stableCore);
+                int linkCount = CountLinks(stableCore);
+
+                for (int index = 0; index < 3; index++)
+                {
+                    NlpWorkbenchState refreshed = workbench.RefreshState();
+                    Assert(refreshed.GraphNodeCount == before.GraphNodeCount, "refresh should not change nodes");
+                    Assert(refreshed.GraphLinkCount == before.GraphLinkCount, "refresh should not change links");
+                    Assert(refreshed.TurnIndex == before.TurnIndex, "refresh should not change turns");
+                    Assert(refreshed.MentionCount == before.MentionCount, "refresh should not change mentions");
+                    Assert(refreshed.ProvenanceCount == before.ProvenanceCount, "refresh should not change provenance");
+                }
+
+                Assert(CountNodes(stableCore) == nodeCount, "repeated refresh should not add nodes");
+                Assert(CountLinks(stableCore) == linkCount, "repeated refresh should not add links");
+            }
+
+            LRD_Core firstCore = NewCore();
+            NlpStatus firstIngestStatus;
+            NlpStatus firstAskStatus;
+            string? firstShortAnswer;
+            IReadOnlyList<string> firstDiagnostics;
+            int firstMentions;
+            int firstProvenance;
+
+            using (NlpWorkbench workbench = new NlpWorkbench(firstCore))
+            {
+                Assert(workbench.StartNewConversation(), "the determinism conversation should start");
+                firstIngestStatus = workbench.Ingest("Alice works at Acme.").Status;
+                NlpResult answer = workbench.Ask("Where does she work?");
+                firstAskStatus = answer.Status;
+                firstShortAnswer = answer.Answer?.ShortAnswer;
+                firstDiagnostics = answer.Diagnostics;
+                NlpWorkbenchState state = workbench.RefreshState();
+                firstMentions = state.MentionCount;
+                firstProvenance = state.ProvenanceCount;
+            }
+
+            LRD_Core secondCore = NewCore();
+            using (NlpWorkbench workbench = new NlpWorkbench(secondCore))
+            {
+                Assert(workbench.StartNewConversation(), "the second determinism conversation should start");
+                NlpStatus secondIngestStatus = workbench.Ingest("Alice works at Acme.").Status;
+                NlpResult answer = workbench.Ask("Where does she work?");
+                NlpWorkbenchState state = workbench.RefreshState();
+                Assert(firstIngestStatus == secondIngestStatus, "ingest statuses should be deterministic");
+                Assert(firstAskStatus == answer.Status, "answer statuses should be deterministic");
+                Assert(firstShortAnswer == answer.Answer?.ShortAnswer, "short answers should be deterministic");
+                Assert(firstDiagnostics.SequenceEqual(answer.Diagnostics), "diagnostics should be deterministic");
+                Assert(firstMentions == state.MentionCount, "mention counts should be deterministic");
+                Assert(firstProvenance == state.ProvenanceCount, "provenance counts should be deterministic");
+            }
         }
 
         private static int CountNodes(LRD_Core core)

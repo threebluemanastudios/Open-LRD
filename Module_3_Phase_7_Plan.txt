@@ -1,0 +1,1527 @@
+OPEN-LRD
+MODULE 3: THE NLP PIPELINE
+PHASE 7 IMPLEMENTATION PLAN
+
+Phase: 7 of 7
+Title: Integration, NLP Workbench, and final documentation
+Status: Planned. Phases 1-6 are complete and passing.
+Scope owner: Module 3 (README numbering).
+Reference design: README.md, ReadMe2.md, Module_3_Plan.txt, and
+                   Module_3_Phase_4_Plan.txt through Module_3_Phase_6_Plan.txt.
+Implementation constraint: native C#, WPF, no external libraries or packages.
+Current baseline: full solution builds with zero warnings and zero errors;
+                  61 smoke tests pass.
+
+================================================================================
+1. PHASE 7 GOAL AND DELIVERABLES
+================================================================================
+
+Phase 7 is the final integration phase for Module 3. It does not add new NLP
+algorithms. It makes the completed pipeline usable end to end from the existing
+WPF application, gives the user explicit control over conversation sessions,
+and completes the Module 3 documentation and verification pass.
+
+Required outcomes:
+
+1. Keep the existing placeholder Tools window unchanged.
+   The Tools window must continue to list Import, Export, and Visualizer as
+   planned work. It must not be converted into the NLP Workbench.
+
+2. Add a separate NlpWorkbenchWindow for the NLP Workbench.
+   The workbench window must let the user:
+   - Start a new conversation.
+   - Attach to an existing conversation by conversation ID.
+   - Reset the current conversation.
+   - Remove the current conversation.
+   - Clear all conversations.
+   - Ingest a statement through NlpPipeline.Ingest.
+   - Ask a question through NlpPipeline.Ask.
+   - Inspect answer text, short answer, evidence, diagnostics, frames, mentions,
+     focus state, and session provenance.
+   - See graph node and link counts without mutating the graph.
+
+3. Add a UI-independent workbench facade so session lifecycle and display state
+   can be smoke-tested without starting WPF.
+
+4. Integrate the NlpWorkbenchWindow with MainWindow lifecycle.
+   The NLP Workbench window must not allow NLP operations before the core is
+   initialized, and opening it repeatedly must not create uncontrolled duplicate
+   workbench windows. The existing Tools button and Tools window remain
+   independent and unchanged.
+
+5. Add headless smoke tests for the new workbench facade.
+   WPF controls themselves remain covered by a documented manual UI checklist
+   because the smoke-test project targets net10.0 and does not reference WPF.
+
+6. Update README.md and ReadMe2.md to describe Module 3 as Phase 7 of 7.
+   After Phase 7 acceptance passes, Module 3 may be marked complete.
+
+7. Perform the final verification pass:
+   - Full solution build with zero warnings and zero errors.
+   - Existing Phase 1-6 smoke tests unchanged and passing.
+   - New workbench smoke tests passing.
+   - Manual WPF workflow verified on Windows.
+
+Required new source files:
+
+1. OPEN-LRD/NLP/NlpWorkbench.cs
+   - UI-independent session facade over LRD_Core and NlpPipeline.
+   - Owns exactly one current pipeline and conversation.
+   - Provides create, attach, reset, remove, clear, ingest, ask, refresh, and
+     dispose operations.
+   - Exposes an immutable display-state snapshot.
+   - Does not reference WPF.
+
+2. OPEN-LRD/NlpWorkbenchWindow.xaml
+   - Create it by copying OPEN-LRD/Tools.xaml to
+     OPEN-LRD/NlpWorkbenchWindow.xaml before changing anything.
+   - Update the copied file's x:Class, window title, and any copied names.
+   - Then replace the placeholder content with the NLP Workbench layout.
+   - Uses named controls and event handlers implemented in
+     NlpWorkbenchWindow.xaml.cs.
+   - Do not replace or modify the existing Tools window.
+
+3. OPEN-LRD/NlpWorkbenchWindow.xaml.cs
+   - Create it by copying OPEN-LRD/Tools.xaml.cs to
+     OPEN-LRD/NlpWorkbenchWindow.xaml.cs before changing anything.
+   - Update the copied namespace, class name, and constructor to
+     NlpWorkbenchWindow.
+   - Then add the workbench lifecycle and event handling.
+   - Keep the code-behind thin.
+   - Delegate session lifecycle and NLP operations to NlpWorkbench.
+   - Populate display grids and lists from NlpWorkbenchState and NlpResult.
+   - Handle validation, confirmation prompts, and user-visible errors.
+
+Required modified files:
+
+4. OPEN-LRD/NLP/NlpTypes.cs
+   - Add workbench state records used by the facade and tests.
+   - Alternatively place these records in NlpWorkbench.cs if keeping the
+     surface area small; the plan prefers a separate small record group in
+     NlpTypes.cs for consistency with existing result types.
+
+5. OPEN-LRD/MainWindow.xaml
+   - Add a new NLP Workbench button and initialize it as disabled.
+   - Leave the existing Tools button and its layout unchanged.
+   - Add optional layout-neutral changes needed to support the enabled/disabled
+     state and tooltip for the new button.
+
+6. OPEN-LRD/MainWindow.xaml.cs
+   - Enable the NLP Workbench button after Launch Core succeeds.
+   - Maintain a single non-modal NlpWorkbenchWindow instance.
+   - Activate the existing NlpWorkbenchWindow instead of opening duplicates.
+   - Clear the stored reference when the NlpWorkbenchWindow closes.
+   - Leave the existing Tools button handler and Tools window behavior
+     unchanged.
+
+7. OPEN-LRD.SmokeTests/NlpTests.cs
+   - Add workbench lifecycle and operation tests.
+   - Register the new test groups in NlpTests.RunAll.
+   - Keep all existing tests unchanged unless a test intentionally needs the
+     new facade.
+
+8. README.md
+   - Update Module 3 status to Phase 7 of 7 and, after acceptance, complete.
+   - Add a concise NLP Workbench usage section.
+   - State the supported workflow and the remaining Module 3 limits.
+   - Continue to describe the separate Tools window as a placeholder.
+
+9. ReadMe2.md
+   - Update the module table and Current Status section.
+   - Describe session controls, inspection, and the end-to-end WPF workflow.
+   - Distinguish the NLP Workbench window from the placeholder Tools window.
+   - Do not claim durable persistence, import/export, or graph visualization.
+
+10. Module_3_Plan.txt
+    - Update the plan status line after Phase 7 acceptance.
+    - Do not rewrite historical phase definitions.
+
+Files that must remain unchanged:
+
+- OPEN-LRD/Tools.xaml
+- OPEN-LRD/Tools.xaml.cs
+
+================================================================================
+2. SCOPE BOUNDARIES AND NON-GOALS
+================================================================================
+
+In scope:
+
+- A dedicated NlpWorkbenchWindow built from standard WPF controls.
+- Keeping the existing Tools window and its placeholder content unchanged.
+- A UI-independent NlpWorkbench facade under OPEN-LRD/NLP.
+- End-to-end Ingest and Ask workflows from the desktop application.
+- Conversation creation, explicit attachment by ID, reset, removal, and clear.
+- Read-only session inspection for mentions, focus, provenance, frames, chains,
+  candidates, and evidence.
+- Display of all existing NlpStatus and AnswerStatus values.
+- Validation of input text and optional source/topic GUIDs.
+- Confirmation prompts for destructive session operations.
+- Single NLP Workbench window per MainWindow instance.
+- Headless smoke tests for workbench lifecycle and state.
+- A manual WPF acceptance checklist.
+- Final Module 3 documentation and status wording.
+
+Out of scope:
+
+- New parsing, relation extraction, reasoning, trust, or answer-generation
+  behavior.
+- Changes to Module 1 graph models or Module 2 reasoning models.
+- Durable provenance, disk persistence, save/load, import, or export.
+- Graph editing, node deletion, or link editing from the workbench.
+- Force-directed graph visualization.
+- Converting, replacing, or removing the placeholder Tools window.
+  It continues to list Import, Export, and Visualizer as future work.
+- Adding Import, Export, or Visualizer behavior to either window.
+  They remain future work and must not be advertised as implemented.
+- Statistical NLP, ML, embeddings, external packages, or network access.
+- Async pipelines, cancellation tokens, background workers, or progress bars.
+- Multi-user operation, authentication, or remote sessions.
+- MVVM framework adoption. Existing code-behind style is sufficient.
+- Rich-text answer rendering, markdown rendering, or source citation management.
+- Automatic conversation expiry or persistence across application restarts.
+- Changes to NlpPipeline public/internal API unless a small non-breaking
+  accessor is genuinely required.
+- WPF automated UI tests in the net10.0 smoke-test project.
+
+================================================================================
+3. CURRENT BASELINE AND INTEGRATION CONSTRAINTS
+================================================================================
+
+Current implementation facts:
+
+1. LRD_Core is a singleton accessed through LRD_Core.Instance.
+   - InitializeCore resets the graph, query/response chains, conversations, and
+     pipeline mappings.
+   - Existing NlpPipeline instances must not be reused after InitializeCore.
+   - CreateConversation, GetConversation, TryGetConversation,
+     ResolveConversation, RemoveConversation, ClearConversations,
+     RegisterPipelineConversation, TryGetPipelineConversation, and
+     UnregisterPipelineConversation already exist.
+
+2. NlpPipeline is internal, sealed, and IDisposable.
+   - Constructor requires an initialized core.
+   - Constructor parameters are core, optional NlpOptions, optional
+     ReasoningEngine, and optional conversation ID.
+   - A null conversation ID creates a fresh conversation.
+   - A non-null unknown conversation ID throws InvalidOperationException.
+   - PipelineID, ConversationID, Conversation, Provenance, and
+     ResetConversation are already exposed.
+   - Dispose removes only the pipeline mapping.
+
+3. NlpPipeline operations are synchronous.
+   - Analyze is stateless with respect to conversation state.
+   - Ingest creates turns, provenance, mentions, and focus updates.
+   - Ask creates turns and answer-side mentions but remains graph-read-only.
+
+4. NlpResult and NlpAnswer expose enough data for the workbench:
+   - NlpResult.Status, Diagnostics, Parsed, Frames, Chains, ReasoningResults,
+     Question, Answer, and Provenance.
+   - NlpAnswer.Status, Kind, Text, ShortAnswer, AnswerNodeID, Candidates,
+     EvidencePaths, Question, Reasoning, UsesTemporaryEvidence, Confidence,
+     Diagnostics, and UsesSessionProvenance.
+
+5. ConversationContext exposes:
+   - ConversationID, TurnIndex, Sequence.
+   - FocusNodeID, LastSubjectNodeID, LastObjectNodeID, LastQualifierNodeID,
+     LastAnswerNodeID, LastObjectOrQualifierNodeID.
+   - Mentions and Provenance read-only lists.
+
+6. The current Tools window is a placeholder and must remain one.
+   - It contains only a TextBox listing planned Tools: Import, Export,
+     Visualizer.
+   - It has no core, pipeline, session, or input handling.
+   - Phase 7 adds a separate NlpWorkbenchWindow and does not modify Tools.xaml
+     or Tools.xaml.cs.
+
+7. MainWindow currently:
+   - Stores LRD_Core.Instance in a nullable field.
+   - Initializes the core from Launch_Button_Click.
+   - Opens a new Tools window on every Tools click.
+   - Does not track or close an existing Tools window.
+   - Has no NLP Workbench button or NlpWorkbenchWindow reference.
+
+8. The WPF project targets net10.0-windows and uses standard WPF.
+   - The smoke-test project targets net10.0.
+   - The smoke-test project compiles OPEN-LRD/NLP/**/*.cs directly.
+   - Therefore NlpWorkbench must live under OPEN-LRD/NLP to be headlessly
+     testable.
+   - XAML and code-behind can only be verified by build and manual UI checks.
+
+9. Current test baseline:
+   - 61 smoke tests pass.
+   - Phase 6 added conversation, pronoun, focus, provenance, caveat, registry,
+     read-only, and determinism groups.
+
+10. No external UI framework, package, or service locator exists.
+    The workbench must use the existing singleton explicitly and keep WPF
+    event handling in the NLP Workbench window.
+
+11. The WPF application has no existing session persistence.
+    Closing the application loses graph and conversation state. The workbench
+    must not imply otherwise.
+
+12. WSL dotnet may be unavailable.
+    Use the Windows SDK binary paths documented in Section 16.
+
+Integration constraints:
+
+- The NlpWorkbenchWindow must not construct NlpPipeline before the core is
+  initialized.
+- The existing Tools window must remain independent and must not require core
+  initialization to open.
+- Conversation IDs and pipeline IDs are GUIDs and must be displayed and copied
+  verbatim.
+- Attaching to an unknown conversation ID must not destroy the current session.
+- Removing or clearing conversations must not delete graph nodes or links.
+- Reset must clear only conversation memory, not the graph.
+- Closing the NlpWorkbenchWindow must dispose its pipeline but must not remove
+  the conversation.
+- Core reinitialization invalidates the current workbench session.
+  The workbench must detect stale mappings and transition to a no-session state.
+- The workbench must never expose mutable conversation collections.
+
+================================================================================
+4. ARCHITECTURE AND FILE RESPONSIBILITIES
+================================================================================
+
+4.1 Separation of concerns
+
+Use three layers:
+
+1. Core and NLP layer
+   - LRD_Core owns graph and conversation registries.
+   - NlpPipeline owns one pipeline attachment.
+   - ConversationContext owns session memory.
+
+2. Workbench facade layer
+   - NlpWorkbench owns one current pipeline.
+   - It translates UI intentions into core and pipeline calls.
+   - It returns NlpResult and NlpWorkbenchState snapshots.
+   - It contains no WPF references and no MessageBox calls.
+
+3. WPF presentation layer
+   - NlpWorkbenchWindow.xaml defines controls and layout.
+   - NlpWorkbenchWindow.xaml.cs handles user events, confirmations, and display formatting.
+   - MainWindow owns application-level launch and NLP Workbench window lifetime.
+
+4.2 NlpWorkbench responsibilities
+
+NlpWorkbench must:
+
+- Validate that the supplied core is not null.
+- Tolerate an uninitialized core at construction, but refuse session operations
+  until the core is initialized.
+- Create a new conversation and pipeline when requested.
+- Attach to an existing conversation by ID when requested.
+- Reuse one NlpOptions instance for all pipelines it creates.
+- Treat pipeline replacement transactionally.
+- Dispose the old pipeline only after the new session is known to be valid.
+- Provide ResetCurrentConversation, RemoveCurrentConversation, and
+  ClearAllConversations.
+- Expose Ingest and Ask that delegate directly to the current NlpPipeline.
+- Expose RefreshState and State for display.
+- Detect stale pipeline mappings after core reinitialization and clear the
+  current pipeline reference.
+- Dispose only its pipeline mapping on Dispose.
+
+NlpWorkbench must not:
+
+- Call LRD_Core.InitializeCore.
+- Remove conversations implicitly when starting a new or attaching another
+  conversation.
+- Mutate graph nodes or links directly.
+- Catch and swallow programming errors inside NlpPipeline.
+- Reference WPF, System.Windows, or UI culture-specific formatting.
+- Keep a second copy of mutable mentions or provenance data.
+
+4.3 NLP Workbench window responsibilities
+
+NlpWorkbenchWindow.xaml.cs must:
+
+- Obtain LRD_Core.Instance.
+- Create one NlpWorkbench for the window.
+- Enable or disable controls based on workbench state.
+- Show operation status without changing NlpResult semantics.
+- Display raw diagnostics and evidence rather than hiding failures.
+- Confirm reset, remove, and clear operations.
+- Parse optional source and topic GUID fields.
+- Handle empty input and unknown conversation IDs without crashing.
+- Dispose the workbench when the window closes.
+
+NlpWorkbenchWindow.xaml.cs must not:
+
+- Instantiate NlpPipeline directly.
+- Modify ConversationContext collections directly.
+- Call LRD_Core.RemoveConversation without going through the workbench unless
+  the workbench API explicitly requires it.
+- Perform graph edits.
+- Run NLP work on a background thread.
+
+4.4 MainWindow responsibilities
+
+MainWindow must:
+
+- Keep the existing Launch Core workflow.
+- Keep the existing Tools button and Tools window behavior unchanged.
+- Add a separate NLP Workbench button.
+- Disable the NLP Workbench button until Launch Core succeeds.
+- Open one non-modal NlpWorkbenchWindow at a time.
+- Activate and focus the existing NlpWorkbenchWindow if already open.
+- Clear the stored NlpWorkbenchWindow reference on Closed.
+- Avoid forcing the NlpWorkbenchWindow closed when the main window merely loses
+  focus.
+
+4.5 Proposed workbench API
+
+The exact names may be adjusted during implementation, but the following shape is
+the design baseline:
+
+    internal sealed class NlpWorkbench : IDisposable
+    {
+        public NlpWorkbench(LRD_Core core, NlpOptions? options = null);
+
+        public bool IsCoreInitialized { get; }
+        public bool HasSession { get; }
+        public Guid? PipelineID { get; }
+        public Guid? ConversationID { get; }
+        public NlpWorkbenchState? State { get; }
+
+        public bool StartNewConversation();
+        public bool TryAttachConversation(Guid conversationID, out string? error);
+        public bool ResetCurrentConversation();
+        public bool RemoveCurrentConversation();
+        public void ClearAllConversations();
+        public NlpResult Ingest(
+            string? text,
+            Guid? sourceNodeID = null,
+            Guid? topicNodeID = null);
+        public NlpResult Ask(string? text);
+        public NlpWorkbenchState RefreshState();
+        public void Dispose();
+    }
+
+Behavioral rules:
+
+- StartNewConversation returns false when the core is uninitialized.
+- StartNewConversation disposes the old pipeline after the new conversation is
+  created successfully.
+- TryAttachConversation first checks TryGetConversation. If the ID is unknown,
+  it returns false and leaves the current session untouched.
+- If the ID is valid, it disposes the old pipeline and creates a new pipeline
+  attached to that ID.
+- ResetCurrentConversation returns false when there is no current session.
+- RemoveCurrentConversation removes the current conversation through the core
+  and disposes the pipeline reference.
+- ClearAllConversations calls core.ClearConversations and disposes the current
+  pipeline reference.
+- Ingest and Ask throw InvalidOperationException when there is no current
+  session. The UI must prevent those calls while controls are disabled.
+- Dispose does not remove the conversation.
+- RefreshState never throws for a normal no-session state.
+
+4.6 Proposed workbench state records
+
+Add display-oriented immutable records, preferably in NlpTypes.cs:
+
+    internal sealed record NlpWorkbenchState(
+        bool CoreInitialized,
+        bool HasSession,
+        Guid? PipelineID,
+        Guid? ConversationID,
+        int TurnIndex,
+        Guid? FocusNodeID,
+        Guid? LastSubjectNodeID,
+        Guid? LastObjectNodeID,
+        Guid? LastQualifierNodeID,
+        Guid? LastAnswerNodeID,
+        int GraphNodeCount,
+        int GraphLinkCount,
+        int MentionCount,
+        int ProvenanceCount,
+        IReadOnlyList<ConversationMention> Mentions,
+        IReadOnlyList<SessionProvenanceEntry> Provenance);
+
+Optional presentation rows may live in NlpWorkbenchWindow.xaml.cs because they are WPF-only:
+
+    internal sealed record MentionRow(...);
+    internal sealed record ProvenanceRow(...);
+    internal sealed record CandidateRow(...);
+    internal sealed record DiagnosticRow(...);
+
+Rules:
+
+- The state snapshot is a copy of read-only views plus scalar counters.
+- Do not expose the internal List<T> objects.
+- Do not cache a stale state after a pipeline operation; refresh after every
+  successful or failed Ingest/Ask.
+- The workbench state reports node and link counts by reading the core
+  dictionary. It must not call mutation APIs.
+- Graph link count is the sum of each node's GetLinks count, matching the smoke
+  test helper convention. If duplicate visual counting is undesirable in the
+  UI, label the field "directed links" explicitly.
+
+================================================================================
+5. NLP WORKBENCH LIFECYCLE AND OPERATION SEMANTICS
+================================================================================
+
+5.1 Construction
+
+- Constructor validates core is not null.
+- Constructor stores the core and options.
+- Constructor does not create a pipeline.
+- If the core is initialized, the NLP Workbench window calls StartNewConversation after
+  constructing the workbench.
+- If the core is uninitialized, NlpWorkbenchWindow displays a disabled state.
+  MainWindow should normally prevent this by enabling the NLP Workbench button
+  only after launch.
+
+5.2 Start new conversation
+
+1. Verify core.initialized.
+2. Create a new pipeline without an explicit conversation ID.
+3. The core creates a fresh conversation and registers the pipeline mapping.
+4. Dispose the old pipeline, if any.
+5. Replace the current pipeline and conversation references.
+6. Refresh state and return true.
+7. The old conversation remains in the core registry and can be reattached by
+   its conversation ID until explicitly removed or cleared.
+
+5.3 Attach existing conversation
+
+1. Verify core.initialized.
+2. Reject Guid.Empty with a caller-visible error.
+3. Call core.TryGetConversation.
+4. If missing, return false with a message and keep the current pipeline.
+5. If present, create a new pipeline using the requested conversation ID.
+6. Dispose the old pipeline.
+7. Replace references.
+8. Refresh state and return true.
+9. Sharing semantics are inherited: both old and new pipelines would share the
+   same conversation if the old pipeline were still attached elsewhere.
+
+5.4 Reset current conversation
+
+1. Verify current pipeline exists and its conversation is still registered.
+2. Call ResetConversation on the current pipeline.
+3. Refresh state.
+4. Do not dispose the pipeline.
+5. Do not change graph counts.
+
+5.5 Remove current conversation
+
+1. Capture the current conversation ID.
+2. Call core.RemoveConversation.
+3. Dispose the current pipeline reference.
+4. Set current pipeline and conversation to null.
+5. Refresh state.
+6. Graph counts must be unchanged.
+7. If the removal returns false, still clear a stale local session reference and
+   report that the session was no longer registered.
+
+5.6 Clear all conversations
+
+1. Confirm in the UI.
+2. Call core.ClearConversations.
+3. Dispose and clear the current pipeline reference.
+4. Refresh state.
+5. Graph counts must be unchanged.
+
+5.7 Ingest
+
+1. Require a current session.
+2. Call pipeline.Ingest with the exact text and optional source/topic IDs.
+3. Return the NlpResult unchanged.
+4. The UI refreshes workbench state afterward so provenance, mentions, focus,
+   and turn count are current.
+5. Do not normalize, trim, or rewrite the user text in the workbench.
+   Whitespace validation remains NlpPipeline behavior.
+
+5.8 Ask
+
+1. Require a current session.
+2. Call pipeline.Ask with the exact question text.
+3. Return the NlpResult unchanged.
+4. The UI refreshes workbench state afterward.
+5. Ask must remain graph-read-only. The workbench must not add graph inspection
+   code that mutates graph state.
+
+5.9 Refresh and stale-session detection
+
+RefreshState must:
+
+1. Determine CoreInitialized from core.initialized.
+2. If a current pipeline exists, verify both:
+   - core.TryGetPipelineConversation(pipelineID, out conversationID) succeeds.
+   - core.TryGetConversation(conversationID, out _) succeeds.
+3. If either check fails, the session is stale. Dispose the local pipeline
+   reference, clear it, and return a no-session state.
+4. Otherwise return a snapshot of the live context and graph counters.
+5. If the core is uninitialized, return a no-session state without throwing.
+
+The UI may display a specific message when it transitions from HasSession=true
+to false because of core reinitialization.
+
+5.10 Dispose
+
+- Dispose the current pipeline only.
+- Do not remove, reset, or clear the conversation.
+- Do not call InitializeCore.
+- Dispose must be idempotent.
+
+================================================================================
+6. TOOLS WINDOW UI DESIGN
+================================================================================
+
+6.1 Window properties
+
+- Title: "NLP Workbench"
+- Initial size: approximately 1100 x 760.
+- Minimum width: approximately 900.
+- Minimum height: approximately 620.
+- Resizable.
+- Standard WPF window chrome.
+- Non-modal when opened from MainWindow.
+
+6.2 Layout hierarchy
+
+Use a root Grid with rows for status, session controls, input, output, and an
+optional status bar.
+
+Proposed sections:
+
+A. Header status row
+   - Core status text.
+   - Conversation ID text with a Copy button.
+   - Pipeline ID text.
+   - Turn count.
+   - Graph node count.
+   - Directed link count.
+   - Refresh button.
+
+B. Conversation controls row
+   - New Conversation button.
+   - Attach Conversation TextBox for a GUID.
+   - Attach button.
+   - Reset Conversation button.
+   - Remove Conversation button.
+   - Clear All Conversations button.
+
+C. Input area
+   - GroupBox or TabControl with Ingest and Ask views.
+   - Ingest input: multiline TextBox.
+   - Optional Ingest Source Node ID TextBox.
+   - Optional Ingest Topic Node ID TextBox.
+   - Ingest button.
+   - Ask input: multiline TextBox.
+   - Ask button.
+   - Analyze preview is optional. If included, it must call pipeline.Analyze and
+     must not change conversation state.
+
+D. Result summary area
+   - Operation status text.
+   - NlpStatus or AnswerStatus.
+   - Answer text or ingest summary.
+   - Short answer.
+   - Confidence.
+   - Temporary-evidence and session-provenance flags.
+   - Graph-mutated indicator when available from provenance.
+   - Turn index after the operation.
+
+E. Result tabs
+   1. Diagnostics
+      - Read-only ListBox or ListView.
+      - Shows every NlpResult.Diagnostics entry in order.
+   2. Evidence / Candidates
+      - DataGrid of AnswerCandidate rows.
+      - Columns: Label, Node Type, Score, Depth, Relation Link Type, Link Class,
+        Temporary, Path Node IDs.
+      - If no answer, display an empty-state message.
+   3. Frames and Chains
+      - Read-only summary of extracted frames and chain endpoint/relation
+        information.
+      - Expanded raw object dumps are acceptable only as a fallback, but
+        human-readable rows are preferred.
+   4. Session Mentions
+      - DataGrid of ConversationMention rows.
+      - Columns: Sequence, Turn, Node ID, Label, Surface, Node Type, Role,
+        From Answer.
+   5. Session Provenance
+      - DataGrid of SessionProvenanceEntry rows.
+      - Columns: Sequence, Turn, Sentence, Source Text, Status, Relation, Link
+        Class, Subject Node ID, Object Node ID, Qualifier Node ID, Trust Source,
+        Topic, Temporary Node Count, Graph Mutated, Usable For Answer.
+   6. Session Focus
+      - Text block or small grid showing FocusNodeID, LastSubjectNodeID,
+        LastObjectNodeID, LastQualifierNodeID, LastAnswerNodeID.
+   7. Module limits note
+      - A small non-interactive section stating that durable persistence,
+        Import, Export, and Visualizer remain outside Module 3.
+      - The existing Tools window remains the placeholder that lists Import,
+        Export, and Visualizer as planned work.
+      - Do not add fake buttons or placeholder event handlers.
+
+6.3 Control names
+
+Use explicit x:Name values so the code-behind remains readable:
+
+- CoreStatusText
+- ConversationIDText
+- CopyConversationButton
+- PipelineIDText
+- TurnIndexText
+- GraphCountsText
+- RefreshButton
+- NewConversationButton
+- AttachConversationBox
+- AttachConversationButton
+- ResetConversationButton
+- RemoveConversationButton
+- ClearConversationsButton
+- IngestInput
+- IngestSourceBox
+- IngestTopicBox
+- IngestButton
+- AskInput
+- AskButton
+- AnalyzeButton (only if Analyze preview is implemented)
+- OperationStatusText
+- AnswerText
+- ShortAnswerText
+- ConfidenceText
+- EvidenceFlagsText
+- DiagnosticsList
+- CandidatesGrid
+- FramesGrid
+- MentionsGrid
+- ProvenanceGrid
+- FocusGrid
+- WorkbenchStatusBar
+
+6.4 UI state rules
+
+- If no session exists, disable Ingest, Ask, Reset, Remove, and Copy.
+- If no session exists, enable New Conversation, Attach, Clear, and Refresh.
+- If a session exists, enable all session controls.
+- Disable destructive buttons during an operation.
+- Use try/finally to re-enable controls after synchronous operations.
+- Use confirmation MessageBoxes for Reset, Remove, and Clear All.
+- Reset confirmation should mention that graph data is not deleted.
+- Remove confirmation should mention that the conversation cannot be recovered.
+- Clear confirmation should mention that all sessions are removed and the graph
+  is unchanged.
+- Copy Conversation displays a short success message or leaves a status-bar
+  confirmation.
+- Invalid GUID input must be shown inline or in the status area, not via a
+  modal dialog unless the operation cannot continue.
+
+6.5 Formatting rules
+
+- Display GUIDs with the standard hyphenated format.
+- Display null IDs as "(none)".
+- Display counts using invariant integer formatting.
+- Display confidence with a fixed number of decimal places, for example F2.
+- Preserve diagnostic order from NlpResult.
+- Preserve mention and provenance order from ConversationContext.
+- Do not merge duplicate diagnostics in the UI; the pipeline already handles
+  deduplication where appropriate.
+- Do not hide Unsupported, NoMatch, Ambiguous, RejectedByTrust, or InvalidInput.
+- Do not relabel No as failure; Yes and No are successful boolean answers.
+
+6.6 Example end-to-end UI flow
+
+1. Start the WPF application.
+2. Click Launch Core.
+3. Verify the NLP Workbench button becomes enabled.
+4. Click NLP Workbench.
+5. Verify a new conversation is created automatically and its ID is visible.
+   Optionally click Tools and verify its placeholder text remains unchanged.
+6. Ingest: "Alice works at Acme."
+   - Status: Ingested.
+   - Graph counts increase.
+   - Provenance gains one or more entries.
+   - Mentions include Alice and Acme.
+7. Ask: "Where does she work?"
+   - Status: Answered.
+   - Short answer: Acme.
+   - Answer text includes the session-provenance caveat.
+   - The same graph counts remain; only conversation memory changes.
+8. Click New Conversation.
+   - Conversation ID changes.
+   - Mentions and provenance are empty.
+   - Ask "Where does she work?" returns Unsupported with a no-antecedent
+     diagnostic.
+9. Return to the first conversation by pasting its ID and clicking Attach.
+   - The pronoun question works again.
+10. Click Reset Conversation.
+    - Mentions, focus, turn count, and provenance clear.
+    - Ask "Where does she work?" is Unsupported again.
+    - Graph counts are unchanged.
+11. Click Remove Conversation.
+    - The workbench returns to the no-session state.
+12. Click New Conversation to continue.
+
+================================================================================
+7. SESSION AND CONVERSATION SEMANTICS IN THE UI
+================================================================================
+
+7.1 New versus attach
+
+- New creates a brand-new conversation and does not delete prior sessions.
+- Attach reuses an existing conversation ID and shares its mentions, focus,
+  turn count, and provenance.
+- This distinction must be visible in the UI text so the user does not assume
+  that New clears old sessions.
+- Clear All is the explicit bulk cleanup operation.
+
+7.2 Reset
+
+- Reset clears only the current conversation memory.
+- TurnIndex and Sequence return to zero.
+- Focus and last-role IDs become null.
+- Mentions and provenance become empty.
+- The ConversationID and pipeline mapping remain valid.
+- The graph is untouched.
+- The UI must refresh all session tabs immediately.
+
+7.3 Remove
+
+- Remove deletes the current conversation from the core registry.
+- All pipeline mappings for that conversation are removed by the core.
+- The workbench disposes its local pipeline reference.
+- The graph is untouched.
+- The UI must not silently create a replacement conversation.
+- The user must click New Conversation or Attach.
+
+7.4 Clear All
+
+- Clear All removes every conversation and pipeline mapping from the core.
+- The current workbench session becomes invalid.
+- The graph is untouched.
+- The UI enters the no-session state.
+
+7.5 Closing the NLP Workbench window
+
+- Closing the NLP Workbench window disposes only its workbench pipeline.
+- The conversation remains in the core registry and may be reattached later in
+  the same application run.
+- Reopening the NLP Workbench window should create a new pipeline with a new
+  conversation by default, unless the user attaches an existing ID.
+- The Tools window is unrelated and keeps its existing placeholder behavior.
+- Because the application has no persistence, all session state is lost when
+  the application exits.
+
+7.6 Single NLP Workbench window
+
+- MainWindow stores a nullable NlpWorkbenchWindow reference.
+- If the window is already open, clicking NLP Workbench activates it.
+- If the user closes the NLP Workbench window, the reference is cleared.
+- This prevents duplicate workbenches with competing input state.
+- The conversation remains available for reattachment, so no work is lost.
+
+7.7 Core reinitialization
+
+- The NLP Workbench button should be enabled only after an explicit Launch Core.
+- If code elsewhere calls InitializeCore again, the workbench must detect stale
+  mappings on Refresh or before the next operation.
+- The UI must show a clear "session no longer available" message and enter the
+  no-session state.
+- Do not attempt to reuse an old pipeline after core reinitialization.
+
+================================================================================
+8. MAINWINDOW INTEGRATION
+================================================================================
+
+8.1 Launch behavior
+
+- Keep the existing Launch_Button_Click flow.
+- Initialize the core once.
+- On success:
+  - Update the welcome text or status as today.
+  - Hide or disable the Launch button as today.
+  - Enable the NLP Workbench button.
+- On failure:
+  - Show the existing error message.
+  - Leave the NLP Workbench button disabled.
+  - Do not create a workbench.
+
+8.2 NLP Workbench button state
+
+- Add an x:Name to the NLP Workbench button in MainWindow.xaml.
+- Set IsEnabled="False" in XAML.
+- Add a tooltip explaining that the core must be launched first.
+- Do not change the button's position or visual role unless needed for clarity.
+
+8.3 NLP Workbench window lifetime
+
+- Add a private NlpWorkbenchWindow? field to MainWindow.
+- On NlpWorkbench_Button_Click:
+  - If the stored window exists, call Activate and return.
+  - Otherwise create NlpWorkbenchWindow, assign Owner = this, attach a Closed
+    handler, and call Show.
+- On Closed:
+  - Set the field to null.
+- Do not use ShowDialog. The existing NLP Workbench window is non-modal.
+- Do not allow the NLP Workbench window to be opened before core initialization.
+- Do not gate or otherwise change the existing Tools button.
+
+8.4 Application exit
+
+- Closing the main window ends the application as today.
+- No save prompt is required because there is no persistence.
+- Do not add graph serialization in Phase 7.
+
+================================================================================
+9. ERROR HANDLING AND VALIDATION
+================================================================================
+
+9.1 Text input
+
+- Empty or whitespace-only text is passed to the pipeline.
+- The pipeline returns InvalidInput, and the UI displays its diagnostics.
+- The UI must not show an unhandled exception for invalid text.
+- Maximum length and token/sentence limits remain enforced by NlpPipeline.
+- The UI should not duplicate pipeline limits in code; display pipeline
+  diagnostics instead.
+
+9.2 GUID inputs
+
+- Blank source and topic fields mean null.
+- A non-blank value must parse as a Guid.
+- Invalid GUID text produces an inline or status-area validation message.
+- The workbench must not call Ingest when GUID validation fails.
+- If a supplied source or topic node ID does not exist, show a status-area error
+  and do not call Ingest.
+- Validate source and topic only when provided.
+- Optional stricter validation: source node type should be NodeTypes.Sources.
+  If enforced, state the requirement in the UI label and tests.
+
+9.3 Unknown conversation ID
+
+- Attach must catch the core's missing-conversation condition or use
+  TryGetConversation first.
+- The current session must remain intact.
+- The UI must show a message such as:
+  "Conversation '<id>' was not found. The current session was not changed."
+
+9.4 No session
+
+- Ingest, Ask, Reset, Remove, and Copy are disabled.
+- If a stale event fires, the workbench throws InvalidOperationException and
+  the UI shows a status message rather than crashing.
+- New and Attach remain available.
+
+9.5 Unexpected exceptions
+
+- Wrap event-handler bodies in try/catch at the UI boundary.
+- Show a MessageBox with the operation name and exception message.
+- Do not include stack traces in normal user-facing text.
+- Keep the existing workbench and display state where possible.
+- Refresh state after the catch.
+- Do not hide exceptions from the smoke tests.
+
+9.6 Destructive confirmations
+
+- Reset: confirmation required.
+- Remove: confirmation required.
+- Clear All: confirmation required.
+- New and Attach: no confirmation required.
+- Closing the NLP Workbench window: no confirmation required because it does
+  not remove sessions.
+- Do not prompt twice for the same click.
+
+9.7 Reentrancy
+
+- Synchronous operations run on the UI thread.
+- Disable operation buttons before calling the workbench.
+- Use try/finally to restore button state.
+- Do not support concurrent Ingest or Ask calls.
+- Do not add Task.Run, timers, or async/await in Phase 7 unless a later review
+  explicitly requests it.
+
+================================================================================
+10. IMPLEMENTATION SEQUENCE
+================================================================================
+
+Step 1: Baseline verification
+- Run the existing smoke-test build and suite.
+- Confirm 61 tests pass and the solution builds with zero warnings and errors.
+- Record the baseline in the implementation notes.
+
+Step 2: Workbench state records
+- Add NlpWorkbenchState and any small supporting records.
+- Keep all fields immutable.
+- Build the smoke-test project to catch nullable and accessibility errors.
+
+Step 3: NlpWorkbench facade
+- Implement construction, new, attach, reset, remove, clear, ingest, ask,
+  refresh, stale detection, and dispose.
+- Keep all errors explicit and avoid swallowing programmer errors.
+- Do not reference WPF.
+
+Step 4: Headless workbench tests
+- Add the workbench test groups described in Section 11.
+- Register them in NlpTests.RunAll.
+- Run the smoke suite and fix lifecycle, state, and determinism issues before
+  starting XAML work.
+
+Step 5: MainWindow integration
+- Add a separate NLP Workbench button name, disabled initial state, and tooltip.
+- Enable the NLP Workbench button after successful core launch.
+- Leave the existing Tools button and handler unchanged.
+- Track one NlpWorkbenchWindow and activate it if already open.
+- Clear the stored reference on Closed.
+
+Step 6: Create NlpWorkbenchWindow from the Tools template
+- Copy OPEN-LRD/Tools.xaml to OPEN-LRD/NlpWorkbenchWindow.xaml.
+- Copy OPEN-LRD/Tools.xaml.cs to OPEN-LRD/NlpWorkbenchWindow.xaml.cs.
+- Do this before adding any workbench controls or behavior.
+- Update the copied x:Class, class name, constructor, and window title to
+  NlpWorkbenchWindow.
+- Confirm the copied window builds as a renamed placeholder before replacing
+  its content.
+- Do not modify the original Tools.xaml or Tools.xaml.cs.
+
+Step 7: NlpWorkbenchWindow XAML layout
+- Replace the copied placeholder content with the workbench layout.
+- Do not modify the existing Tools window.
+- Add only standard WPF controls.
+- Add x:Name values and Click handlers.
+- Keep visual styling simple and consistent with the existing application.
+
+Step 8: NlpWorkbenchWindow code-behind
+- Wire the workbench lifecycle into the copied code-behind.
+- Populate status, result summary, diagnostics, candidates, frames, mentions,
+  provenance, and focus views.
+- Add validation, confirmations, and exception handling.
+- Refresh session views after every operation.
+
+Step 9: Manual WPF workflow verification
+- Run the application on Windows.
+- Execute the manual checklist in Section 12.
+- Confirm no unhandled exceptions and no binding errors in the debug output.
+- Confirm graph counts do not change on Ask, Reset, Remove, or Clear.
+
+Step 10: Documentation
+- Update README.md, ReadMe2.md, and the Module_3_Plan.txt status line.
+- Use Phase 7 of 7 wording before final acceptance.
+- After the complete checklist passes, mark Module 3 complete.
+
+Step 11: Final verification
+- Build the smoke-test project with -warnaserror.
+- Run the complete smoke suite.
+- Build OPEN-LRD.slnx on Windows.
+- Confirm all existing and new tests pass.
+- Confirm no project code outside the documented Phase 7 files changed
+  unexpectedly.
+
+================================================================================
+11. TEST PLAN
+================================================================================
+
+11.1 New smoke-test groups
+
+Register after the Phase 6 groups in NlpTests.RunAll:
+
+    Program.Run("NLP workbench lifecycle",
+        TestNlpWorkbenchLifecycle);
+    Program.Run("NLP workbench operations",
+        TestNlpWorkbenchOperations);
+    Program.Run("NLP workbench state and stale sessions",
+        TestNlpWorkbenchStateAndStaleSessions);
+
+11.2 NlpWorkbench lifecycle tests
+
+1. Uninitialized core
+   - Construct a core without calling InitializeCore.
+   - Construct NlpWorkbench.
+   - Assert IsCoreInitialized is false, HasSession is false.
+   - StartNewConversation returns false and does not throw.
+   - RefreshState returns a no-session state.
+
+2. New conversation
+   - Initialize the core.
+   - Construct NlpWorkbench.
+   - StartNewConversation returns true.
+   - HasSession is true.
+   - PipelineID and ConversationID are non-empty.
+   - State reports the same IDs.
+   - Graph node and link counts are zero.
+
+3. Attach existing conversation
+   - Start a conversation and record its ID.
+   - Start a new conversation.
+   - TryAttachConversation with the old ID returns true.
+   - The workbench conversation ID matches the old ID.
+   - State equals the old conversation state.
+
+4. Unknown conversation attach
+   - Record current conversation ID.
+   - TryAttachConversation(Guid.NewGuid(), out error) returns false.
+   - Error is non-empty.
+   - Current conversation ID is unchanged.
+   - Current state is unchanged.
+
+5. Remove current conversation
+   - Start a conversation.
+   - RemoveCurrentConversation returns true.
+   - HasSession is false.
+   - core.TryGetConversation(oldID, out _) is false.
+   - Graph counts are unchanged.
+
+6. Clear all conversations
+   - Start two workbenches or create two conversations through the core.
+   - ClearAllConversations.
+   - HasSession is false.
+   - core.GetConversations() is empty.
+   - Graph counts are unchanged.
+
+7. Dispose behavior
+   - Start a conversation.
+   - Dispose the workbench.
+   - The pipeline mapping is removed.
+   - The conversation still exists in the core.
+   - A second workbench can attach to the same ID.
+   - Dispose is idempotent.
+
+11.3 NlpWorkbench operation tests
+
+1. Ingest and ask
+   - New conversation.
+   - Ingest "Alice works at Acme." returns Ingested.
+   - State graph counts increase.
+   - State mentions include Alice and Acme.
+   - State provenance count is greater than zero.
+   - Ask "Where does she work?" returns Answered and ShortAnswer Acme.
+   - State turn count increased.
+   - Graph counts after Ask equal graph counts before Ask.
+
+2. Ingest with source and topic
+   - Add permanent source and topic nodes through core test helpers.
+   - Ingest with both IDs.
+   - Result provenance records both IDs.
+   - State reflects the same provenance entries.
+
+3. Invalid input
+   - Ingest null, empty, and whitespace text.
+   - Status is InvalidInput and no graph or session mutation occurs.
+   - Ask invalid text similarly returns InvalidInput and does not change graph
+     counts.
+
+4. Failed pronoun statement
+   - New conversation.
+   - Ingest "She works at Acme." returns Unsupported.
+   - No pronoun node exists.
+   - State mentions remain empty.
+   - Graph counts remain unchanged.
+
+5. Failed pronoun question
+   - New conversation.
+   - Ask "Where does she work?" returns Unsupported.
+   - State mentions remain empty.
+   - Focus remains null.
+   - Graph counts remain unchanged.
+
+6. Shared conversation through two workbenches
+   - Workbench A creates a conversation and ingests Alice works at Acme.
+   - Workbench B attaches to A.ConversationID.
+   - B sees A's mentions and provenance in State.
+   - B asks "Where does she work?" and receives Answered.
+   - A observes the updated turn and answer-side mention state.
+
+7. Reset
+   - Ingest and ask in one conversation.
+   - ResetCurrentConversation returns true.
+   - TurnIndex becomes zero.
+   - Mentions and provenance are empty.
+   - Focus and last-role IDs are null.
+   - Graph counts are unchanged.
+   - The same workbench can ingest and ask again.
+
+8. Ask read-only regression
+   - Record graph counts.
+   - Run pronoun Ask.
+   - Assert node and link counts are unchanged.
+   - Assert no query-only IDs were inserted by checking the same way the Phase 6
+     read-only test does.
+
+11.4 NlpWorkbench state and stale-session tests
+
+1. Snapshot contents
+   - State reports graph node count, directed link count, turn index, focus,
+     last-role IDs, mention count, and provenance count.
+   - Mention and provenance lists preserve their context order.
+
+2. Stale session after core reinitialization
+   - Start a workbench and ingest a fact.
+   - Call core.InitializeCore.
+   - Call RefreshState.
+   - HasSession is false.
+   - No exception is thrown.
+   - Old pipeline mapping is absent.
+   - graph counts reflect the new empty core.
+
+3. Stale operation guard
+   - After core reinitialization and stale detection, Ingest and Ask throw
+     InvalidOperationException rather than using the old pipeline.
+
+4. No mutation from state refresh
+   - Call RefreshState repeatedly.
+   - Graph node and link counts are unchanged.
+   - Conversation turn counter is unchanged.
+   - Mentions and provenance are unchanged.
+
+5. Determinism
+   - Repeat the same ingest/ask sequence with a fresh core and fresh
+     conversation.
+   - Statuses, short answers, answer node IDs, and diagnostics match the first
+     run.
+   - IDs themselves may differ, but sequence and counts must match.
+
+11.5 Regression requirements
+
+- All existing 61 smoke tests must remain passing.
+- Do not alter Phase 1-6 expected behavior.
+- Do not weaken Phase 6 read-only, isolation, provenance, or pronoun tests.
+- The workbench tests must use distinct cores or InitializeCore between cases
+  when isolation is intended.
+- The workbench must not introduce wall-clock timestamps into deterministic
+  output.
+
+11.6 Manual WPF acceptance checklist
+
+Run the WPF application on Windows and verify:
+
+1. Before Launch Core:
+   - NLP Workbench button is disabled.
+   - Launch Core works.
+2. After Launch Core:
+   - NLP Workbench button becomes enabled.
+   - The welcome text still indicates the core is running.
+3. Open NLP Workbench:
+   - A fresh conversation is created automatically.
+   - Core status, conversation ID, pipeline ID, turn count, and graph counts are
+     visible.
+4. Clicking NLP Workbench again activates the existing window instead of
+   opening a second one.
+5. Ingest "Alice works at Acme.":
+   - Status is Ingested.
+   - Answer/summary text is meaningful.
+   - Diagnostics are empty or accurately shown.
+   - Graph counts increase.
+   - Mentions and provenance tabs populate.
+6. Ask "Where does she work?":
+   - Status is Answered.
+   - Short answer is Acme.
+   - Answer text includes the session caveat.
+   - Evidence/candidate tabs populate.
+   - Graph counts do not change.
+7. New Conversation:
+   - Conversation ID changes.
+   - Session tabs are empty.
+   - Pronoun question returns Unsupported with a no-antecedent diagnostic.
+8. Attach the first conversation ID:
+   - The prior session state returns.
+   - The pronoun question answers again.
+9. Reset:
+   - Confirmation appears.
+   - Session state clears.
+   - Graph counts remain unchanged.
+10. Remove:
+    - Confirmation appears.
+    - No-session state appears.
+    - The conversation is no longer attachable.
+11. Clear All:
+    - Confirmation appears.
+    - All sessions are gone.
+    - Graph counts remain unchanged.
+12. Invalid input:
+    - Empty text shows InvalidInput diagnostics.
+    - Invalid GUID text is rejected without changing session state.
+    - Unknown conversation ID reports an error and preserves the current
+      session.
+13. Close and reopen NLP Workbench:
+    - The old conversation remains attachable until removed or the app exits.
+    - A new default conversation is created on reopen unless the user attaches.
+14. Resize the window:
+    - Layout remains usable.
+    - No controls overlap or disappear.
+15. Tools placeholder:
+    - Open the separate Tools window.
+    - Confirm it still shows the planned Import, Export, and Visualizer text.
+    - Confirm it is unchanged by the NLP Workbench workflow.
+16. Debug output:
+    - No binding errors.
+    - No unhandled exceptions.
+
+================================================================================
+12. DOCUMENTATION PLAN
+================================================================================
+
+12.1 README.md
+
+Update the Module 3 line to Phase 7 of 7 during implementation and to Complete
+after acceptance.
+
+Add or update a concise section covering:
+
+- Module 3 now includes an NLP Workbench in a dedicated NlpWorkbenchWindow.
+- The existing Tools window remains a placeholder for Import, Export, and
+  Visualizer.
+- Launch Core is required before opening the NLP Workbench window.
+- The workbench supports Ingest, Ask, conversation creation, explicit
+  conversation attachment by ID, reset, removal, and clear.
+- Session inspection includes mentions, focus, provenance, diagnostics,
+  candidates, evidence, frames, and chains.
+- Ask remains graph-read-only.
+- Session state is in memory only and is lost when the application exits or the
+  core is reinitialized.
+- Import, Export, and Visualizer are not implemented in Phase 7.
+- Pronoun, ambiguity, trust, and no-match limitations from Phases 1-6 still
+  apply.
+
+12.2 ReadMe2.md
+
+Update:
+
+- The module table row for Module 3.
+- The Current Status section from Phases 1-6 to Phases 1-7.
+- The NLP section's description of the WPF workbench and session controls.
+- A clear distinction between the NLP Workbench window and the placeholder
+  Tools window.
+
+Add a short workflow:
+
+1. Launch Core.
+2. Open NLP Workbench.
+3. Ingest a fact.
+4. Ask a follow-up question.
+5. Inspect answer evidence, mentions, and provenance.
+6. Create or attach conversations to compare isolated and shared context.
+7. Reset or remove sessions without changing graph data.
+
+Do not claim:
+
+- Durable provenance.
+- Save/load persistence.
+- Import/export support.
+- Graph visualization.
+- Multi-user or remote sessions.
+- Statistical accuracy guarantees.
+
+12.3 Module_3_Plan.txt
+
+- Change the status line after Phase 7 acceptance to indicate Phases 1-7
+  complete.
+- Leave the historical phase descriptions intact.
+- Do not rewrite Phase 7 scope beyond integration and documentation.
+
+12.4 Status wording
+
+Preferred status progression:
+
+- During implementation: "In Progress (Phase 7 of 7)".
+- After acceptance: "Complete" for Module 3.
+
+Do not mark Module 3 complete before:
+
+- The workbench tests pass.
+- The manual WPF checklist passes.
+- The full solution builds with zero warnings and zero errors.
+- README.md and ReadMe2.md are updated.
+
+================================================================================
+13. PHASE 7 ACCEPTANCE CRITERIA
+================================================================================
+
+Phase 7 is complete when all of the following are true:
+
+1. NlpWorkbench exists under OPEN-LRD/NLP and has no WPF dependency.
+2. NlpWorkbench can create, attach, reset, remove, and clear conversations.
+3. NlpWorkbench can ingest statements and ask questions through NlpPipeline.
+4. NlpWorkbench exposes read-only state for graph counts, turns, focus,
+   mentions, and provenance.
+5. Starting or attaching a new session disposes the previous pipeline only after
+   the new session is valid.
+6. Unknown conversation IDs do not destroy the current session.
+7. Closing or disposing the workbench leaves the conversation in the core.
+8. Core reinitialization is detected as a stale session without exceptions.
+9. The NLP Workbench window provides the inputs and controls listed in Section 6.
+10. Ingest and Ask results display status, answer text, short answer, flags,
+    diagnostics, candidates, evidence, frames/chains, mentions, focus, and
+    provenance.
+11. The UI enables the NLP Workbench button only after successful core launch.
+12. MainWindow allows only one NLP Workbench window at a time.
+13. Destructive session operations require confirmation.
+14. Invalid text, invalid GUIDs, unknown IDs, and unexpected exceptions are
+    handled without crashing the application.
+15. Ingest, Ask, Reset, Remove, and Clear never edit graph nodes or links except
+    for Ingest's normal pipeline behavior.
+16. New workbench smoke tests pass.
+17. All existing 61 smoke tests still pass.
+18. Full solution build succeeds with zero warnings and zero errors.
+19. The manual WPF checklist passes on Windows.
+20. README.md, ReadMe2.md, and Module_3_Plan.txt reflect Phase 7 accurately.
+21. Module 3 is marked complete only after all above conditions pass.
+22. Import, Export, Visualizer, durable persistence, and graph editing are not
+    claimed as implemented.
+
+================================================================================
+14. RISKS, DECISIONS, AND DEFERRED WORK
+================================================================================
+
+Resolved design decisions for Phase 7:
+
+- Use a UI-independent NlpWorkbench under OPEN-LRD/NLP so lifecycle and state
+  are testable in the net10.0 smoke project.
+- Keep NlpWorkbenchWindow.xaml.cs as the WPF boundary; do not introduce an MVVM framework.
+- Keep the existing Tools window and Tools button unchanged as placeholders.
+- Allow only one NLP Workbench window per MainWindow instance.
+- Enable the NLP Workbench button only after Launch Core succeeds.
+- Start a fresh conversation automatically when the NLP Workbench window opens
+  with an initialized core.
+- New Conversation does not delete prior sessions.
+- Attach is explicit by conversation ID.
+- Remove and Clear All are the only destructive registry operations.
+- Closing or disposing a workbench does not remove the conversation.
+- Reset clears conversation memory only.
+- Workbench operations are synchronous on the UI thread.
+- No background threads, cancellation, or async pipeline work in Phase 7.
+- Optional source and topic inputs are GUID text boxes, not graph pickers.
+- Validate optional source/topic IDs for parseability and existence before
+  ingestion.
+- Preserve raw NlpResult semantics in the UI; do not reinterpret statuses.
+- Keep Import, Export, and Visualizer visibly deferred.
+- Do not add persistence or graph serialization.
+- Do not change Module 1 or Module 2 models.
+
+Known Phase 7 limitations after implementation:
+
+- WPF UI automation is not part of the smoke suite.
+- The UI is English-only and desktop-only.
+- No durable session or graph persistence.
+- No session expiry.
+- No source/topic picker; IDs are entered as text.
+- No graph visualization or editing.
+- No async progress or cancellation for large inputs.
+- Large graph counts and session lists are displayed without virtualization
+  tuning beyond standard WPF DataGrid behavior.
+- Session IDs must be copied and stored manually to reattach later.
+- Core reinitialization invalidates existing sessions by design.
+
+Deferred beyond Module 3:
+
+- Import, Export, and Visualizer tools.
+- Durable provenance and persistence.
+- Graph editing and visualization.
+- Async pipeline execution and progress reporting.
+- Rich answer rendering and source citation UI.
+- Multi-user sessions and remote services.
+- Additional NLP algorithms or statistical models.
+
+================================================================================
+15. IMPLEMENTATION FILE CHECKLIST
+================================================================================
+
+Expected changed files:
+
+- OPEN-LRD/NLP/NlpWorkbench.cs                  (new facade)
+- OPEN-LRD/NLP/NlpTypes.cs                      (workbench state records)
+- OPEN-LRD/NlpWorkbenchWindow.xaml              (copied from Tools.xaml, then updated)
+- OPEN-LRD/NlpWorkbenchWindow.xaml.cs           (copied from Tools.xaml.cs, then updated)
+- OPEN-LRD/MainWindow.xaml                      (new NLP Workbench button)
+- OPEN-LRD/MainWindow.xaml.cs                   (launch and single-window logic)
+- OPEN-LRD.SmokeTests/NlpTests.cs               (new workbench tests)
+- README.md                                     (Phase 7 completion wording)
+- ReadMe2.md                                    (Phase 7 completion wording)
+- Module_3_Plan.txt                             (final status line)
+
+No changes expected in:
+
+- OPEN-LRD/Tools.xaml
+- OPEN-LRD/Tools.xaml.cs
+- OPEN-LRD/Nodes/**
+- OPEN-LRD/Reasoning/**
+- OPEN-LRD/NLP/NlpPipeline.cs unless a small accessor proves necessary
+- OPEN-LRD/NLP/ConversationContext.cs
+- OPEN-LRD/NLP/AnswerGenerator.cs
+- OPEN-LRD/NLP/QuestionAnalyzer.cs
+- OPEN-LRD/NLP/EntityResolver.cs
+- OPEN-LRD/NLP/Lexicon.cs
+- OPEN-LRD/NLP/NlpOptions.cs
+- OPEN-LRD.SmokeTests/Program.cs
+
+If implementation discovers that a file outside the expected list must change,
+stop and document the reason in the plan review before proceeding.
+
+================================================================================
+16. VERIFICATION COMMANDS
+================================================================================
+
+Run from the repository root.
+
+Smoke-test build with warnings treated as errors:
+
+    dotnet build OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj -warnaserror
+
+Run the complete smoke suite:
+
+    dotnet run --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build
+
+If the WSL dotnet host is unavailable, use the Windows SDK binary:
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" build \
+        OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj -warnaserror
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" run \
+        --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build
+
+On Windows, build the complete solution including the WPF project:
+
+    dotnet build OPEN-LRD.slnx
+
+Using the WSL environment and Windows SDK binary:
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" build OPEN-LRD.slnx
+
+Expected final result:
+
+- Zero warnings.
+- Zero errors.
+- All existing Module 1, Module 2, and Module 3 Phase 1-6 tests pass.
+- All new workbench tests pass.
+- The manual WPF checklist passes on Windows.
+- README.md and ReadMe2.md describe Module 3 as complete only after all checks
+  pass.
+
+================================================================================
+17. REVIEW CHECKPOINTS
+================================================================================
+
+Before implementation starts, review and confirm:
+
+1. NlpWorkbench belongs under OPEN-LRD/NLP and is the only planned new
+   non-WPF source file besides its state records.
+2. NlpWorkbenchWindow.xaml and NlpWorkbenchWindow.xaml.cs are new files
+   created by copying the Tools files before workbench changes are applied.
+3. The existing Tools window and Tools button remain unchanged placeholders.
+4. The NLP Workbench is a single non-modal window per MainWindow.
+5. The NLP Workbench button is disabled until Launch Core succeeds.
+6. New Conversation keeps old sessions available for later attach.
+7. Remove and Clear All are the only destructive session operations.
+8. Closing the NLP Workbench window leaves conversations in the core.
+9. Optional source and topic inputs are GUID text fields.
+10. Analyze preview is optional and, if included, must be read-only.
+11. Import, Export, and Visualizer remain explicitly deferred, and the Tools
+    window continues to describe them as planned work.
+12. WPF UI verification is manual on Windows; workbench logic is covered by the
+    net10.0 smoke suite.
+13. No Module 1 or Module 2 changes are planned.
+14. Documentation will mark Module 3 complete only after all acceptance checks
+    pass.
+
+This plan intentionally adds no new NLP behavior. Phase 7 is an integration,
+workbench, testing, and documentation phase for the behavior completed in
+Phases 1-6.
+
+(End of Phase 7 plan.)

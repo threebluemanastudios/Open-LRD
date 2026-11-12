@@ -343,4 +343,22 @@ namespace OPEN_LRD.NLP
         public IReadOnlyList<SessionProvenanceEntry> Provenance { get; init; } =
             Array.Empty<SessionProvenanceEntry>();
     }
+
+    internal sealed record NlpWorkbenchState(
+        bool CoreInitialized,
+        bool HasSession,
+        Guid? PipelineID,
+        Guid? ConversationID,
+        int TurnIndex,
+        Guid? FocusNodeID,
+        Guid? LastSubjectNodeID,
+        Guid? LastObjectNodeID,
+        Guid? LastQualifierNodeID,
+        Guid? LastAnswerNodeID,
+        int GraphNodeCount,
+        int GraphLinkCount,
+        int MentionCount,
+        int ProvenanceCount,
+        IReadOnlyList<ConversationMention> Mentions,
+        IReadOnlyList<SessionProvenanceEntry> Provenance);
 }
