@@ -90,17 +90,23 @@ namespace OPEN_LRD.NLP
                 ["write"] = "wrote"
             };
 
+        private const string temporaryCaveat = " (This fact is not yet verified.)";
+        private const string sessionCaveat = " (This fact was provided in this session.)";
+
         public static NlpAnswer Generate(
-            QuestionAnalysis question,
+            QuestionAnalysis? question,
             IReadOnlyList<QuestionEvaluation> evaluations,
             LRD_Core core,
-            NlpOptions? options = null)
+            NlpOptions? options = null,
+            ConversationContext? conversation = null)
         {
-            ArgumentNullException.ThrowIfNull(question);
             ArgumentNullException.ThrowIfNull(evaluations);
             ArgumentNullException.ThrowIfNull(core);
 
             options ??= new NlpOptions();
+
+            if (question is null)
+                return Unsupported(null, new[] { "The question could not be analyzed." });
 
             if (question.AnchorIsAmbiguous)
                 return CreateAmbiguousAnchorAnswer(question, options);
@@ -112,8 +118,8 @@ namespace OPEN_LRD.NLP
                 return Unsupported(question, new[] { "No query could be evaluated." });
 
             return question.Type == QuestionType.YesNo
-                ? GenerateBoolean(question, evaluations, core, options)
-                : GenerateWh(question, evaluations, core, options);
+                ? GenerateBoolean(question, evaluations, core, options, conversation)
+                : GenerateWh(question, evaluations, core, options, conversation);
         }
 
         public static NlpAnswer Unsupported(
@@ -167,7 +173,8 @@ namespace OPEN_LRD.NLP
             QuestionAnalysis question,
             IReadOnlyList<QuestionEvaluation> evaluations,
             LRD_Core core,
-            NlpOptions options)
+            NlpOptions options,
+            ConversationContext? conversation)
         {
             bool verified = false;
             bool ambiguous = false;
@@ -218,6 +225,7 @@ namespace OPEN_LRD.NLP
             string? shortAnswer;
             string text;
             AnswerKind kind = AnswerKind.Boolean;
+            bool usesSessionProvenance = false;
 
             if (verified)
             {
@@ -227,7 +235,21 @@ namespace OPEN_LRD.NLP
                 string? evidence = options.IncludeEvidenceSentence
                     ? BuildEvidenceSentence(evidencePath, core, question.Tense)
                     : null;
-                text = evidence is null ? "Yes." : "Yes. " + evidence;
+                string baseText = evidence is null ? "Yes." : "Yes. " + evidence;
+                usesSessionProvenance = UsesSessionProvenance(
+                    evidencePath,
+                    conversation,
+                    options);
+
+                if (usesSessionProvenance)
+                {
+                    text = AppendSessionCaveat(baseText, options, diagnostics);
+                    diagnostics.Add("Answer evidence was provided in this session.");
+                }
+                else
+                {
+                    text = baseText;
+                }
             }
             else if (ambiguous)
             {
@@ -271,14 +293,16 @@ namespace OPEN_LRD.NLP
                 evaluations.FirstOrDefault()?.Result,
                 false,
                 Math.Clamp(confidence, 0.0, 1.0),
-                Deduplicate(diagnostics));
+                Deduplicate(diagnostics),
+                usesSessionProvenance);
         }
 
         private static NlpAnswer GenerateWh(
             QuestionAnalysis question,
             IReadOnlyList<QuestionEvaluation> evaluations,
             LRD_Core core,
-            NlpOptions options)
+            NlpOptions options,
+            ConversationContext? conversation)
         {
             if (question.AnchorNodeID is null)
             {
@@ -438,10 +462,25 @@ namespace OPEN_LRD.NLP
             string? evidence = options.IncludeEvidenceSentence
                 ? BuildEvidenceSentence(evidencePath, core, question.Tense)
                 : null;
-            string text = evidence ?? selected.Label;
+            string baseText = evidence ?? selected.Label;
+            bool usesSessionProvenance = UsesSessionProvenance(
+                evidencePath,
+                conversation,
+                options);
+            string text;
 
-            if (usesTemporaryEvidence)
-                text = text + " (This fact is not yet verified.)";
+            if (usesSessionProvenance)
+            {
+                text = AppendSessionCaveat(baseText, options, diagnostics);
+                diagnostics.Add("Answer evidence was provided in this session.");
+            }
+            else
+            {
+                text = baseText;
+
+                if (usesTemporaryEvidence)
+                    text += temporaryCaveat;
+            }
 
             AnswerKind kind = DetermineAnswerKind(question, selected);
 
@@ -457,7 +496,28 @@ namespace OPEN_LRD.NLP
                 evaluations.FirstOrDefault()?.Result,
                 usesTemporaryEvidence,
                 Math.Clamp(selected.Score, 0.0, 1.0),
-                Deduplicate(diagnostics));
+                Deduplicate(diagnostics),
+                usesSessionProvenance);
+        }
+
+        private static bool UsesSessionProvenance(
+            GraphPath? path,
+            ConversationContext? conversation,
+            NlpOptions options)
+        {
+            return conversation is not null
+                && options.EnableSessionProvenance
+                && options.UseSessionProvenanceInAnswers
+                && conversation.FindProvenance(path).Count > 0;
+        }
+
+        private static string AppendSessionCaveat(
+            string baseText,
+            NlpOptions options,
+            List<string> diagnostics)
+        {
+            int baseLimit = Math.Max(1, options.MaxAnswerTextLength - sessionCaveat.Length);
+            return TrimText(baseText, baseLimit, diagnostics) + sessionCaveat;
         }
 
         private static GraphPath? FindEvidencePath(

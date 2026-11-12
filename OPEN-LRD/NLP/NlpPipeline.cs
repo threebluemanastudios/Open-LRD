@@ -1,18 +1,23 @@
 using OPEN_LRD.Nodes;
+using OPEN_LRD.Nodes.Links;
 using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.NLP
 {
-    internal sealed class NlpPipeline
+    internal sealed class NlpPipeline : IDisposable
     {
         private readonly LRD_Core core;
         private readonly NlpOptions options;
         private readonly ReasoningEngine reasoning;
+        private readonly Guid pipelineID;
+        private readonly Guid conversationID;
+        private readonly ConversationContext conversation;
 
         public NlpPipeline(
             LRD_Core core,
             NlpOptions? options = null,
-            ReasoningEngine? reasoning = null)
+            ReasoningEngine? reasoning = null,
+            Guid? conversationID = null)
         {
             this.core = core ?? throw new ArgumentNullException(nameof(core));
 
@@ -21,6 +26,27 @@ namespace OPEN_LRD.NLP
 
             this.options = options ?? new NlpOptions();
             this.reasoning = reasoning ?? new ReasoningEngine(core);
+            this.pipelineID = Guid.NewGuid();
+            this.conversation = core.ResolveConversation(conversationID, this.options);
+            this.conversationID = this.conversation.ConversationID;
+
+            if (!core.RegisterPipelineConversation(this.pipelineID, this.conversationID))
+                throw new InvalidOperationException("The pipeline could not be attached to its conversation.");
+        }
+
+        public Guid PipelineID => pipelineID;
+
+        public Guid ConversationID => conversationID;
+
+        public ConversationContext Conversation => conversation;
+
+        public IReadOnlyList<SessionProvenanceEntry> Provenance => conversation.Provenance;
+
+        public void ResetConversation() => conversation.Clear();
+
+        public void Dispose()
+        {
+            core.UnregisterPipelineConversation(pipelineID);
         }
 
         public NlpResult Analyze(string? text)
@@ -115,7 +141,9 @@ namespace OPEN_LRD.NLP
                 };
             }
 
-            EntityResolver resolver = new EntityResolver(core);
+            conversation.BeginTurn();
+
+            EntityResolver resolver = new EntityResolver(core, conversation, options);
             QuestionAnalysis question = QuestionAnalyzer.Analyze(analysis.Parsed, resolver, options);
 
             List<string> diagnostics = new List<string>();
@@ -142,8 +170,11 @@ namespace OPEN_LRD.NLP
                 }
             }
 
-            NlpAnswer answer = AnswerGenerator.Generate(question, evaluations, core, options);
+            NlpAnswer answer = AnswerGenerator.Generate(question, evaluations, core, options, conversation);
             diagnostics.AddRange(answer.Diagnostics);
+
+            if (answer.Status is AnswerStatus.Answered or AnswerStatus.Yes or AnswerStatus.No)
+                UpdateAskConversation(question, answer);
 
             NlpStatus status = MapAnswerStatus(answer.Status);
 
@@ -166,7 +197,12 @@ namespace OPEN_LRD.NLP
             if (analysis.Status == NlpStatus.InvalidInput || analysis.Parsed is null)
                 return analysis;
 
+            conversation.BeginTurn();
+
             List<string> diagnostics = new List<string>(analysis.Diagnostics);
+            List<RelationFrame> ingestibleFrames = analysis.Frames
+                .Where(frame => frame.Ingestible || IsContextPronounFrame(frame))
+                .ToList();
 
             if (analysis.Frames.Count == 0)
             {
@@ -174,7 +210,7 @@ namespace OPEN_LRD.NLP
                 return new NlpResult(NlpStatus.Unsupported, diagnostics, analysis.Parsed);
             }
 
-            if (!analysis.Frames.Any(frame => frame.Ingestible))
+            if (ingestibleFrames.Count == 0)
             {
                 diagnostics.Add("No ingestible relation frames were found.");
                 return new NlpResult(NlpStatus.Unsupported, diagnostics, analysis.Parsed)
@@ -191,21 +227,27 @@ namespace OPEN_LRD.NLP
                 {
                     diagnostics.Add(
                         $"The source is discredited (score {trust.Score:F3}, evidence {trust.TotalEvidence:F1}).");
+                    List<SessionProvenanceEntry> rejectedProvenance = RecordRejectedProvenance(
+                        ingestibleFrames,
+                        analysis.Parsed.OriginalText,
+                        sourceNodeID,
+                        topicNodeID,
+                        diagnostics);
+
                     return new NlpResult(NlpStatus.RejectedByTrust, diagnostics, analysis.Parsed)
                     {
-                        Frames = analysis.Frames
+                        Frames = analysis.Frames,
+                        Provenance = rejectedProvenance
                     };
                 }
             }
 
-            EntityResolver resolver = new EntityResolver(core);
+            EntityResolver resolver = new EntityResolver(core, conversation, options);
             List<LinkedList<Chain_Node>> chains = new List<LinkedList<Chain_Node>>();
+            List<RelationFrame> chainFrames = new List<RelationFrame>();
 
-            foreach (RelationFrame frame in analysis.Frames)
+            foreach (RelationFrame frame in ingestibleFrames)
             {
-                if (!frame.Ingestible)
-                    continue;
-
                 ChainBuildResult built = ChainBuilder.Build(frame, resolver, options);
                 diagnostics.AddRange(built.Diagnostics);
 
@@ -219,6 +261,7 @@ namespace OPEN_LRD.NLP
                     }
 
                     chains.Add(chain);
+                    chainFrames.Add(frame);
                 }
 
                 if (chains.Count >= options.MaxChainsPerText)
@@ -239,13 +282,41 @@ namespace OPEN_LRD.NLP
             foreach (LinkedList<Chain_Node> chain in chains)
                 results.Add(IngestChain(chain, sourceNodeID, topicNodeID, diagnostics));
 
+            List<SessionProvenanceEntry> provenance = new List<SessionProvenanceEntry>();
+
+            for (int index = 0; index < chains.Count; index++)
+            {
+                if (!options.EnableSessionProvenance)
+                    break;
+
+                SessionProvenanceEntry entry = BuildProvenanceEntry(
+                    chains[index],
+                    chainFrames[index],
+                    results[index],
+                    sourceNodeID,
+                    topicNodeID,
+                    analysis.Parsed.OriginalText);
+
+                SessionProvenanceEntry recorded = conversation.RecordProvenance(entry);
+
+                if (recorded.Sequence > 0)
+                    provenance.Add(recorded);
+            }
+
+            for (int index = 0; index < chains.Count; index++)
+            {
+                if (IsSuccessfulIngestion(results[index].Status))
+                    UpdateIngestionConversation(chains[index], chainFrames[index], results[index]);
+            }
+
             NlpStatus status = AggregateStatus(results);
 
             return new NlpResult(status, diagnostics, analysis.Parsed)
             {
                 Frames = analysis.Frames,
                 Chains = chains,
-                ReasoningResults = results
+                ReasoningResults = results,
+                Provenance = provenance
             };
         }
 
@@ -277,6 +348,325 @@ namespace OPEN_LRD.NLP
             }
 
             return reasoning.Ingest(chain, sourceNodeID, topicNodeID);
+        }
+
+        private bool IsContextPronounFrame(RelationFrame frame)
+        {
+            return options.EnableConversationContext
+                && options.EnablePronounResolution
+                && !frame.Negated
+                && frame.Modal is null
+                && frame.Voice != Voice.Unknown
+                && frame.Arguments.Any(argument => argument.IsPronoun);
+        }
+
+        private List<SessionProvenanceEntry> RecordRejectedProvenance(
+            IReadOnlyList<RelationFrame> frames,
+            string sourceText,
+            Guid? sourceNodeID,
+            Guid? topicNodeID,
+            IReadOnlyList<string> diagnostics)
+        {
+            List<SessionProvenanceEntry> entries = new List<SessionProvenanceEntry>();
+
+            if (!options.EnableSessionProvenance || frames.Count == 0)
+                return entries;
+
+            foreach (RelationFrame frame in frames)
+            {
+                SessionProvenanceEntry entry = new SessionProvenanceEntry(
+                    0,
+                    conversation.TurnIndex,
+                    frame.SentenceIndex,
+                    sourceText,
+                    ReasoningStatus.RejectedByTrust,
+                    frame.RelationName,
+                    frame.LinkClass,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    sourceNodeID,
+                    topicNodeID,
+                    Array.Empty<Guid>(),
+                    Array.Empty<Guid>(),
+                    false,
+                    false,
+                    diagnostics);
+
+                SessionProvenanceEntry recorded = conversation.RecordProvenance(entry);
+
+                if (recorded.Sequence > 0)
+                    entries.Add(recorded);
+            }
+
+            return entries;
+        }
+
+        private SessionProvenanceEntry BuildProvenanceEntry(
+            LinkedList<Chain_Node> chain,
+            RelationFrame frame,
+            ReasoningResult result,
+            Guid? sourceNodeID,
+            Guid? topicNodeID,
+            string sourceText)
+        {
+            Chain_Node? first = chain.First?.Value;
+            Chain_Node? last = chain.Last?.Value;
+            Link? link = first?.Get_LinkNext();
+            LinkClass linkClass = link?.Classification ?? frame.LinkClass;
+            Guid? subjectNodeID = first is null ? null : MapGraphNodeID(first.ID, result);
+            Guid? objectNodeID = last is null ? null : MapGraphNodeID(last.ID, result);
+
+            if (subjectNodeID == Guid.Empty)
+                subjectNodeID = null;
+
+            if (objectNodeID == Guid.Empty)
+                objectNodeID = null;
+
+            bool targetIsQualifier = linkClass == LinkClass.spatial
+                || linkClass == LinkClass.temporal
+                || linkClass == LinkClass.basic
+                || linkClass == LinkClass.empty;
+            List<Guid> nodeIDs = chain
+                .Select(node => MapGraphNodeID(node.ID, result))
+                .Where(nodeID => nodeID != Guid.Empty)
+                .Distinct()
+                .ToList();
+            List<Guid> temporaryNodeIDs = nodeIDs
+                .Where(nodeID => core.TryGetNode(nodeID, out Web_Node? node)
+                    && node is not null
+                    && node.IsTemporary)
+                .ToList();
+
+            return new SessionProvenanceEntry(
+                0,
+                conversation.TurnIndex,
+                frame.SentenceIndex,
+                sourceText,
+                result.Status,
+                link?.ForwardLink.Name ?? frame.RelationName,
+                linkClass,
+                link?.ForwardLink.Id,
+                link?.InverseLink.Id,
+                subjectNodeID,
+                objectNodeID,
+                targetIsQualifier ? objectNodeID : null,
+                sourceNodeID,
+                topicNodeID,
+                nodeIDs,
+                temporaryNodeIDs,
+                result.GraphMutated,
+                IsSuccessfulIngestion(result.Status),
+                result.Diagnostics);
+        }
+
+        private void UpdateIngestionConversation(
+            LinkedList<Chain_Node> chain,
+            RelationFrame frame,
+            ReasoningResult result)
+        {
+            if (!options.EnableConversationContext)
+                return;
+
+            Chain_Node? first = chain.First?.Value;
+            Chain_Node? last = chain.Last?.Value;
+
+            if (first is null)
+                return;
+
+            Guid firstNodeID = MapGraphNodeID(first.ID, result);
+
+            if (firstNodeID == Guid.Empty)
+                return;
+
+            Link? link = first.Get_LinkNext();
+            FrameRole targetRole = RoleForLinkClass(link?.Classification ?? frame.LinkClass);
+            List<ConversationMention> mentions = new List<ConversationMention>();
+            AddChainMention(mentions, firstNodeID, first.Label, first.Get_NodeType(), FrameRole.Subject);
+
+            Guid lastNodeID = Guid.Empty;
+
+            if (last is not null && last.ID != first.ID)
+            {
+                lastNodeID = MapGraphNodeID(last.ID, result);
+
+                if (lastNodeID != Guid.Empty)
+                    AddChainMention(mentions, lastNodeID, last.Label, last.Get_NodeType(), targetRole);
+            }
+
+            conversation.RecordMentions(mentions);
+
+            Guid? focus = lastNodeID != Guid.Empty
+                ? lastNodeID
+                : firstNodeID;
+            conversation.SetFocus(focus, targetRole, false);
+        }
+
+        private void UpdateAskConversation(
+            QuestionAnalysis question,
+            NlpAnswer answer)
+        {
+            if (!options.EnableConversationContext)
+                return;
+
+            List<ConversationMention> mentions = new List<ConversationMention>();
+
+            if (question.AnchorNodeID.HasValue)
+            {
+                FrameArgument? anchorArgument = question.AnchorRole switch
+                {
+                    FrameRole.Object => question.Object,
+                    FrameRole.Qualifier => question.Qualifier,
+                    _ => question.Subject
+                };
+
+                AddQuestionMention(
+                    mentions,
+                    question.AnchorNodeID.Value,
+                    anchorArgument?.NodeType ?? NodeTypes.Empties,
+                    question.AnchorRole,
+                    anchorArgument?.SurfaceText ?? string.Empty,
+                    false);
+            }
+
+            Guid? focusNodeID = question.AnchorNodeID;
+            FrameRole focusRole = question.AnchorRole;
+            bool fromAnswer = false;
+
+            if (answer.Status == AnswerStatus.Answered && answer.AnswerNodeID.HasValue)
+            {
+                FrameRole answerRole = RoleForAnswerKind(answer.Kind);
+                AddQuestionMention(
+                    mentions,
+                    answer.AnswerNodeID.Value,
+                    NodeTypes.Empties,
+                    answerRole,
+                    answer.ShortAnswer ?? string.Empty,
+                    true);
+                focusNodeID = answer.AnswerNodeID;
+                focusRole = answerRole;
+                fromAnswer = true;
+            }
+
+            conversation.RecordMentions(mentions);
+
+            if (focusNodeID.HasValue)
+                conversation.SetFocus(focusNodeID, focusRole, fromAnswer);
+        }
+
+        private void AddChainMention(
+            List<ConversationMention> mentions,
+            Guid nodeID,
+            string? fallbackLabel,
+            NodeTypes fallbackType,
+            FrameRole role)
+        {
+            string fallback = fallbackLabel ?? string.Empty;
+            string label = GetNodeLabel(nodeID, fallback);
+            string surface = string.IsNullOrWhiteSpace(fallback) ? label : fallback;
+            NodeTypes nodeType = fallbackType;
+
+            if (core.TryGetNode(nodeID, out Web_Node? graphNode) && graphNode is not null)
+                nodeType = graphNode.Get_NodeType();
+
+            mentions.Add(new ConversationMention(
+                nodeID,
+                label,
+                surface,
+                nodeType,
+                role,
+                conversation.TurnIndex,
+                0,
+                false));
+        }
+
+        private static Guid MapGraphNodeID(Guid chainNodeID, ReasoningResult result)
+        {
+            if (result.MergedNodeMap is not null
+                && result.MergedNodeMap.TryGetValue(chainNodeID, out Guid mergedNodeID)
+                && mergedNodeID != Guid.Empty)
+            {
+                return mergedNodeID;
+            }
+
+            if (result.SelectedMatch is not null
+                && result.SelectedMatch.NodeMap.TryGetValue(chainNodeID, out Guid graphNodeID)
+                && graphNodeID != Guid.Empty)
+            {
+                return graphNodeID;
+            }
+
+            return chainNodeID;
+        }
+
+        private void AddQuestionMention(
+            List<ConversationMention> mentions,
+            Guid nodeID,
+            NodeTypes fallbackType,
+            FrameRole role,
+            string fallbackSurface,
+            bool fromAnswer)
+        {
+            string label = GetNodeLabel(nodeID, fallbackSurface);
+            string surface = string.IsNullOrWhiteSpace(fallbackSurface) ? label : fallbackSurface;
+            NodeTypes nodeType = fallbackType;
+
+            if (core.TryGetNode(nodeID, out Web_Node? node) && node is not null)
+                nodeType = node.Get_NodeType();
+
+            mentions.Add(new ConversationMention(
+                nodeID,
+                label,
+                surface,
+                nodeType,
+                role,
+                conversation.TurnIndex,
+                0,
+                fromAnswer));
+        }
+
+        private string GetNodeLabel(Guid nodeID, string fallback)
+        {
+            if (!core.TryGetNode(nodeID, out Web_Node? node) || node is null)
+                return fallback;
+
+            if (!string.IsNullOrWhiteSpace(node.Label))
+                return node.Label!;
+
+            string? alias = node.Aliases.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            return alias ?? fallback;
+        }
+
+        private static bool IsSuccessfulIngestion(ReasoningStatus status)
+        {
+            return status is ReasoningStatus.Answered or ReasoningStatus.Contradiction;
+        }
+
+        private static FrameRole RoleForLinkClass(LinkClass linkClass)
+        {
+            if (linkClass == LinkClass.identities || linkClass == LinkClass.actions)
+                return FrameRole.Object;
+
+            if (linkClass == LinkClass.spatial)
+                return FrameRole.Location;
+
+            if (linkClass == LinkClass.temporal)
+                return FrameRole.Time;
+
+            return FrameRole.Qualifier;
+        }
+
+        private static FrameRole RoleForAnswerKind(AnswerKind kind)
+        {
+            return kind switch
+            {
+                AnswerKind.Location => FrameRole.Location,
+                AnswerKind.Time => FrameRole.Time,
+                AnswerKind.Quantity => FrameRole.Qualifier,
+                _ => FrameRole.Object
+            };
         }
 
         private static NlpStatus MapAnswerStatus(AnswerStatus status)

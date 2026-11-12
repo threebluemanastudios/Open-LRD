@@ -1,4 +1,5 @@
-﻿using OPEN_LRD.Nodes;
+﻿using OPEN_LRD.NLP;
+using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
 using System.Collections.ObjectModel;
 
@@ -12,6 +13,8 @@ namespace OPEN_LRD
         protected Dictionary<Guid, Web_Node>? nodes;
         protected LinkedList<Chain_Node>? queryChain;
         protected LinkedList<Chain_Node>? responseChain;
+        private Dictionary<Guid, ConversationContext>? conversations;
+        private Dictionary<Guid, Guid>? pipelineConversations;
 
         static LRD_Core() { }
 
@@ -25,7 +28,120 @@ namespace OPEN_LRD
             nodes = new Dictionary<Guid, Web_Node>();
             queryChain = new LinkedList<Chain_Node>();
             responseChain = new LinkedList<Chain_Node>();
+            conversations = new Dictionary<Guid, ConversationContext>();
+            pipelineConversations = new Dictionary<Guid, Guid>();
             initialized = true;
+        }
+
+        public Guid CreateConversation(NlpOptions options)
+        {
+            ArgumentNullException.ThrowIfNull(options);
+
+            if (!initialized || conversations is null)
+                throw new InvalidOperationException("The core must be initialized before creating a conversation.");
+
+            Guid conversationID;
+
+            do
+            {
+                conversationID = Guid.NewGuid();
+            }
+            while (conversationID == Guid.Empty || conversations.ContainsKey(conversationID));
+
+            conversations.Add(conversationID, new ConversationContext(conversationID, options));
+            return conversationID;
+        }
+
+        public ConversationContext GetConversation(Guid conversationID)
+        {
+            if (!initialized || conversations is null)
+                throw new InvalidOperationException("The core must be initialized before accessing conversations.");
+
+            if (conversations.TryGetValue(conversationID, out ConversationContext? context))
+                return context;
+
+            throw new InvalidOperationException($"Conversation '{conversationID}' was not found.");
+        }
+
+        public bool TryGetConversation(Guid conversationID, out ConversationContext? context)
+        {
+            context = null;
+
+            if (!initialized || conversations is null)
+                return false;
+
+            return conversations.TryGetValue(conversationID, out context);
+        }
+
+        public ConversationContext ResolveConversation(Guid? conversationID, NlpOptions options)
+        {
+            if (!initialized)
+                throw new InvalidOperationException("The core must be initialized before resolving conversations.");
+
+            if (!conversationID.HasValue)
+                return GetConversation(CreateConversation(options));
+
+            return GetConversation(conversationID.Value);
+        }
+
+        public bool RemoveConversation(Guid conversationID)
+        {
+            if (!initialized || conversations is null || pipelineConversations is null)
+                return false;
+
+            List<Guid> attachedPipelines = pipelineConversations
+                .Where(pair => pair.Value == conversationID)
+                .Select(pair => pair.Key)
+                .ToList();
+
+            foreach (Guid pipelineID in attachedPipelines)
+                pipelineConversations.Remove(pipelineID);
+
+            return conversations.Remove(conversationID);
+        }
+
+        public IReadOnlyDictionary<Guid, ConversationContext>? GetConversations()
+        {
+            if (!initialized || conversations is null)
+                return null;
+
+            return new ReadOnlyDictionary<Guid, ConversationContext>(conversations);
+        }
+
+        public void ClearConversations()
+        {
+            conversations?.Clear();
+            pipelineConversations?.Clear();
+        }
+
+        public bool RegisterPipelineConversation(Guid pipelineID, Guid conversationID)
+        {
+            if (!initialized || conversations is null || pipelineConversations is null)
+                return false;
+
+            if (!conversations.ContainsKey(conversationID))
+                return false;
+
+            pipelineConversations[pipelineID] = conversationID;
+            return true;
+        }
+
+        public bool TryGetPipelineConversation(Guid pipelineID, out Guid conversationID)
+        {
+            conversationID = Guid.Empty;
+
+            if (!initialized || pipelineConversations is null)
+                return false;
+
+            return pipelineConversations.TryGetValue(pipelineID, out conversationID);
+        }
+
+        public bool UnregisterPipelineConversation(Guid pipelineID)
+        {
+            if (!initialized || pipelineConversations is null)
+                return false;
+
+            return pipelineConversations.Remove(pipelineID);
         }
 
         // Generates a new basic type node with a collision-resistant GUID and adds it to the graph.

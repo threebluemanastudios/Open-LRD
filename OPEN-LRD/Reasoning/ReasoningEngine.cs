@@ -275,7 +275,8 @@ namespace OPEN_LRD.Reasoning
                         applyResult.PromotedNodeIDs,
                         plan.Conflicts,
                         mutated,
-                        diagnostics);
+                        diagnostics,
+                        plan.QueryNodeToGraphNode);
                 }
 
                 return new ReasoningResult(
@@ -291,7 +292,8 @@ namespace OPEN_LRD.Reasoning
                     applyResult.PromotedNodeIDs,
                     plan.Conflicts,
                     mutated,
-                    diagnostics);
+                    diagnostics,
+                    plan.QueryNodeToGraphNode);
             }
 
             if (!answer)

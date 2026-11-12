@@ -14,6 +14,51 @@ namespace OPEN_LRD.NLP
             "yourselves", "themselves", "someone", "something", "anyone", "anything",
             "everyone", "everything", "nobody", "nothing", "none");
 
+        private static readonly Dictionary<string, PronounInfo> pronounInfos =
+            new Dictionary<string, PronounInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["he"] = ThirdPronoun("he", PronounNumber.Singular, PronounCase.Subject),
+                ["him"] = ThirdPronoun("him", PronounNumber.Singular, PronounCase.Object),
+                ["his"] = ThirdPronoun("his", PronounNumber.Singular, PronounCase.Possessive),
+                ["she"] = ThirdPronoun("she", PronounNumber.Singular, PronounCase.Subject),
+                ["her"] = ThirdPronoun("her", PronounNumber.Singular, PronounCase.Object),
+                ["hers"] = ThirdPronoun("hers", PronounNumber.Singular, PronounCase.Possessive),
+                ["it"] = ThirdPronoun("it", PronounNumber.Singular, PronounCase.Subject),
+                ["its"] = ThirdPronoun("its", PronounNumber.Singular, PronounCase.Possessive),
+                ["they"] = ThirdPronoun("they", PronounNumber.Plural, PronounCase.Subject),
+                ["them"] = ThirdPronoun("them", PronounNumber.Plural, PronounCase.Object),
+                ["their"] = ThirdPronoun("their", PronounNumber.Plural, PronounCase.Possessive),
+                ["theirs"] = ThirdPronoun("theirs", PronounNumber.Plural, PronounCase.Possessive),
+                ["himself"] = ReflexivePronoun("himself", PronounPerson.Third, PronounNumber.Singular),
+                ["herself"] = ReflexivePronoun("herself", PronounPerson.Third, PronounNumber.Singular),
+                ["itself"] = ReflexivePronoun("itself", PronounPerson.Third, PronounNumber.Singular),
+                ["themselves"] = ReflexivePronoun("themselves", PronounPerson.Third, PronounNumber.Plural),
+                ["i"] = PersonalPronoun("i", PronounPerson.First, PronounNumber.Singular, PronounCase.Subject),
+                ["me"] = PersonalPronoun("me", PronounPerson.First, PronounNumber.Singular, PronounCase.Object),
+                ["my"] = PersonalPronoun("my", PronounPerson.First, PronounNumber.Singular, PronounCase.Possessive),
+                ["mine"] = PersonalPronoun("mine", PronounPerson.First, PronounNumber.Singular, PronounCase.Possessive),
+                ["myself"] = ReflexivePronoun("myself", PronounPerson.First, PronounNumber.Singular),
+                ["we"] = PersonalPronoun("we", PronounPerson.First, PronounNumber.Plural, PronounCase.Subject),
+                ["us"] = PersonalPronoun("us", PronounPerson.First, PronounNumber.Plural, PronounCase.Object),
+                ["our"] = PersonalPronoun("our", PronounPerson.First, PronounNumber.Plural, PronounCase.Possessive),
+                ["ours"] = PersonalPronoun("ours", PronounPerson.First, PronounNumber.Plural, PronounCase.Possessive),
+                ["ourselves"] = ReflexivePronoun("ourselves", PronounPerson.First, PronounNumber.Plural),
+                ["you"] = PersonalPronoun("you", PronounPerson.Second, PronounNumber.Unknown, PronounCase.Subject),
+                ["your"] = PersonalPronoun("your", PronounPerson.Second, PronounNumber.Unknown, PronounCase.Possessive),
+                ["yours"] = PersonalPronoun("yours", PronounPerson.Second, PronounNumber.Unknown, PronounCase.Possessive),
+                ["yourself"] = ReflexivePronoun("yourself", PronounPerson.Second, PronounNumber.Singular),
+                ["yourselves"] = ReflexivePronoun("yourselves", PronounPerson.Second, PronounNumber.Plural),
+                ["someone"] = IndefinitePronoun("someone"),
+                ["something"] = IndefinitePronoun("something"),
+                ["anyone"] = IndefinitePronoun("anyone"),
+                ["anything"] = IndefinitePronoun("anything"),
+                ["everyone"] = IndefinitePronoun("everyone"),
+                ["everything"] = IndefinitePronoun("everything"),
+                ["nobody"] = IndefinitePronoun("nobody"),
+                ["nothing"] = IndefinitePronoun("nothing"),
+                ["none"] = IndefinitePronoun("none")
+            };
+
         private static readonly HashSet<string> whWords = Create(
             "who", "whom", "whose", "what", "which", "when", "where", "why", "how");
 
@@ -162,6 +207,70 @@ namespace OPEN_LRD.NLP
         private static HashSet<string> Create(params string[] values)
         {
             return new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static PronounInfo ThirdPronoun(
+            string surface,
+            PronounNumber number,
+            PronounCase pronounCase)
+        {
+            return PersonalPronoun(surface, PronounPerson.Third, number, pronounCase);
+        }
+
+        private static PronounInfo PersonalPronoun(
+            string surface,
+            PronounPerson person,
+            PronounNumber number,
+            PronounCase pronounCase)
+        {
+            return new PronounInfo(
+                surface,
+                surface,
+                person,
+                number,
+                pronounCase,
+                false,
+                false,
+                person == PronounPerson.Third);
+        }
+
+        private static PronounInfo ReflexivePronoun(
+            string surface,
+            PronounPerson person,
+            PronounNumber number)
+        {
+            return new PronounInfo(
+                surface,
+                surface,
+                person,
+                number,
+                PronounCase.Object,
+                true,
+                false,
+                false);
+        }
+
+        private static PronounInfo IndefinitePronoun(string surface)
+        {
+            return new PronounInfo(
+                surface,
+                surface,
+                PronounPerson.Unknown,
+                PronounNumber.Unknown,
+                PronounCase.Unknown,
+                false,
+                true,
+                false);
+        }
+
+        public static bool TryGetPronounInfo(string value, out PronounInfo info)
+        {
+            info = null!;
+
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return pronounInfos.TryGetValue(value.Trim(), out info!);
         }
 
         public static bool IsDeterminer(string value) => determiners.Contains(value);

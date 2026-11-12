@@ -17,5 +17,14 @@ namespace OPEN_LRD.NLP
         public bool IncludeEvidenceSentence { get; init; } = true;
         public int MaxAnswerTextLength { get; init; } = 500;
         public int TemporaryNodeTimeToLive { get; init; } = Node.DefaultTimeToLive;
+        public bool EnableConversationContext { get; init; } = true;
+        public bool EnablePronounResolution { get; init; } = true;
+        public bool EnableSessionProvenance { get; init; } = true;
+        public bool UseSessionProvenanceInAnswers { get; init; } = true;
+        public int MaxConversationMentions { get; init; } = 32;
+        public int MaxSessionProvenanceEntries { get; init; } = 256;
+        public int MaxPronounCandidates { get; init; } = 8;
+        public int PronounRecencyWindow { get; init; } = 8;
+        public double PronounAmbiguityMargin { get; init; } = 0.05;
     }
 }

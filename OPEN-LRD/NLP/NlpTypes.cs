@@ -319,7 +319,8 @@ namespace OPEN_LRD.NLP
         ReasoningResult? Reasoning,
         bool UsesTemporaryEvidence,
         double Confidence,
-        IReadOnlyList<string> Diagnostics);
+        IReadOnlyList<string> Diagnostics,
+        bool UsesSessionProvenance = false);
 
     internal sealed record NlpResult(
         NlpStatus Status,
@@ -338,5 +339,8 @@ namespace OPEN_LRD.NLP
         public QuestionAnalysis? Question { get; init; }
 
         public NlpAnswer? Answer { get; init; }
+
+        public IReadOnlyList<SessionProvenanceEntry> Provenance { get; init; } =
+            Array.Empty<SessionProvenanceEntry>();
     }
 }

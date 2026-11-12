@@ -113,7 +113,8 @@ namespace OPEN_LRD.Reasoning
         IReadOnlyList<Guid> PromotedNodeIDs,
         IReadOnlyList<LinkConflict> Conflicts,
         bool GraphMutated,
-        IReadOnlyList<string> Diagnostics);
+        IReadOnlyList<string> Diagnostics,
+        IReadOnlyDictionary<Guid, Guid>? MergedNodeMap = null);
 
     internal enum NodeActionKind
     {

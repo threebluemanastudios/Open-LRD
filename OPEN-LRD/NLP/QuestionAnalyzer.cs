@@ -472,19 +472,13 @@ namespace OPEN_LRD.NLP
             {
                 supported = false;
 
-                if (!diagnostics.Any(message => message.Contains("Phase 6", StringComparison.Ordinal)))
-                    diagnostics.Add("Pronoun questions require conversation context (Phase 6).");
+                if (anchor.Diagnostics.Count == 0)
+                    diagnostics.Add("Pronoun questions require conversation context, but no antecedent is available.");
             }
 
             if (anchor.IsAmbiguous)
             {
                 diagnostics.Add("The question anchor matches multiple nodes.");
-                supported = false;
-            }
-
-            if (objectArgument is not null && objectArgument.IsPronoun && questionType == QuestionType.YesNo)
-            {
-                diagnostics.Add("Pronoun questions require conversation context (Phase 6).");
                 supported = false;
             }
 
@@ -510,6 +504,20 @@ namespace OPEN_LRD.NLP
                     {
                         EntityResolution target = resolver.Resolve(yesNoObject);
                         diagnostics.AddRange(target.Diagnostics);
+
+                        if (target.IsPronoun)
+                        {
+                            supported = false;
+
+                            if (target.Diagnostics.Count == 0)
+                                diagnostics.Add("Pronoun questions require conversation context, but no antecedent is available.");
+                        }
+
+                        if (target.IsAmbiguous)
+                        {
+                            supported = false;
+                            diagnostics.Add("The yes/no object matches multiple nodes.");
+                        }
 
                         if (!target.IsPronoun && !target.IsAmbiguous)
                         {

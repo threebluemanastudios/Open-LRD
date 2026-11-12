@@ -16,10 +16,17 @@ namespace OPEN_LRD.NLP
     internal sealed class EntityResolver
     {
         private readonly LRD_Core core;
+        private readonly ConversationContext? conversation;
+        private readonly NlpOptions options;
 
-        public EntityResolver(LRD_Core core)
+        public EntityResolver(
+            LRD_Core core,
+            ConversationContext? conversation = null,
+            NlpOptions? options = null)
         {
             this.core = core ?? throw new ArgumentNullException(nameof(core));
+            this.conversation = conversation;
+            this.options = options ?? new NlpOptions();
         }
 
         public EntityResolution Resolve(FrameArgument argument)
@@ -34,6 +41,68 @@ namespace OPEN_LRD.NLP
 
             if (argument.IsPronoun)
             {
+                if (conversation is not null
+                    && options.EnableConversationContext
+                    && options.EnablePronounResolution)
+                {
+                    PronounResolution resolution = conversation.ResolvePronoun(
+                        argument.SurfaceText,
+                        argument.NodeType,
+                        argument.Role,
+                        core,
+                        options);
+
+                    if (resolution.NodeID.HasValue && !resolution.IsAmbiguous)
+                    {
+                        if (core.TryGetNode(resolution.NodeID.Value, out Web_Node? node) && node is not null)
+                        {
+                            string resolvedLabel = string.IsNullOrWhiteSpace(node.Label)
+                                ? resolution.Label ?? label
+                                : node.Label!;
+                            List<string> mergedAliases = MergeAliases(resolvedLabel, node.Aliases);
+
+                            foreach (string alias in aliases)
+                                AddAlias(mergedAliases, resolvedLabel, alias);
+
+                            return new EntityResolution(
+                                resolvedLabel,
+                                lemma,
+                                node.Get_NodeType(),
+                                mergedAliases,
+                                node.ID,
+                                new[] { node.ID },
+                                false,
+                                false,
+                                resolution.Diagnostics);
+                        }
+                    }
+
+                    if (resolution.IsAmbiguous)
+                    {
+                        return new EntityResolution(
+                            label,
+                            lemma,
+                            argument.NodeType,
+                            aliases,
+                            null,
+                            resolution.CandidateNodeIDs,
+                            true,
+                            false,
+                            resolution.Diagnostics);
+                    }
+
+                    return new EntityResolution(
+                        label,
+                        lemma,
+                        argument.NodeType,
+                        aliases,
+                        null,
+                        Array.Empty<Guid>(),
+                        false,
+                        true,
+                        resolution.Diagnostics);
+                }
+
                 return new EntityResolution(
                     label,
                     lemma,
@@ -45,7 +114,7 @@ namespace OPEN_LRD.NLP
                     true,
                     new[]
                     {
-                        $"Pronoun '{argument.SurfaceText}' requires conversation context (Phase 6)."
+                        $"Pronoun '{argument.SurfaceText}' requires conversation context, but no context is available."
                     });
             }
 

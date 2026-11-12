@@ -1,0 +1,1651 @@
+OPEN-LRD
+MODULE 3: THE NLP PIPELINE
+PHASE 6 IMPLEMENTATION PLAN
+
+Phase: 6 of 7
+Title: Conversation context, pronoun resolution, focus tracking, and session
+       provenance
+Status: Planned. Phases 1-5 complete and passing.
+Scope owner: Module 3 (README numbering).
+Reference design: README.md, ReadMe2.md, Module_3_Plan.txt,
+Module_3_Phase_4_Plan.txt, and Module_3_Phase_5_Plan.txt.
+Implementation constraint: native C# only, no external libraries.
+
+================================================================================
+1. PHASE 6 GOAL AND DELIVERABLES
+================================================================================
+
+Phase 6 adds session-scoped conversational state:
+
+    ingestion / question
+        -> conversation turn
+        -> pronoun and focus resolution
+        -> question analysis / chain building
+        -> reasoning
+        -> answer
+        -> context and session-provenance update
+
+Phase 6 does NOT add durable provenance, disk persistence, statistical
+co-reference, or WPF integration. Conversation state is owned by LRD_Core in an
+in-memory conversation registry and is shared by NlpPipeline instances that
+attach to the same conversation ID. It is lost when the session is explicitly
+removed or the core is reinitialized.
+
+Required new source file:
+
+1. OPEN-LRD/NLP/ConversationContext.cs
+   - Store bounded recent mentions, role-specific focus, turn counters, and
+     session provenance entries for one conversation.
+   - Resolve third-person personal pronouns from recent mentions.
+   - Detect ambiguous or missing antecedents deterministically.
+   - Provide provenance recording and lookup for answer caveats.
+
+Required modified files:
+
+2. OPEN-LRD/LRD_Core.cs
+   - Add the in-memory conversation web: dictionaries keyed by conversation ID
+     and by NlpPipeline instance ID.
+   - Initialize the conversation dictionaries with the graph in InitializeCore.
+   - Expose create/get/remove/clear conversation methods plus pipeline
+     attachment lookup and removal.
+   - Clear or detach conversation state when the core is reinitialized without
+     mutating graph nodes.
+
+3. OPEN-LRD/NLP/NlpTypes.cs
+   - Add pronoun metadata, conversation mention, pronoun-resolution result,
+     and session provenance entry types.
+   - Extend NlpAnswer with a session-provenance flag.
+   - Extend NlpResult with provenance entries produced by the current call.
+
+4. OPEN-LRD/NLP/NlpOptions.cs
+   - Add conversation, pronoun, focus, and provenance limits and feature flags.
+
+5. OPEN-LRD/NLP/Lexicon.cs
+   - Add pronoun person, number, and case metadata.
+   - Distinguish resolvable third-person pronouns from first-person,
+     second-person, reflexive, and indefinite pronouns.
+
+6. OPEN-LRD/NLP/EntityResolver.cs
+   - Accept an optional ConversationContext.
+   - Resolve pronoun arguments through the context before falling back to the
+     existing unresolved-pronoun behavior.
+
+7. OPEN-LRD/NLP/QuestionAnalyzer.cs
+   - Resolve anchor and object pronouns through the context-aware resolver.
+   - Reject only pronouns that remain unresolved or ambiguous after context
+     resolution.
+   - Preserve existing question semantics and variant construction.
+
+8. OPEN-LRD/NLP/AnswerGenerator.cs
+   - Accept an optional ConversationContext.
+   - Detect when selected evidence was provided earlier in this conversation.
+   - Append a deterministic session-provenance caveat when appropriate.
+   - Keep the existing temporary-evidence behavior when no session provenance
+     exists.
+
+9. OPEN-LRD/NLP/NlpPipeline.cs
+   - Attach to a core-owned ConversationContext by conversation ID.
+   - Register the pipeline instance with LRD_Core and expose its ConversationID.
+   - Pass context into EntityResolver, AnswerGenerator, and provenance updates.
+   - Record successful ingestion provenance and update conversation focus.
+   - Record successful question/answer mentions and update focus.
+   - Expose read-only conversation and provenance accessors and a reset method.
+   - Keep Analyze fully read-only with respect to conversation state.
+
+10. OPEN-LRD.SmokeTests/NlpTests.cs
+    - Add pronoun, follow-up, focus, ambiguity, shared-conversation, isolation,
+      provenance, caveat, read-only, determinism, and regression tests.
+    - Update the Phase 5 pronoun test that currently expects a Phase 6
+      placeholder diagnostic.
+
+11. README.md and ReadMe2.md
+    - Mark Module 3 as Phase 6 of 7 after all tests pass.
+    - Describe conversation context, pronoun resolution, focus tracking,
+      shared conversation IDs, and session provenance.
+    - Do not claim Phase 7 work.
+
+================================================================================
+2. SCOPE BOUNDARIES AND NON-GOALS
+================================================================================
+
+In scope:
+
+- Third-person personal pronouns in questions and ingestible statements.
+- Subject, object, and qualifier pronoun arguments.
+- Recent-mention and role-specific focus tracking.
+- Follow-up questions that reuse recent entities through pronouns.
+- Session-scoped provenance for facts ingested by any pipeline attached to the
+  same conversation ID.
+- Deterministic disclosure when answer evidence came from this session.
+- Bounded context and provenance memory with FIFO eviction.
+- A core-owned conversation registry that lets multiple NlpPipeline instances
+  attach to and share one conversation.
+- Isolation between different conversation IDs, even when pipelines share a
+  core or graph.
+
+Out of scope:
+
+- First-person or second-person pronoun resolution.
+- Gender inference or gender validation.
+- Full discourse analysis, topic segmentation, or centering theory.
+- Resolving pronouns across different conversation IDs.
+- Implicit global sharing of one conversation by every NlpPipeline.
+- Cross-process, cross-session, or durable provenance.
+- Full ellipsis resolution such as "And Bob?" or "What about Monday?".
+- Relative-clause pronoun resolution.
+- Possessive phrase rewriting or full possessive NP resolution.
+- Changes to Module 1 or Module 2 graph models, trust rules, or matching.
+- WPF Tools integration; this remains Phase 7 work.
+
+================================================================================
+3. INTEGRATION CONSTRAINTS DISCOVERED IN THE CURRENT CODEBASE
+================================================================================
+
+1. The conversation boundary is a conversation ID, not an NlpPipeline instance.
+   LRD_Core is a global singleton and already owns global in-memory state.
+   Phase 6 extends it with a conversation registry so several pipelines can
+   share one conversation when constructed with the same ID.
+
+2. LRD_Core currently initializes only graph and chain state.
+   InitializeCore must also initialize the conversation dictionaries and clear
+   any sessions from a previous initialization. It must not mutate or delete
+   graph nodes during this reset.
+
+3. Pipeline instances need an explicit, stable identity for registry
+   attachment. Add a pipeline ID generated at construction and map it to the
+   selected conversation ID in LRD_Core.
+
+4. Analyze is currently read-only.
+   It performs normalization, tagging, parsing, NER, and relation extraction
+   without mutating the graph. Phase 6 must keep Analyze free of graph and
+   conversation updates so parsing remains deterministic and side-effect free.
+
+5. Ask and Ingest already create EntityResolver instances.
+   Both call sites must use the context-aware resolver. Existing direct
+   EntityResolver construction in tests must keep working through an optional
+   constructor parameter.
+
+6. EntityResolver currently rejects every pronoun.
+   It returns IsPronoun=true with the diagnostic:
+       "Pronoun 'she' requires conversation context (Phase 6)."
+   Phase 6 replaces this with context resolution when a context is available.
+   Only unresolved or unsupported pronouns retain IsPronoun=true.
+
+7. QuestionAnalyzer currently rejects raw pronoun arguments early.
+   It checks anchor.IsPronoun and objectArgument.IsPronoun before the
+   context-aware resolver can resolve them. Phase 6 must resolve first and
+   reject only unresolved/ambiguous pronouns.
+
+8. ChainBuilder currently abandons chains when either endpoint is a pronoun.
+   If EntityResolver resolves the pronoun, IsPronoun becomes false and existing
+   ChainBuilder behavior is sufficient. No ChainBuilder signature change is
+   required.
+
+9. Ingest currently performs no provenance recording.
+   It builds chains, calls ReasoningEngine.Ingest, aggregates statuses, and
+   returns. Phase 6 will record per-chain provenance after each result is
+   available.
+
+10. Ask currently has no answer-side context update.
+    Phase 6 will record successful anchor/answer mentions after answer
+    generation, without mutating the graph.
+
+11. NlpPipeline has no conversation, context, or provenance accessors.
+    Phase 6 attaches it to a core-owned conversation, exposes ConversationID,
+    a read-only provenance view, and a reset method.
+
+12. NlpAnswer has no session-provenance flag.
+    Phase 6 adds a defaulted field so existing constructors and tests remain
+    source-compatible.
+
+13. NlpResult has no provenance list.
+    Phase 6 adds an init property with an empty default, following the existing
+    Chains and ReasoningResults pattern.
+
+14. Current temporary-evidence caveat lives in AnswerGenerator.
+    Session provenance must integrate without breaking the existing
+    "(This fact is not yet verified.)" behavior.
+
+15. Current Phase 5 pronoun test expects a Phase 6 placeholder.
+    TestNlpAnswerDiagnostics asks "Where does she work?" on a fresh pipeline and
+    expects Unsupported plus a diagnostic containing "Phase 6". Phase 6 must
+    update this expectation to the new no-antecedent diagnostic while keeping
+    the question Unsupported on a fresh session.
+
+16. Node labels and aliases are the only stable entity metadata available.
+    Phase 6 must not invent gender, animacy, or number data not present in the
+    graph.
+
+17. Session provenance cannot use wall-clock timestamps in answer text.
+    Determinism tests require monotonic turn and sequence counters, not
+    DateTimeOffset values in user-visible output.
+
+18. Sharing a conversation across pipelines changes observable test behavior.
+    Existing tests that create two pipelines on one core must either use
+    distinct conversation IDs to preserve isolation or explicitly opt into the
+    same ID to test sharing.
+
+================================================================================
+4. FILE LAYOUT AND RESPONSIBILITIES
+================================================================================
+
+New file:
+
+OPEN-LRD/NLP/ConversationContext.cs
+
+    internal enum PronounPerson
+    internal enum PronounNumber
+    internal enum PronounCase
+    internal sealed record PronounInfo
+    internal sealed record ConversationMention
+    internal sealed record PronounResolution
+    internal sealed record SessionProvenanceEntry
+    internal sealed class ConversationContext
+
+Modified files:
+
+OPEN-LRD/LRD_Core.cs
+    Owns the conversation web and access framework:
+        Dictionary<Guid, ConversationContext> conversations
+        Dictionary<Guid, Guid> pipelineConversations
+    Provides session creation, lookup, removal, clearing, and pipeline
+    attachment lookup. InitializeCore initializes and clears both dictionaries.
+    This is memory-only state; it is not part of the graph dictionaries.
+
+OPEN-LRD/NLP/NlpTypes.cs
+    Adds public/internal conversation and provenance record types used by the
+    core registry, pipeline, resolver, answer generator, and tests.
+
+OPEN-LRD/NLP/NlpOptions.cs
+    Adds MaxConversationMentions, MaxSessionProvenanceEntries,
+    PronounRecencyWindow, MaxPronounCandidates, PronounAmbiguityMargin,
+    EnableConversationContext, EnablePronounResolution,
+    EnableSessionProvenance, and UseSessionProvenanceInAnswers.
+
+OPEN-LRD/NLP/Lexicon.cs
+    Adds personal-pronoun metadata lookup. Existing IsPronoun remains for
+    parser/POS compatibility.
+
+OPEN-LRD/NLP/EntityResolver.cs
+    Adds optional ConversationContext and NlpOptions construction parameters.
+    Resolves pronoun arguments before returning an EntityResolution.
+
+OPEN-LRD/NLP/QuestionAnalyzer.cs
+    Accepts the resolver as today. Changes only the pronoun rejection logic so
+    resolved pronouns participate in normal anchor/object handling.
+
+OPEN-LRD/NLP/AnswerGenerator.cs
+    Adds optional ConversationContext to Generate and session-backed evidence
+    detection.
+
+OPEN-LRD/NLP/NlpPipeline.cs
+    Attaches to a conversation in the core registry, registers its pipeline ID,
+    updates and exposes conversation state, and resets the attached session.
+    Records session provenance after ingestion.
+
+OPEN-LRD.SmokeTests/NlpTests.cs
+    Adds Phase 6 test groups and updates the Phase 5 placeholder assertion.
+
+README.md and ReadMe2.md
+    Status and feature wording updates after green tests.
+
+================================================================================
+5. DATA MODEL ADDITIONS
+================================================================================
+
+5.1 Pronoun metadata
+
+Add to ConversationContext.cs or NlpTypes.cs:
+
+    internal enum PronounPerson
+    {
+        Unknown,
+        First,
+        Second,
+        Third
+    }
+
+    internal enum PronounNumber
+    {
+        Unknown,
+        Singular,
+        Plural
+    }
+
+    internal enum PronounCase
+    {
+        Unknown,
+        Subject,
+        Object,
+        Possessive
+    }
+
+    internal sealed record PronounInfo(
+        string Surface,
+        string Normalized,
+        PronounPerson Person,
+        PronounNumber Number,
+        PronounCase Case,
+        bool IsReflexive,
+        bool IsIndefinite,
+        bool IsResolvable);
+
+Lexicon mapping requirements:
+
+- he/him/his -> third person, singular; subject/object/possessive forms.
+- she/her/hers -> third person, singular; subject/object/possessive forms.
+- it/its/itself -> third person, singular.
+- they/them/their/theirs/themselves -> third person, plural/unknown number.
+- I/me/my/mine/myself -> first person, not resolvable in Phase 6.
+- you/your/yours/yourself/yourselves -> second person, not resolvable.
+- we/us/our/ours/ourselves -> first person plural, not resolvable.
+- someone/something/anyone/anything/everyone/everything/nobody/nothing/none ->
+  indefinite, not resolvable.
+- Reflexive third-person pronouns may be marked non-resolvable in Phase 6 even
+  if their person/number is known.
+
+Add:
+
+    public static bool TryGetPronounInfo(string value, out PronounInfo info)
+
+Existing Lexicon.IsPronoun must remain unchanged for POS tagging and parser
+behavior.
+
+5.2 Conversation mention
+
+    internal sealed record ConversationMention(
+        Guid NodeID,
+        string Label,
+        string SurfaceText,
+        NodeTypes NodeType,
+        FrameRole Role,
+        int TurnIndex,
+        int Sequence,
+        bool FromAnswer);
+
+Rules:
+
+- NodeID must be non-empty.
+- Label comes from the graph node when available, otherwise from the chain node.
+- SurfaceText preserves what the user or answer used.
+- Role records the grammatical/semantic role used for pronoun preference.
+- TurnIndex and Sequence provide deterministic recency ordering.
+- FromAnswer distinguishes answer mentions from ordinary mention records.
+
+5.3 Pronoun resolution result
+
+    internal sealed record PronounResolution(
+        Guid? NodeID,
+        string? Label,
+        NodeTypes NodeType,
+        IReadOnlyList<Guid> CandidateNodeIDs,
+        bool IsAmbiguous,
+        bool IsSupported,
+        IReadOnlyList<string> Diagnostics);
+
+Semantics:
+
+- IsSupported=false means the pronoun class is not handled in Phase 6.
+- NodeID != null with IsAmbiguous=false means a unique antecedent was selected.
+- IsAmbiguous=true means multiple antecedents were plausible; no guessing.
+- Diagnostics always explain no antecedent, ambiguity, unsupported person, or
+  successful resolution.
+
+5.4 Session provenance entry
+
+    internal sealed record SessionProvenanceEntry(
+        int Sequence,
+        int TurnIndex,
+        int? SentenceIndex,
+        string SourceText,
+        ReasoningStatus Status,
+        string? RelationName,
+        LinkClass LinkClass,
+        int? ForwardLinkTypeId,
+        int? InverseLinkTypeId,
+        Guid? SubjectNodeID,
+        Guid? ObjectNodeID,
+        Guid? QualifierNodeID,
+        Guid? TrustSourceNodeID,
+        Guid? TopicNodeID,
+        IReadOnlyList<Guid> NodeIDs,
+        IReadOnlyList<Guid> TemporaryNodeIDs,
+        bool GraphMutated,
+        bool IsUsableForAnswer,
+        IReadOnlyList<string> Diagnostics);
+
+Rules:
+
+- One entry is recorded per built chain, not one per NlpResult.
+- Status uses the per-chain ReasoningStatus before aggregate status mapping.
+- IsUsableForAnswer is true only for Answered and Contradiction outcomes.
+- Sequence and TurnIndex are monotonic integers, never timestamps.
+- SourceText is the original user text passed to Ingest.
+- TrustSourceNodeID and TopicNodeID come from the Ingest call arguments.
+- TemporaryNodeIDs are determined by querying core node lifetime after the
+  chain result.
+
+5.5 NlpAnswer extension
+
+Add a defaulted field at the end of the positional record:
+
+    bool UsesSessionProvenance = false
+
+Existing construction sites remain valid without modification.
+
+5.6 NlpResult extension
+
+Add:
+
+    public IReadOnlyList<SessionProvenanceEntry> Provenance { get; init; } =
+        Array.Empty<SessionProvenanceEntry>();
+
+Populate it with entries created by the current Ingest call. Do not populate it
+with the entire session history; the core conversation registry and the
+attached pipeline expose the full shared history instead.
+
+================================================================================
+6. NLP OPTIONS ADDITIONS
+================================================================================
+
+Add to NlpOptions.cs:
+
+    public bool EnableConversationContext { get; init; } = true;
+    public bool EnablePronounResolution { get; init; } = true;
+    public bool EnableSessionProvenance { get; init; } = true;
+    public bool UseSessionProvenanceInAnswers { get; init; } = true;
+    public int MaxConversationMentions { get; init; } = 32;
+    public int MaxSessionProvenanceEntries { get; init; } = 256;
+    public int MaxPronounCandidates { get; init; } = 8;
+    public int PronounRecencyWindow { get; init; } = 8;
+    public double PronounAmbiguityMargin { get; init; } = 0.05;
+
+Behavior of disabled flags:
+
+- EnableConversationContext=false disables mention/focus updates and enables
+  the old unresolved-pronoun diagnostics.
+- EnablePronounResolution=false disables pronoun lookup even when a context
+  exists.
+- EnableSessionProvenance=false disables provenance recording.
+- UseSessionProvenanceInAnswers=false keeps provenance available
+  programmatically but suppresses session wording in answer text.
+
+Limits must be clamped to safe minimums at use sites:
+
+- MaxConversationMentions >= 1.
+- MaxSessionProvenanceEntries >= 1.
+- MaxPronounCandidates >= 1.
+- PronounRecencyWindow >= 1.
+
+================================================================================
+7. CONVERSATIONCONTEXT DESIGN
+================================================================================
+
+7.1 State and ownership
+
+LRD_Core owns the conversation web:
+
+    Dictionary<Guid, ConversationContext> conversations
+    Dictionary<Guid, Guid> pipelineConversations
+
+- conversations maps a conversation ID to its per-session state.
+- pipelineConversations maps an NlpPipeline instance ID to its conversation ID.
+- Both dictionaries are initialized in InitializeCore and are memory-only.
+- They must never be serialized into the graph or treated as Web_Node data.
+
+ConversationContext owns the state for exactly one conversation:
+
+- Guid ConversationID (immutable and non-empty)
+- int TurnIndex
+- int Sequence
+- Guid? FocusNodeID
+- Guid? LastSubjectNodeID
+- Guid? LastObjectNodeID
+- Guid? LastQualifierNodeID
+- Guid? LastAnswerNodeID
+- IReadOnlyList<ConversationMention> Mentions (newest last internally)
+- IReadOnlyList<SessionProvenanceEntry> Provenance
+
+Use List<T> internally and expose read-only views. Do not expose mutable
+collections. Because one ConversationContext may be attached to several
+pipelines, all counters and collections are shared by those pipelines.
+
+7.2 Turn lifecycle
+
+Add:
+
+    public void BeginTurn()
+
+Behavior:
+
+- Increment TurnIndex once per valid Ingest or Ask call.
+- Reset Sequence only on context reset, not per turn.
+- Invalid input must not increment TurnIndex.
+- Analyze must never call BeginTurn.
+
+Ask and Ingest call BeginTurn after the initial Analyze check confirms the input
+is analyzable and before normalization/parsing proceeds.
+
+7.3 Mention recording
+
+Add:
+
+    public void RecordMention(ConversationMention mention)
+    public void RecordMentions(IEnumerable<ConversationMention> mentions)
+
+Rules:
+
+- Ignore empty NodeIDs.
+- Remove any older mention with the same NodeID before adding the new one.
+  This keeps one current role/recency record per node and prevents repeated
+  questions from flooding the window.
+- Cap the list to MaxConversationMentions using FIFO eviction.
+- Increment Sequence for each accepted mention.
+- Update role-specific focus fields:
+    Subject -> LastSubjectNodeID
+    Object -> LastObjectNodeID
+    Location/Time/Qualifier -> LastQualifierNodeID
+- Do not automatically change FocusNodeID in RecordMention; callers decide
+  focus explicitly.
+
+Focus update methods:
+
+    public void SetFocus(Guid? nodeID, FrameRole role, bool fromAnswer)
+
+Behavior:
+
+- Set FocusNodeID to nodeID.
+- Update the role-specific last-node field.
+- If fromAnswer, set LastAnswerNodeID.
+- Ignore Guid.Empty.
+
+7.4 Focus tracking rules
+
+After successful ingestion of a chain:
+
+- Record the first chain node as a Subject mention.
+- Record the last chain node with a role derived from the link classification:
+    identities/actions -> Object
+    spatial -> Location
+    temporal -> Time
+    basic/empty -> Qualifier
+- Set focus to the last chain target, falling back to the subject.
+- Do not update context for chains whose ReasoningStatus is RejectedByTrust,
+  Ambiguous, NoMatch, or InvalidInput.
+
+After a successful question answer:
+
+- Answered: record the anchor mention using question.AnchorRole, record the
+  answer node using a role derived from AnswerKind, and set focus to the answer
+  node when present, otherwise the anchor.
+- Yes/No: record the anchor mention and set focus to the anchor.
+- Ambiguous/NoMatch/Unsupported/InvalidInput: do not change mentions or focus.
+- Always increment the turn counter, even when the answer is not successful.
+
+This policy prevents failed questions from polluting subsequent pronoun
+resolution.
+
+7.5 Pronoun resolution algorithm
+
+Add:
+
+    public PronounResolution ResolvePronoun(
+        string surfaceText,
+        NodeTypes expectedType,
+        FrameRole role,
+        LRD_Core core,
+        NlpOptions options)
+
+Algorithm:
+
+1. Look up PronounInfo through Lexicon.TryGetPronounInfo.
+2. If the value is not a pronoun or the info is missing, return
+   IsSupported=false with a diagnostic.
+3. If Person is First or Second, return IsSupported=false with:
+       "First- and second-person pronouns are not supported in this session."
+4. If IsReflexive or IsIndefinite, return IsSupported=false with an explicit
+   unsupported-pronoun diagnostic.
+5. Build a candidate list from recent mentions:
+   - NodeID must still resolve through core.TryGetNode.
+   - Turn distance must be <= PronounRecencyWindow.
+   - Prefer mentions whose NodeType exactly matches expectedType.
+   - If no type-compatible mention exists, retry without the type filter.
+   - Limit to MaxPronounCandidates after scoring.
+6. If no candidates remain, return IsSupported=true, NodeID=null,
+   IsAmbiguous=false with:
+       "Pronoun '<surface>' has no clear antecedent in this session."
+7. Score each candidate deterministically:
+   - Recency score: 0.20 * (1.0 / (1 + turnDistance))
+   - Role match: +0.50 when mention.Role == role
+   - Focus match: +0.20 when mention.NodeID == FocusNodeID
+   - Answer match: +0.10 when mention.FromAnswer
+   - Type match: +0.10 when mention.NodeType == expectedType
+8. Sort by score descending, then TurnIndex descending, then Sequence
+   descending, then NodeID string ordinal ascending.
+9. If the top two candidates have different NodeIDs and their score difference
+   is <= PronounAmbiguityMargin, return IsAmbiguous=true with all top-tied
+   candidates and a diagnostic naming the ambiguity.
+10. Otherwise return the top candidate with a diagnostic:
+       "Pronoun '<surface>' resolved to '<label>'."
+
+Gender policy:
+
+- Phase 6 does not infer or verify gender.
+- he/him/his and she/her/hers are treated as singular third-person pronouns.
+- Recency and role selection decide the antecedent when only one plausible
+  candidate exists.
+- When multiple equally plausible candidates exist, return ambiguity rather
+  than guessing.
+
+Number policy:
+
+- it/its is singular/unknown.
+- they/them/their is treated as plural-or-unknown and may match any plausible
+  recent entity.
+- No graph-level number metadata is introduced in Phase 6.
+
+7.6 No-antecedent and ambiguity behavior
+
+- Unresolved pronoun in a question:
+    EntityResolution.IsPronoun=true
+    QuestionAnalyzer keeps the question unsupported
+    NlpStatus.Unsupported
+    Diagnostic explains no clear antecedent
+- Ambiguous pronoun in a question:
+    EntityResolution.IsAmbiguous=true
+    QuestionAnalysis.AnchorIsAmbiguous=true
+    NlpStatus.Ambiguous through existing AnswerGenerator anchor-ambiguity path
+- Unresolved or ambiguous pronoun in a statement:
+    ChainBuilder receives IsPronoun/IsAmbiguous and produces no chain
+    NlpStatus.Unsupported with the resolver diagnostic
+    No graph mutation
+- Unsupported pronoun class:
+    NlpStatus.Unsupported with an explicit Phase 6 limitation diagnostic
+
+7.7 Session provenance storage and lookup
+
+Add:
+
+    public void RecordProvenance(SessionProvenanceEntry entry)
+    public IReadOnlyList<SessionProvenanceEntry> FindProvenance(GraphPath? path)
+
+Record rules:
+
+- Ignore entries when EnableSessionProvenance=false.
+- Cap the list to MaxSessionProvenanceEntries using FIFO eviction.
+- Increment Sequence for each entry.
+- Preserve insertion order for deterministic diagnostics and tests.
+
+Lookup rules for answer caveats:
+
+- Return no entries when path is null or has no links.
+- Match an entry when both:
+    - The path link's forward/inverse IDs equal the entry's IDs, and
+    - The path endpoints equal the entry endpoints in either orientation.
+- Only return entries with IsUsableForAnswer=true.
+- Do not use labels alone for matching; labels are not unique.
+- Return entries in sequence order.
+
+7.8 Bounds and reset
+
+Add:
+
+    public void Clear()
+    public void Reset()
+
+Reset behavior:
+
+- ConversationID remains unchanged.
+- TurnIndex = 0.
+- Sequence = 0.
+- Focus and last-role IDs = null.
+- Mentions and provenance lists cleared.
+
+NlpPipeline exposes ResetConversation(), which calls context.Clear() and does
+not mutate the graph. LRD_Core.RemoveConversation removes one whole session from
+the registry, and LRD_Core.ClearConversations removes all sessions. Neither
+operation touches graph nodes or links.
+
+7.9 LRD_Core conversation registry and shared access
+
+Add to LRD_Core.cs:
+
+    private Dictionary<Guid, ConversationContext>? conversations;
+    private Dictionary<Guid, Guid>? pipelineConversations;
+
+    public Guid CreateConversation(NlpOptions options)
+    public ConversationContext GetConversation(Guid conversationID)
+    public bool TryGetConversation(Guid conversationID, out ConversationContext? context)
+    public ConversationContext ResolveConversation(Guid? conversationID, NlpOptions options)
+    public bool RemoveConversation(Guid conversationID)
+    public IReadOnlyDictionary<Guid, ConversationContext>? GetConversations()
+    public void ClearConversations()
+    public bool RegisterPipelineConversation(Guid pipelineID, Guid conversationID)
+    public bool TryGetPipelineConversation(Guid pipelineID, out Guid conversationID)
+    public bool UnregisterPipelineConversation(Guid pipelineID)
+
+Behavior:
+
+- InitializeCore creates both dictionaries and clears any existing conversation
+  state. It does not delete graph nodes.
+- CreateConversation generates a new GUID, creates a ConversationContext with
+  the supplied options, stores it, and returns the ID.
+- ResolveConversation(null, options) creates a fresh conversation.
+- ResolveConversation(nonNullID, options) returns the existing conversation or
+  throws InvalidOperationException when the ID is unknown. This prevents a
+  typo from silently starting an unintended session.
+- GetConversation returns the shared context or throws when missing.
+  TryGetConversation is the non-throwing variant.
+- RemoveConversation removes the session and all pipeline attachments to it.
+- ClearConversations removes every session and attachment without touching the
+  graph. It is used by InitializeCore and by tests that need a clean registry.
+- RegisterPipelineConversation requires the conversation to exist and records
+  the pipeline-to-conversation mapping. Re-registering the same pipeline ID is
+  idempotent and replaces the old mapping.
+- UnregisterPipelineConversation removes only the pipeline mapping. It does not
+  clear the shared conversation.
+- GetConversations exposes a read-only view for diagnostics and tests.
+- LRD_Core and ConversationContext are internal types in the same assembly, so
+  LRD_Core may reference OPEN_LRD.NLP.ConversationContext without introducing a
+  project or assembly cycle.
+
+Access across pipelines:
+
+- Two NlpPipeline instances share state only when constructed with the same
+  conversation ID.
+- A pipeline constructed without an ID gets a fresh conversation.
+- Sharing is explicit and per-core; it is never inferred from the graph.
+- LRD_Core remains the single authority for which conversations exist.
+
+================================================================================
+8. ENTITYRESOLVER INTEGRATION
+================================================================================
+
+8.1 Constructor
+
+Change to:
+
+    public EntityResolver(
+        LRD_Core core,
+        ConversationContext? conversation = null,
+        NlpOptions? options = null)
+
+The existing one-argument constructor continues to work.
+
+8.2 Pronoun path
+
+Replace the unconditional pronoun rejection with:
+
+1. If argument.IsPronoun and conversation is not null and
+   options.EnableConversationContext and options.EnablePronounResolution:
+   - Call conversation.ResolvePronoun(
+       argument.SurfaceText,
+       argument.NodeType,
+       argument.Role,
+       core,
+       options).
+2. If resolution returns a unique NodeID:
+   - Fetch the node from core.
+   - Return EntityResolution with:
+       Label = node label when present, otherwise resolution label
+       Lemma = existing lemma
+       NodeType = node type
+       Aliases = existing built aliases plus node aliases
+       ResolvedNodeID = resolved node ID
+       CandidateNodeIDs = [resolved node ID]
+       IsAmbiguous = false
+       IsPronoun = false
+       Diagnostics = resolution diagnostics
+3. If resolution is ambiguous:
+   - Return EntityResolution with IsAmbiguous=true, IsPronoun=false,
+     CandidateNodeIDs populated, and resolution diagnostics.
+4. If resolution is unsupported or has no antecedent:
+   - Return EntityResolution with IsPronoun=true, ResolvedNodeID=null, and
+     resolution diagnostics.
+5. If context is absent or pronoun resolution is disabled:
+   - Keep the existing unresolved-pronoun behavior, but update the diagnostic
+     from "requires conversation context (Phase 6)" to
+     "requires conversation context, but no context is available."
+
+8.3 Non-pronoun path
+
+No behavioral change. Existing label, alias, type, ambiguity, and node-ID
+creation rules remain authoritative.
+
+8.4 Important invariant
+
+A resolved pronoun must return a real graph node ID. Phase 6 must never create a
+new node labeled "she", "he", or "it" merely because resolution was attempted.
+
+================================================================================
+9. QUESTIONANALYZER INTEGRATION
+================================================================================
+
+9.1 Anchor pronouns
+
+Current code rejects anchor.IsPronoun before variant construction. Keep this
+check, but it now runs after context resolution:
+
+- Resolved pronoun: anchor.IsPronoun=false, so normal anchor handling proceeds.
+- Unresolved pronoun: anchor.IsPronoun=true, so the question remains
+  unsupported with the resolver diagnostic.
+- Ambiguous pronoun: anchor.IsAmbiguous=true, so the existing ambiguous-anchor
+  path applies.
+
+Update the diagnostic text added by QuestionAnalyzer so it does not duplicate
+the resolver diagnostic. Only add a generic Phase 6 message when the resolver
+did not already provide one.
+
+9.2 Object pronouns in yes/no questions
+
+Current code rejects objectArgument.IsPronoun before resolving the target.
+Change to:
+
+1. Resolve yesNoObject through the existing resolver.
+2. Check target.IsPronoun for unresolved pronouns.
+3. Check target.IsAmbiguous for ambiguous antecedents.
+4. Proceed when target has a unique ResolvedNodeID.
+
+This enables:
+    "Alice sees Bob." -> "Does she see him?" -> Yes
+
+9.3 Wh-object and wh-qualifier pronouns
+
+No special change is needed beyond the resolver. Existing role recovery and
+variant construction already handle resolved objects and qualifiers.
+
+9.4 Diagnostics
+
+Add no new QuestionType or AnswerKind values. Phase 6 is about resolving
+arguments, not changing question classification.
+
+Suggested resolved-pronoun diagnostic:
+    "Pronoun 'she' resolved to 'Alice'."
+
+Suggested no-antecedent diagnostic:
+    "Pronoun 'she' has no clear antecedent in this session."
+
+Suggested ambiguous diagnostic:
+    "Pronoun 'she' matches multiple recent antecedents."
+
+================================================================================
+10. INGESTION AND CHAINBUILDER INTEGRATION
+================================================================================
+
+10.1 EntityResolver use
+
+NlpPipeline.Ingest must create:
+
+    new EntityResolver(core, conversation, options)
+
+instead of the current one-argument resolver. ChainBuilder and
+ReasoningEngine.Ingest signatures do not change.
+
+10.2 Pronoun statements
+
+Supported examples:
+
+    "Alice works at Acme."
+    "She works at Globex."        // she resolves to Alice
+    "Alice sees Bob."
+    "She sees him."               // she -> Alice, him -> Bob
+
+Behavior:
+
+- Resolved pronouns produce normal chains using the resolved node IDs.
+- No chain node or graph node is created for the pronoun surface.
+- Unresolved or ambiguous pronouns produce no chain and no graph mutation.
+- The resulting diagnostics must state why the statement was not ingested.
+
+10.3 Context and provenance update order
+
+After results are produced for all chains:
+
+1. Pair each built chain with its ReasoningResult by index.
+2. For each pair, create and record a SessionProvenanceEntry when provenance
+   is enabled.
+3. For successful results only, record chain-node mentions and update focus.
+4. Return NlpResult with Provenance set to the entries created by this call.
+
+This ordering ensures answer caveats and later follow-up questions see the same
+fact state that the reasoning results reported. Updates are written to the
+core-owned conversation, so sibling pipelines attached to the same ID observe
+them immediately.
+
+10.4 Failed ingestion
+
+- RejectedByTrust, Ambiguous, NoMatch, and InvalidInput results still receive
+  provenance entries when provenance is enabled, with IsUsableForAnswer=false.
+- They do not update conversation mentions or focus.
+- They must not leave partial mention state from an unsuccessful chain.
+
+================================================================================
+11. NLPPIPELINE INTEGRATION
+================================================================================
+
+11.1 Constructor and fields
+
+Add:
+
+    private readonly Guid pipelineID;
+    private readonly Guid conversationID;
+    private readonly ConversationContext conversation;
+
+Constructor parameter (added at the end to preserve existing calls):
+
+    Guid? conversationID = null
+
+Initialize:
+
+    this.pipelineID = Guid.NewGuid();
+    this.conversation = core.ResolveConversation(conversationID, this.options);
+    this.conversationID = this.conversation.ConversationID;
+    core.RegisterPipelineConversation(this.pipelineID, this.conversationID);
+
+A null conversationID asks LRD_Core for a new session. A non-null
+conversationID must already exist in the core registry; otherwise construction
+throws InvalidOperationException. NlpPipeline never creates a private context
+outside the core registry.
+
+11.2 Public/internal accessors
+
+Add:
+
+    public Guid PipelineID => pipelineID;
+    public Guid ConversationID => conversationID;
+    public ConversationContext Conversation => conversation;
+    public IReadOnlyList<SessionProvenanceEntry> Provenance =>
+        conversation.Provenance;
+    public void ResetConversation() => conversation.Clear();
+    public void Dispose() => core.UnregisterPipelineConversation(pipelineID);
+
+Implement IDisposable so the pipeline mapping can be removed without deleting
+the shared conversation. If exposing ConversationContext publicly is
+undesirable, make the accessors internal to match NlpPipeline visibility. Tests
+in the smoke-test project can still access internal members because they
+compile the NLP sources directly.
+
+11.3 Ask integration
+
+Order of operations:
+
+1. Analyze the question as today.
+2. If invalid, return unchanged and do not begin a turn.
+3. Call conversation.BeginTurn() on the shared core-owned context.
+4. Create EntityResolver(core, conversation, options).
+5. Run QuestionAnalyzer.Analyze.
+6. Evaluate variants exactly as today; Ask remains read-only with respect to the
+   graph.
+7. Generate the answer with AnswerGenerator.Generate(..., conversation).
+8. On AnswerStatus.Answered, Yes, or No:
+   - Record the anchor node mention when question.AnchorNodeID is not null.
+   - For Answered, record the answer node mention when AnswerNodeID is not null.
+   - Set focus to the answer node, otherwise the anchor.
+9. On Ambiguous, NoMatch, Unsupported, or InvalidInput:
+   - Do not record mentions or change focus.
+10. Return NlpResult with Question, Answer, ReasoningResults, and any
+    provenance entries created by this call (normally empty for Ask).
+
+Read-only invariant:
+
+- Ask must not add graph nodes, graph links, or query-only IDs to the core graph.
+- Ask may update the core-owned conversation registry because that is session
+  memory, not graph data.
+- A turn begun by one pipeline is visible to every pipeline attached to the same
+  conversation ID.
+
+11.4 Ingest integration
+
+Order of operations:
+
+1. Analyze the statement as today.
+2. If invalid, return unchanged and do not begin a turn.
+3. Call conversation.BeginTurn() on the shared core-owned context.
+4. Create EntityResolver(core, conversation, options).
+5. Build chains and call ReasoningEngine.Ingest as today.
+6. Record provenance and update mentions/focus as described in Section 10.
+7. Return NlpResult with Chains, ReasoningResults, Frames, and Provenance.
+
+Ingestion through any attached pipeline updates the same conversation, so later
+pronoun questions through a sibling pipeline can use those mentions.
+
+11.5 Analyze integration
+
+No conversation registry calls, no turn increment, no provenance, no focus
+changes. Analyze remains the stateless parser/analyzer facade.
+
+11.6 Reset and lifecycle integration
+
+ResetConversation clears mentions, focus, turn counters, and provenance for the
+attached conversation. It does not delete graph nodes or links. Because the
+conversation is shared, a reset through one pipeline affects every pipeline
+attached to the same conversation ID. A subsequent pronoun question must behave
+like a fresh session.
+
+Dispose removes only the pipeline attachment. If no pipeline remains attached,
+the session stays in LRD_Core until RemoveConversation or ClearConversations is
+called. Core reinitialization clears all sessions.
+
+================================================================================
+12. ANSWERGENERATOR SESSION-PROVENANCE INTEGRATION
+================================================================================
+
+12.1 Signature
+
+Change to:
+
+    public static NlpAnswer Generate(
+        QuestionAnalysis? question,
+        IReadOnlyList<QuestionEvaluation> evaluations,
+        LRD_Core core,
+        NlpOptions options,
+        ConversationContext? conversation = null)
+
+Existing calls without conversation remain valid.
+
+12.2 Evidence path selection
+
+- Wh answers: use the same selected evidence path already computed by
+  FindEvidencePath.
+- Yes/No answers: use the same evidencePath already captured for verified
+  responses.
+- Ambiguous, NoMatch, and Unsupported answers do not receive a session caveat.
+
+12.3 Session-backed detection
+
+Before finalizing text:
+
+    bool usesSessionProvenance =
+        conversation is not null
+        && options.EnableSessionProvenance
+        && options.UseSessionProvenanceInAnswers
+        && conversation.FindProvenance(evidencePath).Count > 0;
+
+Set NlpAnswer.UsesSessionProvenance to this value.
+
+12.4 Caveat text
+
+Use a deterministic sentence or suffix:
+
+    " (This fact was provided in this session.)"
+
+Policy:
+
+- If usesSessionProvenance is true, append the session caveat.
+- Do not also append the generic temporary caveat in that case.
+- If usesSessionProvenance is false and existing temporary-evidence logic says
+  all evidence is temporary, keep the current temporary caveat.
+- If neither applies, do not append a caveat.
+- Add a diagnostic when the session caveat is applied:
+    "Answer evidence was provided in this session."
+
+12.5 Length handling
+
+Apply TrimText to the base answer before appending the caveat, or reserve room
+for the caveat so MaxAnswerTextLength does not truncate the disclosure.
+The caveat must remain readable when the base answer is at the limit.
+
+12.6 No-provenance behavior
+
+When conversation is null, provenance is disabled, or no matching entry exists,
+answer text and status must match Phase 5 behavior exactly.
+
+================================================================================
+13. DETERMINISM AND READ-ONLY GUARANTEES
+================================================================================
+
+Determinism:
+
+- Use TurnIndex and Sequence, not wall-clock time, for recency and ordering.
+- Sort mentions/provenance by explicit sequence values.
+- Sort pronoun candidates with explicit tie-breakers.
+- Deduplicate diagnostics exactly as NlpPipeline already does.
+- Repeated Ask calls with the same shared context state must produce the same
+  status, kind, short answer, answer node ID, and base text.
+- Tests that need isolated determinism must use distinct conversation IDs or
+  reset the registry between scenarios.
+
+Read-only graph guarantees:
+
+- Ask never mutates the graph.
+- Provenance lookup never mutates the graph.
+- Pronoun resolution reads node metadata only.
+- Context updates and the core conversation dictionaries are bounded session
+  memory, not graph data.
+- ResetConversation, RemoveConversation, and ClearConversations never delete
+  graph nodes or links.
+- Ask may add or update conversation registry entries, but it must not add
+  graph nodes, graph links, or query-only IDs.
+- InitializeCore clears conversation dictionaries and reinitializes the graph;
+  pipelines created before that reset must not be reused.
+
+Mutation guarantees for ingestion:
+
+- Resolved pronouns reuse existing graph nodes when available.
+- Unresolved or ambiguous pronouns never create placeholder pronoun nodes.
+- Statement ingestion uses the same trust, merge, and idempotence rules as
+  Phase 4.
+
+================================================================================
+14. TEST PLAN (OPEN-LRD.SmokeTests/NlpTests.cs)
+================================================================================
+
+Register new groups in NlpTests.RunAll after the Phase 5 groups:
+
+    Program.Run("NLP conversation pronoun ingestion",
+        TestNlpConversationPronounIngestion);
+    Program.Run("NLP conversation follow-up questions",
+        TestNlpConversationFollowUpQuestions);
+    Program.Run("NLP conversation ambiguity and sharing",
+        TestNlpConversationAmbiguityAndSharing);
+    Program.Run("NLP conversation registry",
+        TestNlpConversationRegistry);
+    Program.Run("NLP conversation focus",
+        TestNlpConversationFocus);
+    Program.Run("NLP session provenance",
+        TestNlpSessionProvenance);
+    Program.Run("NLP session provenance caveats",
+        TestNlpSessionProvenanceCaveats);
+    Program.Run("NLP conversation read-only and determinism",
+        TestNlpConversationReadOnlyAndDeterminism);
+
+14.1 Pronoun ingestion tests
+
+1. Ingest "Alice works at Acme." then "She works at Globex."
+   - Both calls return Ingested.
+   - Globex is linked from the existing Alice node.
+   - No node labeled "she" exists.
+   - Conversation mention for Alice is updated, not duplicated.
+
+2. Ingest "Alice sees Bob." then "She sees him."
+   - The second statement resolves she -> Alice and him -> Bob.
+   - Existing links are reused or matched idempotently.
+   - No pronoun nodes are created.
+
+3. Fresh pipeline: Ingest "She works at Acme."
+   - Status is Unsupported.
+   - Diagnostic mentions no clear antecedent.
+   - Node/link counts are unchanged.
+   - No node labeled "she" exists.
+
+4. Fresh pipeline: Ingest "I work at Acme."
+   - Status is Unsupported.
+   - Diagnostic mentions first- and second-person pronouns are unsupported.
+   - No graph mutation.
+
+5. Fresh pipeline: Ingest "Someone works at Acme."
+   - Status is Unsupported.
+   - Diagnostic mentions indefinite pronouns are unsupported.
+   - No graph mutation.
+
+14.2 Follow-up question tests
+
+1. Ingest "Alice works at Acme." then Ask "Where does she work?"
+   - Status Answered.
+   - ShortAnswer contains "Acme".
+   - No graph mutation from Ask.
+
+2. Ingest "Alice sees Bob." then Ask "Who did she see?"
+   - Status Answered.
+   - ShortAnswer is "Bob".
+
+3. Ingest "Alice sees Bob." then Ask "Does she see Bob?"
+   - AnswerStatus.Yes.
+
+4. Ingest "Alice is a doctor." then Ask "Is she a doctor?"
+   - AnswerStatus.Yes.
+
+5. Ingest "Alice sees Bob." then Ask "Does Alice see him?"
+   - AnswerStatus.Yes.
+
+6. Fresh pipeline: Ask "Where does she work?"
+   - Status Unsupported.
+   - Diagnostic mentions no clear antecedent.
+   - No graph mutation.
+
+7. Fresh pipeline: Ask "Where do I work?"
+   - Status Unsupported.
+   - Diagnostic mentions first- and second-person pronouns are unsupported.
+
+14.3 Ambiguity and conversation-sharing tests
+
+1. Ambiguous pronoun:
+   - Add two entity nodes with equal type and role eligibility.
+   - Record both as same-role recent mentions through the ConversationContext
+     test hook.
+   - Ask a pronoun question.
+   - Expect NlpStatus.Ambiguous or Unsupported according to the final question
+     path, with an ambiguity diagnostic and no graph mutation.
+   - The important assertion is that no arbitrary antecedent is chosen.
+
+2. Cross-conversation isolation:
+   - Pipeline A ingests "Alice works at Acme."
+   - Pipeline B is created on the same core without A's conversation ID.
+   - Ask "Where does she work?" on B.
+   - Expect Unsupported with a no-antecedent diagnostic.
+   - Pipeline A still answers its own follow-up.
+
+3. Explicit shared conversation:
+   - Pipeline A ingests "Alice works at Acme."
+   - Pipeline C is created on the same core with A.ConversationID.
+   - Ask "Where does she work?" on C.
+   - Expect Answered with "Acme".
+   - C sees the mention and provenance state recorded by A.
+
+4. Reset through a sibling pipeline:
+   - After C answers the shared follow-up, call C.ResetConversation().
+   - Ask the same pronoun question on A.
+   - Expect Unsupported with a no-antecedent diagnostic.
+   - Graph node/link counts remain unchanged by the reset.
+
+5. Failed question does not pollute shared context:
+   - Ask a no-match question with a pronoun that cannot resolve.
+   - Then ask a valid explicit-entity follow-up through either attached
+     pipeline.
+   - Focus and mentions remain from the last successful interaction.
+
+6. Disposal does not delete the shared conversation:
+   - Dispose one attached pipeline.
+   - Its pipeline ID is removed from pipelineConversations.
+   - The conversation still exists and sibling pipelines can use it.
+
+14.4 Conversation registry tests
+
+1. Default session creation:
+   - Construct two pipelines without conversation IDs on the same core.
+   - Their ConversationIDs differ.
+   - Each has independent mentions and focus.
+
+2. Explicit sharing:
+   - Create a conversation through core.CreateConversation.
+   - Construct two pipelines with that ID.
+   - Both expose the same ConversationContext instance.
+   - Registering both pipelines succeeds and GetConversations contains the ID.
+
+3. Unknown conversation ID:
+   - Construct a pipeline with a random non-empty ID.
+   - Expect InvalidOperationException before any graph or mention mutation.
+
+4. RemoveConversation:
+   - Remove a session while pipelines are attached.
+   - TryGetConversation returns false.
+   - Pipeline attachments for that conversation are gone.
+   - Graph node/link counts are unchanged.
+
+5. ClearConversations:
+   - Clear the registry.
+   - GetConversations is empty.
+   - PipelineConversations mappings are empty.
+   - Graph node/link counts are unchanged.
+
+6. InitializeCore reset:
+   - Populate the registry, then call InitializeCore again.
+   - Conversation and pipeline dictionaries are empty.
+   - No stale context is returned by GetConversations.
+
+7. Pipeline mapping:
+   - TryGetPipelineConversation returns the expected conversation ID.
+   - Dispose removes only that pipeline mapping.
+   - Removing one pipeline does not remove sibling mappings or the session.
+
+8. Registry view:
+   - GetConversations returns a read-only dictionary view.
+   - It cannot be used to mutate the registry directly.
+
+14.5 Focus tests
+
+1. After ingesting "Alice works at Acme.":
+   - LastSubjectNodeID is Alice.
+   - LastObjectOrQualifierNodeID is Acme.
+   - FocusNodeID is the chain target (Acme).
+
+2. After Ask "Where does Alice work?":
+   - FocusNodeID becomes the answer node Acme.
+   - LastAnswerNodeID is Acme.
+
+3. After Ask "Is Alice a doctor?" after ingestion:
+   - FocusNodeID is Alice (yes/no anchor).
+   - LastAnswerNodeID remains null or unchanged according to the chosen policy.
+
+4. After an Unsupported pronoun question:
+   - FocusNodeID and role-specific IDs are unchanged.
+
+5. After an Unsupported/failed Ingest:
+   - Focus and mentions are unchanged.
+
+14.6 Session provenance tests
+
+1. Ingest "Alice works at Acme." with a source node and topic node.
+   - pipeline.Provenance has at least one entry.
+   - Entry contains SourceText, relation "work_at", node IDs, link IDs,
+     TrustSourceNodeID, TopicNodeID, and GraphMutated=true.
+   - NlpResult.Provenance contains the entries created by that call.
+
+2. Ingest the same fact twice.
+   - Graph remains idempotent.
+   - Both calls create session provenance entries.
+   - No duplicate graph links appear.
+
+3. Rejected trust ingestion.
+   - Use a discredited source.
+   - Status is RejectedByTrust.
+   - Provenance entry exists with IsUsableForAnswer=false.
+   - No mentions/focus update.
+
+4. Provenance bounds.
+   - Set MaxSessionProvenanceEntries to a small value.
+   - Ingest more facts than the limit.
+   - Count never exceeds the configured bound.
+   - Oldest entries are evicted first.
+
+5. Ask does not create provenance entries.
+   - Record provenance count before and after Ask.
+   - Count is unchanged.
+
+6. Reset clears provenance.
+   - After ResetConversation, pipeline.Provenance is empty for every pipeline
+     attached to the shared conversation.
+
+7. Shared provenance:
+   - Pipeline A ingests a fact.
+   - Pipeline B is attached to A.ConversationID.
+   - B.Provenance contains the entry produced through A.
+
+8. Registry removal clears provenance:
+   - core.RemoveConversation(A.ConversationID) removes the session.
+   - A subsequent TryGetConversation returns false and no stale provenance is
+     observable through the registry.
+   - core.ClearConversations removes all session provenance and leaves graph
+     counts unchanged.
+
+14.7 Session provenance caveat tests
+
+1. Session-backed answer:
+   - Ingest "Alice works at Acme." through the pipeline.
+   - Ask "Where does Alice work?"
+   - Answer text contains "provided in this session".
+   - NlpAnswer.UsesSessionProvenance is true.
+
+2. Direct graph fact:
+   - Add Alice and an Acme link directly through the core test helper.
+   - Ask "Where does Alice work?"
+   - Answer text does not contain the session caveat.
+   - NlpAnswer.UsesSessionProvenance is false.
+
+3. Disabled caveat:
+   - Ingest the fact through the pipeline with UseSessionProvenanceInAnswers
+     false.
+   - Ask the follow-up.
+   - Session wording is absent even though provenance exists.
+
+4. Temporary evidence precedence:
+   - A session-provided temporary fact gets the session caveat, not the generic
+     temporary caveat.
+   - A non-session temporary fact keeps the existing temporary caveat.
+
+5. No caveat for failed answers:
+   - Ambiguous, NoMatch, and Unsupported answers do not append the session
+     caveat.
+
+14.8 Read-only and determinism tests
+
+1. Ask with pronoun resolution does not change core graph node or link counts.
+2. No query-only node IDs are inserted into the graph dictionary.
+3. Two pipelines attached to the same conversation and fed the same operation
+   sequence observe identical mention sequences, turn counters, focus IDs, and
+   provenance field values.
+4. Two pipelines with distinct conversation IDs remain independent even when
+   created from the same core.
+5. Repeated "Where does she work?" after ingestion returns identical status,
+   kind, short answer, answer node ID, and base text.
+6. Diagnostics are deduplicated and deterministic.
+7. Existing Phase 5 read-only and determinism tests still pass after being
+   updated to use fresh conversation IDs where isolation is assumed.
+
+14.9 Existing test updates
+
+Update TestNlpAnswerDiagnostics:
+
+- Fresh pipeline Ask "Where does she work?" remains Unsupported.
+- Change the diagnostic assertion from requiring "Phase 6" to requiring
+  "antecedent" or "conversation context", matching the new no-antecedent
+  diagnostic.
+- A fresh pipeline constructed without an ID must receive a new conversation,
+  not accidentally reuse a prior test's registry entry.
+
+Other existing tests:
+
+- Any test that assumes two NlpPipeline instances are isolated must construct
+  them with distinct conversation IDs or clear the core registry between cases.
+- Tests that write direct graph facts and expect no session caveat must not
+  share a conversation with a pipeline that ingested the same fact.
+
+Do not loosen the existing checks that the question is unsupported and that no
+graph mutation occurs.
+
+14.10 Regression
+
+- Module 1 and Module 2 smoke tests remain unchanged and passing.
+- All Phase 1-5 NLP tests remain passing.
+- New Phase 6 tests pass.
+- Build remains warning-free under -warnaserror.
+
+================================================================================
+15. IMPLEMENTATION SEQUENCE
+================================================================================
+
+Step 1: Data model and options
+- Add pronoun, mention, resolution, and provenance records to NlpTypes.cs or
+  ConversationContext.cs.
+- Add NlpAnswer.UsesSessionProvenance with a default value.
+- Add NlpResult.Provenance with an empty default.
+- Add NlpOptions conversation/provenance flags and limits.
+- Build to confirm no source-compatibility break.
+
+Step 2: Pronoun lexicon metadata
+- Add PronounPerson, PronounNumber, PronounCase, and PronounInfo.
+- Add Lexicon.TryGetPronounInfo with third-person, first/second-person,
+  reflexive, and indefinite classifications.
+- Keep Lexicon.IsPronoun unchanged.
+- Add focused lexicon tests if existing POS/lemmatizer tests need coverage.
+
+Step 3: ConversationContext
+- Add ConversationID, bounded mention storage, focus fields, turn/sequence
+  counters, and role updates.
+- Add pronoun candidate scoring, ambiguity detection, and diagnostics.
+- Add provenance storage, bounds, lookup, and reset.
+- Add direct context tests before pipeline integration.
+
+Step 4: LRD_Core conversation registry
+- Add the conversations and pipelineConversations dictionaries.
+- Initialize and clear them in InitializeCore.
+- Add create, get, resolve, remove, clear, attach, lookup, and detach methods.
+- Add direct registry tests: default creation, explicit sharing, unknown ID,
+  removal, clearing, and reinitialization.
+- Confirm graph node/link collections are untouched by registry operations.
+
+Step 5: EntityResolver integration
+- Add optional conversation/options constructor parameters.
+- Resolve pronoun arguments through the context.
+- Preserve existing non-pronoun behavior.
+- Re-run Phase 4 and Phase 5 tests before pipeline changes.
+
+Step 6: NlpPipeline integration
+- Generate a pipeline ID and attach to a core-owned conversation by ID.
+- Register the pipeline mapping and implement Dispose to detach it.
+- Pass the shared context to EntityResolver in Ask and Ingest.
+- Begin turns only for valid inputs.
+- Record successful answer mentions and focus.
+- Record ingestion mentions, focus, and provenance.
+- Expose PipelineID, ConversationID, Conversation, Provenance, and
+  ResetConversation.
+
+Step 7: QuestionAnalyzer adjustment
+- Keep unresolved pronoun rejection.
+- Allow context-resolved pronouns through anchor and yes/no object handling.
+- Ensure ambiguous pronoun questions use the existing ambiguous-anchor path.
+
+Step 8: AnswerGenerator session caveat
+- Add optional context parameter.
+- Detect session-backed evidence from the selected evidence path.
+- Append the session caveat with temporary-caveat precedence rules.
+- Set UsesSessionProvenance and add the diagnostic.
+- Verify Phase 5 answer text remains unchanged when no session provenance exists.
+
+Step 9: Tests
+- Add the Phase 6 test groups, including registry and shared-conversation tests.
+- Update the Phase 5 pronoun placeholder diagnostic assertion.
+- Update existing tests that assume per-instance isolation to use distinct
+  conversation IDs where isolation is intended.
+- Run the full smoke suite and fix nullable, unused, ordering, and determinism
+  issues.
+
+Step 10: Documentation
+- Update README.md and ReadMe2.md to Phase 6 of 7 after tests pass.
+- Describe supported follow-ups, pronoun limits, explicit conversation sharing,
+  conversation-ID isolation, and session-provenance caveats.
+- Do not claim durable provenance or Phase 7 work.
+
+Step 11: Final verification
+- Build the smoke-test project with -warnaserror.
+- Run the complete smoke suite.
+- On Windows, build OPEN-LRD.slnx to verify the WPF project.
+- Confirm no graph mutation from Ask and no pronoun placeholder nodes.
+- Confirm ClearConversations and RemoveConversation leave graph counts
+  unchanged.
+
+================================================================================
+16. PHASE 6 ACCEPTANCE CRITERIA
+================================================================================
+
+Phase 6 is complete when all of the following are true:
+
+1. After Ingest("Alice works at Acme."), Ask("Where does she work?") returns
+   NlpStatus.Answered with ShortAnswer containing "Acme".
+2. After Ingest("Alice sees Bob."), Ask("Who did she see?") returns "Bob" and
+   Ask("Does she see Bob?") returns Yes.
+3. After Ingest("Alice is a doctor."), Ask("Is she a doctor?") returns Yes.
+4. Ingest("She works at Globex.") after Alice is in context resolves she to
+   Alice and creates no node labeled "she".
+5. A fresh pipeline cannot resolve she/he/it/they and returns Unsupported with
+   an explicit no-antecedent diagnostic.
+6. First-person, second-person, reflexive, and indefinite pronouns remain
+   unsupported with explicit diagnostics and no graph mutation.
+7. Ambiguous pronoun antecedents return an ambiguity result or unsupported
+   result with an ambiguity diagnostic; no arbitrary antecedent is selected.
+8. Conversation state is owned by LRD_Core and isolated by conversation ID,
+   not by NlpPipeline instance.
+9. Two pipelines constructed with the same conversation ID share mentions,
+   focus, turn counters, and provenance.
+10. A pipeline constructed without an ID receives a fresh conversation and
+    cannot resolve another pipeline's pronouns.
+11. Focus and role-specific last-node fields update only after successful
+    ingestion or successful answers.
+12. Failed questions and failed ingestions do not pollute mentions or focus.
+13. Session provenance records source text, relation/link IDs, node IDs,
+    trust source/topic IDs, graph-mutated state, and temporary node IDs for each
+    ingested chain.
+14. Provenance is bounded by MaxSessionProvenanceEntries and cleared by
+    ResetConversation, RemoveConversation, ClearConversations, and
+    InitializeCore.
+15. Answers whose selected evidence came from this session append a
+    deterministic session caveat and set UsesSessionProvenance=true.
+16. Answers using pre-existing graph facts do not append a session caveat.
+17. UseSessionProvenanceInAnswers=false suppresses the caveat while preserving
+    provenance storage.
+18. Ask remains graph-read-only: graph node count and link count are unchanged
+    and no query-only IDs are inserted.
+19. Repeated operations with the same shared context state are deterministic.
+20. The Phase 5 pronoun placeholder test is updated and still verifies that a
+    fresh session cannot answer a pronoun question.
+21. Registry operations never change graph node/link counts; reinitializing the
+    core clears conversations without stale lookups.
+22. The full solution builds with zero warnings and zero errors.
+23. All Module 1, Module 2, Module 3 Phase 1-5, and new Phase 6 smoke tests
+    pass.
+
+================================================================================
+17. RISKS, DECISIONS, AND DEFERRED WORK
+================================================================================
+
+Resolved decisions for Phase 6:
+
+- Session boundary is a conversation ID. LRD_Core remains the global graph
+  owner and also owns the in-memory conversation registry.
+- Conversation state is stored in two core dictionaries: conversations keyed by
+  conversation ID and pipelineConversations keyed by pipeline instance ID.
+- Sharing is explicit: pipelines share only when constructed with the same
+  conversation ID. A default constructor creates a fresh conversation.
+- Context updates happen only in Ingest and Ask, never in Analyze.
+- Pronouns resolve to existing graph nodes only. No pronoun placeholder nodes
+  are created.
+- he/she/it/they are resolved by recency, role, focus, and type compatibility,
+  not by gender or hidden metadata.
+- Role-specific mention preference is stronger than general focus preference
+  so subject pronouns prefer the last subject and object pronouns prefer the
+  last object.
+- Ambiguity is surfaced rather than guessed.
+- First/second-person, reflexive, and indefinite pronouns are deferred.
+- Focus updates only on successful ingestion or successful answers.
+- Session provenance is per-conversation, shared by attached pipelines,
+  bounded, and memory-only.
+- Session provenance is recorded per chain with reasoning status and trust
+  context.
+- RemoveConversation and ClearConversations affect session state only; they
+  never delete graph data.
+- InitializeCore clears the conversation registry because old pipeline
+  attachments are no longer valid after reinitialization.
+- Session caveat takes precedence over the generic temporary-evidence caveat.
+- No Module 1 or Module 2 model changes are required.
+- No WPF changes in Phase 6.
+
+Known limitations after Phase 6:
+
+- No gender inference; he and she may resolve to the same candidate set.
+- No number metadata beyond pronoun class.
+- No full ellipsis or discourse structure.
+- No cross-process or cross-core persistence.
+- No automatic conversation expiry or idle cleanup; removal is explicit.
+- No thread-safety guarantee for concurrent pipelines sharing one conversation.
+- No provenance replay or durable audit trail.
+- No resolution inside relative clauses or complex coordinated subjects.
+- Session memory is bounded, so very old antecedents may be forgotten.
+- Provenance matching uses link type and endpoints, not source text equality.
+- If the same fact was both pre-existing and re-ingested in this session, the
+  answer may use the session caveat because the session did provide it again.
+
+Explicitly deferred to Phase 7:
+
+- Final documentation pass and status wording.
+- WPF Tools integration and any end-to-end UI workflow.
+- Optional manual session inspection UI.
+- Full solution-wide documentation polish.
+
+================================================================================
+18. VERIFICATION COMMANDS
+================================================================================
+
+Run from the repository root:
+
+    dotnet build OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj -warnaserror
+    dotnet run --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj
+
+The smoke-test project targets net10.0 and compiles the NLP, Nodes, Reasoning,
+and core sources, so it is the authoritative Phase 6 build/test check.
+
+If the WSL dotnet host is unavailable, use the Windows SDK binary:
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" build \
+        OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj -warnaserror
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" run \
+        --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build
+
+On Windows, also verify the WPF project:
+
+    dotnet build OPEN-LRD.slnx
+
+Expected result: zero warnings, zero errors, and every smoke test passing,
+including Module 1, Module 2, Phase 1-5 NLP, and the new Phase 6 tests.
+
+(End of Phase 6 plan.)

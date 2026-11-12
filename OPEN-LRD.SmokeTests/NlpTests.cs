@@ -33,6 +33,14 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP question read-only", TestNlpQuestionReadOnly);
             Program.Run("NLP question determinism", TestNlpQuestionDeterminism);
             Program.Run("NLP temporary evidence", TestNlpTemporaryEvidence);
+            Program.Run("NLP conversation pronoun ingestion", TestNlpConversationPronounIngestion);
+            Program.Run("NLP conversation follow-up questions", TestNlpConversationFollowUpQuestions);
+            Program.Run("NLP conversation ambiguity and sharing", TestNlpConversationAmbiguityAndSharing);
+            Program.Run("NLP conversation registry", TestNlpConversationRegistry);
+            Program.Run("NLP conversation focus", TestNlpConversationFocus);
+            Program.Run("NLP session provenance", TestNlpSessionProvenance);
+            Program.Run("NLP session provenance caveats", TestNlpSessionProvenanceCaveats);
+            Program.Run("NLP conversation read-only and determinism", TestNlpConversationReadOnlyAndDeterminism);
         }
 
         private static LRD_Core NewCore()
@@ -849,11 +857,15 @@ namespace OPEN_LRD.SmokeTests
                 answer.Diagnostics.Any(message => message.Contains("Selected answer", StringComparison.Ordinal)),
                 "answer diagnostics should describe the selected answer");
 
-            NlpResult pronoun = pipeline.Ask("Where does she work?");
+            LRD_Core pronounCore = NewCore();
+            NlpPipeline pronounPipeline = new NlpPipeline(pronounCore);
+            NlpResult pronoun = pronounPipeline.Ask("Where does she work?");
             Assert(pronoun.Status == NlpStatus.Unsupported, $"expected Unsupported but got {pronoun.Status}");
             Assert(
-                pronoun.Diagnostics.Any(message => message.Contains("Phase 6", StringComparison.Ordinal)),
-                "pronoun questions should include a Phase 6 diagnostic");
+                pronoun.Diagnostics.Any(message =>
+                    message.Contains("antecedent", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("conversation context", StringComparison.OrdinalIgnoreCase)),
+                "pronoun questions should include a no-antecedent or context diagnostic");
 
             NlpResult modal = pipeline.Ask("Can Alice see Bob?");
             Assert(modal.Status == NlpStatus.Unsupported, $"expected Unsupported but got {modal.Status}");
@@ -944,7 +956,8 @@ namespace OPEN_LRD.SmokeTests
         private static void TestNlpTemporaryEvidence()
         {
             LRD_Core core = NewCore();
-            NlpPipeline pipeline = new NlpPipeline(core);
+            NlpOptions temporaryOptions = new NlpOptions { UseSessionProvenanceInAnswers = false };
+            NlpPipeline pipeline = new NlpPipeline(core, temporaryOptions);
             Assert(pipeline.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "neutral ingestion failed");
 
             NlpResult neutral = pipeline.Ask("Who works at Acme?");
@@ -958,7 +971,7 @@ namespace OPEN_LRD.SmokeTests
             Guid source = AddNode(trustedCore, NodeTypes.Sources, "GoodSource", NodeLifetime.Permanent);
             ReasoningEngine engine = new ReasoningEngine(trustedCore);
             engine.RecordTrustEvidence(source, null, true, 50);
-            NlpPipeline trustedPipeline = new NlpPipeline(trustedCore, reasoning: engine);
+            NlpPipeline trustedPipeline = new NlpPipeline(trustedCore, temporaryOptions, engine);
             Assert(
                 trustedPipeline.Ingest("Alice works at Acme.", source).Status == NlpStatus.Ingested,
                 "trusted ingestion failed");
@@ -969,6 +982,506 @@ namespace OPEN_LRD.SmokeTests
             Assert(
                 trusted.Answer?.Text.Contains("not yet verified", StringComparison.OrdinalIgnoreCase) == false,
                 "permanent evidence should not add the temporary caveat");
+        }
+
+        private static void TestNlpConversationPronounIngestion()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+
+            NlpResult first = pipeline.Ingest("Alice works at Acme.");
+            Assert(first.Status == NlpStatus.Ingested, $"first ingestion failed with {first.Status}: {string.Join("; ", first.Diagnostics)}");
+
+            NlpResult second = pipeline.Ingest("She works at Globex.");
+            Assert(second.Status == NlpStatus.Ingested, $"pronoun ingestion failed with {second.Status}: {string.Join("; ", second.Diagnostics)}");
+            Assert(core.FindByLabel("she").Count == 0, "pronoun ingestion must not create a pronoun node");
+            Assert(core.FindByLabel("She").Count == 0, "pronoun ingestion must not create a pronoun node");
+
+            Guid alice = core.FindByLabel("Alice", NodeTypes.Entities).Single().ID;
+            Guid globex = core.FindByLabel("Globex", NodeTypes.Entities).Single().ID;
+            Assert(
+                core.GetLinks(alice).Any(link => link.DestinationID == globex && link.ForwardLink.Name == "work_at"),
+                "the resolved pronoun should connect Alice to Globex");
+            Assert(
+                pipeline.Conversation.Mentions.Count(mention => mention.NodeID == alice) == 1,
+                "the Alice mention should be updated rather than duplicated");
+
+            NlpResult sees = pipeline.Ingest("Alice sees Bob.");
+            Assert(sees.Status == NlpStatus.Ingested, $"sees ingestion failed with {sees.Status}: {string.Join("; ", sees.Diagnostics)}");
+
+            NlpResult resolved = pipeline.Ingest("She sees him.");
+            Assert(resolved.Status == NlpStatus.Ingested, $"resolved pronoun ingestion failed with {resolved.Status}: {string.Join("; ", resolved.Diagnostics)}");
+            Assert(core.FindByLabel("him").Count == 0, "object pronouns must not create nodes");
+
+            Guid bob = core.FindByLabel("Bob", NodeTypes.Entities).Single().ID;
+            Assert(
+                core.GetLinks(alice).Any(link => link.DestinationID == bob && link.ForwardLink.Name == "see"),
+                "the resolved pronouns should connect Alice to Bob");
+
+            LRD_Core freshCore = NewCore();
+            NlpPipeline fresh = new NlpPipeline(freshCore);
+            NlpResult unresolved = fresh.Ingest("She works at Acme.");
+            Assert(unresolved.Status == NlpStatus.Unsupported, $"expected Unsupported but got {unresolved.Status}");
+            Assert(
+                unresolved.Diagnostics.Any(message => message.Contains("antecedent", StringComparison.OrdinalIgnoreCase)),
+                "a fresh statement should report a missing antecedent");
+            Assert(CountNodes(freshCore) == 0 && CountLinks(freshCore) == 0, "an unresolved pronoun statement must not mutate the graph");
+            Assert(freshCore.FindByLabel("she").Count == 0, "an unresolved pronoun must not create a placeholder node");
+
+            NlpResult firstPerson = fresh.Ingest("I work at Acme.");
+            Assert(firstPerson.Status == NlpStatus.Unsupported, $"expected Unsupported but got {firstPerson.Status}");
+            Assert(
+                firstPerson.Diagnostics.Any(message => message.Contains("First- and second-person", StringComparison.OrdinalIgnoreCase)),
+                "first-person statement pronouns should be unsupported");
+            Assert(CountNodes(freshCore) == 0 && CountLinks(freshCore) == 0, "a first-person statement must not mutate the graph");
+
+            NlpResult indefinite = fresh.Ingest("Someone works at Acme.");
+            Assert(indefinite.Status == NlpStatus.Unsupported, $"expected Unsupported but got {indefinite.Status}");
+            Assert(
+                indefinite.Diagnostics.Any(message => message.Contains("Indefinite", StringComparison.OrdinalIgnoreCase)),
+                "indefinite statement pronouns should be unsupported");
+            Assert(CountNodes(freshCore) == 0 && CountLinks(freshCore) == 0, "an indefinite statement must not mutate the graph");
+        }
+
+        private static void TestNlpConversationFollowUpQuestions()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+            Assert(pipeline.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "work ingestion failed");
+
+            int nodeCount = CountNodes(core);
+            int linkCount = CountLinks(core);
+            NlpResult where = pipeline.Ask("Where does she work?");
+            Assert(where.Status == NlpStatus.Answered, $"expected Answered but got {where.Status}: {string.Join("; ", where.Diagnostics)}");
+            Assert(where.Answer?.ShortAnswer == "Acme", $"expected Acme but got {where.Answer?.ShortAnswer}");
+            Assert(CountNodes(core) == nodeCount && CountLinks(core) == linkCount, "pronoun questions must not mutate the graph");
+
+            LRD_Core seeCore = NewCore();
+            NlpPipeline seePipeline = new NlpPipeline(seeCore);
+            Assert(seePipeline.Ingest("Alice sees Bob.").Status == NlpStatus.Ingested, "see ingestion failed");
+
+            NlpResult who = seePipeline.Ask("Who did she see?");
+            Assert(who.Status == NlpStatus.Answered, $"expected Answered but got {who.Status}: {string.Join("; ", who.Diagnostics)}");
+            Assert(who.Answer?.ShortAnswer == "Bob", $"expected Bob but got {who.Answer?.ShortAnswer}");
+
+            NlpResult does = seePipeline.Ask("Does she see Bob?");
+            Assert(does.Answer?.Status == AnswerStatus.Yes, $"expected Yes but got {does.Answer?.Status}: {string.Join("; ", does.Diagnostics)}");
+
+            NlpResult him = seePipeline.Ask("Does Alice see him?");
+            Assert(him.Answer?.Status == AnswerStatus.Yes, $"expected Yes but got {him.Answer?.Status}: {string.Join("; ", him.Diagnostics)}");
+
+            LRD_Core copulaCore = NewCore();
+            NlpPipeline copulaPipeline = new NlpPipeline(copulaCore);
+            Assert(copulaPipeline.Ingest("Alice is a doctor.").Status == NlpStatus.Ingested, "copula ingestion failed");
+
+            NlpResult copula = copulaPipeline.Ask("Is she a doctor?");
+            Assert(copula.Answer?.Status == AnswerStatus.Yes, $"expected Yes but got {copula.Answer?.Status}: {string.Join("; ", copula.Diagnostics)}");
+
+            LRD_Core freshCore = NewCore();
+            NlpPipeline fresh = new NlpPipeline(freshCore);
+            NlpResult noAntecedent = fresh.Ask("Where does she work?");
+            Assert(noAntecedent.Status == NlpStatus.Unsupported, $"expected Unsupported but got {noAntecedent.Status}");
+            Assert(
+                noAntecedent.Diagnostics.Any(message => message.Contains("antecedent", StringComparison.OrdinalIgnoreCase)),
+                "a fresh session should report a missing antecedent");
+            Assert(CountNodes(freshCore) == 0, "failed pronoun questions must not create nodes");
+
+            NlpResult firstPerson = fresh.Ask("Where do I work?");
+            Assert(firstPerson.Status == NlpStatus.Unsupported, $"expected Unsupported but got {firstPerson.Status}");
+            Assert(
+                firstPerson.Diagnostics.Any(message => message.Contains("First- and second-person", StringComparison.OrdinalIgnoreCase)),
+                "first-person pronouns should be rejected with an explicit diagnostic");
+        }
+
+        private static void TestNlpConversationAmbiguityAndSharing()
+        {
+            LRD_Core ambiguousCore = NewCore();
+            Guid alice = AddNode(ambiguousCore, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid bob = AddNode(ambiguousCore, NodeTypes.Entities, "Bob", NodeLifetime.Permanent);
+            NlpPipeline ambiguous = new NlpPipeline(ambiguousCore);
+            ConversationContext context = ambiguous.Conversation;
+            context.BeginTurn();
+            context.RecordMentions(new[]
+            {
+                new ConversationMention(alice, "Alice", "Alice", NodeTypes.Entities, FrameRole.Subject, context.TurnIndex, 0, false),
+                new ConversationMention(bob, "Bob", "Bob", NodeTypes.Entities, FrameRole.Subject, context.TurnIndex, 0, false)
+            });
+
+            int nodeCount = CountNodes(ambiguousCore);
+            int linkCount = CountLinks(ambiguousCore);
+            NlpResult ambiguousAnswer = ambiguous.Ask("Where does she work?");
+            Assert(
+                ambiguousAnswer.Status is NlpStatus.Ambiguous or NlpStatus.Unsupported,
+                $"expected Ambiguous or Unsupported but got {ambiguousAnswer.Status}");
+            Assert(
+                ambiguousAnswer.Diagnostics.Any(message =>
+                    message.Contains("multiple", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("ambig", StringComparison.OrdinalIgnoreCase)),
+                "an ambiguous pronoun should produce an ambiguity diagnostic");
+            Assert(CountNodes(ambiguousCore) == nodeCount && CountLinks(ambiguousCore) == linkCount, "ambiguous pronouns must not mutate the graph");
+
+            LRD_Core sharedCore = NewCore();
+            NlpOptions options = new NlpOptions();
+            NlpPipeline pipelineA = new NlpPipeline(sharedCore, options);
+            Assert(pipelineA.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "pipeline A ingestion failed");
+
+            NlpPipeline pipelineB = new NlpPipeline(sharedCore, options);
+            Assert(pipelineA.ConversationID != pipelineB.ConversationID, "pipelines without IDs should receive distinct conversations");
+
+            Guid? focusBeforeFailure = pipelineA.Conversation.FocusNodeID;
+            int mentionsBeforeFailure = pipelineA.Conversation.Mentions.Count;
+            NlpResult isolated = pipelineB.Ask("Where does she work?");
+            Assert(isolated.Status == NlpStatus.Unsupported, $"expected Unsupported but got {isolated.Status}");
+            Assert(
+                isolated.Diagnostics.Any(message => message.Contains("antecedent", StringComparison.OrdinalIgnoreCase)),
+                "an isolated conversation should not resolve another session's pronoun");
+            Assert(pipelineA.Conversation.FocusNodeID == focusBeforeFailure, "a failed question in another conversation must not change focus");
+            Assert(pipelineA.Conversation.Mentions.Count == mentionsBeforeFailure, "a failed question in another conversation must not add mentions");
+
+            NlpResult own = pipelineA.Ask("Where does she work?");
+            Assert(own.Status == NlpStatus.Answered, $"expected Answered but got {own.Status}: {string.Join("; ", own.Diagnostics)}");
+
+            NlpPipeline pipelineC = new NlpPipeline(sharedCore, options, conversationID: pipelineA.ConversationID);
+            NlpResult shared = pipelineC.Ask("Where does she work?");
+            Assert(shared.Status == NlpStatus.Answered, $"expected Answered but got {shared.Status}: {string.Join("; ", shared.Diagnostics)}");
+            Assert(shared.Answer?.ShortAnswer == "Acme", $"expected Acme but got {shared.Answer?.ShortAnswer}");
+
+            Assert(ReferenceEquals(pipelineA.Conversation, pipelineC.Conversation), "attached pipelines should share one context instance");
+
+            Guid? sharedFocus = pipelineC.Conversation.FocusNodeID;
+            int sharedMentions = pipelineC.Conversation.Mentions.Count;
+            NlpResult sharedFailure = pipelineA.Ask("Where do I work?");
+            Assert(sharedFailure.Status == NlpStatus.Unsupported, $"expected Unsupported but got {sharedFailure.Status}");
+            Assert(pipelineC.Conversation.FocusNodeID == sharedFocus, "a failed shared question must not change focus");
+            Assert(pipelineC.Conversation.Mentions.Count == sharedMentions, "a failed shared question must not add mentions");
+            NlpResult explicitFollowUp = pipelineC.Ask("Where does Alice work?");
+            Assert(explicitFollowUp.Status == NlpStatus.Answered, "a valid explicit follow-up should still work after a failed pronoun question");
+
+            pipelineC.ResetConversation();
+            NlpResult afterReset = pipelineA.Ask("Where does she work?");
+            Assert(afterReset.Status == NlpStatus.Unsupported, $"expected Unsupported after reset but got {afterReset.Status}");
+            Assert(
+                afterReset.Diagnostics.Any(message => message.Contains("antecedent", StringComparison.OrdinalIgnoreCase)),
+                "a reset shared conversation should have no antecedents");
+        }
+
+        private static void TestNlpConversationRegistry()
+        {
+            LRD_Core core = NewCore();
+            NlpOptions options = new NlpOptions();
+            NlpPipeline first = new NlpPipeline(core, options);
+            NlpPipeline second = new NlpPipeline(core, options);
+            Assert(first.ConversationID != second.ConversationID, "default pipelines should get distinct conversation IDs");
+
+            Guid conversationID = core.CreateConversation(options);
+            NlpPipeline third = new NlpPipeline(core, options, conversationID: conversationID);
+            NlpPipeline fourth = new NlpPipeline(core, options, conversationID: conversationID);
+            Assert(ReferenceEquals(third.Conversation, fourth.Conversation), "explicit conversation IDs should share context");
+            Assert(core.GetConversations()!.ContainsKey(conversationID), "the created conversation should be registered");
+
+            AssertThrows<InvalidOperationException>(
+                () => new NlpPipeline(core, options, conversationID: Guid.NewGuid()),
+                "an unknown conversation ID should be rejected");
+
+            int nodeCount = CountNodes(core);
+            int linkCount = CountLinks(core);
+            Assert(core.RemoveConversation(conversationID), "the conversation should be removed");
+            Assert(!core.TryGetConversation(conversationID, out _), "a removed conversation should not be found");
+            Assert(!core.TryGetPipelineConversation(third.PipelineID, out _), "attachments to a removed conversation should be gone");
+            Assert(CountNodes(core) == nodeCount && CountLinks(core) == linkCount, "conversation removal must not change the graph");
+
+            core.ClearConversations();
+            Assert(core.GetConversations()!.Count == 0, "the conversation registry should be empty");
+            Assert(!core.TryGetPipelineConversation(first.PipelineID, out _), "clearing should remove pipeline attachments");
+            Assert(CountNodes(core) == nodeCount && CountLinks(core) == linkCount, "clearing conversations must not change the graph");
+
+            Guid resetID = core.CreateConversation(options);
+            NlpPipeline resetPipeline = new NlpPipeline(core, options, conversationID: resetID);
+            Assert(core.TryGetPipelineConversation(resetPipeline.PipelineID, out Guid mapped) && mapped == resetID, "pipeline mapping should be recorded");
+
+            core.InitializeCore();
+            Assert(core.GetConversations()!.Count == 0, "reinitializing the core should clear conversations");
+            Assert(!core.TryGetPipelineConversation(resetPipeline.PipelineID, out _), "reinitializing the core should clear pipeline mappings");
+
+            Guid readOnlyID = core.CreateConversation(options);
+            IReadOnlyDictionary<Guid, ConversationContext> view = core.GetConversations()!;
+            Assert(
+                view is System.Collections.ObjectModel.ReadOnlyDictionary<Guid, ConversationContext>,
+                "the conversation view should be read-only");
+            Assert(view.ContainsKey(readOnlyID), "the read-only view should expose the session");
+
+            NlpPipeline disposable = new NlpPipeline(core, options, conversationID: readOnlyID);
+            NlpPipeline sibling = new NlpPipeline(core, options, conversationID: readOnlyID);
+            disposable.Dispose();
+            Assert(!core.TryGetPipelineConversation(disposable.PipelineID, out _), "dispose should remove the pipeline mapping");
+            Assert(core.TryGetPipelineConversation(sibling.PipelineID, out _), "dispose should not remove sibling mappings");
+            Assert(core.TryGetConversation(readOnlyID, out _), "dispose should not delete the shared conversation");
+        }
+
+        private static void TestNlpConversationFocus()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+            Assert(pipeline.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "work ingestion failed");
+
+            Guid alice = core.FindByLabel("Alice", NodeTypes.Entities).Single().ID;
+            Guid acme = core.FindByLabel("Acme", NodeTypes.Entities).Single().ID;
+            Assert(pipeline.Conversation.LastSubjectNodeID == alice, "Alice should be the last subject");
+            Assert(pipeline.Conversation.LastObjectOrQualifierNodeID == acme, "Acme should be the last object or qualifier");
+            Assert(pipeline.Conversation.FocusNodeID == acme, "focus should move to the chain target");
+
+            NlpResult where = pipeline.Ask("Where does Alice work?");
+            Assert(where.Status == NlpStatus.Answered, $"expected Answered but got {where.Status}");
+            Assert(pipeline.Conversation.FocusNodeID == acme, "the answer node should become the focus");
+            Assert(pipeline.Conversation.LastAnswerNodeID == acme, "the answer node should be recorded");
+
+            Guid? previousAnswer = pipeline.Conversation.LastAnswerNodeID;
+            Assert(pipeline.Ingest("Alice is a doctor.").Status == NlpStatus.Ingested, "copula ingestion failed");
+            NlpResult yes = pipeline.Ask("Is Alice a doctor?");
+            Assert(yes.Answer?.Status == AnswerStatus.Yes, $"expected Yes but got {yes.Answer?.Status}");
+            Assert(pipeline.Conversation.FocusNodeID == alice, "yes/no questions should focus on the anchor");
+            Assert(pipeline.Conversation.LastAnswerNodeID == previousAnswer, "yes/no questions should not replace the last answer");
+
+            Guid? focus = pipeline.Conversation.FocusNodeID;
+            Guid? lastSubject = pipeline.Conversation.LastSubjectNodeID;
+            Guid? lastObject = pipeline.Conversation.LastObjectNodeID;
+            Guid? lastQualifier = pipeline.Conversation.LastQualifierNodeID;
+            int mentionCount = pipeline.Conversation.Mentions.Count;
+
+            NlpResult unsupported = pipeline.Ask("Where do I work?");
+            Assert(unsupported.Status == NlpStatus.Unsupported, $"expected Unsupported but got {unsupported.Status}");
+            Assert(pipeline.Conversation.FocusNodeID == focus, "failed questions should not change focus");
+            Assert(pipeline.Conversation.LastSubjectNodeID == lastSubject, "failed questions should not change subject focus");
+            Assert(pipeline.Conversation.LastObjectNodeID == lastObject, "failed questions should not change object focus");
+            Assert(pipeline.Conversation.LastQualifierNodeID == lastQualifier, "failed questions should not change qualifier focus");
+            Assert(pipeline.Conversation.Mentions.Count == mentionCount, "failed questions should not add mentions");
+
+            NlpResult failedIngest = pipeline.Ingest("I work at Globex.");
+            Assert(failedIngest.Status == NlpStatus.Unsupported, $"expected Unsupported but got {failedIngest.Status}");
+            Assert(pipeline.Conversation.FocusNodeID == focus, "failed ingestion should not change focus");
+            Assert(pipeline.Conversation.Mentions.Count == mentionCount, "failed ingestion should not add mentions");
+        }
+
+        private static void TestNlpSessionProvenance()
+        {
+            LRD_Core core = NewCore();
+            Guid source = AddNode(core, NodeTypes.Sources, "Source", NodeLifetime.Permanent);
+            Guid topic = AddNode(core, NodeTypes.Entities, "Topic", NodeLifetime.Permanent);
+            NlpPipeline pipeline = new NlpPipeline(core);
+
+            NlpResult result = pipeline.Ingest("Alice works at Acme.", source, topic);
+            Assert(result.Status == NlpStatus.Ingested, $"ingestion failed with {result.Status}: {string.Join("; ", result.Diagnostics)}");
+            Assert(result.Provenance.Count > 0, "ingestion should produce provenance entries");
+            Assert(pipeline.Provenance.Count >= result.Provenance.Count, "the pipeline should expose shared provenance");
+
+            SessionProvenanceEntry entry = result.Provenance[0];
+            Assert(entry.SourceText == "Alice works at Acme.", "provenance should preserve the source text");
+            Assert(entry.Status == ReasoningStatus.Answered, $"expected Answered but got {entry.Status}");
+            Assert(entry.RelationName is not null, "provenance should record the relation");
+            Assert(entry.ForwardLinkTypeId.HasValue && entry.InverseLinkTypeId.HasValue, "provenance should record link IDs");
+            Assert(entry.SubjectNodeID.HasValue && entry.ObjectNodeID.HasValue, "provenance should record endpoints");
+            Assert(entry.TrustSourceNodeID == source, "provenance should record the trust source");
+            Assert(entry.TopicNodeID == topic, "provenance should record the topic");
+            Assert(entry.GraphMutated, "the first ingestion should report a graph mutation");
+            Assert(entry.IsUsableForAnswer, "successful ingestion should be usable for answers");
+            Assert(result.Provenance.Any(item => item.TemporaryNodeIDs.Count > 0), "temporary node IDs should be recorded");
+
+            int linkCount = CountLinks(core);
+            NlpResult repeated = pipeline.Ingest("Alice works at Acme.");
+            Assert(repeated.Status == NlpStatus.Ingested, "repeated ingestion failed");
+            Assert(repeated.Provenance.Count > 0, "repeated ingestion should also record provenance");
+            Assert(CountLinks(core) == linkCount, "repeated ingestion should not duplicate graph links");
+
+            int provenanceCount = pipeline.Provenance.Count;
+            NlpResult question = pipeline.Ask("Who works at Acme?");
+            Assert(question.Status == NlpStatus.Answered, $"expected Answered but got {question.Status}");
+            Assert(pipeline.Provenance.Count == provenanceCount, "Ask must not create provenance entries");
+            Assert(question.Provenance.Count == 0, "Ask should not return provenance entries");
+
+            LRD_Core boundedCore = NewCore();
+            NlpOptions boundedOptions = new NlpOptions { MaxSessionProvenanceEntries = 1 };
+            NlpPipeline bounded = new NlpPipeline(boundedCore, boundedOptions);
+            Assert(bounded.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "bounded ingestion failed");
+            Assert(bounded.Ingest("Bob works at Globex.").Status == NlpStatus.Ingested, "second bounded ingestion failed");
+            Assert(bounded.Provenance.Count == 1, "provenance should respect the configured bound");
+            Assert(bounded.Provenance[0].SourceText == "Bob works at Globex.", "the oldest provenance entry should be evicted first");
+
+            LRD_Core rejectedCore = NewCore();
+            Guid badSource = AddNode(rejectedCore, NodeTypes.Sources, "BadSource", NodeLifetime.Permanent);
+            ReasoningEngine rejectingEngine = new ReasoningEngine(rejectedCore);
+            rejectingEngine.RecordTrustEvidence(badSource, null, false, 100);
+            NlpPipeline rejecting = new NlpPipeline(rejectedCore, new NlpOptions(), rejectingEngine);
+            NlpResult rejected = rejecting.Ingest("Alice works at Acme.", badSource);
+            Assert(rejected.Status == NlpStatus.RejectedByTrust, $"expected RejectedByTrust but got {rejected.Status}");
+            Assert(rejected.Provenance.Count > 0, "rejected trust ingestion should still record provenance");
+            Assert(rejected.Provenance.All(entry => !entry.IsUsableForAnswer), "rejected provenance should not be usable for answers");
+            Assert(rejected.Provenance.All(entry => !entry.GraphMutated), "rejected provenance should not report graph mutation");
+            Assert(rejecting.Conversation.Mentions.Count == 0, "rejected trust ingestion should not add mentions");
+            Assert(rejecting.Conversation.FocusNodeID is null, "rejected trust ingestion should not change focus");
+            Assert(rejectedCore.FindByLabel("Alice").Count == 0, "rejected trust ingestion should not create entity nodes");
+
+            LRD_Core sharedCore = NewCore();
+            NlpOptions options = new NlpOptions();
+            NlpPipeline pipelineA = new NlpPipeline(sharedCore, options);
+            Assert(pipelineA.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "shared ingestion failed");
+            NlpPipeline pipelineB = new NlpPipeline(sharedCore, options, conversationID: pipelineA.ConversationID);
+            Assert(pipelineB.Provenance.Count == pipelineA.Provenance.Count, "sibling pipelines should see shared provenance");
+
+            pipelineB.ResetConversation();
+            Assert(pipelineA.Provenance.Count == 0, "reset should clear shared provenance");
+        }
+
+        private static void TestNlpSessionProvenanceCaveats()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+            Assert(pipeline.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "ingestion failed");
+
+            NlpResult session = pipeline.Ask("Where does Alice work?");
+            Assert(session.Status == NlpStatus.Answered, $"expected Answered but got {session.Status}");
+            Assert(session.Answer?.UsesSessionProvenance == true, "session-backed answers should set the provenance flag");
+            Assert(
+                session.Answer?.Text.Contains("provided in this session", StringComparison.OrdinalIgnoreCase) == true,
+                "session-backed answers should include the session caveat");
+            Assert(
+                session.Answer?.Text.Contains("not yet verified", StringComparison.OrdinalIgnoreCase) == false,
+                "the session caveat should take precedence over the temporary caveat");
+
+            LRD_Core directCore = NewCore();
+            Guid alice = AddNode(directCore, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid acme = AddNode(directCore, NodeTypes.Entities, "Acme", NodeLifetime.Permanent);
+            RelationLinkType workAt = RelationRegistry.GetOrRegister("work_at");
+            Assert(
+                directCore.AddDirectedConnection(alice, acme, LinkClass.actions, workAt.Forward.Id),
+                "the direct work link should be added");
+            NlpPipeline direct = new NlpPipeline(directCore);
+            NlpResult directAnswer = direct.Ask("Where does Alice work?");
+            Assert(directAnswer.Status == NlpStatus.Answered, $"expected Answered but got {directAnswer.Status}");
+            Assert(directAnswer.Answer?.UsesSessionProvenance == false, "direct graph facts should not use session provenance");
+            Assert(
+                directAnswer.Answer?.Text.Contains("provided in this session", StringComparison.OrdinalIgnoreCase) == false,
+                "direct graph facts should not include the session caveat");
+
+            LRD_Core disabledCore = NewCore();
+            NlpOptions disabledOptions = new NlpOptions { UseSessionProvenanceInAnswers = false };
+            NlpPipeline disabled = new NlpPipeline(disabledCore, disabledOptions);
+            Assert(disabled.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "disabled-caveat ingestion failed");
+            NlpResult disabledAnswer = disabled.Ask("Where does Alice work?");
+            Assert(disabledAnswer.Answer?.UsesSessionProvenance == false, "the caveat flag should respect the option");
+            Assert(
+                disabledAnswer.Answer?.Text.Contains("provided in this session", StringComparison.OrdinalIgnoreCase) == false,
+                "the caveat text should respect the option");
+            Assert(disabled.Provenance.Count > 0, "provenance should still be stored when answer wording is disabled");
+
+            LRD_Core temporaryCore = NewCore();
+            Guid temporaryAlice = AddNode(temporaryCore, NodeTypes.Entities, "Alice");
+            Guid temporaryAcme = AddNode(temporaryCore, NodeTypes.Entities, "Acme");
+            Assert(
+                temporaryCore.AddDirectedConnection(temporaryAlice, temporaryAcme, LinkClass.actions, workAt.Forward.Id),
+                "the temporary work link should be added");
+            NlpPipeline temporary = new NlpPipeline(temporaryCore);
+            NlpResult temporaryAnswer = temporary.Ask("Where does Alice work?");
+            Assert(temporaryAnswer.Answer?.UsesSessionProvenance == false, "temporary graph facts should not use session provenance");
+            Assert(temporaryAnswer.Answer?.UsesTemporaryEvidence == true, "temporary graph facts should remain temporary evidence");
+            Assert(
+                temporaryAnswer.Answer?.Text.Contains("not yet verified", StringComparison.OrdinalIgnoreCase) == true,
+                "non-session temporary facts should keep the temporary caveat");
+
+            NlpResult noMatch = pipeline.Ask("Where does Bob work?");
+            Assert(noMatch.Answer?.Status == AnswerStatus.NoMatch, $"expected NoMatch but got {noMatch.Answer?.Status}");
+            Assert(noMatch.Answer?.UsesSessionProvenance == false, "no-match answers should not use session provenance");
+            Assert(
+                noMatch.Answer?.Text.Contains("provided in this session", StringComparison.OrdinalIgnoreCase) == false,
+                "no-match answers should not include the session caveat");
+
+            LRD_Core ambiguousCore = NewCore();
+            Guid ambiguousAlice = AddNode(ambiguousCore, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid ambiguousBob = AddNode(ambiguousCore, NodeTypes.Entities, "Bob", NodeLifetime.Permanent);
+            NlpPipeline ambiguousPipeline = new NlpPipeline(ambiguousCore);
+            ambiguousPipeline.Conversation.BeginTurn();
+            ambiguousPipeline.Conversation.RecordMentions(new[]
+            {
+                new ConversationMention(ambiguousAlice, "Alice", "Alice", NodeTypes.Entities, FrameRole.Subject, ambiguousPipeline.Conversation.TurnIndex, 0, false),
+                new ConversationMention(ambiguousBob, "Bob", "Bob", NodeTypes.Entities, FrameRole.Subject, ambiguousPipeline.Conversation.TurnIndex, 0, false)
+            });
+            NlpResult ambiguous = ambiguousPipeline.Ask("Where does she work?");
+            Assert(ambiguous.Answer?.UsesSessionProvenance == false, "ambiguous answers should not use session provenance");
+            Assert(
+                ambiguous.Answer?.Text.Contains("provided in this session", StringComparison.OrdinalIgnoreCase) == false,
+                "ambiguous answers should not include the session caveat");
+
+            LRD_Core failedCore = NewCore();
+            NlpPipeline failed = new NlpPipeline(failedCore);
+            NlpResult failedAnswer = failed.Ask("Where does she work?");
+            Assert(failedAnswer.Answer?.UsesSessionProvenance == false, "failed answers should not use session provenance");
+            Assert(
+                failedAnswer.Answer?.Text.Contains("provided in this session", StringComparison.OrdinalIgnoreCase) == false,
+                "failed answers should not include the session caveat");
+        }
+
+        private static void TestNlpConversationReadOnlyAndDeterminism()
+        {
+            LRD_Core core = NewCore();
+            NlpOptions options = new NlpOptions();
+            NlpPipeline pipeline = new NlpPipeline(core, options);
+            Assert(pipeline.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "ingestion failed");
+
+            int nodeCount = CountNodes(core);
+            int linkCount = CountLinks(core);
+            NlpResult first = pipeline.Ask("Where does she work?");
+            Assert(first.Status == NlpStatus.Answered, $"expected Answered but got {first.Status}");
+            Assert(CountNodes(core) == nodeCount, "Ask must not add graph nodes");
+            Assert(CountLinks(core) == linkCount, "Ask must not add graph links");
+
+            foreach (QuestionVariant variant in first.Question!.Variants)
+            {
+                if (variant.IsAnchorOnly)
+                    continue;
+
+                Assert(
+                    !core.TryGetNode(variant.Chain.First!.Value.ID, out _),
+                    "query-only IDs must not be inserted into the graph");
+            }
+
+            NlpResult second = pipeline.Ask("Where does she work?");
+            Assert(first.Status == second.Status, "repeated pronoun questions should return the same status");
+            Assert(first.Answer?.Kind == second.Answer?.Kind, "repeated pronoun questions should return the same kind");
+            Assert(first.Answer?.ShortAnswer == second.Answer?.ShortAnswer, "repeated pronoun questions should return the same short answer");
+            Assert(first.Answer?.AnswerNodeID == second.Answer?.AnswerNodeID, "repeated pronoun questions should return the same answer node");
+            Assert(first.Answer?.Text == second.Answer?.Text, "repeated pronoun questions should return the same text");
+
+            Assert(
+                first.Diagnostics.Distinct(StringComparer.Ordinal).Count() == first.Diagnostics.Count,
+                "diagnostics should be deduplicated");
+
+            NlpPipeline shared = new NlpPipeline(core, options, conversationID: pipeline.ConversationID);
+            Assert(ReferenceEquals(shared.Conversation, pipeline.Conversation), "shared pipelines should use the same context");
+            Assert(shared.Conversation.TurnIndex == pipeline.Conversation.TurnIndex, "shared pipelines should observe the same turn counter");
+            Assert(shared.Conversation.FocusNodeID == pipeline.Conversation.FocusNodeID, "shared pipelines should observe the same focus");
+            Assert(
+                shared.Conversation.Mentions.Select(mention => mention.Sequence).SequenceEqual(
+                    pipeline.Conversation.Mentions.Select(mention => mention.Sequence)),
+                "shared pipelines should observe the same mention sequence");
+
+            NlpPipeline isolated = new NlpPipeline(core, options);
+            Assert(isolated.Conversation.TurnIndex == 0, "a new conversation should start with a zero turn counter");
+            Assert(isolated.Conversation.Mentions.Count == 0, "a new conversation should start with no mentions");
+            Assert(isolated.Conversation.Provenance.Count == 0, "a new conversation should start with no provenance");
+        }
+
+        private static int CountNodes(LRD_Core core)
+        {
+            return core.GetDictionary()?.Count ?? 0;
+        }
+
+        private static int CountLinks(LRD_Core core)
+        {
+            IReadOnlyDictionary<Guid, Web_Node>? nodes = core.GetDictionary();
+
+            if (nodes is null)
+                return 0;
+
+            return nodes.Values.Sum(node => core.GetLinks(node.ID).Count);
         }
 
         private static void AssertArgument(RelationFrame frame, FrameRole role, string surfaceText)
