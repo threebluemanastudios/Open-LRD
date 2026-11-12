@@ -55,7 +55,8 @@ namespace OPEN_LRD.NLP
                 if (!hasVerb
                     || index + 1 >= tokens.Count
                     || !IsClauseConjunction(tokens[index].Normalized)
-                    || !IsSubjectStart(tokens[index + 1].PartOfSpeech))
+                    || !IsSubjectStart(tokens[index + 1].PartOfSpeech)
+                    || !HasVerbAfter(tokens, index + 1))
                 {
                     continue;
                 }
@@ -308,6 +309,17 @@ namespace OPEN_LRD.NLP
         private static bool IsClauseConjunction(string value)
         {
             return clauseConjunctions.Contains(value);
+        }
+
+        private static bool HasVerbAfter(IReadOnlyList<Token> tokens, int start)
+        {
+            for (int index = start; index < tokens.Count; index++)
+            {
+                if (tokens[index].PartOfSpeech is PartOfSpeech.Verb or PartOfSpeech.Auxiliary)
+                    return true;
+            }
+
+            return false;
         }
 
         private static bool IsSubjectStart(PartOfSpeech partOfSpeech)

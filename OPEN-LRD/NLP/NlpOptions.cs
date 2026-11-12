@@ -10,6 +10,12 @@ namespace OPEN_LRD.NLP
         public int MaxClausesPerSentence { get; init; } = 16;
         public int MaxChainsPerText { get; init; } = 64;
         public int MaxAnswerCandidates { get; init; } = 5;
+        public int MaxQuestionVariants { get; init; } = 12;
+        public double AnswerAmbiguityMargin { get; init; } = 0.05;
+        public double MinimumAnswerScore { get; init; } = 0.40;
+        public bool EnableAnchorFallback { get; init; } = true;
+        public bool IncludeEvidenceSentence { get; init; } = true;
+        public int MaxAnswerTextLength { get; init; } = 500;
         public int TemporaryNodeTimeToLive { get; init; } = Node.DefaultTimeToLive;
     }
 }

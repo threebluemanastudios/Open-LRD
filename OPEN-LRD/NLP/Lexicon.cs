@@ -35,7 +35,7 @@ namespace OPEN_LRD.NLP
             "while", "whereas", "if", "unless", "whether", "that", "than", "as");
 
         private static readonly HashSet<string> commonVerbs = Create(
-            "accept", "add", "agree", "allow", "answer", "appear", "ask", "believe",
+            "accept", "add", "agree", "allow", "answer", "appear", "arrive", "ask", "believe",
             "bring", "build", "buy", "call", "carry", "cause", "change", "choose",
             "close", "come", "continue", "create", "cut", "decide", "describe", "die",
             "draw", "drink", "drive", "eat", "end", "expect", "explain", "fall", "feel",

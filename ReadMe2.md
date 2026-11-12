@@ -25,7 +25,7 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 |---|---|---|---|
 | 1 | The Graph Backend (Core and Data Storage) | Nodes, links, storage, search, memory lifecycle | Complete |
 | 2 | The Reasoning Engine | Subgraph matching, trust, contradiction resolution, response extraction | Complete |
-| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | Planned |
+| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | In Progress (Phase 5 of 7) |
 | 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts and structural rules | Planned |
 
 ## Module 1: The Graph Backend
@@ -141,7 +141,21 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 
 ### Current Status
 
-Planned. No NLP implementation exists yet.
+In progress. Phases 1–5 of the Module 3 implementation plan are complete:
+normalization, tokenization, POS tagging, lemmatization, shallow parsing,
+named-entity recognition, relation extraction, predicate link-type registration,
+entity resolution, chain construction, Reasoning Engine ingestion, question
+analysis, answer generation, yes/no answers, evidence text, and ambiguity and
+no-match diagnostics, with smoke tests for each.
+
+`NlpPipeline.Analyze(...)` parses text into tokens, chunks, clauses, typed
+mentions, and relation frames. `NlpPipeline.Ingest(...)` resolves entities,
+builds temporary chains, provisions the required anchor, applies the trust
+precheck, and merges through the Reasoning Engine. `NlpPipeline.Ask(...)`
+analyzes a question, builds bounded query variants, evaluates them with the
+Reasoning Engine, and generates read-only wh or yes/no answers. Still
+outstanding are conversation context and session provenance. See
+`Module_3_Plan.txt` for the full phased plan.
 
 ## Module 4: Upper Ontology
 

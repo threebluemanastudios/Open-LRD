@@ -1,0 +1,993 @@
+OPEN-LRD
+MODULE 3 - PHASE 4: RELATION EXTRACTION, CHAIN BUILDING, AND INGESTION
+IMPLEMENTATION PLAN
+
+Status: Ready for implementation.
+Parent plan: Module_3_Plan.txt (Phases 1-3 complete).
+Scope owner: Module 3 (README numbering).
+Implementation constraint: Native C# with no external library dependencies.
+Prerequisite goal: Full solution builds with zero warnings and all existing
+Module 1, Module 2, and Module 3 tests still pass before Phase 4 begins.
+
+================================================================================
+1. PHASE 4 GOAL AND DELIVERABLES
+================================================================================
+
+Phase 4 turns parsed text into temporary graph chains and merges those chains
+through the Reasoning Engine. It is the first phase that mutates the graph.
+
+On completion:
+
+- Analyze("Alice works at Acme.") returns tokens, POS tags, mentions, and a
+  work_at relation frame.
+- Relation predicates are registered as stable forward and inverse link types.
+- Mentions resolve to existing nodes by label or alias, or are marked for new
+  temporary node creation.
+- Relation frames convert into valid linear LinkedList<Chain_Node> chains.
+- NlpPipeline.Ingest creates temporary nodes and links through the Reasoning
+  Engine without direct permanent mutation.
+- Repeating the same ingestion is idempotent.
+- Source and topic trust are passed through to the Reasoning Engine.
+
+Files added in Phase 4 (under OPEN-LRD/NLP/):
+
+1. RelationRegistry.cs
+   Canonical predicate naming and stable forward/inverse link-type IDs.
+
+2. RelationExtractor.cs
+   Clause-to-relation-frame extraction: copula, possession, transitive,
+   intransitive diagnostics, verb plus preposition, coordination, passive
+   normalization, negation, and modality flags.
+
+3. EntityResolver.cs
+   Label and alias lookup, ambiguity detection, new-node label planning, and
+   Phase 6 pronoun hooks.
+
+4. ChainBuilder.cs
+   RelationFrame to one or more linear LinkedList<Chain_Node> chains.
+
+Files modified in Phase 4:
+
+5. NlpTypes.cs
+   Frame roles, tense/voice, FrameArgument, RelationFrame, and result fields.
+
+6. NlpPipeline.cs
+   Analyze adds relation extraction; new Ingest method and ingestion adapter.
+
+7. OPEN-LRD.SmokeTests/NlpTests.cs
+   New relation, registry, resolver, chain, ingestion, trust, and idempotency
+   tests, registered in NlpTests.RunAll().
+
+No changes are required to OPEN-LRD.SmokeTests.csproj because it already
+includes ../OPEN-LRD/NLP/**/*.cs.
+
+================================================================================
+2. INTEGRATION CONSTRAINTS DISCOVERED IN THE CURRENT CODEBASE
+================================================================================
+
+These constraints drive the Phase 4 design and must not be bypassed.
+
+1. ReasoningEngine.Ingest requires at least one matching graph node.
+   ReasoningEngine.Execute returns NoMatch before merging when
+   SubgraphMatcher.FindMatches returns no matches. A chain whose root does not
+   match an existing node can never create nodes. The NLP ingestion adapter
+   must therefore provision a temporary anchor for the chain root before
+   calling Ingest. See section 8.5.
+
+2. Query nodes are matched by Label, Type, and Aliases, not by ID.
+   SubgraphMatcher.BuildCandidateIndex uses QueryNode.Label/Aliases/Type to find
+   graph candidates. New Chain_Node instances may use fresh GUIDs; existing
+   nodes are still matched when labels and types match.
+
+3. The merger creates new nodes for unmatched query nodes.
+   ReasoningMerger.BuildPlan emits NodeActionKind.CreateTemporaryNode for any
+   query node not mapped to the graph. ChainBuilder therefore only needs to
+   set correct labels, aliases, and NodeTypes; it must not write to core.
+
+4. QueryGraphBuilder rejects empty IDs, duplicate IDs, links that reference
+   nodes outside the chain, and self-loops. ChainBuilder must guarantee
+   subject.ID != object.ID and must wire linkNext/linkPrevious between only the
+   two chain nodes.
+
+5. Link construction rejects unknown forward or inverse link-type IDs.
+   Every predicate must be registered through RelationRegistry before a Link
+   is constructed.
+
+6. IDs 1-999 are reserved for Module 4 ontology relations.
+   Module 3 predicate IDs must start at 1000.
+
+7. Functional link classes are currently LinkClass.identities only
+   (ReasoningOptions.FunctionalLinkClasses). Identity/copula links participate
+   in contradiction resolution; action links do not.
+
+8. Nodes are created temporary by the merger unless the source is Trusted.
+   The ingestion adapter must not promote nodes itself.
+
+9. Trust must be prechecked before anchor creation.
+   If a discredited source is supplied, the adapter must not leave an orphan
+   temporary anchor behind. ReasoningEngine.GetTrust can assess the source
+   first.
+
+10. NlpPipeline is internal and lives in the same assembly as the Reasoning
+    Engine, so it may reference ReasoningResult and ReasoningEngine directly.
+
+================================================================================
+3. DATA MODEL ADDITIONS (NlpTypes.cs)
+================================================================================
+
+Add using OPEN_LRD.Reasoning and using OPEN_LRD.Nodes.Links to NlpTypes.cs.
+
+3.1 Frame roles and grammatical metadata
+
+    internal enum FrameRole
+    {
+        Subject,
+        Object,
+        Recipient,
+        Time,
+        Location,
+        Qualifier
+    }
+
+    internal enum Tense
+    {
+        Unknown,
+        Present,
+        Past,
+        Future
+    }
+
+    internal enum Voice
+    {
+        Unknown,
+        Active,
+        Passive
+    }
+
+3.2 Frame argument
+
+    internal sealed record FrameArgument(
+        FrameRole Role,
+        string SurfaceText,
+        string Lemma,
+        NodeTypes NodeType,
+        MentionKind Kind,
+        int SentenceIndex,
+        int StartToken,
+        int EndToken,
+        bool IsPronoun,
+        string? Preposition,
+        double Confidence);
+
+SurfaceText is the raw chunk text with determiners intact (for example
+"The doctor"). Lemma is the argument head lemma. IsPronoun is true when the
+argument span is pronoun-only; the resolver defers these to Phase 6.
+Preposition is the qualifier's preposition lemma (for example "at") and is
+null for subject, object, and complement arguments.
+
+3.3 Relation frame
+
+    internal sealed record RelationFrame(
+        string PredicateLemma,
+        string RelationName,
+        LinkClass LinkClass,
+        IReadOnlyList<FrameArgument> Arguments,
+        bool Negated,
+        string? Modal,
+        Tense Tense,
+        Voice Voice,
+        int SentenceIndex,
+        int ClauseIndex,
+        int StartToken,
+        int EndToken,
+        double Confidence,
+        bool Ingestible,
+        IReadOnlyList<string> Diagnostics);
+
+PredicateLemma is the verb lemma (for example "work"). RelationName is the
+canonical registry key (for example "work_at" or "is"). Ingestible is false for
+negated, modal, imperative, intransitive, and otherwise unsupported frames.
+
+3.4 Extraction and build helper results
+
+    internal sealed record RelationExtractionResult(
+        IReadOnlyList<RelationFrame> Frames,
+        IReadOnlyList<string> Diagnostics);
+
+    internal sealed record ChainBuildResult(
+        IReadOnlyList<LinkedList<Chain_Node>> Chains,
+        IReadOnlyList<string> Diagnostics);
+
+3.5 NlpResult extension
+
+Keep the existing positional record and add init properties:
+
+    internal sealed record NlpResult(
+        NlpStatus Status,
+        IReadOnlyList<string> Diagnostics,
+        ParsedText? Parsed = null)
+    {
+        public IReadOnlyList<RelationFrame> Frames { get; init; } =
+            Array.Empty<RelationFrame>();
+
+        public IReadOnlyList<LinkedList<Chain_Node>> Chains { get; init; } =
+            Array.Empty<LinkedList<Chain_Node>>();
+
+        public IReadOnlyList<ReasoningResult> ReasoningResults { get; init; } =
+            Array.Empty<ReasoningResult>();
+    }
+
+No existing constructor call sites need to change because the new properties
+have defaults.
+
+================================================================================
+4. RELATION REGISTRY
+================================================================================
+
+File: OPEN-LRD/NLP/RelationRegistry.cs
+
+4.1 Purpose
+
+Map canonical predicate names to stable forward and inverse link-type IDs,
+reserve the Module 4 range, and guarantee idempotent registration.
+
+4.2 Constants
+
+    internal const int FirstPredicateLinkTypeId = 1000;
+    internal const int LastReservedOntologyId = 999;
+
+Reject any registration request below 1000. If the registry ever exhausts
+int.MaxValue, throw InvalidOperationException with a clear diagnostic.
+
+4.3 Registered relation record
+
+    internal sealed record RelationLinkType(
+        int Id,
+        string Name,
+        string InverseName,
+        ForwardLinkTypes Forward,
+        InverseLinkTypes Inverse);
+
+4.4 Construction and seeding
+
+Use a static, thread-safe registry in the same style as ForwardLinkTypes:
+
+    private static readonly object sync = new();
+    private static readonly Dictionary<string, RelationLinkType> byName =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<int, RelationLinkType> byId = new();
+    private static int nextId = FirstPredicateLinkTypeId;
+
+In the static constructor, pre-register the canonical closed-class relations
+in a fixed order so their IDs are stable within a process and likely stable
+across runs:
+
+    is    (copula)
+    has   (possession)
+    does  (light verb)
+    at, in, on, by, for, with, of, from, to, during, after, before
+          (prepositional qualifiers)
+
+Do not pre-register ordinary verbs. They are registered on first use.
+
+4.5 Public API
+
+    public static RelationLinkType GetOrRegister(string relationName)
+    public static bool TryGet(string relationName, out RelationLinkType relation)
+    public static string Normalize(string lemma, string? particle = null)
+
+GetOrRegister behavior:
+
+1. Validate and normalize the name. Throw ArgumentException for empty input.
+2. Return the existing mapping when already registered.
+3. Allocate the lowest free ID starting at nextId. Before accepting an ID,
+   confirm both ForwardLinkTypes.TryFromId(id) and InverseLinkTypes.TryFromId(id)
+   return false, so no Module 4 or test-registered ID is overwritten.
+4. Call ForwardLinkTypes.Register(id, name) and
+   InverseLinkTypes.Register(id, "inverse_" + name).
+5. Cache the RelationLinkType in both dictionaries and return it.
+
+Normalize behavior:
+
+- Trim, lowercase invariant, replace whitespace and hyphens with underscore,
+  and strip characters other than letters, digits, and underscore.
+- When particle is supplied, combine lemma and particle: "work" + "at" ->
+  "work_at".
+- Apply the canonical exceptions: be/is/are/was/were/been/being -> "is";
+  have/has/had/having -> "has"; do/does/did/done/doing -> "does".
+- Return "unknown_relation" only when normalization removes every character;
+  callers should not normally reach this branch.
+
+4.6 Determinism and durability notes
+
+IDs are stable for the lifetime of the process and stable for repeated
+registration of the same predicate. They are not durable across process
+restarts because Module 3 has no lexical persistence yet. Dynamic IDs depend on
+first-registration order, so tests must assert ID equality for the same
+predicate and the >= 1000 range, never a specific dynamic number. This is an
+accepted Phase 4 limitation and a Phase 7 documentation item.
+
+================================================================================
+5. RELATION EXTRACTION
+================================================================================
+
+File: OPEN-LRD/NLP/RelationExtractor.cs
+
+5.1 Signature
+
+    internal static RelationExtractionResult Extract(
+        ParsedText parsed,
+        NlpOptions? options = null)
+
+The extractor is pure: it reads ParsedText and returns frames. It must not
+mutate the core graph or the registries. Analyze calls it after NER.
+
+5.2 Sentence filtering
+
+- SentenceType.Declarative: extract frames.
+- SentenceType.YesNoQuestion and WhQuestion: no frames in Phase 4. Phase 5
+  builds query frames from them. Do not emit an error diagnostic.
+- SentenceType.Imperative: emit one Unsupported diagnostic per sentence and no
+  frames.
+- Cap clauses per sentence at options.MaxClausesPerSentence and emit a
+  diagnostic for skipped clauses.
+
+5.3 Per-clause argument mapping
+
+For each Clause:
+
+1. Read Clause.Arguments by ClauseRole:
+   Subject, Predicate, Object, Complement, Qualifier (there may be zero or more
+   qualifiers).
+2. Convert Subject, Object, Complement, and Qualifier spans into FrameArguments.
+   - Find the NER Mention whose StartToken/EndToken matches or contains the
+     span. Prefer an exact match.
+   - If no mention exists (for example a pronoun-only span), build a fallback
+     argument from the tokens:
+       SurfaceText = joined token text
+       Lemma = head token lemma or last token lemma
+       NodeType = Entities for ProperNoun/Pronoun, Concepts otherwise
+       IsPronoun = all non-punctuation tokens are PartOfSpeech.Pronoun
+   - For a qualifier argument, the surface is the noun phrase inside the
+     prepositional phrase, not the preposition itself. Read the inner
+     NounPhrase chunk.
+3. Locate the verb group from the Predicate span. The main verb is the last
+   Verb token that is not an Auxiliary. If there is no Verb token, emit an
+   Unsupported diagnostic for the clause and continue.
+
+5.4 Flags
+
+Negation:
+- Negated = true when any token in the clause has Normalized in
+  { "not", "never", "no", "none", "nothing", "nobody" } or Text contains "n't".
+- Negated frames are returned with Ingestible = false and one diagnostic.
+
+Modality:
+- Collect auxiliary tokens in the Predicate span whose lemma is in
+  { "can", "could", "will", "would", "shall", "should", "may", "might",
+    "must", "ought" }.
+- Modal = the first such lemma, otherwise null.
+- Any modal sets Ingestible = false. This follows accepted design decision 5.
+  Tense future is still recorded when the modal is will or shall.
+
+Tense:
+- Future when Modal is will or shall.
+- Past when the predicate contains was, were, had, or did, or when the main
+  verb is an irregular past form recognized by Lexicon.TryGetIrregularLemma
+  whose surface differs from its lemma, or when the main verb ends in "ed".
+- Present otherwise.
+- Unknown when no verb group exists.
+
+Voice:
+- Passive when the predicate contains an auxiliary form of be (am, is, are,
+  was, were, been, being) and a Qualifier prepositional phrase begins with
+  "by". The agent is the by-phrase object and the patient is the clause
+  subject. Swap them for frame construction.
+- Active otherwise.
+
+5.5 Relation patterns
+
+Copula:
+- Main verb lemma "be" (including is/are/was/were/been/being).
+- RelationName = "is", LinkClass = LinkClass.identities.
+- Subject = clause subject, Object = clause Complement.
+- If the complement is missing, Unsupported diagnostic.
+
+Possession:
+- Main verb lemma "have" (including has/had/having).
+- RelationName = "has", LinkClass = LinkClass.actions.
+- Requires a direct object.
+
+Transitive:
+- Main verb plus ClauseRole.Object.
+- RelationName = Normalize(verb lemma).
+- LinkClass = LinkClass.actions.
+
+Verb plus preposition:
+- Main verb with no direct object but with a Qualifier prepositional phrase.
+- Preposition lemma from the preposition token (for example at).
+- RelationName = Normalize(verb lemma, preposition lemma) -> "work_at".
+- Object = the noun phrase inside the prepositional phrase.
+- LinkClass = LinkClass.actions.
+- This is the acceptance target for "Alice works at Acme.".
+
+Qualifier classification:
+- For every qualifier phrase not consumed as the main object, emit a
+  FrameArgument with Role = Location, Time, or Qualifier:
+    Location when the object NodeType is Locations, or the preposition is a
+    spatial cue (at, in, on, near, inside, outside, under, over, beside,
+    between, behind, above, below, to, from, into, onto, toward, towards,
+    across, through, along, around, upon).
+    Time when the object is RawData with Kind Date or Time, or the preposition
+    is a temporal cue (during, after, before, since, until, by).
+    Qualifier for everything else.
+- These do not change the main Object role.
+
+Intransitive:
+- Main verb with a subject and no object, complement, or qualifier.
+- Do not create a self-loop. Emit Ingestible = false and a diagnostic stating
+  that event reification is deferred. No frame is required; a diagnostic-only
+  outcome is acceptable, but if a frame is returned it must be non-ingestible.
+
+Coordination:
+- Clause-level coordination is already split by ShallowParser when a
+  conjunction is followed by a subject. Extract each clause independently.
+- Object-level coordination (for example "Alice sees Bob and Carol") arrives as
+  one noun phrase. Split the object span on conjunction tokens ("and", "or")
+  into sub-spans and emit one frame per sub-span. Preserve order.
+- Do not split on conjunctions inside a proper name.
+
+Passive normalization:
+- For passive voice, set FrameArgument Subject = by-phrase object (agent),
+  Object = clause subject (patient), Voice = Passive.
+- RelationName remains the main verb lemma, for example "see".
+- If the by-phrase is absent, emit Unsupported and do not ingest.
+
+5.6 Ingestibility rules
+
+Ingestible = true only when all of the following hold:
+- Sentence is declarative.
+- Subject and object/complement arguments exist.
+- Negated is false.
+- Modal is null.
+- Voice is Active or a successfully normalized Passive.
+- No argument is a pronoun (deferred to Phase 6).
+- No argument resolution is required at extraction time; ambiguity is handled
+  by EntityResolver/ChainBuilder.
+
+5.7 Frame ordering and confidence
+
+- Order frames by SentenceIndex, then ClauseIndex, then argument token order.
+- Confidence starts from the minimum argument confidence and applies pattern
+  adjustments:
+    Copula and possession: 0.95
+    Transitive: 0.90
+    Verb plus preposition: 0.85
+    Passive: 0.80
+  Clamp to [0.0, 1.0].
+
+================================================================================
+6. ENTITY RESOLUTION
+================================================================================
+
+File: OPEN-LRD/NLP/EntityResolver.cs
+
+6.1 Signature and result
+
+    internal sealed record EntityResolution(
+        string Label,
+        string Lemma,
+        NodeTypes NodeType,
+        IReadOnlyList<string> Aliases,
+        Guid? ResolvedNodeID,
+        IReadOnlyList<Guid> CandidateNodeIDs,
+        bool IsAmbiguous,
+        bool IsPronoun,
+        IReadOnlyList<string> Diagnostics);
+
+    internal sealed class EntityResolver
+    {
+        public EntityResolver(LRD_Core core);
+        public EntityResolution Resolve(FrameArgument argument);
+    }
+
+The resolver never mutates the graph. It only reads labels, aliases, and IDs.
+
+6.2 Label normalization
+
+Build a display label from SurfaceText as follows:
+1. Trim and collapse internal whitespace.
+2. Remove one leading determiner: a, an, the, this, that, these, those,
+   some, any, no, every, each.
+3. Preserve original capitalization for proper nouns and predicate labels;
+   use the resulting text as the node label.
+
+Aliases:
+- Add the head lemma when it differs from the label, is alphabetic, is longer
+  than one character, and is not a determiner.
+- For NodeTypes.Entities, Locations, and Events, also add the lowercased label
+  when it differs from the label.
+- Never duplicate the label as an alias; Node.Add_Alias already enforces this.
+
+6.3 Lookup order
+
+1. If argument.IsPronoun: return Label = lemma, IsPronoun = true,
+   ResolvedNodeID = null, and the diagnostic
+   "Pronoun '{surface}' requires conversation context (Phase 6)."
+2. FindByLabel(label, argument.NodeType).
+3. If none, FindByLabel(argument.SurfaceText, argument.NodeType).
+4. If none, FindByLabel(argument.Lemma, argument.NodeType).
+5. If none, retry the three lookups without the type filter to catch
+   type-mismatched candidates.
+6. Deduplicate by node ID.
+
+Resolution outcomes:
+- Exactly one candidate: ResolvedNodeID = candidate.ID. Reuse the candidate
+  Label for the node label when it is non-null; otherwise use the cleaned
+  label. Merge aliases from the candidate plus the computed aliases.
+- More than one candidate: IsAmbiguous = true, ResolvedNodeID = null,
+  CandidateNodeIDs populated, diagnostic with the surface text and count.
+- Zero candidates: ResolvedNodeID = null, CandidateNodeIDs empty. The chain
+  builder will allocate a fresh Guid and the merger creates the node.
+
+6.4 Phase 6 hooks
+
+Do not implement ConversationContext in Phase 4. Keep EntityResolver stateless
+and add a documented overload point for Phase 6:
+
+    Resolve(FrameArgument argument, ConversationContext? context)
+
+Phase 6 will use context focus and recency to resolve pronouns and to break
+ties among candidates. Phase 4 must compile without a ConversationContext type,
+so do not declare that overload yet; note it as a Phase 6 extension in the file
+header.
+
+================================================================================
+7. CHAIN BUILDING
+================================================================================
+
+File: OPEN-LRD/NLP/ChainBuilder.cs
+
+7.1 Signature
+
+    internal static ChainBuildResult Build(
+        RelationFrame frame,
+        EntityResolver resolver,
+        NlpOptions? options = null)
+
+7.2 Main chain construction
+
+1. Select the Subject argument and the primary Object/Complement argument.
+   If either is missing, return no chains and a diagnostic.
+2. Resolve both with EntityResolver.
+3. Reject the frame when:
+   - Either resolution IsPronoun (Phase 6 diagnostic).
+   - Either resolution IsAmbiguous (ambiguous-mention diagnostic).
+   - Both resolutions produce the same node ID or the same new-node identity
+     (self-loop diagnostic).
+4. Determine node IDs:
+   - Use resolution.ResolvedNodeID when present.
+   - Otherwise generate a fresh non-empty Guid and verify it is not already in
+     core by calling resolver's core.TryGetNode (EntityResolver should expose a
+     helper or ChainBuilder receives LRD_Core). Duplicate collision retries.
+5. Create Chain_Node instances with the node ID, resolution.NodeType, and
+   options.TemporaryNodeTimeToLive. Set Label and Aliases from the resolution.
+6. Resolve the link type through RelationRegistry.GetOrRegister(
+   frame.RelationName).
+7. Create Link(subject.ID, object.ID, relation.Forward.Id,
+   relation.Inverse.Id, frame.LinkClass).
+8. Set subject.Set_LinkNext(link) and object.Set_LinkPrevious(link).
+9. Return a LinkedList<Chain_Node> containing exactly subject then object.
+
+ChainBuilder must not add nodes to core. The ingestion adapter handles anchor
+provisioning and the Reasoning Engine handles node creation/merging.
+
+7.3 Qualifier chains
+
+For each argument with Role Location, Time, or Qualifier that is not the
+primary object:
+1. Resolve the qualifier argument.
+2. RelationName = Normalize(argument.Preposition). The qualifier FrameArgument
+   carries the preposition lemma in its Preposition property.
+3. LinkClass:
+   - Location -> LinkClass.spatial
+   - Time -> LinkClass.temporal
+   - Qualifier -> LinkClass.basic
+4. Build a second chain subject -> qualifier object using the same subject node
+   identity and a fresh qualifier node as needed.
+5. Deduplicate exact chains by (subject ID, relation name, object ID, class) so
+   a PP already used as the main verb-plus-preposition object is not added
+   twice.
+
+This produces two chains for "Alice works at Acme.":
+- Alice --work_at/actions--> Acme
+- Alice --at/spatial--> Acme
+
+7.4 Limits
+
+- Enforce options.MaxChainsPerText across main and qualifier chains. Emit
+  "The maximum of {n} chains per text was reached." when truncating.
+- Reject empty chains before returning.
+- Every returned chain must pass QueryGraphBuilder.Build without throwing.
+  ChainBuilder tests should assert this directly.
+
+================================================================================
+8. PIPELINE INTEGRATION
+================================================================================
+
+File: OPEN-LRD/NLP/NlpPipeline.cs
+
+8.1 Analyze changes
+
+After NamedEntityRecognizer.Recognize:
+
+    RelationExtractionResult extraction =
+        RelationExtractor.Extract(recognized, options);
+
+    return new NlpResult(NlpStatus.Parsed, combinedDiagnostics, recognized)
+    {
+        Frames = extraction.Frames
+    };
+
+Combine parse diagnostics and extraction diagnostics in deterministic order.
+Analyze remains graph-read-only and must not register relations or mutate core.
+
+8.2 New Ingest method
+
+    public NlpResult Ingest(
+        string? text,
+        Guid? sourceNodeID = null,
+        Guid? topicNodeID = null)
+
+Add a private readonly ReasoningEngine constructed once in the pipeline
+constructor after the existing core initialization check.
+
+Flow:
+
+1. Run Analyze. Return immediately for InvalidInput.
+2. Mark diagnostics. If no frames exist, return status Unsupported with
+   "No supported relation frames were found."
+3. If no frame is Ingestible, return status Unsupported with the accumulated
+   extraction diagnostics (negation, modality, intransitive, imperative).
+4. If sourceNodeID has a value, call reasoning.GetTrust(sourceNodeID, topic).
+   If Decision == Discredited, return status RejectedByTrust without creating
+   anchors or chains.
+5. Build chains from each Ingestible frame with ChainBuilder and an
+   EntityResolver over core. Collect build diagnostics.
+6. Enforce MaxChainsPerText across all built chains.
+7. For each chain, call IngestChain (section 8.5) and collect the
+   ReasoningResult.
+8. Aggregate status (section 8.6) and return NlpResult with Frames, Chains,
+   ReasoningResults, and all diagnostics.
+
+8.3 Skip diagnostics
+
+Emit explicit diagnostics for each skipped frame:
+- "Skipped negated relation '{relation}'."
+- "Skipped modal relation '{relation}' (modal '{modal}')."
+- "Intransitive relation '{lemma}' has no object; ingestion is deferred."
+- "Imperative input is parsed but not ingested."
+- "Ambiguous mention '{surface}' matched multiple nodes."
+- "Pronoun '{surface}' requires conversation context (Phase 6)."
+
+8.4 Determinism
+
+- Chains are processed in frame order.
+- Registry registration occurs during chain building in that same order.
+- GUIDs for new nodes are random, so tests must not compare raw GUIDs. Tests
+  assert labels, types, link IDs, classifications, and mutation counts.
+
+8.5 Anchor provisioning (critical integration rule)
+
+ReasoningEngine cannot create a graph from zero matches. Before calling
+Ingest for a chain:
+
+1. Let anchor = chain.First.
+2. If core.TryGetNode(anchor.ID) succeeds, no action is needed. This is the
+   case when EntityResolver reused an existing node.
+3. Otherwise create a temporary Web_Node directly:
+       new Web_Node(anchor.ID, anchor.Get_NodeType(),
+                    NodeLifetime.Temporary, options.TemporaryNodeTimeToLive)
+   Set the label and aliases from the anchor, then call core.AddExistingNode.
+   Add the diagnostic "Anchor node '{label}' was created as temporary."
+4. Call reasoning.Ingest(chain, sourceNodeID, topicNodeID).
+
+Only the root node is provisioned. The Reasoning Engine creates the remaining
+unmatched nodes through its normal merge plan. This keeps permanent mutation in
+Module 2 while satisfying its root-candidate requirement.
+
+The discredited-source precheck in step 4 of section 8.2 prevents orphan
+anchors. If the source is trusted, the merger promotes the matched anchor via
+NodeActionKind.PromoteExistingNode.
+
+8.6 Status aggregation
+
+Map ReasoningStatus to NlpStatus per reasoning result:
+- Answered or Contradiction -> Ingested (contradiction adds a diagnostic)
+- NoMatch -> NoMatch
+- Ambiguous -> Ambiguous
+- RejectedByTrust -> RejectedByTrust
+- InvalidInput -> InvalidInput
+
+Aggregate across results in this precedence:
+1. If any result is Ingested -> Ingested.
+2. Else if any result is RejectedByTrust -> RejectedByTrust.
+3. Else if any result is Ambiguous -> Ambiguous.
+4. Else if any result is InvalidInput -> InvalidInput.
+5. Else if any result is NoMatch -> NoMatch.
+6. Else Unsupported.
+
+Reasoning diagnostics are appended verbatim after NLP diagnostics.
+
+8.7 Idempotency
+
+The second identical Ingest must produce:
+- Same NlpStatus.Ingested.
+- No new nodes in core.GetDictionary().
+- No additional links.
+- At least one ReasoningResult with GraphMutated == false, or all results with
+  GraphMutated == false when multiple chains are present.
+
+This works because the first ingestion leaves labeled nodes and typed links in
+the graph; the second resolution finds them and the merger keeps existing links.
+
+================================================================================
+9. TEST PLAN (OPEN-LRD.SmokeTests/NlpTests.cs)
+================================================================================
+
+Register the following test groups from NlpTests.RunAll():
+
+    Program.Run("NLP relation extraction", TestNlpRelationExtraction);
+    Program.Run("NLP relation registry", TestNlpRelationRegistry);
+    Program.Run("NLP entity resolution", TestNlpEntityResolution);
+    Program.Run("NLP chain construction", TestNlpChainConstruction);
+    Program.Run("NLP ingestion", TestNlpIngestion);
+    Program.Run("NLP ingestion idempotency", TestNlpIngestionIdempotency);
+    Program.Run("NLP ingestion trust", TestNlpIngestionTrust);
+    Program.Run("NLP unsupported relations", TestNlpUnsupportedRelations);
+
+9.1 Relation extraction
+
+- "Alice works at Acme." -> exactly one Ingestible frame with
+  RelationName == "work_at", LinkClass.actions, Subject Alice, Object Acme,
+  Tense.Present, Voice.Active.
+- "Alice is a doctor." -> RelationName == "is", LinkClass.identities,
+  Subject Alice, Object = doctor.
+- "Alice sees Bob." -> RelationName == "see", LinkClass.actions.
+- "Alice has a dog." -> RelationName == "has", LinkClass.actions.
+- "Bob was seen by Alice." -> RelationName == "see", Voice.Passive, Subject
+  Alice, Object Bob.
+- "Alice sees Bob and Carol." -> two frames, objects Bob and Carol.
+- "Alice sees Bob and Bob sees Carol." -> two clauses, two frames.
+- "Alice does not see Bob." -> one frame with Negated == true and
+  Ingestible == false.
+- "Alice can see Bob." -> one frame with Modal == "can" and Ingestible == false.
+- "Where does Alice work?" -> no frames, no extraction error.
+- Assert extraction is deterministic for the same input.
+
+9.2 Relation registry
+
+- GetOrRegister("see") twice returns the same Id and the same Forward/Inverse
+  references.
+- Id >= 1000 for every registered predicate.
+- Distinct names produce distinct IDs.
+- ForwardLinkTypes.FromId(id).Name equals the canonical name.
+- InverseLinkTypes.FromId(id).Name equals "inverse_" + canonical name.
+- Normalize("Works", "At") == "work_at"; Normalize("be") == "is";
+  Normalize("has") == "has".
+- Empty input throws ArgumentException.
+- No registered ID falls in 1..999.
+
+9.3 Entity resolution
+
+- Pre-add permanent "Alice"/Entities. Resolve a matching FrameArgument:
+  ResolvedNodeID equals the node ID.
+- Add alias "Al" to a node. Resolve surface "Al": resolved.
+- Unknown "Zed": ResolvedNodeID null, Label "Zed", NodeType Entities.
+- "The doctor": Label "doctor" (determiner removed), NodeType Concepts.
+- Two nodes with label "Paris" and the same type: IsAmbiguous true,
+  ResolvedNodeID null, CandidateNodeIDs.Count == 2.
+- Pronoun argument: IsPronoun true, ResolvedNodeID null, diagnostic mentions
+  Phase 6.
+- Label types are preserved for proper nouns.
+
+9.4 Chain construction
+
+Build a work_at frame via Analyze and ChainBuilder:
+- Main chain has two nodes in subject -> object order.
+- Node labels are "Alice" and "Acme"; types are Entities; aliases follow the
+  resolver policy.
+- The link forward and inverse IDs both equal the registry ID for work_at.
+- Link.Classification == LinkClass.actions.
+- subject.Get_LinkNext() and object.Get_LinkPrevious() reference the same Link.
+- QueryGraphBuilder.Build(chain) succeeds and returns IsLinear == true.
+- "Alice works at Acme." also yields a qualifier chain with relation "at" and
+  LinkClass.spatial.
+- A chain whose subject and object resolve to the same node returns no chains
+  and a self-loop diagnostic.
+
+9.5 Ingestion
+
+Fresh core and pipeline:
+- Ingest("Alice works at Acme.") returns NlpStatus.Ingested.
+- core.GetDictionary() contains Alice and Acme with correct NodeTypes.
+- Both nodes are temporary immediately after a neutral ingest.
+- A link exists from Alice to Acme with classification actions and forward link
+  ID equal to the registered work_at ID.
+- A spatial qualifier link exists from Alice to Acme with the registered "at"
+  ID.
+- At least one ReasoningResult has GraphMutated == true.
+- No node is Permanent.
+
+9.6 Idempotency
+
+- Perform the same Ingest twice on the same core.
+- Record dictionary count and Alice link count after the first call.
+- After the second call, counts are unchanged, NlpStatus.Ingested, and no
+  ReasoningResult reports GraphMutated == true.
+- Repeat with a second NlpPipeline instance over the same core to prove
+  resolution works across pipeline instances.
+
+9.7 Trust
+
+- Trusted source: add a Sources node, call
+  new ReasoningEngine(core).RecordTrustEvidence(source, null, true, 50), then
+  Ingest("Alice works at Acme.", source). Assert:
+    result.Trust.Decision == TrustDecision.Trusted
+    the created/matched nodes are Permanent
+    PromotedNodeIDs is non-empty
+    GraphMutated == true
+- Discredited source: add a Sources node, record false evidence with weight 100,
+  capture dictionary count, then Ingest. Assert:
+    NlpStatus.RejectedByTrust
+    dictionary count unchanged
+    no Alice or Acme anchor remains
+- Topic pass-through: supply topicNodeID and assert
+  result.ReasoningResults[0].Trust.TopicNodeID == topicNodeID.
+
+9.8 Unsupported relations and robustness
+
+- "Alice runs." -> NlpStatus.Unsupported with an intransitive diagnostic and no
+  graph mutation.
+- "Please open the door." -> Unsupported with imperative diagnostic.
+- "Alice does not see Bob." ingestion -> Unsupported or Parsed-only with a
+  negated diagnostic and no graph mutation. Choose Unsupported because no
+  ingestible frame exists.
+- "Alice can see Bob." ingestion -> Unsupported with modal diagnostic.
+- Empty, whitespace, and punctuation-only input still return InvalidInput and
+  do not touch the graph.
+- Re-run all Phase 1-3 NLP tests and all Module 1/2 tests unchanged.
+
+================================================================================
+10. IMPLEMENTATION SEQUENCE
+================================================================================
+
+Step 1: Extend NlpTypes.cs
+- Add FrameRole, Tense, Voice, FrameArgument (with Preposition), RelationFrame,
+  RelationExtractionResult, ChainBuildResult.
+- Add Frames, Chains, ReasoningResults to NlpResult.
+- Build the smoke-test project to confirm no breaking changes.
+
+Step 2: Add RelationRegistry.cs
+- Implement normalization, seeding, ID allocation, and idempotent registration.
+- Add the registry tests.
+
+Step 3: Add EntityResolver.cs
+- Implement label cleaning, alias policy, lookup order, ambiguity, and pronoun
+  diagnostics.
+- Add the resolver tests.
+
+Step 4: Add RelationExtractor.cs
+- Implement sentence filtering, argument mapping, flags, all relation
+  patterns, coordination, and passive normalization.
+- Wire extraction into NlpPipeline.Analyze.
+- Add extraction tests and confirm Phase 1-3 tests still pass.
+
+Step 5: Add ChainBuilder.cs
+- Implement main and qualifier chain construction, link wiring, limits, and
+  QueryGraphBuilder validation.
+- Add chain tests.
+
+Step 6: Extend NlpPipeline with Ingest
+- Add the ReasoningEngine field, trust precheck, anchor provisioning, chain
+  ingestion, aggregation, and diagnostics.
+- Add ingestion, idempotency, trust, and unsupported tests.
+
+Step 7: Full verification
+- Build the smoke-test project with zero warnings.
+- Run all smoke tests.
+- Fix any nullable, unused, or naming warnings introduced by Phase 4.
+
+Step 8: Documentation
+- Update README.md and ReadMe2.md to say Phase 4 is complete and Phase 5
+  (question analysis and answer generation) is next.
+- Do not claim Phase 5-7 work in the same change.
+
+================================================================================
+11. PHASE 4 ACCEPTANCE CRITERIA
+================================================================================
+
+Phase 4 is complete when all of the following are true:
+
+1. Analyze("Alice works at Acme.") returns a work_at relation frame with
+   Subject Alice and Object Acme.
+2. RelationRegistry assigns forward and inverse link-type IDs >= 1000 and
+   returns the same ID for repeated registration of the same predicate.
+3. EntityResolver resolves labels and aliases, reports ambiguity, and defers
+   pronouns with an explicit diagnostic.
+4. ChainBuilder produces valid linear chains with correct NodeTypes, labels,
+   aliases, link classes, registered predicate IDs, and linked
+   linkNext/linkPrevious entries.
+5. Ingest creates temporary nodes and links through the Reasoning Engine and
+   performs no direct permanent mutation.
+6. A second identical Ingest is idempotent: no new nodes and no new links.
+7. Source and topic trust are passed through, trusted sources promote nodes,
+   and discredited sources are rejected before anchor creation.
+8. Negated, modal, imperative, and intransitive inputs produce explicit
+   diagnostics and are not ingested.
+9. The full solution builds with zero warnings and zero errors.
+10. All Module 1, Module 2, and Module 3 smoke tests pass, including the new
+    Phase 4 tests.
+
+================================================================================
+12. RISKS, DECISIONS, AND DEFERRED WORK
+================================================================================
+
+Resolved decisions for Phase 4:
+
+- Anchor provisioning: the pipeline creates a temporary root node before
+  Ingest when no existing match exists. This is required by the current
+  Reasoning Engine design. It is documented and covered by tests.
+- Intransitive verbs: not ingested in Phase 4. Event-node reification is out
+  of scope. A diagnostic is the correct MVP behavior.
+- Pronouns: detected and deferred to Phase 6. No pronoun resolution or
+  ConversationContext is implemented in Phase 4.
+- Modality: all modal auxiliaries block ingestion, matching accepted design
+  decision 5.
+- Passive: implemented as a best-effort normalization for "be ... by" patterns.
+- Coordination: clause coordination relies on ShallowParser splits; object
+  coordination is split by RelationExtractor.
+- Qualifier chains: emitted in addition to the main relation chain, using
+  registered preposition predicates and spatial/temporal/basic link classes.
+- Predicate IDs: session-stable, not durable. Durable numbering is a future
+  persistence concern.
+
+Explicitly deferred to later phases:
+
+- Phase 5: QuestionAnalyzer, query-frame construction, chain orientation,
+  AnswerGenerator, ambiguity/no-match answers, and question-chain tests.
+- Phase 6: ConversationContext, pronoun resolution, focus tracking, session
+  provenance, and follow-up questions.
+- Phase 7: README/ReadMe2 final status, optional WPF Tools window integration,
+  and full-solution documentation pass.
+
+Known limitations after Phase 4:
+
+- Rule-based extraction only; no statistical accuracy guarantees.
+- Complex nested clauses and relative clauses may produce diagnostics rather
+  than chains.
+- Object coordination split does not handle nested conjunctions or appositives.
+- Passive detection is heuristic and only handles a by-phrase agent.
+- No temporal or spatial reasoning beyond link classification.
+- No durable lexical or provenance storage.
+
+================================================================================
+13. VERIFICATION COMMANDS
+================================================================================
+
+Run from the repository root:
+
+    dotnet build OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj -warnaserror
+    dotnet run --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj
+
+The smoke-test project targets net10.0 and compiles the NLP, Nodes, Reasoning,
+and core sources, so it is the authoritative Phase 4 build/test check on Linux.
+
+On Windows, also verify the WPF project:
+
+    dotnet build OPEN-LRD.slnx
+
+Expected result: zero warnings, zero errors, and every smoke test passing,
+including Module 1, Module 2, Phase 1-3 NLP, and the new Phase 4 tests.
+
+(End of Phase 4 plan.)

@@ -1,4 +1,6 @@
 using OPEN_LRD.Nodes;
+using OPEN_LRD.Nodes.Links;
+using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.NLP
 {
@@ -144,8 +146,197 @@ namespace OPEN_LRD.NLP
         public IReadOnlyList<Mention> Mentions { get; init; } = Array.Empty<Mention>();
     }
 
+    internal enum FrameRole
+    {
+        Subject,
+        Object,
+        Recipient,
+        Time,
+        Location,
+        Qualifier
+    }
+
+    internal enum Tense
+    {
+        Unknown,
+        Present,
+        Past,
+        Future
+    }
+
+    internal enum Voice
+    {
+        Unknown,
+        Active,
+        Passive
+    }
+
+    internal sealed record FrameArgument(
+        FrameRole Role,
+        string SurfaceText,
+        string Lemma,
+        NodeTypes NodeType,
+        MentionKind Kind,
+        int SentenceIndex,
+        int StartToken,
+        int EndToken,
+        bool IsPronoun,
+        string? Preposition,
+        double Confidence);
+
+    internal sealed record RelationFrame(
+        string PredicateLemma,
+        string RelationName,
+        LinkClass LinkClass,
+        IReadOnlyList<FrameArgument> Arguments,
+        bool Negated,
+        string? Modal,
+        Tense Tense,
+        Voice Voice,
+        int SentenceIndex,
+        int ClauseIndex,
+        int StartToken,
+        int EndToken,
+        double Confidence,
+        bool Ingestible,
+        IReadOnlyList<string> Diagnostics);
+
+    internal sealed record RelationExtractionResult(
+        IReadOnlyList<RelationFrame> Frames,
+        IReadOnlyList<string> Diagnostics);
+
+    internal sealed record ChainBuildResult(
+        IReadOnlyList<LinkedList<Chain_Node>> Chains,
+        IReadOnlyList<string> Diagnostics);
+
+    internal enum QuestionType
+    {
+        Unknown,
+        YesNo,
+        WhSubject,
+        WhObject,
+        WhQualifier,
+        WhQuantity
+    }
+
+    internal enum WhKind
+    {
+        None,
+        Who,
+        Whom,
+        Whose,
+        What,
+        Which,
+        When,
+        Where,
+        Why,
+        How
+    }
+
+    internal enum AnswerKind
+    {
+        None,
+        Entity,
+        Location,
+        Time,
+        Date,
+        Quantity,
+        Boolean,
+        Description
+    }
+
+    internal enum AnswerStatus
+    {
+        Unknown,
+        Answered,
+        Yes,
+        No,
+        Ambiguous,
+        NoMatch,
+        Unsupported,
+        RejectedByTrust,
+        InvalidInput
+    }
+
+    internal sealed record QuestionVariant(
+        string Name,
+        LinkedList<Chain_Node> Chain,
+        NodeTypes ExpectedAnswerType,
+        string RelationName,
+        int ForwardLinkTypeId,
+        int InverseLinkTypeId,
+        LinkClass LinkClass,
+        FrameRole AnswerRole,
+        bool IsAnchorOnly,
+        bool IsBoolean);
+
+    internal sealed record QuestionAnalysis(
+        QuestionType Type,
+        WhKind Wh,
+        AnswerKind ExpectedAnswer,
+        string? WhSurface,
+        FrameArgument? WhArgument,
+        FrameArgument? Subject,
+        FrameArgument? Object,
+        FrameArgument? Qualifier,
+        string? PredicateLemma,
+        string? RelationName,
+        LinkClass LinkClass,
+        Tense Tense,
+        Voice Voice,
+        bool Negated,
+        bool IsPassive,
+        bool Supported,
+        bool AnchorIsAmbiguous,
+        Guid? AnchorNodeID,
+        FrameRole AnchorRole,
+        IReadOnlyList<QuestionVariant> Variants,
+        IReadOnlyList<string> Diagnostics,
+        int SentenceIndex,
+        int WhStartToken,
+        int WhEndToken);
+
+    internal sealed record AnswerCandidate(
+        Guid NodeID,
+        string Label,
+        NodeTypes NodeType,
+        double Score,
+        int Depth,
+        int RelationLinkTypeId,
+        LinkClass LinkClass,
+        IReadOnlyList<Guid> PathNodeIDs,
+        bool UsesTemporaryEvidence);
+
+    internal sealed record NlpAnswer(
+        AnswerStatus Status,
+        AnswerKind Kind,
+        string Text,
+        string? ShortAnswer,
+        Guid? AnswerNodeID,
+        IReadOnlyList<AnswerCandidate> Candidates,
+        IReadOnlyList<GraphPath> EvidencePaths,
+        QuestionAnalysis? Question,
+        ReasoningResult? Reasoning,
+        bool UsesTemporaryEvidence,
+        double Confidence,
+        IReadOnlyList<string> Diagnostics);
+
     internal sealed record NlpResult(
         NlpStatus Status,
         IReadOnlyList<string> Diagnostics,
-        ParsedText? Parsed = null);
+        ParsedText? Parsed = null)
+    {
+        public IReadOnlyList<RelationFrame> Frames { get; init; } =
+            Array.Empty<RelationFrame>();
+
+        public IReadOnlyList<LinkedList<Chain_Node>> Chains { get; init; } =
+            Array.Empty<LinkedList<Chain_Node>>();
+
+        public IReadOnlyList<ReasoningResult> ReasoningResults { get; init; } =
+            Array.Empty<ReasoningResult>();
+
+        public QuestionAnalysis? Question { get; init; }
+
+        public NlpAnswer? Answer { get; init; }
+    }
 }

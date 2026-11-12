@@ -285,11 +285,19 @@ namespace OPEN_LRD.NLP
 
             if (isQuestion)
             {
-                Token? firstWord = tokens.FirstOrDefault(
-                    token => token.PartOfSpeech != PartOfSpeech.Punctuation);
+                List<Token> words = tokens
+                    .Where(token => token.PartOfSpeech != PartOfSpeech.Punctuation)
+                    .ToList();
 
-                if (firstWord is not null && Lexicon.IsWhWord(firstWord.Normalized))
+                if (words.Count > 0 && Lexicon.IsWhWord(words[0].Normalized))
                     return SentenceType.WhQuestion;
+
+                if (words.Count > 1
+                    && Lexicon.IsPreposition(words[0].Normalized)
+                    && Lexicon.IsWhWord(words[1].Normalized))
+                {
+                    return SentenceType.WhQuestion;
+                }
 
                 return SentenceType.YesNoQuestion;
             }

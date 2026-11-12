@@ -1,0 +1,1270 @@
+OPEN-LRD
+MODULE 3: THE NLP PIPELINE
+PHASE 5 IMPLEMENTATION PLAN
+
+Phase: 5 of 7
+Title: Question answering and natural-language generation
+Status: Planned. Phases 1-4 complete and passing.
+Scope owner: Module 3 (README numbering).
+Reference design: README.md, ReadMe2.md, Module_3_Plan.txt, Module_2_Plan.txt,
+and Module_3_Phase_4_Plan.txt.
+Implementation constraint: native C# only, no external libraries.
+
+================================================================================
+1. PHASE 5 GOAL AND DELIVERABLES
+================================================================================
+
+Phase 5 adds the read-only question path:
+
+    user question -> question analysis -> query chain(s) -> Reasoning Engine
+    answer search -> candidate selection -> human-readable answer
+
+Phase 5 does NOT add new graph mutation. Ingestion remains in Phase 4. Question
+answering uses ReasoningEngine.Answer(chain), which runs with merge=false.
+
+Required new source files:
+
+1. OPEN-LRD/NLP/QuestionAnalyzer.cs
+   - Select the question sentence.
+   - Identify wh word, auxiliary, subject, main verb, object/complement, and
+     prepositional qualifiers.
+   - Classify the question as yes/no, wh-subject, wh-object, wh-qualifier, or
+     wh-quantity.
+   - Resolve known entities through EntityResolver.
+   - Build one or more query chains oriented so the known entity is terminal.
+   - Emit diagnostics for unsupported, ambiguous, pronoun, modal, negated, and
+     unknown-anchor questions.
+
+2. OPEN-LRD/NLP/AnswerGenerator.cs
+   - Invoke or evaluate ReasoningEngine.Answer results.
+   - Extract answer candidates from response paths.
+   - Filter by expected relation, expected type, depth, and score.
+   - Detect ambiguity across candidates and query variants.
+   - Generate deterministic short answers and optional evidence sentences.
+   - Generate honest no-match, unsupported, and ambiguity text.
+   - Add a temporary-knowledge caveat when all evidence is unverified.
+
+Required modified files:
+
+3. OPEN-LRD/NLP/NlpTypes.cs
+   - Add question, answer, and query-variant enums and records.
+   - Extend NlpResult with Question and Answer properties.
+
+4. OPEN-LRD/NLP/NlpOptions.cs
+   - Add question-answering limits and scoring thresholds.
+
+5. OPEN-LRD/NLP/RelationExtractor.cs
+   - Expose the existing argument factory and verb helpers to QuestionAnalyzer
+     as internal static methods. No behavioral change to Phase 4 extraction.
+
+6. OPEN-LRD/NLP/NlpPipeline.cs
+   - Add Ask(string? text) using the existing read-only analysis path.
+   - Reuse the pipeline's ReasoningEngine instance.
+   - Never call Ingest or IngestAndAnswer from Ask.
+
+7. OPEN-LRD.SmokeTests/NlpTests.cs
+   - Add question-analysis, answer-generation, read-only, ambiguity, no-match,
+     unsupported, and determinism tests.
+
+8. README.md and ReadMe2.md
+   - Mark Module 3 as Phase 5 of 7 after tests pass.
+   - Do not claim Phase 6 or 7 work.
+
+================================================================================
+2. INTEGRATION CONSTRAINTS DISCOVERED IN THE CURRENT CODEBASE
+================================================================================
+
+These constraints must be respected by the implementation.
+
+1. Analyze already skips question frames.
+   RelationExtractor filters YesNoQuestion and WhQuestion sentences. Therefore
+   QuestionAnalyzer must work from ParsedText tokens, chunks, and mentions, not
+   from RelationFrame. Do not change Phase 4 frame extraction for questions.
+
+2. ShallowParser argument roles are declarative-order only.
+   Current examples:
+   - "What did Alice see?" assigns the auxiliary "did" as the predicate and
+     "Alice" as an object.
+   - "Is Alice a doctor?" produces no subject and treats the full post-copula
+     noun phrase as a complement.
+   - "Where does she work?" produces no subject.
+   QuestionAnalyzer must not rely on Clause.Arguments for subject/object roles.
+   It must reconstruct roles from token positions, auxiliary position, main-verb
+   position, mentions, and prepositions.
+
+3. Existing mentions are useful and sentence-local.
+   ParsedText.Mentions includes proper nouns, common noun phrases, dates,
+   times, and quantities with StartToken/EndToken relative to the sentence.
+   Pronouns are not mentions and must be detected from token POS.
+
+4. EntityResolver is the single entity-normalization path.
+   Use it for known anchors and known yes/no arguments. It strips determiners,
+   resolves labels and aliases, reports ambiguity, defers pronouns, and creates
+   collision-free IDs for query-only nodes.
+
+5. ReasoningEngine.Answer(chain) is the correct read-only entry point.
+   Answer uses merge=false and answer=true. It never adds nodes or links. It may
+   clear and rebuild the core response chain, which is not graph mutation.
+
+6. QueryGraphBuilder requires:
+   - Non-empty unique query node IDs.
+   - Every link endpoint present in the chain.
+   - No self-loops.
+   - Linear topology (degree <= 2 per node).
+
+7. The query root is the first Chain_Node in the LinkedList.
+   SubgraphMatcher requires at least one candidate for the root query node.
+
+8. Empty-label query nodes receive type-only candidates.
+   SubgraphMatcher generates type-only candidates when a query node has no label
+   or aliases, even when AllowTypeOnlyCandidates is false. The type must be an
+   exact NodeTypes instance/id match.
+
+9. Known anchors must be terminal for response extraction.
+   ResponseExtractor finds a terminal query node and starts traversal there. To
+   make it start at the known entity, build wh chains in this order:
+       [wh / unknown node] -> [known anchor]
+   For wh-object and wh-qualifier questions, the query link uses the inverse
+   direction so the graph's forward fact still matches.
+
+10. Inverse edge matching is supported.
+    QueryEdge stores both forward and inverse link-type IDs. A query edge
+    wh -> anchor with forward=relation.Inverse and inverse=relation.Forward
+    matches a graph link anchor -> answer and receives the inverse edge score
+    (0.90 by default).
+
+11. Response paths start at the terminal anchor and may reach depth > 1.
+    The first path is always the anchor itself (length 1). Answer selection must
+    ignore length-1 paths when looking for a focus node.
+
+12. ReasoningEngine.Answer has no source/topic trust arguments.
+    Read-only answers therefore use neutral trust and cannot apply a source
+    trust precheck. Phase 5 answers must expose temporary-evidence caveats
+    instead of implying a trusted source.
+
+13. RelationRegistry may allocate IDs during Ask.
+    Question relation names are normalized and registered through
+    RelationRegistry.GetOrRegister. This mutates only the runtime link-type
+    registry, never the graph. Variant order must be deterministic.
+
+14. NodeTypes uses reference/id equality and Matcher.TypesEqual is exact.
+    A query node expecting Locations will not match a node of type Entities.
+    Phase 5 must try multiple expected types where the wh word is semantically
+    broad, and must provide an anchor-only fallback for qualifier questions.
+
+15. NlpOptions already defines MaxAnswerCandidates (default 5) but Phase 4
+    does not use it. Phase 5 must use it for candidate and ambiguity limits.
+
+16. NlpPipeline already accepts an optional shared ReasoningEngine.
+    Keep that constructor signature. Ask uses the same instance so tests and
+    callers can share trust state and inspect read-only behavior consistently.
+
+================================================================================
+3. DATA MODEL ADDITIONS (NlpTypes.cs)
+================================================================================
+
+Add the following types in the OPEN_LRD.NLP namespace. Keep records sealed and
+use IReadOnlyList/IReadOnlyCollection for result collections, matching Phase 4.
+
+3.1 Question classification
+
+    internal enum QuestionType
+    {
+        Unknown,
+        YesNo,
+        WhSubject,
+        WhObject,
+        WhQualifier,
+        WhQuantity
+    }
+
+    internal enum WhKind
+    {
+        None,
+        Who,
+        Whom,
+        Whose,
+        What,
+        Which,
+        When,
+        Where,
+        Why,
+        How
+    }
+
+    internal enum AnswerKind
+    {
+        None,
+        Entity,
+        Location,
+        Time,
+        Date,
+        Quantity,
+        Boolean,
+        Description
+    }
+
+    internal enum AnswerStatus
+    {
+        Unknown,
+        Answered,
+        Yes,
+        No,
+        Ambiguous,
+        NoMatch,
+        Unsupported,
+        RejectedByTrust,
+        InvalidInput
+    }
+
+3.2 Query variant
+
+    internal sealed record QuestionVariant(
+        string Name,
+        LinkedList<Chain_Node> Chain,
+        NodeTypes ExpectedAnswerType,
+        string RelationName,
+        int ForwardLinkTypeId,
+        int InverseLinkTypeId,
+        LinkClass LinkClass,
+        FrameRole AnswerRole,
+        bool IsAnchorOnly,
+        bool IsBoolean);
+
+Field rules:
+- Name is a stable diagnostic label such as "who+Entities+see" or
+  "where+Entities+work_at".
+- Chain is fully wired; every adjacent node pair has linkNext/linkPrevious set.
+- ExpectedAnswerType is the type used for the wh query node. For anchor-only
+  variants it records the preferred answer type but does not constrain matching.
+- RelationName is the normalized registry name.
+- IsAnchorOnly means the chain contains only the known anchor.
+- IsBoolean marks a yes/no variant.
+
+3.3 Question analysis result
+
+    internal sealed record QuestionAnalysis(
+        QuestionType Type,
+        WhKind Wh,
+        AnswerKind ExpectedAnswer,
+        string? WhSurface,
+        FrameArgument? WhArgument,
+        FrameArgument? Subject,
+        FrameArgument? Object,
+        FrameArgument? Qualifier,
+        string? PredicateLemma,
+        string? RelationName,
+        LinkClass LinkClass,
+        Tense Tense,
+        Voice Voice,
+        bool Negated,
+        bool IsPassive,
+        bool Supported,
+        bool AnchorIsAmbiguous,
+        Guid? AnchorNodeID,
+        FrameRole AnchorRole,
+        IReadOnlyList<QuestionVariant> Variants,
+        IReadOnlyList<string> Diagnostics,
+        int SentenceIndex,
+        int WhStartToken,
+        int WhEndToken);
+
+Field rules:
+- Subject/Object/Qualifier describe the recovered question roles. The wh
+  argument may occupy one of these slots and is also copied into WhArgument.
+- AnchorNodeID is the resolved node ID when available. For a new label it may
+  be null; the chain anchor still carries a generated ID and the label.
+- AnchorIsAmbiguous means the anchor matched multiple graph nodes. Ask must
+  return an ambiguity answer and must not query.
+- Supported is false for modals, negation, pronouns, unsupported wh kinds, and
+  missing anchors. Diagnostics explain why.
+- Variants are ordered deterministically and already capped by
+  NlpOptions.MaxQuestionVariants.
+
+3.4 Answer candidate and answer result
+
+    internal sealed record AnswerCandidate(
+        Guid NodeID,
+        string Label,
+        NodeTypes NodeType,
+        double Score,
+        int Depth,
+        int RelationLinkTypeId,
+        LinkClass LinkClass,
+        IReadOnlyList<Guid> PathNodeIDs,
+        bool UsesTemporaryEvidence);
+
+    internal sealed record NlpAnswer(
+        AnswerStatus Status,
+        AnswerKind Kind,
+        string Text,
+        string? ShortAnswer,
+        Guid? AnswerNodeID,
+        IReadOnlyList<AnswerCandidate> Candidates,
+        IReadOnlyList<GraphPath> EvidencePaths,
+        QuestionAnalysis? Question,
+        ReasoningResult? Reasoning,
+        bool UsesTemporaryEvidence,
+        double Confidence,
+        IReadOnlyList<string> Diagnostics);
+
+Field rules:
+- ShortAnswer is the bare answer ("Alice", "Acme", "Monday", "Yes", "No") or
+  null when there is no focused answer.
+- AnswerNodeID is set only for a single focused entity/location/time answer.
+- Candidates are de-duplicated and ordered by score descending, then label,
+  then node-ID string for determinism.
+- EvidencePaths are the selected GraphPath instances, at most
+  NlpOptions.MaxAnswerCandidates.
+- UsesTemporaryEvidence is true when every node in the selected evidence path is
+  temporary.
+- Confidence is clamped to [0, 1].
+
+3.5 NlpResult extension
+
+    internal sealed record NlpResult(...)
+    {
+        public IReadOnlyList<RelationFrame> Frames { get; init; } = ...;
+        public IReadOnlyList<LinkedList<Chain_Node>> Chains { get; init; } = ...;
+        public IReadOnlyList<ReasoningResult> ReasoningResults { get; init; } = ...;
+        public QuestionAnalysis? Question { get; init; }
+        public NlpAnswer? Answer { get; init; }
+    }
+
+Do not change the existing positional parameters of NlpResult.
+
+================================================================================
+4. NLP OPTIONS ADDITIONS (NlpOptions.cs)
+================================================================================
+
+Add:
+
+    public int MaxQuestionVariants { get; init; } = 12;
+    public double AnswerAmbiguityMargin { get; init; } = 0.05;
+    public double MinimumAnswerScore { get; init; } = 0.40;
+    public bool EnableAnchorFallback { get; init; } = true;
+    public bool IncludeEvidenceSentence { get; init; } = true;
+    public int MaxAnswerTextLength { get; init; } = 500;
+
+Existing MaxAnswerCandidates (default 5) becomes active in Phase 5.
+
+Notes:
+- MaxQuestionVariants caps type x relation combinations and fallback variants.
+- MinimumAnswerScore filters weak response paths before ambiguity comparison.
+- AnswerAmbiguityMargin is separate from ReasoningOptions.AmbiguityMargin: the
+  former compares answers across variants, the latter compares graph matches.
+- Answer text length is measured in characters after assembly.
+
+================================================================================
+5. QUESTION ANALYSIS
+================================================================================
+
+5.1 Signature
+
+    internal static class QuestionAnalyzer
+    {
+        public static QuestionAnalysis Analyze(
+            ParsedText parsed,
+            EntityResolver resolver,
+            NlpOptions? options = null);
+    }
+
+QuestionAnalyzer is pure with respect to the graph. It may allocate GUIDs for
+query-only nodes and register relation names, but it must not add nodes or
+links to LRD_Core.
+
+5.2 Sentence selection
+
+1. Select the first sentence whose Type is WhQuestion or YesNoQuestion.
+2. If none exists, return Supported=false with diagnostic
+   "Only questions are supported by Ask."
+3. If more than one question sentence exists, analyze the first and add
+   "Additional question sentences were ignored."
+4. Use sentence-local token indices for all spans and diagnostics.
+
+5.3 Token layout
+
+1. Trim trailing punctuation from the working end index.
+2. Detect leading pied-piping:
+   - If token[0] is a preposition and token[1] is a wh word, record
+     leadingPreposition and set whStart=1.
+   - Otherwise whStart=0 when token[0] is a wh word.
+3. For WhQuestion, if no wh word is found at the start, return Supported=false
+   with "The question word could not be identified."
+4. Find the first auxiliary after the wh token (or at token 0 for yes/no).
+   Auxiliaries are PartOfSpeech.Auxiliary.
+5. Find the main verb using the Phase 4 verb-group rule:
+   - Last non-auxiliary Verb token in the sentence.
+   - If none, an auxiliary with lemma "have", "do", or "be" may serve as the
+     copula/possession/do predicate.
+6. Record copula = no main verb and an auxiliary with lemma "be".
+7. Scan the sentence for a modal auxiliary and for negators:
+   - Modal sets match Phase 4: can, could, will, would, shall, should, may,
+     might, must, ought.
+   - Negators match Phase 4: not, never, no, none, nothing, nobody, and any
+     token normalized containing "n't".
+8. Do not attempt full syntactic parsing of relative clauses. Use the first
+   main verb and the tokens around it.
+
+5.4 Role recovery
+
+Recover spans using token order and mentions. Reuse
+RelationExtractor.CreateArgument(sentence, parsed, start, end, role, prep)
+after exposing it as internal static.
+
+Wh-subject:
+- Subject span is the wh token, or the wh token plus an immediately following
+  noun for "which X" / "what X".
+- Main verb follows the subject or an auxiliary.
+- Direct object is the first non-PP mention/NP after the main verb.
+- Prepositional qualifiers are prepositions after the main verb with their
+  following mention/NP.
+
+Inverted wh-object / wh-qualifier / yes/no:
+- Subject span is the first mention, pronoun, or noun-phrase token run between
+  the auxiliary and the main verb.
+- Direct object/complement is the first non-PP mention/NP after the main verb.
+- Prepositional qualifiers are prepositions after the main verb with their
+  following mention/NP.
+- If the main verb appears before the subject (rare in this grammar), fall back
+  to the first mention after the auxiliary.
+
+Pronoun detection:
+- A span whose tokens are all PartOfSpeech.Pronoun is a pronoun argument.
+- If the anchor or required known argument is a pronoun, set Supported=false
+  with "Pronoun questions require conversation context (Phase 6)."
+
+Passive questions:
+- passive = an auxiliary with lemma "be" + a non-"be" main verb + a "by"
+  prepositional phrase.
+- The by-phrase object is the agent; the pre-verb subject is the patient.
+- Example: "Who was seen by Alice?":
+  - wh is the patient (semantic object).
+  - Alice is the agent (known anchor).
+  - relation is the main verb "see".
+  - Build the same inverse chain used for wh-object questions.
+- Example: "By whom was Bob seen?":
+  - leading "by" identifies the wh as the agent (semantic subject).
+  - Bob is the patient (known anchor).
+  - relation is "see".
+  - Build the wh-subject orientation.
+
+Copula questions:
+- "Is Alice a doctor?":
+  - subject = Alice (after copula).
+  - complement = "a doctor" (after subject).
+  - relation = is / identities.
+- "What is Alice?":
+  - wh is the complement/object.
+  - subject/anchor = Alice.
+  - relation = is / identities.
+
+5.5 Wh-kind mapping
+
+Map the normalized wh token to WhKind. Handle "how many" and "how much" as
+WhQuantity with WhKind.How.
+
+Expected answer kind and preferred types:
+
+    who / whom       -> AnswerKind.Entity
+                        [Entities]
+
+    whose            -> AnswerKind.Entity
+                        [Entities]
+                        Supported=false in Phase 5 unless the question also has
+                        an explicit possessor construction.
+
+    what             -> AnswerKind.Description or Entity
+                        [Entities, Concepts, Events, Objects, Locations,
+                         RawData, Names, Basics]
+
+    which            -> AnswerKind.Description or Entity
+                        [Entities, Concepts, Events, Objects, Locations,
+                         RawData, Names, Basics]
+                        If "which X" is present, use a small noun map:
+                        city/country/place -> Locations
+                        day/date/time -> RawData
+                        person/company -> Entities
+                        otherwise keep the broad list.
+
+    where            -> AnswerKind.Location
+                        [Locations, Entities, RawData, Basics]
+                        Entities is required because Phase 4 tags organization
+                        names such as Acme as Entities, not Locations.
+
+    when             -> AnswerKind.Time
+                        [RawData, Events]
+
+    how (many/much)  -> AnswerKind.Quantity
+                        [RawData]
+
+    why / how        -> AnswerKind.Description
+                        Supported=false with
+                        "Why and manner questions are not supported in Phase 5."
+
+5.6 Anchor selection
+
+Choose the known anchor by question type:
+
+1. Wh-subject:
+   - Prefer the direct object mention after the main verb.
+   - Else prefer the object of the first post-verb prepositional phrase.
+   - Else prefer the copula complement.
+   - Example: "Who works at Acme?" -> anchor Acme, role Qualifier.
+   - Example: "Who sees Bob?" -> anchor Bob, role Object.
+
+2. Wh-object:
+   - Anchor is the subject span after inversion.
+   - Example: "What did Alice see?" -> anchor Alice, role Subject.
+
+3. Wh-qualifier / Wh-quantity:
+   - Anchor is the subject span.
+   - If no subject can be recovered, use the direct object as a fallback anchor.
+   - Example: "Where does Alice work?" -> anchor Alice.
+   - Example: "Where did the meeting happen?" -> anchor "the meeting".
+
+4. Yes/no:
+   - Anchor is the subject.
+   - The object/complement is a second known/query node.
+
+Resolve the anchor with EntityResolver.Resolve(argument):
+- If IsPronoun -> Supported=false, Phase 6 diagnostic.
+- If IsAmbiguous -> AnchorIsAmbiguous=true, Supported=false, diagnostic with
+  candidate count.
+- If resolved -> capture ResolvedNodeID, label, aliases, and node type.
+- If unresolved -> keep the normalized label and type; query matching will
+  return NoMatch if the graph has no such anchor. Do not reject solely because
+  the label is new.
+
+5.7 Relation names and link classes
+
+Use RelationRegistry.Normalize and RelationRegistry.GetOrRegister for names.
+
+Base rules:
+- Copula -> "is", LinkClass.identities.
+- Possession -> "has", LinkClass.actions.
+- Transitive action -> main verb lemma, LinkClass.actions.
+- Verb + explicit preposition or verb + PP object -> Normalize(verb, prep),
+  LinkClass.actions. Examples: work_at, arrive_on, speak_to.
+- Qualifier-only fallback relation -> preposition name, class:
+  - Where/spatial prepositions -> LinkClass.spatial.
+  - When/temporal prepositions -> LinkClass.temporal.
+  - Other -> LinkClass.basic.
+
+Particle/preposition discovery:
+- Leading pied-piping: "To whom..." -> preposition "to".
+- Stranded preposition at the end: "Who does Alice work with?" -> "with".
+- PP directly after the verb: "Who works at Acme?" -> "at".
+- PP elsewhere after the verb: use that preposition for the qualifier relation.
+- If multiple prepositions exist, produce relation candidates in sentence order
+  after the main verb, then the base verb, then the standard preposition sets.
+
+Relation candidates for wh-qualifier:
+- If the question contains an explicit preposition, try Normalize(verb, prep)
+  first.
+- Then try Normalize(verb) if it is a valid registered/ingestible relation.
+- Then try Normalize(verb, prep) for the standard spatial set for Where:
+  at, in, on, near, inside, outside, under, over, beside, between, behind,
+  above, below, to, from, into, onto, toward, towards, across, through, along,
+  around, upon.
+- Then try the same set for temporal When:
+  at, in, on, during, after, before, since, until, by.
+- Then try the bare preposition relations in the same order. Phase 4 also
+  emits qualifier chains using bare preposition names, for example
+  Alice --at--> Acme in addition to Alice --work_at--> Acme.
+- Cap with NlpOptions.MaxQuestionVariants. Keep deterministic order.
+
+5.8 Query-chain orientation
+
+Create query nodes:
+- Wh node: Label = null, Type = variant expected type, aliases empty.
+- Anchor node: ID = resolved ID or generated ID, Label = resolved label,
+  aliases = resolved aliases, Type = resolved type.
+- Known second node for yes/no: same rule as anchor, but label retained.
+
+Wh-subject questions:
+    [wh] --forward relation--> [anchor]
+Example:
+    Who works at Acme?
+    [wh:Entities] --work_at--> [Acme]
+
+Wh-object / wh-qualifier / wh-complement questions:
+    [wh] --inverse relation orientation--> [anchor]
+Construct the Link with forward = relation.Inverse.Id and
+inverse = relation.Forward.Id.
+Example:
+    What did Alice see?
+    [wh:Entities] --inverse_see--> [Alice]
+    Graph fact: Alice --see--> Bob
+    GraphPath: Alice -> Bob
+    Answer: Bob
+
+Yes/no questions:
+    [subject] --relation--> [object/complement]
+Root is the subject, terminal is the object/complement.
+- For a known object, resolve it normally.
+- For an unknown complement such as "a teacher", keep label "teacher" and the
+  mention type. Matching returns NoMatch when the graph has no such fact.
+
+Anchor-only fallback variant:
+    [anchor]
+Used only when NlpOptions.EnableAnchorFallback is true and normal wh variants
+produce no answer. It lets AnswerGenerator inspect paths from a known anchor
+when type-only matching is too restrictive. Relation filtering still happens
+in AnswerGenerator.
+
+Self-loop guard:
+- If the generated wh node ID equals the anchor node ID, regenerate the wh ID.
+- Never add a query link whose endpoints are the same node.
+
+5.9 Variant construction order
+
+For wh questions:
+1. Iterate relation candidates in priority order.
+2. Within each relation, iterate expected types in the order listed in 5.5.
+3. Add a variant only if the chain is valid.
+4. Stop at MaxQuestionVariants.
+5. If enabled and Type is WhQualifier/WhQuantity, append one anchor-only
+   fallback variant.
+
+For yes/no:
+1. Build exactly one primary variant.
+2. Do not add type variants.
+3. If relation candidates from a PP exist, prefer the verb+prep relation.
+4. If the complement is missing and no known object exists, return
+   Supported=false with "The question does not contain a complete fact."
+
+5.10 Unsupported and diagnostic cases
+
+Emit explicit diagnostics and set Supported=false for:
+- No question sentence.
+- Missing wh word in a wh question.
+- Missing subject or predicate after role recovery.
+- Pronoun anchor or pronoun required argument:
+  "Pronoun questions require conversation context (Phase 6)."
+- Ambiguous anchor: "The question anchor matches multiple nodes."
+- Negated questions: "Negated questions are not supported in Phase 5."
+- Modal questions: "Modal questions are not supported in Phase 5."
+- Why/manner questions: "Why and manner questions are not supported in
+  Phase 5."
+- Possessive whose without an explicit possessor phrase.
+- Locative copula with no ingested relation:
+  "Locative copula questions require Phase 4 ingestion support that is not
+  available."
+- No relation candidate can be registered.
+
+QuestionAnalyzer should still return the best partial analysis and diagnostics.
+Ask decides whether to return Unsupported or Ambiguous.
+
+================================================================================
+6. ANSWER GENERATION
+================================================================================
+
+6.1 Evaluation record and signature
+
+Add in AnswerGenerator.cs:
+
+    internal sealed record QuestionEvaluation(
+        QuestionVariant Variant,
+        ReasoningResult Result);
+
+    internal static class AnswerGenerator
+    {
+        public static NlpAnswer Generate(
+            QuestionAnalysis question,
+            IReadOnlyList<QuestionEvaluation> evaluations,
+            LRD_Core core,
+            NlpOptions? options = null);
+
+        public static NlpAnswer Unsupported(
+            QuestionAnalysis? question,
+            IReadOnlyList<string> diagnostics);
+    }
+
+AnswerGenerator must be deterministic and must not mutate the graph or the
+runtime link-type registry.
+
+6.2 Input handling
+
+1. If question is null or !Supported:
+   - Return AnswerStatus.Unsupported.
+   - Text = "I can't answer that question yet." plus the first diagnostic when
+     present.
+2. If question.AnchorIsAmbiguous:
+   - Return AnswerStatus.Ambiguous.
+   - ShortAnswer = null.
+   - Text lists up to MaxAnswerCandidates candidate anchor labels if the
+     analyzer captured them; otherwise say the anchor is ambiguous.
+3. If evaluations is empty:
+   - Return AnswerStatus.Unsupported with "No query could be evaluated."
+
+6.3 Boolean (yes/no) evaluation
+
+Yes/no answering does not need a focused response path.
+
+For each evaluation:
+- Answered:
+  - Verify the selected match actually contains the expected relation/class.
+  - If verified, mark yes and keep the first evidence path.
+- NoMatch:
+  - Mark no-match evidence.
+- Ambiguous:
+  - Mark ambiguity.
+- RejectedByTrust / InvalidInput:
+  - Mark the corresponding failure.
+
+Decision order:
+1. Any verified Answered -> AnswerStatus.Yes.
+2. Else any Ambiguous -> AnswerStatus.Ambiguous.
+3. Else any NoMatch -> AnswerStatus.NoAnswer/No.
+4. Else if all evaluations failed structurally -> Unsupported.
+5. Else -> Unknown.
+
+Use AnswerStatus.No for a confident negative answer. Use AnswerStatus.NoMatch
+only for wh questions with no candidate. For yes/no, the short answer is "No"
+and the text must include a caveat such as
+"No, I don't have a fact matching that."
+
+Confidence:
+- Yes: highest SelectedMatch.OverallScore, clamped to [0,1].
+- No: 0.40.
+- Ambiguous: 0.50.
+- Unsupported/Unknown: 0.0.
+
+6.4 Wh candidate extraction
+
+For each evaluation and each GraphPath in Result.ResponsePaths:
+
+1. Ignore paths with NodeIDs.Count < 2. The length-1 path is the anchor itself.
+2. Let anchor = path.NodeIDs[0]. Confirm the anchor label or ID corresponds to
+   the question anchor; skip otherwise.
+3. Inspect the first link, path.Links[0].
+4. Determine relation match:
+   - Exact: link.ForwardLink.Id equals variant.ForwardLinkTypeId.
+   - Inverse: link.ForwardLink.Id equals variant.InverseLinkTypeId.
+   - Class-only: link.Classification equals variant.LinkClass when the variant
+     is anchor-only or the question is a qualifier fallback.
+   - Reject the path when none of these apply.
+5. Candidate nodes are path node IDs after the anchor:
+   - Depth is the path index of the candidate (1 for the immediate neighbor).
+   - For Phase 5, prefer depth 1. Depth > 1 candidates are allowed only when no
+     depth-1 candidate matches the expected type and the path length is within
+     ReasoningOptions.MaxTraversalDepth.
+6. Fetch the node with core.TryGetNode(candidateID, out Web_Node node).
+   - Skip null nodes, nodes with empty labels, and nodes typed Sources,
+     Dictionaries, Empties, or Basics unless Basics is explicitly expected.
+   - Skip the anchor itself.
+7. Type filter:
+   - Exact expected type: accepted, full type bonus.
+   - For Where/When qualifier variants and anchor-only fallback: accept other
+     types with a penalty. This allows Acme (Entities) to answer
+     "Where does Alice work?" and Monday (RawData) to answer a When question.
+   - For Who/What/Which: reject types that are not in the wh type variant list
+     unless the anchor-only fallback is active.
+8. Record an AnswerCandidate with:
+   - NodeID, Label (node.Label fallback first alias), NodeType.
+   - Depth.
+   - RelationLinkTypeId = matched link forward or inverse ID, depending on
+     orientation.
+   - LinkClass.
+   - PathNodeIDs = path.NodeIDs.
+   - UsesTemporaryEvidence = all path nodes are temporary.
+
+Candidate scoring:
+
+    score = path.Score
+          + 0.20 if relation ID match is exact
+          + 0.10 if relation match is inverse
+          + 0.05 if relation match is class-only
+          + 0.10 if type equals the variant expected type
+          - 0.10 if type differs and a relaxed qualifier fallback allowed
+          + 0.10 if depth == 1
+          - 0.05 per additional hop
+          + 0.05 if the label is non-empty
+
+Clamp to [0, 1]. Do not compare scores across runs or rely on GUID ordering
+except as a final deterministic tie-breaker.
+
+6.5 De-duplication and ambiguity
+
+1. Deduplicate candidates by NodeID. Keep the highest score and the shortest
+   path for the same node.
+2. If two candidates have the same label, kind, and a score difference within
+   AnswerAmbiguityMargin, collapse them into one representative. The same
+   surface answer is not ambiguous to the user.
+3. Sort by score descending, then label ordinal, then NodeID string.
+4. Drop candidates below MinimumAnswerScore.
+5. Ambiguity across candidates:
+   - If the top two distinct answer nodes have scores within
+     AnswerAmbiguityMargin and both are at the same depth, return
+     AnswerStatus.Ambiguous.
+   - Keep up to MaxAnswerCandidates candidates and their evidence paths.
+6. Ambiguity from ReasoningResult:
+   - If any evaluation is Ambiguous and no candidate is selected, return
+     AnswerStatus.Ambiguous with the number of candidate matches.
+7. If no candidates:
+   - If any evaluation is NoMatch -> AnswerStatus.NoMatch.
+   - Else if any evaluation is Unsupported/InvalidInput -> Unsupported.
+   - Else -> Unknown.
+
+6.6 Answer kind
+
+Set NlpAnswer.Kind from the question:
+- Who/Whom/Whose/What/Which -> Entity or Description based on the selected node
+  type. Use Entity for Entities/Names/Objects, Description for Concepts/Events,
+  and Location/Time/Quantity when the selected node type or wh kind implies it.
+- Where -> Location.
+- When -> Time; use Date when the selected node's label parses as a date or the
+  mention kind is Date.
+- How many/much -> Quantity.
+- Yes/no -> Boolean.
+
+6.7 Answer text generation
+
+Short answers:
+- Entity/Description/Location/Time/Quantity: the selected node's label.
+- Yes: "Yes".
+- No: "No".
+- Ambiguous: null.
+- NoMatch/Unsupported: null.
+
+Text templates (deterministic, culture-invariant):
+- Yes: "Yes." or "Yes. {evidence sentence}"
+- No: "No, I don't have a fact matching that."
+- Entity/Description: "{evidence sentence}" when available, else the label.
+- Location: "{evidence sentence}" when available, else the label.
+- Time: "{evidence sentence}" when available, else the label.
+- Quantity: "{evidence sentence}" when available, else the label.
+- Ambiguous: "I found multiple possible answers: A, B." (at most
+  MaxAnswerCandidates labels).
+- NoMatch: "I don't know. I couldn't find a matching fact in the graph."
+- Unsupported: "I can't answer that question yet. {reason}" when a reason is
+  available.
+- Unknown: "I don't know."
+
+Evidence sentence construction:
+- Use the selected GraphPath and its first link.
+- Resolve source and destination labels through core.TryGetNode.
+- Determine the semantic relation name:
+  - Prefer link.ForwardLink.Name.
+  - If it begins with "inverse_", strip the prefix.
+- Build the sentence from the graph link direction:
+  - identities: "{source} is {destination}."
+  - actions / other: "{source} {verbPhrase} {destination}."
+  - bare preposition relation (at/in/on/during/...) without another verb:
+    "{source} is {preposition} {destination}."
+- Verb phrase helper:
+  - Split relation name on '_'. First segment is the base verb; remaining
+    segments are particles.
+  - Present tense, third-person singular: add -s/-es using simple English
+    rules; handle have->has, do->does, be->is.
+  - Past: use a small irregular map (see/saw, work/worked, arrive/arrived)
+    and otherwise append -ed.
+  - Future: "will {base} {particles}".
+  - If the relation is already "is", "has", or "does", use it directly.
+  - If the relation is a bare preposition, use "is {preposition}".
+- Do not modify the graph to derive text.
+- Cap the final text at MaxAnswerTextLength and append "..." when truncated.
+
+Temporary-knowledge caveat:
+- If every node in the selected evidence path is temporary, append
+  " (This fact is not yet verified.)"
+- Set UsesTemporaryEvidence=true.
+- If at least one node is permanent, no caveat and
+  UsesTemporaryEvidence=false.
+
+Source/trust wording:
+- Phase 5 does not have a source node for Ask, so do not claim source-backed
+  knowledge.
+- Use "the graph" or "the current knowledge graph" in no-match and unsupported
+  wording. Do not say "verified" unless a permanent node supports it.
+
+6.8 Answer diagnostics
+
+AnswerGenerator diagnostics must include:
+- "Selected answer '{label}' with score {score:F3}."
+- "No answer candidate passed the relation and type filters."
+- "Multiple answers are within the ambiguity margin of {margin:F2}."
+- "All evidence for this answer is temporary."
+- "The answer was truncated to the maximum text length."
+
+Ask combines parse, question, reasoning, and answer diagnostics in that order
+and removes exact duplicates while preserving first occurrence.
+
+================================================================================
+7. PIPELINE INTEGRATION (NlpPipeline.cs)
+================================================================================
+
+7.1 New Ask method
+
+    public NlpResult Ask(string? text)
+    {
+        ...
+    }
+
+Ask must be read-only with respect to LRD_Core nodes and links.
+
+Flow:
+
+1. Run Analyze(text).
+   - If Status is InvalidInput or Parsed is null, return the analysis result
+     with Answer set to an InvalidInput NlpAnswer.
+2. Create EntityResolver over core.
+3. Call QuestionAnalyzer.Analyze(analysis.Parsed, resolver, options).
+4. Start diagnostics with analysis.Diagnostics, then append question
+   diagnostics.
+5. If question.AnchorIsAmbiguous:
+   - Build an Ambiguous answer via AnswerGenerator.
+   - Return NlpStatus.Ambiguous with Question and Answer set.
+6. If !question.Supported:
+   - Build an Unsupported answer via AnswerGenerator.Unsupported.
+   - Return NlpStatus.Unsupported with Question and Answer set.
+7. Evaluate variants in order:
+   - Call reasoning.Answer(variant.Chain).
+   - Append result diagnostics.
+   - Store QuestionEvaluation in a list.
+   - Stop early only if an exact, unambiguous boolean Yes is proven; otherwise
+     evaluate all variants so cross-variant ambiguity is visible.
+8. Call AnswerGenerator.Generate(question, evaluations, core, options).
+9. Append answer diagnostics.
+10. Map AnswerStatus to NlpStatus:
+    - Answered, Yes, No -> NlpStatus.Answered
+    - Ambiguous -> NlpStatus.Ambiguous
+    - NoMatch, Unknown -> NlpStatus.NoMatch
+    - Unsupported -> NlpStatus.Unsupported
+    - RejectedByTrust -> NlpStatus.RejectedByTrust
+    - InvalidInput -> NlpStatus.InvalidInput
+11. Return:
+
+    new NlpResult(mappedStatus, diagnostics, analysis.Parsed)
+    {
+        Frames = analysis.Frames,
+        Question = question,
+        Answer = answer,
+        ReasoningResults = evaluations.Select(e => e.Result).ToArray()
+    };
+
+Do not populate Chains for Ask. Query chains are exposed through
+Question.Variants. Ingest remains the only graph-mutating entry point.
+
+7.2 Shared ReasoningEngine
+
+- Use the existing private readonly reasoning field.
+- Keep the optional constructor parameter from Phase 4 unchanged.
+- Tests that need trusted permanent evidence can pass a shared engine that
+  recorded the trust evidence.
+- Ask never creates an anchor. Only Ingest provisions temporary anchors.
+
+7.3 No mutation guarantees
+
+Add a test that:
+- Counts core.GetDictionary()!.Count and the total number of links before Ask.
+- Calls Ask.
+- Asserts both counts are unchanged.
+- Asserts no query-only node ID exists in core.
+- Allows core.GetResponse() to change; response chains are not graph data.
+
+================================================================================
+8. TEST PLAN (OPEN-LRD.SmokeTests/NlpTests.cs)
+================================================================================
+
+Register new groups in NlpTests.RunAll():
+
+    Program.Run("NLP question analysis", TestNlpQuestionAnalysis);
+    Program.Run("NLP answer generation", TestNlpAnswerGeneration);
+    Program.Run("NLP yes-no answers", TestNlpYesNoAnswers);
+    Program.Run("NLP answer ambiguity and no-match", TestNlpAnswerAmbiguityAndNoMatch);
+    Program.Run("NLP answer diagnostics", TestNlpAnswerDiagnostics);
+    Program.Run("NLP question read-only", TestNlpQuestionReadOnly);
+    Program.Run("NLP question determinism", TestNlpQuestionDeterminism);
+
+8.1 Question analysis tests
+
+Use the existing Parse helper and a fresh core.
+
+Assertions:
+- "Who works at Acme?":
+  - Type == WhSubject, Wh == Who, ExpectedAnswer == Entity.
+  - Anchor label Acme, AnchorRole Qualifier.
+  - RelationName work_at.
+  - Variants contain an Entities variant.
+  - First chain root is the wh node with null label; terminal is Acme.
+- "What did Alice see?":
+  - Type == WhObject, anchor Alice, relation see.
+  - Variants include Entities and Concepts.
+  - Chain link forward ID equals inverse_see ID.
+- "Where does Alice work?":
+  - Type == WhQualifier, anchor Alice.
+  - Relation variants include work_at and at.
+  - Expected types include Locations and Entities.
+- "Is Alice a doctor?":
+  - Type == YesNo, subject Alice, object/complement doctor.
+  - Relation is / identities.
+- "Does Alice work at Acme?":
+  - Type == YesNo, subject Alice, object Acme, relation work_at.
+- "Who was seen by Alice?":
+  - IsPassive true, relation see, anchor Alice, AnswerRole Object.
+- "To whom did Alice speak?":
+  - Relation speak_to, anchor Alice, leading preposition handled.
+- "Who does Alice work with?":
+  - Stranded preposition handled, relation work_with, anchor Alice.
+
+8.2 Answer generation tests
+
+Ingest facts through NlpPipeline.Ingest first, then Ask.
+
+- Ingest "Alice works at Acme."
+  - Ask "Who works at Acme?" -> Status Answered, Kind Entity,
+    ShortAnswer "Alice", AnswerNodeID equals the Alice node, Confidence > 0.
+  - Ask "Where does Alice work?" -> ShortAnswer "Acme" (tests the Entities
+    fallback/relation variants).
+- Ingest "Alice sees Bob."
+  - Ask "What did Alice see?" -> ShortAnswer "Bob".
+  - Ask "Whom did Alice see?" -> ShortAnswer "Bob".
+- Ingest "Alice is a doctor."
+  - Ask "What is Alice?" -> ShortAnswer "doctor" or the stored doctor label.
+- Ingest "Alice arrived on Monday."
+  - Ask "When did Alice arrive?" -> ShortAnswer contains "Monday".
+- Ingest "Bob was seen by Alice."
+  - Ask "Who was seen by Alice?" -> ShortAnswer "Bob".
+
+8.3 Yes/no tests
+
+- Ingest "Alice is a doctor."
+  - Ask "Is Alice a doctor?" -> AnswerStatus.Yes, ShortAnswer "Yes".
+  - Ask "Is Alice a teacher?" -> AnswerStatus.No, ShortAnswer "No".
+- Ingest "Alice works at Acme."
+  - Ask "Does Alice work at Acme?" -> Yes.
+  - Ask "Does Alice work at Globex?" -> No.
+- Ingest "Alice has a dog."
+  - Ask "Does Alice have a dog?" -> Yes.
+
+8.4 Ambiguity and no-match tests
+
+Ambiguity:
+- Add one Alice node and two Bob nodes with the same label.
+- Add directed Alice --see--> Bob1 and Alice --see--> Bob2 links using
+  RelationRegistry.GetOrRegister("see").Forward.Id and LinkClass.actions.
+- Ask "What did Alice see?" -> AnswerStatus.Ambiguous.
+- Text lists both candidates or states that multiple answers were found.
+
+No-match:
+- Add Alice and Acme nodes with no link.
+- Ask "Who works at Acme?" -> AnswerStatus.NoMatch, ShortAnswer null.
+- Ask "Does Alice work at Acme?" -> AnswerStatus.No.
+- Ask "Who works at Globex?" with an unknown anchor -> NoMatch, not an
+  exception.
+
+8.5 Unsupported and diagnostic tests
+
+- Ask "Where does she work?" -> Unsupported with a Phase 6 pronoun diagnostic.
+- Ask "Can Alice see Bob?" -> Unsupported with a modal diagnostic.
+- Ask "Does Alice not see Bob?" -> Unsupported with a negation diagnostic.
+- Ask "Why does Alice work?" -> Unsupported with a why/manner diagnostic.
+- Ask "Where is Alice?" -> Unsupported or NoMatch with a locative-copula
+  diagnostic; no exception.
+- Ask "Alice works at Acme." -> Unsupported with "Only questions are
+  supported."
+- Ask blank text -> InvalidInput.
+- Ask a punctuation-only string -> InvalidInput.
+
+8.6 Read-only tests
+
+- Ingest one fact.
+- Capture node count and total link count:
+  - Sum core.GetLinks(node.ID).Count over core.GetDictionary()!.Values.
+- Ask a supported question.
+- Assert node count and link count are unchanged.
+- Assert every variant chain node ID for wh nodes is absent from core.
+- Assert Answer does not add permanent or temporary nodes.
+
+8.7 Determinism tests
+
+- Ask the same question twice.
+- Assert identical Answer.Status, Answer.Kind, Answer.ShortAnswer,
+  AnswerNodeID, and Answer.Text.
+- Ensure candidate ordering is stable.
+- Do not compare random GUIDs of query-only nodes.
+
+8.8 Temporary-evidence tests
+
+- Neutral ingestion creates temporary nodes.
+  - Ask a question and assert UsesTemporaryEvidence true and the temporary
+    caveat appears in Text.
+- Trusted ingestion with a shared ReasoningEngine promotes nodes to permanent.
+  - Ask again and assert UsesTemporaryEvidence false and no temporary caveat.
+
+8.9 Regression
+
+- All Module 1, Module 2, and Phase 1-4 tests must still pass.
+- No new warnings under -warnaserror.
+
+================================================================================
+9. IMPLEMENTATION SEQUENCE
+================================================================================
+
+Step 1: Extend the data model
+- Add question/answer enums and records to NlpTypes.cs.
+- Add Question and Answer init properties to NlpResult.
+- Add the new NlpOptions values.
+- Build the smoke-test project to confirm no breaking changes.
+
+Step 2: Expose reusable extraction helpers
+- Change RelationExtractor.CreateArgument to internal static.
+- Add or expose a verb finder that QuestionAnalyzer can call with a token list
+  or index range.
+- Add or expose tense detection if needed.
+- Do not change Phase 4 extraction behavior.
+- Re-run Phase 4 tests before continuing.
+
+Step 3: Implement QuestionAnalyzer
+- Sentence selection, wh detection, auxiliary/main-verb detection.
+- Role recovery for wh-subject, wh-object, wh-qualifier, wh-quantity, yes/no,
+  and passive variants.
+- Entity resolution, anchor selection, expected-type mapping, relation
+  candidates, chain orientation, and variant limits.
+- Unsupported diagnostics.
+- Add question-analysis tests.
+
+Step 4: Implement AnswerGenerator
+- Boolean decision path.
+- Wh candidate extraction, filtering, scoring, de-duplication, ambiguity, and
+  limits.
+- Short answers and evidence sentence templates.
+- Temporary-evidence caveat.
+- No-match and unsupported text.
+- Add answer-generation tests.
+
+Step 5: Add NlpPipeline.Ask
+- Add the method and status mapping.
+- Reuse the existing ReasoningEngine.
+- Ensure no graph mutation and no anchor provisioning.
+- Add read-only and determinism tests.
+
+Step 6: Full verification
+- Build the smoke-test project with zero warnings.
+- Run all smoke tests.
+- Fix nullable, unused, naming, and ordering warnings.
+- Verify Module 1 and Module 2 tests remain green.
+
+Step 7: Documentation
+- Update README.md and ReadMe2.md to Phase 5 of 7 after all tests pass.
+- Describe question analysis, answer generation, ambiguity/no-match behavior,
+  and the temporary-evidence caveat.
+- Do not claim Phase 6 or 7 work.
+
+Step 8: Optional WPF hook
+- Deferred to Phase 7 unless separately requested. Do not couple QA tests to
+  WPF code.
+
+================================================================================
+10. PHASE 5 ACCEPTANCE CRITERIA
+================================================================================
+
+Phase 5 is complete when all of the following are true:
+
+1. Ask("Who works at Acme?") after ingesting that fact returns
+   NlpStatus.Answered, Answer.Kind == Entity, and ShortAnswer "Alice".
+2. Ask("What did Alice see?") returns the expected object ("Bob").
+3. Ask("Where does Alice work?") returns the expected location/organization
+   ("Acme") using relation variants and/or the Entities fallback.
+4. Ask("When did Alice arrive?") returns the expected time value ("Monday").
+5. Ask("Is Alice a doctor?") returns Yes when the fact exists and No when the
+   graph has no matching fact; AnswerStatus distinguishes both.
+6. Ask builds wh query chains with the known anchor terminal, uses inverse
+   query edges for wh-object/wh-qualifier questions, and never produces a
+   self-loop or an invalid QueryGraph.
+7. Ambiguous anchors and multi-candidate answers return AnswerStatus.Ambiguous
+   with deterministic candidate ordering and a readable text.
+8. No-match and unsupported questions return honest text and diagnostics
+   without throwing.
+9. Pronoun, modal, negated, why/manner, and unsupported locative-copula
+   questions are rejected with explicit diagnostics and no graph mutation.
+10. Ask is read-only: node count and link count are unchanged, and no
+    query-only node ID is inserted into core.
+11. Temporary evidence adds a caveat; permanent/trusted evidence does not.
+12. Repeated Ask calls on the same question return identical status, kind,
+    short answer, answer node ID, and text.
+13. The full solution builds with zero warnings and zero errors.
+14. All Module 1, Module 2, and Module 3 smoke tests pass, including the new
+    Phase 5 tests.
+
+================================================================================
+11. RISKS, DECISIONS, AND DEFERRED WORK
+================================================================================
+
+Resolved decisions for Phase 5:
+
+- Read-only answering: Ask uses ReasoningEngine.Answer, never Ingest or
+  IngestAndAnswer. No anchor provisioning and no graph mutation.
+- Known-anchor-terminal orientation: wh chains are [wh] -> [anchor] so
+  ResponseExtractor starts at the known entity. Wh-object and wh-qualifier
+  links use inverse link-type IDs.
+- Type variants: because NodeTypes matching is exact, broad wh words generate
+  multiple query variants. Variants are capped and ordered deterministically.
+- Where fallback: Entities is included for Where because Phase 4 tags
+  organization names such as Acme as Entities, not Locations.
+- Anchor-only fallback: used for qualifier questions when type-only matching
+  fails. Relation filtering still happens in AnswerGenerator.
+- Boolean semantics: local closed-world negative answers are allowed for
+  yes/no questions, but the text explicitly says the graph has no matching
+  fact. This avoids pretending absence of knowledge is logical falsity.
+- Temporary evidence: Phase 5 has no source trust input for Ask, so temporary
+  knowledge is disclosed in the answer text.
+- Ambiguity: both Reasoning-level ambiguity and cross-variant answer ambiguity
+  are surfaced, never silently resolved.
+- Text generation: template-based and approximate; no full grammar or
+  inflection engine.
+- Relation registry: Ask may allocate link-type IDs during question analysis;
+  this is session-stable and does not affect graph data.
+- Query-only node IDs: random, collision-free, never added to core.
+
+Explicitly deferred to later phases:
+
+- Phase 6: ConversationContext, pronoun resolution, focus tracking, follow-up
+  questions, and session provenance.
+- Phase 7: final README wording, WPF Tools integration, full-solution
+  documentation pass, and any end-to-end UI workflow.
+
+Known limitations after Phase 5:
+
+- Rule-based English only; no statistical accuracy guarantees.
+- Multi-hop answers are not the primary target. The response extractor may
+  return deeper paths, but answer selection prefers immediate neighbors.
+- Questions with multiple known entities may be simplified to one anchor.
+- Locative copula questions such as "Where is Alice?" require ingestion
+  support that Phase 4 does not provide.
+- Modal, negated, why, manner, and complex possessive questions are rejected.
+- Passive support is heuristic and depends on a by-phrase agent.
+- "Which X" noun-type inference uses a small map, not an ontology.
+- No durable lexical storage, session persistence, or provenance index.
+- No full temporal or spatial reasoning beyond link classification.
+
+================================================================================
+12. VERIFICATION COMMANDS
+================================================================================
+
+Run from the repository root:
+
+    dotnet build OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj -warnaserror
+    dotnet run --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj
+
+The smoke-test project targets net10.0 and compiles the NLP, Nodes, Reasoning,
+and core sources, so it is the authoritative Phase 5 build/test check.
+
+If the WSL dotnet host is unavailable, use the Windows SDK binary:
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" build \
+        OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj -warnaserror
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" run \
+        --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build
+
+On Windows, also verify the WPF project:
+
+    dotnet build OPEN-LRD.slnx
+
+Expected result: zero warnings, zero errors, and every smoke test passing,
+including Module 1, Module 2, Phase 1-4 NLP, and the new Phase 5 tests.
+
+(End of Phase 5 plan.)
