@@ -3,6 +3,14 @@
   "WorkspaceRootPath": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\links\\link.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\links\\link.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\nodetypes.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\nodetypes.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -13,14 +21,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\mainwindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\mainwindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\links\\link.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\links\\link.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\chain_node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -38,11 +38,11 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 4,
               "Title": "MainWindow.xaml.cs",
               "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\MainWindow.xaml.cs",
               "RelativeDocumentMoniker": "OPEN-LRD\\MainWindow.xaml.cs",
@@ -54,20 +54,20 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "NodeTypes.cs",
               "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\NodeTypes.cs",
               "RelativeDocumentMoniker": "OPEN-LRD\\Nodes\\NodeTypes.cs",
               "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\NodeTypes.cs",
               "RelativeToolTip": "OPEN-LRD\\Nodes\\NodeTypes.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-11-09T09:21:49.493Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 1,
               "Title": "Node.cs",
               "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Node.cs",
               "RelativeDocumentMoniker": "OPEN-LRD\\Nodes\\Node.cs",
@@ -75,11 +75,12 @@
               "RelativeToolTip": "OPEN-LRD\\Nodes\\Node.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-11-08T04:08:34.353Z"
+              "WhenOpened": "2026-11-08T04:08:34.353Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 0,
               "Title": "Link.cs",
               "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Links\\Link.cs",
               "RelativeDocumentMoniker": "OPEN-LRD\\Nodes\\Links\\Link.cs",
@@ -87,7 +88,8 @@
               "RelativeToolTip": "OPEN-LRD\\Nodes\\Links\\Link.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-11-06T08:10:32.036Z"
+              "WhenOpened": "2026-11-06T08:10:32.036Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -115,7 +117,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 3,
               "Title": "LRD_Core.cs",
               "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\LRD_Core.cs",
               "RelativeDocumentMoniker": "OPEN-LRD\\LRD_Core.cs",

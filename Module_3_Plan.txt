@@ -1,0 +1,522 @@
+OPEN-LRD
+MODULE 3: THE NLP PIPELINE
+IMPLEMENTATION PLAN
+
+Status: Approved. Phase 3 parsing and NER complete.
+Scope owner: Module 3 (README numbering).
+Reference design: README.md, ReadMe2.md, and Module_2_Plan.txt.
+Implementation constraint: Native C# with no external library dependencies.
+
+================================================================================
+1. PURPOSE AND SCOPE
+================================================================================
+
+Module 3 converts human language into temporary graph chains for Module 2 and
+converts reasoning results back into readable answers.
+
+Module 3 is responsible for:
+
+- Sentence segmentation, tokenization, and text normalization.
+- Part-of-speech tagging and lemmatization.
+- Noun, verb, and prepositional phrase chunking.
+- Named-entity detection and semantic type assignment.
+- Subject-verb-object relation extraction.
+- Copula, possession, coordination, and prepositional qualifier handling.
+- Pronoun and conversation-context resolution.
+- Text-to-chain ingestion through the Reasoning Engine.
+- Question analysis and query-chain construction.
+- Natural-language answer generation.
+- Explicit diagnostics for unsupported, ambiguous, and no-match cases.
+
+Module 3 is NOT responsible for:
+
+- Statistical NLP, machine learning, embeddings, or external packages.
+- Languages other than English in the initial implementation.
+- Full dependency or constituency parsing.
+- Branched graph matching; Module 3 emits linear chains only.
+- Full event reification, temporal logic, or durable lexical storage.
+- Upper-ontology rules, type hierarchies, or selectional restrictions.
+- Persistence to disk or an external graph database.
+
+================================================================================
+2. ACCEPTED DESIGN DECISIONS
+================================================================================
+
+1. English-first, deterministic, rule-based MVP.
+   Use lexicons, suffix rules, and pattern grammars. No external libraries.
+
+2. Lexical structures remain transient.
+   Tokens, chunks, mentions, and frames stay in memory. Only resolved semantic
+   mentions become Chain_Node or graph nodes. This keeps lexical and semantic
+   layers separate without polluting the knowledge graph.
+
+3. Predicates use the runtime link-type registries.
+   Register extracted predicate lemmas as forward and inverse link types with
+   the same stable integer ID. Reserve IDs 1-999 for Module 4 ontology
+   relations and use IDs 1000 and above for Module 3 lexical predicates.
+
+4. Prefer direct relation links for the MVP.
+   "Alice sees Bob" becomes Alice --see/actions--> Bob.
+   "Alice works at Acme" becomes Alice --work_at/actions--> Acme.
+   Full event-node reification for time, place, and participants is deferred.
+
+5. Assertion-only ingestion initially.
+   Negated, hypothetical, and strongly modal statements are parsed and
+   reported, but not merged as positive facts until Module 4 adds polarity and
+   modality handling.
+
+6. Question chains are oriented around known anchors.
+   Response extraction starts from a terminal query node. Build query chains so
+   the known entity is terminal where possible. Wh nodes use an empty label and
+   an expected semantic type, which enables Module 2 type-only candidates.
+
+7. Session-scoped context and provenance.
+   Each NlpPipeline instance owns conversation context and a session provenance
+   index. Durable provenance remains a future Module 2/4 extension.
+
+8. No Module 1 or Module 2 model changes are required.
+   Use existing node, link, chain, search, trust, and reasoning APIs.
+
+================================================================================
+3. CURRENT BASELINE AND INTEGRATION POINTS
+================================================================================
+
+Relevant current files:
+
+- OPEN-LRD/LRD_Core.cs
+  Owns the graph dictionary, query/response chains, search APIs, connection
+  management, maintenance, and label lookup.
+
+- OPEN-LRD/Nodes/Node.cs
+  Owns Guid ID, NodeTypes, lifetime, TTL, weight, DataPointer, Label, and
+  aliases.
+
+- OPEN-LRD/Nodes/Chain_Node.cs
+  Represents a temporary chain node with linkNext and linkPrevious.
+
+- OPEN-LRD/Nodes/Links/Link.cs
+  Immutable directed link with SourceID, DestinationID, ForwardLink,
+  InverseLink, and Classification.
+
+- OPEN-LRD/Nodes/Links/ForwardLinkTypes.cs, InverseLinkTypes.cs, LinkClass.cs
+  Thread-safe runtime registries with stable integer IDs.
+
+- OPEN-LRD/Reasoning/ReasoningEngine.cs
+  Facade for Ingest, Answer, and IngestAndAnswer.
+
+- OPEN-LRD/Reasoning/ReasoningTypes.cs
+  QueryGraph, SubgraphMatch, GraphPath, ReasoningResult, and related types.
+
+- OPEN-LRD/Reasoning/QueryGraphBuilder.cs
+  Converts LinkedList<Chain_Node> into a validated QueryGraph.
+
+- OPEN-LRD/Reasoning/ResponseExtractor.cs
+  Extracts ranked response paths and builds response chains.
+
+Integration constraints:
+
+- The Reasoning Engine accepts non-empty LinkedList<Chain_Node> input.
+- Query graphs are currently linear; complex facts must be split into multiple
+  linear chains.
+- Response extraction starts from the terminal query node.
+- Link construction rejects unknown forward or inverse link-type IDs.
+- NodeTypes currently provides Empties, Basics, Dictionaries, Objects,
+  Concepts, Entities, Names, Sources, Locations, Events, and RawData.
+
+Current gaps that Module 3 must account for:
+
+- No tokenizer, POS tagger, parser, NER, or language generation exists.
+- No predicate relation vocabulary exists beyond basic link types.
+- No pronoun or conversation-context state exists.
+- No question classification or answer-template logic exists.
+- No durable provenance or lexical storage exists.
+
+================================================================================
+4. FILE LAYOUT AND RESPONSIBILITIES
+================================================================================
+
+Create under OPEN-LRD/NLP/:
+
+1. NlpOptions.cs
+   Limits, thresholds, feature flags, and reasoning options.
+
+2. NlpTypes.cs
+   Tokens, sentences, POS tags, mentions, chunks, frames, results, status enums.
+
+3. TextNormalizer.cs
+   Unicode normalization, quote and dash normalization, whitespace cleanup.
+
+4. TextTokenizer.cs
+   Sentence and token segmentation with source spans.
+
+5. Lexicon.cs
+   Function words, irregular forms, entity cues, and relation cues.
+
+6. Lemmatizer.cs
+   Rule-based suffix stripping and irregular lemmas.
+
+7. PosTagger.cs
+   Contextual rule-based part-of-speech tagging.
+
+8. ShallowParser.cs
+   Noun/verb/preposition chunks, clause boundaries, and SVO roles.
+
+9. NamedEntityRecognizer.cs
+   Mention detection and NodeTypes assignment.
+
+10. RelationExtractor.cs
+    Copula, action, possession, prepositional, coordination, and negation
+    frames.
+
+11. RelationRegistry.cs
+    Stable predicate-to-link-type registration and lookup.
+
+12. EntityResolver.cs
+    Label and alias lookup, pronoun resolution, and context focus.
+
+13. ChainBuilder.cs
+    Frames to linear LinkedList<Chain_Node>, including query-chain orientation.
+
+14. QuestionAnalyzer.cs
+    Wh/yes-no classification and expected answer type.
+
+15. AnswerGenerator.cs
+    ReasoningResult to readable answer, candidate list, and caveats.
+
+16. ConversationContext.cs
+    Recent mentions, focus, and session provenance.
+
+17. NlpPipeline.cs
+    Pipeline facade combining analysis, ingestion, and answering.
+
+Update OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj to include:
+
+    <Compile Include="../OPEN-LRD/NLP/**/*.cs" />
+
+================================================================================
+5. CORE DATA MODEL
+================================================================================
+
+Proposed PartOfSpeech values:
+
+- Determiner
+- Noun
+- ProperNoun
+- Pronoun
+- Verb
+- Auxiliary
+- Adjective
+- Adverb
+- Preposition
+- Conjunction
+- WhWord
+- Number
+- Punctuation
+- Unknown
+
+Proposed Token fields:
+
+- Text
+- Normalized
+- Lemma
+- PartOfSpeech
+- StartOffset
+- EndOffset
+- SentenceIndex
+- TokenIndex
+
+Proposed Sentence fields:
+
+- Tokens
+- Clauses
+- SentenceType
+
+Proposed Mention fields:
+
+- SurfaceText
+- Lemma
+- NodeTypes
+- MentionKind
+- StartToken
+- EndToken
+- Confidence
+- ResolvedNodeID
+
+Proposed FrameArgument roles:
+
+- Subject
+- Object
+- Recipient
+- Time
+- Location
+- Qualifier
+
+Proposed RelationFrame fields:
+
+- PredicateLemma
+- LinkClass
+- Arguments
+- Negated
+- Modal
+- Tense
+- Voice
+- SourceSpan
+- Confidence
+
+Proposed result statuses:
+
+- Parsed
+- Ingested
+- Answered
+- Ambiguous
+- NoMatch
+- Unsupported
+- RejectedByTrust
+- InvalidInput
+
+================================================================================
+6. PIPELINE ALGORITHMS
+================================================================================
+
+6.1 Normalization and tokenization
+
+- Normalize Unicode and common typographic characters.
+- Split sentences on ., !, ?, and line breaks while protecting abbreviations
+  and decimal numbers.
+- Tokenize words, numbers, dates, punctuation, hyphenated terms, and
+  contractions.
+- Preserve exact source spans.
+- Enforce MaxCharacters, MaxSentences, and MaxTokens limits.
+
+6.2 POS tagging and lemmatization
+
+- Use lexicon-first tagging for determiners, pronouns, prepositions,
+  conjunctions, auxiliaries, wh-words, numbers, and punctuation.
+- Apply contextual rules:
+  - after determiner or adjective -> noun
+  - after modal, auxiliary, or "to" -> verb
+  - before noun -> adjective
+  - capitalized unknown -> proper noun
+  - suffix heuristics for -ed, -ing, -s, -ly, -tion, -ness, and -able
+- Use an irregular lemma table plus plural, verb, and comparative rules.
+
+6.3 Shallow parsing
+
+- Build noun phrases from determiners, adjectives, nouns, and proper nouns.
+- Build verb groups from auxiliaries, modals, and main verbs.
+- Build prepositional phrases from preposition plus noun phrase.
+- Detect clause boundaries at coordinating and subordinating conjunctions.
+- Classify declarative, yes/no question, wh-question, and imperative input.
+- Support simple SVO, SV, copula, possession, and verb plus preposition.
+
+6.4 Named-entity recognition and semantic typing
+
+NodeTypes mapping:
+
+- Person, organization, or unknown proper name -> Entities
+- Location or place -> Locations
+- Date, time, quantity, or number -> RawData
+- Event noun -> Events
+- Common noun or concept -> Concepts
+- Predicate or verb -> represented as a link type, not a node
+
+Use capitalization, title cues, location cues, date patterns, and small
+gazetteers. Avoid large hardcoded encyclopedic lists.
+
+6.5 Entity resolution
+
+- Resolve known mentions through FindByLabel with type filtering.
+- Use aliases and prior conversation focus.
+- Resolve pronouns by recency, expected type, and number compatibility.
+- Return an ambiguity diagnostic when multiple antecedents remain plausible.
+- Unknown mentions become new temporary semantic nodes.
+
+6.6 Relation extraction patterns
+
+- Copula: X is Y -> identity link.
+- Possession: X has Y -> has relation.
+- Intransitive: X runs -> relation or diagnostic as appropriate.
+- Transitive: X sees Y -> X --see--> Y.
+- Verb plus preposition: X works at Y -> X --work_at--> Y.
+- Prepositional location and time -> spatial or temporal classification.
+- Coordination -> fan out multiple frames.
+- Passive normalization if practical: Y was seen by X -> X --see--> Y.
+- Negation and modality -> preserve flags, but do not ingest as positive.
+- Unsupported complex patterns -> diagnostics and no merge.
+
+6.7 Chain construction
+
+- Identity: subject --is/identities--> complement.
+- Action: subject --predicate/actions--> object.
+- Qualifier: emit an additional best-effort chain with spatial or temporal
+  classification.
+- Use basic link types only for default edges.
+- Use registered predicate IDs for extracted relations.
+- Set linkNext and linkPrevious on adjacent chain nodes.
+- Enforce MaxChainsPerText and MaxClauses.
+
+6.8 Ingestion
+
+- Parse text and extract frames.
+- For each supported frame, build a chain and call ReasoningEngine.Ingest.
+- Aggregate statuses, diagnostics, promoted nodes, and trust results.
+- Record session provenance with source text span, source ID, topic ID, frame,
+  and relation link keys.
+- Do not mutate permanent knowledge directly.
+- Repeated ingestion of the same fact should be idempotent.
+
+6.9 Question analysis
+
+- Classify yes/no and wh-questions.
+- Map wh-words to expected NodeTypes:
+  - who -> Entities
+  - where -> Locations
+  - when -> RawData initially
+  - what -> Entities or Concepts
+  - how many -> RawData
+  - why and how -> unsupported diagnostic initially
+- Resolve known mentions and pronouns from context.
+- Build a query frame with a wh placeholder.
+- Orient the chain so a known entity is terminal for response extraction.
+
+6.10 Answer generation
+
+- Use ResponseChain and ResponsePaths to identify the selected fact.
+- Extract the answer from SelectedMatch.NodeMap for wh-questions.
+- Use ranked response paths for broad questions.
+- Generate text with link-aware templates:
+  - Identity: X is Y.
+  - Action: X predicate Y.
+  - Spatial or temporal: append qualifier where available.
+  - Fallback: X relation-name Y.
+- Add explicit caveats:
+  - Provided-source wording when session provenance exists.
+  - Stored-knowledge wording for pre-existing graph facts.
+  - Candidate list for ambiguous matches.
+  - Honest no-match wording.
+  - Unsupported negation or hypothetical wording.
+- Never fabricate a relation or answer when no path exists.
+
+================================================================================
+7. TEST PLAN
+================================================================================
+
+Add OPEN-LRD.SmokeTests/NlpTests.cs and call NlpTests.RunAll() from Program.
+
+Required test groups:
+
+1. Text primitives
+   - Sentence boundaries, abbreviations, decimals, contractions, offsets.
+   - Unicode, quote, and dash normalization.
+   - Token and input-size limits.
+
+2. POS and lemmas
+   - Function words, verbs after auxiliaries, nouns after determiners, and
+     adjective/noun contexts.
+   - Regular and irregular lemmas.
+
+3. Parsing and NER
+   - NP, VP, and PP chunking.
+   - Person, location, date, event, and common-noun typing.
+   - Subject and object extraction for simple sentences.
+
+4. Relations
+   - Copula, transitive, verb plus preposition, possession, coordination,
+     negation detection, and passive normalization if implemented.
+   - Unsupported complex input returns diagnostics.
+
+5. Chain construction
+   - Correct NodeTypes, labels, aliases, link classes, predicate IDs, and
+     linear ordering.
+   - Question-chain orientation.
+
+6. Ingestion
+   - Simple fact creates temporary nodes and links through ReasoningEngine.
+   - No permanent mutation without trust.
+   - Second identical ingestion is idempotent.
+   - Source and topic trust are passed through.
+
+7. Question answering
+   - Who works at Acme? returns the expected entity.
+   - What did Alice see? returns the expected object.
+   - Is Alice a doctor? returns yes or no.
+   - Where does she work? resolves she from context.
+   - Ambiguous and no-match questions produce honest answers.
+
+8. Output
+   - Readable identity, action, and qualifier answers.
+   - Source-backed and stored-knowledge wording.
+   - Ambiguity and no-match caveats.
+
+9. Robustness
+   - Empty, punctuation-only, long, malformed, and unsupported input.
+   - Deterministic output for identical input.
+   - Existing Module 1 and Module 2 tests still pass.
+
+================================================================================
+8. IMPLEMENTATION PHASES
+================================================================================
+
+Phase 1: Plan and scaffold
+- Create Module_3_Plan.txt.
+- Add OPEN-LRD/NLP/NlpPipeline.cs and minimal shared result types.
+- Add NLP files to the smoke-test project.
+- Add NlpTests scaffold and register it in Program.
+- Verify the full solution builds and all existing tests pass.
+
+Phase 2: Text primitives
+- TextNormalizer, TextTokenizer, Lexicon, Lemmatizer, and PosTagger.
+- Unit tests and bounds.
+
+Phase 3: Parsing and NER
+- ShallowParser, NamedEntityRecognizer, and semantic typing.
+- Parse-only tests.
+
+Phase 4: Relation extraction and chain building
+- RelationExtractor, RelationRegistry, EntityResolver, and ChainBuilder.
+- Ingestion adapter and end-to-end ingest tests.
+
+Phase 5: Question answering and NLG
+- QuestionAnalyzer and AnswerGenerator.
+- Ambiguity, no-match, and caveat behavior.
+
+Phase 6: Context and provenance
+- ConversationContext, pronoun resolution, focus tracking, and session
+  provenance.
+- Follow-up question tests.
+
+Phase 7: Integration and documentation
+- Full solution build and smoke tests.
+- Update README.md and ReadMe2.md Module 3 status.
+- Optional WPF Tools window hook after the pipeline is stable.
+
+================================================================================
+9. KNOWN LIMITATIONS
+================================================================================
+
+- Rule-based English only; no statistical accuracy guarantees.
+- Linear chains only; complex multi-clause and branched facts are split or
+  rejected.
+- Negation, modality, tense, and hypotheticals are not fully represented in the
+  graph initially.
+- Direct relation links replace full event reification in the MVP.
+- Lexical storage and durable provenance are session-scoped initially.
+- Ambiguity is surfaced rather than silently resolved.
+- Module 4 will add ontology relations, type hierarchies, and selectional
+  restrictions.
+
+================================================================================
+10. ACCEPTANCE CRITERIA
+================================================================================
+
+- Analyze("Alice works at Acme.") produces tokens, POS tags, mentions, and a
+  work_at relation frame.
+- Ingest creates temporary nodes and links through Module 2 without direct
+  permanent mutation.
+- Ingesting the same fact twice is idempotent.
+- Ask("Who works at Acme?") returns the expected entity and a response path.
+- Follow-up questions resolve recent pronouns from conversation context.
+- Ambiguous, unsupported, rejected, and no-match inputs produce honest
+  diagnostics.
+- Full solution builds with zero warnings and zero errors.
+- All Module 1, Module 2, and Module 3 smoke tests pass.

@@ -28,6 +28,7 @@ namespace OPEN_LRD.SmokeTests
             Run("Runtime link type registries", TestRuntimeLinkTypeRegistries);
             Run("Link type registry concurrency", TestLinkTypeRegistryConcurrency);
             ReasoningTests.RunAll();
+            NlpTests.RunAll();
 
             Console.WriteLine($"{_passed} passed, {_failed} failed");
             Environment.ExitCode = _failed == 0 ? 0 : 1;
