@@ -1,0 +1,1141 @@
+OPEN-LRD
+MODULE 2: THE REASONING ENGINE
+COMPLETE IMPLEMENTATION PLAN
+
+Status: Implemented; runtime link-type registries are in place.
+Scope owner: Module 2 (README numbering).
+Reference design: README.md and "Building a Cognitive Knowledge Graph.pdf".
+Implementation constraint: Native C# with no external library dependencies.
+
+================================================================================
+1. PURPOSE AND SCOPE
+================================================================================
+
+Module 2 turns the Module 1 graph backend into a reasoning layer. It accepts
+temporary node chains, matches them against the existing node web, updates the
+graph and trust evidence, and extracts response chains.
+
+Module 2 is responsible for:
+
+- Trust-scale calculations.
+- Query and temporary-chain normalization.
+- Subgraph/chain matching against the existing graph.
+- Entity/chain disambiguation.
+- Integrating new chains into the graph.
+- Non-destructive contradiction resolution.
+- Response-chain extraction and ranking.
+- Returning structured reasoning results for Module 3 and the UI.
+
+Module 2 is NOT responsible for:
+
+- Text ingestion, tokenization, POS tagging, NER, or language generation.
+- Upper-ontology bootstrapping.
+- Persistence to disk or an external graph database.
+- WPF UI work beyond an optional future hook.
+- Vector embeddings or external ML libraries.
+
+The README numbering is authoritative. The PDF refers to a conceptually similar
+"Module 5: The Reasoning Engine" and contains useful design concepts but no
+concrete C# algorithm specification.
+
+================================================================================
+2. ACCEPTED DESIGN DECISIONS
+================================================================================
+
+The following decisions are locked for Module 2:
+
+1. Add optional Node.Label and aliases plus a label lookup.
+   Matching must have a semantic key; matching by type alone is not sufficient.
+
+2. Keep reasoning-only metadata inside Module 2.
+   Confidence, provenance, trust evidence, and link validity are stored in
+   engine-side tables. Do not extend Link for Module 2.
+   Link remains immutable and value-correct as established in Module 1.
+
+3. Trust is per-source plus optional per-topic, held in memory for the MVP.
+   Use a Beta-smoothed ratio with a volume/confidence factor and a minimum
+   evidence threshold.
+
+4. Contradiction handling is trust-weighted and non-destructive.
+   Never delete permanent nodes or links in Module 2. A losing link is marked
+   invalid in reasoning metadata and is ignored by reasoning traversal while
+   remaining available for audit. Losing targets may receive invalid-reference
+   weight through the existing Node API.
+
+5. The matcher starts with linear chains.
+   Generalize to branched mini-graphs only if the linear implementation proves
+   insufficient. Match exact type and label first, then alias/partial label at
+   a lower score.
+
+Additional fixed decisions:
+
+- Work stays in a separate OPEN-LRD/Reasoning/ layer.
+- Validate the full match and merge plan before mutating the graph.
+- All reasoning operations are bounded by configurable limits.
+- Existing Module 1 smoke tests must continue to pass.
+- No external packages or graph libraries.
+- LinkClass, ForwardLinkTypes, and InverseLinkTypes are thread-safe runtime
+  registries with stable, externally visible integer IDs.
+
+================================================================================
+3. CURRENT MODULE 1 BASELINE
+================================================================================
+
+Relevant current files:
+
+- OPEN-LRD/LRD_Core.cs
+  Owns the Dictionary<Guid, Web_Node>, queryChain, responseChain, search APIs,
+  connections, and maintenance.
+
+- OPEN-LRD/Nodes/Node.cs
+  Owns Guid ID, NodeTypes, lifetime, TTL, weightUp, weightDown, and DataPointer.
+  Already provides RegisterVerifiedReference, RegisterInvalidReference, and
+  PromoteToPermanent.
+
+- OPEN-LRD/Nodes/Web_Node.cs
+  Owns the referenceLinks list and link de-duplication.
+
+- OPEN-LRD/Nodes/Chain_Node.cs
+  Represents a chain node with Link? linkNext and Link? linkPrevious.
+
+- OPEN-LRD/Nodes/Links/Link.cs
+  Immutable record with SourceID, DestinationID, ForwardLink, InverseLink, and
+  Classification. Link resolves IDs through the link-type registries.
+
+- OPEN-LRD/Nodes/Links/ForwardLinkTypes.cs, InverseLinkTypes.cs, LinkClass.cs
+  Thread-safe runtime registries with stable integer IDs. Lookup helpers fall
+  back to the basic/empty values; Link construction rejects unknown IDs.
+
+- OPEN-LRD/Nodes/NodeTypes.cs
+  Runtime registry of node types.
+
+- OPEN-LRD/Nodes/NodeSearchCriteria.cs
+  Search criteria for ID, type, lifetime, weights, and link class.
+
+Current gaps that Module 2 must account for:
+
+- Nodes have no text label or aliases, so two nodes of the same type cannot be
+  matched semantically.
+- Links have no confidence or provenance metadata.
+- ForwardLinkTypes and InverseLinkTypes currently seed only "basic". They are
+  extensible runtime registries, so relationships are still primarily
+  distinguished by LinkClass until richer link types are registered.
+- Chain_Node represents a linear chain, not an arbitrary mini-graph.
+- LRD_Core has no adjacency index; reasoning can build a snapshot per call.
+
+================================================================================
+4. PREREQUISITE MODEL EXTENSIONS
+================================================================================
+
+4.1 Node labels and aliases
+
+Add to Node:
+
+- public string? Label { get; private set; }
+- public IReadOnlyCollection<string> Aliases { get; }
+- public void Set_Label(string? label)
+- public bool Add_Alias(string alias)
+- public bool Remove_Alias(string alias)
+- public bool Has_Label(string value, StringComparison comparison = OrdinalIgnoreCase)
+- public bool Has_Alias(string value, StringComparison comparison = OrdinalIgnoreCase)
+
+Rules:
+
+- Labels are optional; existing constructors and behavior remain valid.
+- Labels and aliases are trimmed; empty or whitespace values are rejected or
+  ignored.
+- Duplicate aliases are prevented using case-insensitive comparison by default.
+- Labels are not used as IDs; Guid remains the identity.
+- Aliases are optional matching aids, not separate nodes.
+
+4.2 LRD_Core label lookup
+
+Add to LRD_Core:
+
+- public IReadOnlyList<Web_Node> FindByLabel(string label, NodeTypes? type = null)
+- public bool TryFindByLabel(string label, out IReadOnlyList<Web_Node> nodes)
+
+Initial implementation may scan nodes.Values and compare Label/Aliases using
+case-insensitive comparison. Add a label index only if profiling shows a need.
+
+4.3 Reasoning metadata remains outside Module 1
+
+Do not add confidence, provenance, trust, or validity fields to Link in Module 2.
+Use engine-side tables:
+
+- Dictionary<Link, LinkEvidence> linkEvidence
+- Dictionary<TrustKey, TrustEvidence> trustEvidence
+- Dictionary<Guid, string> optional node label cache if needed for diagnostics
+
+LinkEvidence contains:
+
+- Link Link
+- double Confidence
+- Guid? ProvenanceSourceID
+- Guid? TopicID
+- bool IsInvalid
+- string? InvalidReason
+- DateTimeOffset? LastUpdated
+
+================================================================================
+5. FILE LAYOUT AND RESPONSIBILITIES
+================================================================================
+
+Create under OPEN-LRD/Reasoning/:
+
+1. ReasoningOptions.cs
+   Configuration values and defaults.
+
+2. ReasoningTypes.cs
+   Shared reasoning enums, records, and result types.
+
+3. TrustScale.cs
+   Trust evidence, statistical scoring, trust decisions, and evidence lookup.
+
+4. QueryGraphBuilder.cs
+   Converts LinkedList<Chain_Node> into a validated QueryGraph.
+
+5. GraphSnapshot.cs
+   One-pass adjacency and label/type snapshot used by matching and response
+   extraction.
+
+6. SubgraphMatcher.cs
+   Candidate selection, chain matching, scoring, ambiguity detection.
+
+7. ReasoningMerger.cs
+   Validated merge plan construction and application.
+
+8. ContradictionResolver.cs
+   Functional-link conflict detection and non-destructive resolution.
+
+9. ResponseExtractor.cs
+   Ranked, bounded response-path extraction and chain conversion.
+
+10. ReasoningEngine.cs
+   Public facade combining the pieces above.
+
+Update OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj to include:
+
+    <Compile Include="../OPEN-LRD/Reasoning/**/*.cs" />
+
+Optionally split reasoning smoke tests into a separate file, for example
+OPEN-LRD.SmokeTests/ReasoningTests.cs, and call it from Program.Main.
+
+================================================================================
+6. CORE DATA CONTRACTS
+================================================================================
+
+6.1 ReasoningOptions
+
+Suggested defaults:
+
+- MinimumMatchScore = 0.65
+- AmbiguityMargin = 0.05
+- MaxMatches = 10
+- MaxCandidateNodesPerQueryNode = 50
+- MaxSearchSteps = 10000
+- MaxTraversalDepth = 4
+- MaxResponsePaths = 20
+- MaxExpandedNodes = 500
+- AllowTypeOnlyCandidates = false
+- ExactNodeScore = 1.00
+- AliasNodeScore = 0.75
+- TypeOnlyNodeScore = 0.35
+- ExactEdgeScore = 1.00
+- InverseEdgeScore = 0.90
+- ClassOnlyEdgeScore = 0.50
+- NodeWeight = 0.35
+- EdgeWeight = 0.45
+- CoverageWeight = 0.20
+- TrustPriorVerified = 1.0
+- TrustPriorInvalid = 1.0
+- TrustVolumeSmoothing = 5.0
+- MinTrustEvidence = 5.0
+- TrustedThreshold = 0.70
+- DiscreditedThreshold = 0.30
+- TrustMargin = 0.10
+- FunctionalLinkClasses = { LinkClass.identities }
+- LinkClassPriority values:
+    identities 1.00
+    events 0.90
+    temporal 0.80
+    spatial 0.80
+    actions 0.70
+    sources 0.60
+    map_locations 0.55
+    basic 0.50
+    empty 0.00
+
+All values are configurable through the ReasoningOptions constructor or
+properties. Use immutable or init-only options where practical.
+
+6.2 QueryGraph
+
+QueryGraph:
+
+- IReadOnlyList<QueryNode> Nodes
+- IReadOnlyList<QueryEdge> Edges
+- bool IsLinear
+- Guid RootQueryNodeID
+
+QueryNode:
+
+- Guid QueryNodeID
+- NodeTypes Type
+- string? Label
+- IReadOnlyCollection<string> Aliases
+
+QueryEdge:
+
+- Guid FromQueryNodeID
+- Guid ToQueryNodeID
+- LinkClass Classification
+- int ForwardLinkType
+- int InverseLinkType
+- bool IsInverse
+
+6.3 GraphPath
+
+- IReadOnlyList<Guid> NodeIDs
+- IReadOnlyList<Link> Links
+- double Score
+- double TrustScore
+- int Depth
+
+6.4 SubgraphMatch
+
+- Guid AnchorGraphNodeID
+- IReadOnlyDictionary<Guid, Guid> NodeMap
+  Key: query node ID; Value: graph node ID.
+- IReadOnlyList<Link> MatchedLinks
+- IReadOnlyList<LinkConflict> Conflicts
+- double NodeScore
+- double EdgeScore
+- double CoverageScore
+- double OverallScore
+- IReadOnlyList<string> Diagnostics
+
+6.5 LinkConflict
+
+- Link ExistingLink
+- Link ProposedLink
+- LinkClass Classification
+- Guid SourceGraphNodeID
+- Guid ExistingDestinationGraphNodeID
+- Guid ProposedDestinationGraphNodeID
+- double ExistingTrustScore
+- double ProposedTrustScore
+- string Resolution
+
+6.6 TrustAssessment
+
+- Guid SourceNodeID
+- Guid? TopicNodeID
+- double Verified
+- double Invalid
+- double TotalEvidence
+- double Ratio
+- double Confidence
+- double Score
+- bool IsTrusted
+- bool IsDiscredited
+- bool UsesTopicEvidence
+- bool UsesGlobalFallback
+
+6.7 ReasoningStatus
+
+- Answered
+- NoMatch
+- Ambiguous
+- RejectedByTrust
+- Contradiction
+- InvalidInput
+
+6.8 ReasoningResult
+
+- ReasoningStatus Status
+- QueryGraph? Query
+- SubgraphMatch? SelectedMatch
+- IReadOnlyList<SubgraphMatch> Matches
+- IReadOnlyList<GraphPath> ResponsePaths
+- LinkedList<Chain_Node>? ResponseChain
+- TrustAssessment? Trust
+- IReadOnlyList<Guid> PromotedNodeIDs
+- IReadOnlyList<LinkConflict> Conflicts
+- bool GraphMutated
+- IReadOnlyList<string> Diagnostics
+
+================================================================================
+7. TRUST SCALE DESIGN
+================================================================================
+
+7.1 Evidence model
+
+TrustKey:
+
+- Guid SourceNodeID
+- Guid? TopicNodeID
+
+TrustEvidence:
+
+- double Verified
+- double Invalid
+- DateTimeOffset FirstSeen
+- DateTimeOffset LastUpdated
+
+RecordVerified and RecordInvalid accept an optional weight, default 1.0.
+Negative or zero weights are rejected.
+
+7.2 Scoring formula
+
+For a TrustKey with verified V and invalid I:
+
+    ratio      = (V + TrustPriorVerified) /
+                 (V + I + TrustPriorVerified + TrustPriorInvalid)
+    confidence = (V + I) /
+                 (V + I + TrustVolumeSmoothing)
+    score      = ratio * confidence
+
+Interpretation:
+
+- A source with no evidence has a score near zero and is not trusted.
+- A small amount of evidence has low confidence.
+- Large amounts of verified evidence approach a high score.
+- Large amounts of invalid evidence drive the score toward zero.
+
+7.3 Decision thresholds
+
+- TotalEvidence < MinTrustEvidence:
+    decision = Neutral
+- Score >= TrustedThreshold and TotalEvidence >= MinTrustEvidence:
+    decision = Trusted
+- Score <= DiscreditedThreshold and TotalEvidence >= MinTrustEvidence:
+    decision = Discredited
+- Otherwise:
+    decision = Neutral
+
+7.4 Topic-specific trust and fallback
+
+- If TopicNodeID is supplied, use the topic-specific TrustKey when its
+  TotalEvidence >= MinTrustEvidence.
+- Otherwise fall back to the global TrustKey (SourceNodeID, null).
+- If global evidence is also insufficient, return a Neutral assessment.
+- Mark UsesTopicEvidence and UsesGlobalFallback in the assessment for
+  explainability.
+
+7.5 Trust usage rules
+
+- Temporary-chain promotion is allowed only for Trusted sources.
+- Neutral sources may create temporary nodes/links but must not promote.
+- Discredited sources are rejected by default.
+- Contradiction resolution uses trust scores plus TrustMargin.
+- If no source is supplied, treat the operation as Neutral and do not
+  auto-promote temporary nodes.
+
+7.6 Node-weight integration
+
+- Verified matches call RegisterVerifiedReference on matched nodes when the
+  source is Trusted or when the operation is explicitly verified.
+- Invalid evidence calls RegisterInvalidReference on the losing target when
+  appropriate.
+- Node weights remain the Module 1 aggregate signal; TrustScale remains the
+  detailed source/topic evidence store.
+
+================================================================================
+8. QUERY GRAPH CONSTRUCTION
+================================================================================
+
+Input: LinkedList<Chain_Node> or IReadOnlyList<Chain_Node>.
+
+Validation steps:
+
+1. Reject null or empty chains as InvalidInput.
+2. Ensure every Chain_Node has a non-empty Guid.
+3. Reject duplicate Chain_Node instances or duplicate query IDs in one chain.
+4. Reconstruct edges from linkNext/linkPrevious.
+5. If both links are present, verify that their endpoints agree with the
+   adjacent chain nodes.
+6. If a link is missing between adjacent chain nodes, create a default QueryEdge
+   with LinkClass.basic, ForwardLinkTypes.basic.Id, and
+   InverseLinkTypes.basic.Id.
+7. Reject inconsistent links, self-loops in a linear chain, or links whose
+   endpoints do not match adjacent nodes.
+8. Preserve labels and aliases from Chain_Node into QueryNode.
+9. Mark the graph as linear. Branched mini-graph support is a later extension.
+
+Direction handling:
+
+- If a chain's link points from the current node to the next node, the query
+  edge direction is forward.
+- If the link points from the next node back to the current node, set
+  IsInverse = true.
+- Matching may traverse graph links in either direction when IsInverse is true
+  or when the graph link's inverse type matches the query edge.
+
+================================================================================
+9. GRAPH SNAPSHOT
+================================================================================
+
+Build once per reasoning call:
+
+- Dictionary<Guid, Web_Node> Nodes
+- Dictionary<Guid, List<Link>> Outgoing
+- Dictionary<Guid, List<Link>> Incoming
+- Dictionary<string, List<Guid>> LabelIndex
+  Case-insensitive normalized label to node IDs.
+- Dictionary<string, List<Guid>> AliasIndex
+  Case-insensitive normalized alias to node IDs.
+- Dictionary<NodeTypes, List<Guid>> TypeIndex
+
+Rules:
+
+- Include only nodes currently in LRD_Core.GetDictionary().
+- Exclude links marked invalid in engine-side LinkEvidence when building the
+  reasoning adjacency view.
+- Keep a separate raw adjacency view if diagnostics need to see invalid links.
+- Snapshot is read-only for the duration of the reasoning call.
+- Sort candidate IDs deterministically for stable test results.
+
+================================================================================
+10. SUBGRAPH MATCHING ALGORITHM
+================================================================================
+
+10.1 Candidate generation
+
+For each QueryNode:
+
+1. If the query node ID exists in the graph, add it as an exact candidate with
+   score 1.0.
+2. Otherwise, look up exact Label and aliases in the LabelIndex/AliasIndex.
+3. Filter candidates by NodeTypes when the label is not unique.
+4. If AllowTypeOnlyCandidates is true and no label candidates exist, add
+   type-only candidates with TypeOnlyNodeScore.
+5. Cap candidates per query node at MaxCandidateNodesPerQueryNode.
+6. Sort candidates by score descending, then by Guid for determinism.
+
+10.2 Anchor selection
+
+Choose the query node with the fewest candidates as the anchor.
+If several nodes have the same candidate count, choose the one with the highest
+degree in the existing graph to reduce branching.
+
+10.3 Backtracking search
+
+Use recursive backtracking over the linear chain:
+
+    Map(anchorQueryNode, anchorGraphNode)
+    For each next query edge:
+        For each candidate graph node for the next query node:
+            Verify the graph edge exists with matching direction/class/type.
+            Verify the candidate has not already been used unless the query has
+            a legitimate cycle.
+            Score the node and edge.
+            Recurse.
+        Undo mapping on failure.
+
+Bound the search with MaxSearchSteps and MaxMatches.
+
+10.4 Edge matching
+
+A query edge matches an existing Link when:
+
+- Endpoints match the current mapping.
+- Classification matches exactly, or the engine is configured to allow
+  class-only matching.
+- Forward or inverse link type matches the requested type.
+- If IsInverse is true, reverse traversal is allowed and scored as
+  InverseEdgeScore.
+- Invalid links excluded from the snapshot cannot match.
+
+For the initial implementation, prefer exact class + exact type. Allow
+class-only matching only as a fallback with ClassOnlyEdgeScore.
+
+10.5 Match scoring
+
+Compute:
+
+    nodeScore   = average candidate node scores
+    edgeScore   = average matched edge scores
+    coverage    = matched query edges / total query edges
+    trustBonus  = average trust score of matched graph nodes, if available
+    weightBonus = normalized average weightUp of matched nodes
+
+    overallScore =
+        (NodeWeight * nodeScore +
+         EdgeWeight * edgeScore +
+         CoverageWeight * coverage +
+         TrustBonusWeight * trustBonus +
+         WeightBonusWeight * weightBonus) /
+        (NodeWeight + EdgeWeight + CoverageWeight +
+         TrustBonusWeight + WeightBonusWeight)
+
+Defaults for the optional bonuses:
+
+- TrustBonusWeight = 0.10
+- WeightBonusWeight = 0.10
+
+Keep all weights configurable. Clamp overallScore to [0.0, 1.0].
+
+10.6 Match selection
+
+Sort matches by OverallScore descending, then by AnchorGraphNodeID for
+determinism.
+
+- If no match meets MinimumMatchScore:
+    Status = NoMatch; no mutation.
+- If the top two matches are within AmbiguityMargin:
+    Status = Ambiguous; return both/all candidates; no mutation.
+- Otherwise:
+    Select the top match and continue to merge or response extraction.
+
+10.7 Duplicate match prevention
+
+Canonicalize a match by its sorted NodeMap entries and matched link set.
+Do not return the same mapping twice.
+
+================================================================================
+11. MERGE AND INTEGRATION
+================================================================================
+
+11.1 MergePlan
+
+Build a MergePlan before mutation:
+
+- List<NodeAction> NodeActions
+- List<EdgeAction> EdgeActions
+- List<TrustAction> TrustActions
+- List<ConflictResolution> ConflictResolutions
+- bool CanApply
+- List<string> ValidationErrors
+
+NodeAction kinds:
+
+- ReuseExistingNode
+- CreateTemporaryNode
+- PromoteExistingNode
+- RejectNode
+
+EdgeAction kinds:
+
+- AddDirectedLink
+- KeepExistingLink
+- RejectLink
+- MarkExistingLinkInvalid
+
+11.2 Validation before apply
+
+Validate:
+
+- All mapped graph node IDs exist.
+- All new node IDs are unique and non-empty.
+- All new links have existing endpoints after the node actions.
+- No duplicate exact links would be created.
+- No permanent node would be removed.
+- Trust rules allow any new temporary node creation.
+- Functional-contradiction resolutions are complete.
+- Search limits were respected.
+
+If validation fails, return InvalidInput or RejectedByTrust with
+GraphMutated = false.
+
+11.3 Apply actions
+
+For existing nodes:
+
+- Reuse them; do not overwrite labels, aliases, DataPointer, type, or lifetime.
+- Add missing labels/aliases only when the existing node has none.
+- Increment verified weight when appropriate.
+
+For unmatched query nodes:
+
+- Create Web_Node with a new Guid, query type, Temporary lifetime, and default
+  TTL from Node.DefaultTimeToLive or a configured value.
+- Copy label and aliases.
+- Add through LRD_Core.AddExistingNode.
+
+For missing edges:
+
+- Add through LRD_Core.AddDirectedConnection.
+- Preserve LinkClass and the forward/inverse link-type IDs.
+
+For matched edges:
+
+- Keep existing links.
+- Add LinkEvidence with confidence based on match score.
+- Do not duplicate links.
+
+11.4 Graph mutation guarantee
+
+Module 2 must not mutate the graph for:
+
+- InvalidInput
+- NoMatch
+- Ambiguous
+- RejectedByTrust before merge
+- Any failed validation
+
+The MVP uses validate-before-apply rather than full transaction rollback.
+All expected failures must be detected during validation so the apply phase
+contains only operations that are known to be valid. If an unexpected runtime
+failure occurs, return a result with GraphMutated = true and a diagnostic
+describing partial application. A full rollback mechanism is future work.
+
+================================================================================
+12. CONTRADICTION RESOLUTION
+================================================================================
+
+12.1 Functional links
+
+A link is functional when its LinkClass is in
+ReasoningOptions.FunctionalLinkClasses.
+
+Initial default:
+
+    { LinkClass.identities }
+
+This default is intentionally conservative because LinkClass is still coarse.
+More functional classes can be enabled as the ontology matures.
+
+12.2 Conflict detection
+
+For each proposed edge with a functional class:
+
+1. Find existing outgoing links from the same source node.
+2. Filter to the same LinkClass and forward link type.
+3. If an existing link points to a different destination, this is a conflict.
+4. Gather trust assessments for the existing and proposed sources.
+5. Record a LinkConflict.
+
+Non-functional links are additive and do not conflict.
+
+12.3 Resolution policy
+
+Non-destructive and trust-weighted:
+
+- If the proposed source is Discredited:
+    Reject the proposed link.
+- If the existing source is Trusted and the proposed source is not clearly
+  stronger:
+    Reject the proposed link.
+- If the proposed source is Trusted and exceeds the existing source score by at
+  least TrustMargin:
+    Add the proposed link and mark the existing link invalid in LinkEvidence.
+    Optionally call RegisterInvalidReference on the existing destination.
+- If both are Neutral:
+    Reject the proposed link by default and record the conflict.
+- If there is no trust evidence:
+    Reject the proposed link by default.
+
+Never remove the existing link from Web_Node. The link remains available for
+audit but is excluded from reasoning traversal because LinkEvidence.IsInvalid is
+true.
+
+12.4 Contradiction result
+
+If any conflict was resolved by rejecting the proposed chain or by marking an
+existing link invalid:
+
+- Status may be Contradiction.
+- Include all LinkConflicts in the result.
+- Set GraphMutated according to whether any change was applied.
+- Preserve diagnostics explaining the trust comparison.
+
+================================================================================
+13. RESPONSE EXTRACTION
+================================================================================
+
+13.1 Starting points
+
+Start from:
+
+- The selected match's mapped target/anchor node, and/or
+- The graph node mapped from the query's answer position.
+
+If the query graph identifies a terminal node, prefer it as the response anchor.
+Otherwise start from the anchor and explore both directions.
+
+13.2 Traversal
+
+Use bounded depth-first or best-first traversal:
+
+- Maximum depth: MaxTraversalDepth.
+- Maximum expanded nodes: MaxExpandedNodes.
+- Maximum retained paths: MaxResponsePaths.
+- Avoid cycles within a path.
+- Skip invalid links in LinkEvidence.
+- Prefer permanent nodes and higher-weight nodes.
+
+13.3 Path ranking
+
+Suggested score:
+
+    pathScore =
+        0.35 * queryOverlap +
+        0.25 * normalizedNodeTrustOrWeight +
+        0.20 * linkClassPriorityAverage +
+        0.10 * permanenceRatio +
+        0.10 * (1.0 - depth / MaxTraversalDepth)
+
+Where:
+
+- queryOverlap measures how many query link classes/types appear in the path.
+- normalizedNodeTrustOrWeight uses TrustScale if available, otherwise
+  normalized weightUp.
+- linkClassPriorityAverage uses ReasoningOptions.LinkClassPriority.
+- permanenceRatio is the fraction of permanent nodes in the path.
+
+Clamp to [0.0, 1.0].
+
+13.4 Deduplication
+
+Canonicalize each path by its ordered node ID sequence.
+If two paths have the same sequence, keep the higher-scored one.
+If two paths have the same node set but different order, keep both only when
+the order carries meaning; otherwise keep the higher-scored path.
+
+13.5 Conversion to response chain
+
+For each selected GraphPath:
+
+1. Create Chain_Node instances using the graph node IDs, types, and default
+   chain TTL.
+2. For every adjacent pair, assign linkPrevious and linkNext from the path's
+   Link records.
+3. Preserve direction consistently.
+4. Build a LinkedList<Chain_Node>.
+
+After extraction:
+
+- Call LRD_Core.ClearResponse().
+- If exactly one response chain is selected, call BuildResponse(chain).
+- If multiple chains are selected, either append them as separate segments or
+  return them in ReasoningResult.ResponsePaths and let Module 3 choose.
+  MVP rule: put the top-ranked chain into LRD_Core response; keep all ranked
+  paths in the result.
+
+13.6 No match and ambiguous results
+
+- NoMatch: clear response and return an empty result.
+- Ambiguous: do not mutate the graph; return candidate paths/matches in the
+  result. Do not write candidate paths into the core response unless a future
+  clarification flow explicitly chooses one.
+
+================================================================================
+14. REASONING ENGINE API
+================================================================================
+
+Create an internal sealed class ReasoningEngine.
+
+Constructor:
+
+    public ReasoningEngine(LRD_Core core, ReasoningOptions? options = null)
+
+Rules:
+
+- Throw ArgumentNullException for a null core.
+- Throw InvalidOperationException if the core is not initialized.
+- Copy or hold the supplied options.
+
+Public methods:
+
+    public ReasoningResult Ingest(
+        LinkedList<Chain_Node> chain,
+        Guid? sourceNodeID = null,
+        Guid? topicNodeID = null)
+
+    public ReasoningResult Answer(LinkedList<Chain_Node> query)
+
+    public ReasoningResult IngestAndAnswer(
+        LinkedList<Chain_Node> chain,
+        Guid? sourceNodeID = null,
+        Guid? topicNodeID = null)
+
+    public TrustAssessment GetTrust(
+        Guid sourceNodeID,
+        Guid? topicNodeID = null)
+
+    public void RecordTrustEvidence(
+        Guid sourceNodeID,
+        Guid? topicNodeID,
+        bool verified,
+        double weight = 1.0)
+
+    public IReadOnlyList<GraphPath> ExtractResponse(
+        QueryGraph query,
+        SubgraphMatch match)
+
+Behavior:
+
+- Ingest: normalize query, match, validate, merge, update trust, return result.
+- Answer: normalize query, match, extract response, return result.
+- IngestAndAnswer: perform both operations using one snapshot and one selected
+  match where possible.
+- GetTrust: return the trust assessment without mutation.
+- RecordTrustEvidence: explicit evidence API for tests or Module 3.
+- ExtractResponse: optional lower-level API for callers that already have a
+  match.
+
+Expected graph conditions must not throw; return a ReasoningStatus and
+diagnostics instead. Argument errors may throw.
+
+================================================================================
+15. ERROR HANDLING AND INVARIANTS
+================================================================================
+
+Invariants:
+
+1. No mutation on InvalidInput, NoMatch, Ambiguous, or pre-merge
+   RejectedByTrust.
+2. No permanent node or link is deleted by Module 2.
+3. No duplicate exact links are added.
+4. All returned node IDs exist after mutation.
+5. Response paths contain no cycles.
+6. Temporary nodes created by reasoning use Temporary lifetime.
+7. Invalid links are excluded from reasoning traversal.
+8. Matching and ranking are deterministic for identical inputs and graph state.
+9. A single ReasoningEngine instance is not thread-safe; callers must
+   synchronize or use one engine per thread.
+
+Diagnostics should include:
+
+- Query validation failures.
+- Candidate-count and search-limit information.
+- Match scores and ambiguity margins.
+- Trust decisions and evidence volume.
+- Conflict resolutions.
+- Merge actions applied or rejected.
+
+================================================================================
+16. PERFORMANCE AND LIMITS
+================================================================================
+
+- Build the graph snapshot once per reasoning call.
+- Use label/alias/type indexes from the snapshot for candidate lookup.
+- Cap candidate count per query node.
+- Cap total search steps and matches.
+- Cap response depth, expanded nodes, and paths.
+- Avoid scanning the full dictionary inside nested loops when the snapshot can
+  answer the question.
+- Deterministic sorting is allowed to cost extra in the MVP; optimize later.
+- In-memory trust and link-evidence tables may grow. Pruning/archiving is
+  future work.
+- No persistence is included in Module 2.
+
+Potential future optimizations:
+
+- Persistent label index in LRD_Core.
+- Persistent adjacency index in LRD_Core.
+- Bidirectional search for long chains.
+- Path caching keyed by query signature and graph version.
+- Graph version counter for invalidation.
+- Trust-evidence compaction.
+
+================================================================================
+17. TESTING PLAN
+================================================================================
+
+Extend OPEN-LRD.SmokeTests with ReasoningTests. Keep tests dependency-free.
+
+17.1 Label tests
+
+- Exact label lookup finds a node.
+- Case-insensitive label lookup works.
+- Alias lookup works.
+- Type filter removes wrong-type matches.
+- Missing label returns an empty result.
+- Duplicate aliases are not stored twice.
+- Existing Module 1 constructors still work without labels.
+
+17.2 Query graph tests
+
+- Valid linear chain builds a QueryGraph.
+- Missing linkNext/linkPrevious falls back to default basic edge.
+- Inconsistent link endpoints return InvalidInput.
+- Empty or null chain returns InvalidInput.
+- Duplicate query IDs return InvalidInput.
+
+17.3 Matching tests
+
+- Exact single-hop match finds the intended node.
+- Multi-hop chain match finds the intended entity among two same-label nodes.
+- Alias match succeeds at a lower score.
+- No-match returns NoMatch with no graph mutation.
+- Ambiguous match returns Ambiguous with no graph mutation.
+- Search limits stop runaway matching and return diagnostics.
+- Matching is deterministic across repeated calls.
+
+17.4 Merge tests
+
+- Matched edges are added exactly once.
+- Existing nodes are reused, not duplicated.
+- Unmatched query nodes become temporary nodes when trust permits.
+- Neutral source does not promote temporary nodes.
+- Discredited source rejects the merge.
+- No mutation occurs for Ambiguous or NoMatch.
+
+17.5 Trust tests
+
+- Ratio, confidence, and score match expected values.
+- No evidence yields Neutral.
+- Enough verified evidence yields Trusted.
+- Enough invalid evidence yields Discredited.
+- Topic-specific evidence is used when sufficient.
+- Global fallback is used when topic evidence is insufficient.
+- Explicit RecordTrustEvidence changes subsequent decisions.
+
+17.6 Contradiction tests
+
+- Non-functional links coexist.
+- Functional conflict with neutral trust rejects the proposed edge.
+- Functional conflict with clearly stronger proposed trust accepts the new
+  edge and marks the old link invalid in reasoning metadata.
+- The old link remains present in Web_Node for audit.
+- Invalid links are excluded from response extraction.
+
+17.7 Response tests
+
+- Response path is ranked and returned.
+- Duplicate paths are removed.
+- Cycles are not returned.
+- Depth and path-count limits are respected.
+- Invalid links are skipped.
+- No-match clears the core response.
+- Ambiguous result does not mutate the graph or core response.
+
+17.8 Regression tests
+
+- All existing Module 1 smoke tests still pass.
+- Build has zero warnings and zero errors.
+- Main WPF project still builds.
+
+Verification commands:
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" build OPEN-LRD.slnx -v minimal
+    "/mnt/c/Program Files/dotnet/dotnet.exe" OPEN-LRD.SmokeTests/bin/Debug/net10.0/OPEN-LRD.SmokeTests.dll
+
+================================================================================
+18. IMPLEMENTATION SEQUENCE
+================================================================================
+
+Phase 0: Preparation
+- Re-read Module 1 public/internal APIs.
+- Confirm no unrelated project changes.
+- Add Reasoning folder and smoke-test compile inclusion.
+
+Phase 1: Model prerequisites
+- Add Node label/alias support.
+- Add LRD_Core.FindByLabel/TryFindByLabel.
+- Add tests and verify existing tests still pass.
+
+Phase 2: Contracts and trust
+- Add ReasoningOptions and ReasoningTypes.
+- Implement TrustScale.
+- Add trust tests.
+
+Phase 3: Query graph and snapshot
+- Implement QueryGraphBuilder.
+- Implement GraphSnapshot with adjacency/label/type indexes.
+- Add validation and snapshot tests.
+
+Phase 4: Matcher
+- Implement candidate generation and anchor selection.
+- Implement bounded chain backtracking.
+- Implement scoring, ambiguity detection, and deduplication.
+- Add matching tests.
+
+Phase 5: Merge and contradictions
+- Implement MergePlan and validation.
+- Implement merge application.
+- Implement ContradictionResolver.
+- Add merge/contradiction tests.
+
+Phase 6: Response extraction
+- Implement ResponseExtractor.
+- Convert GraphPath to Chain_Node chains.
+- Add ranking, deduplication, cycle, and limit tests.
+
+Phase 7: Facade and integration
+- Implement ReasoningEngine.
+- Add end-to-end Ingest/Answer/IngestAndAnswer tests.
+- Verify diagnostics and result statuses.
+
+Phase 8: Final verification
+- Build OPEN-LRD.slnx.
+- Run all smoke tests.
+- Confirm zero warnings/errors.
+- Review mutation and determinism invariants.
+
+================================================================================
+19. ACCEPTANCE CRITERIA
+================================================================================
+
+Module 2 is complete when:
+
+1. Nodes support optional labels and aliases, and label lookup works.
+2. A linear Chain_Node query is validated and converted to QueryGraph.
+3. The matcher finds single-hop and multi-hop matches in the existing graph.
+4. Ambiguous and no-match cases are reported without graph mutation.
+5. TrustScale calculates ratio, confidence, and score using the approved model.
+6. Trusted sources can promote temporary chains; discredited sources are
+   rejected; neutral sources do not auto-promote.
+7. Topic-specific trust falls back to global trust when needed.
+8. Merge operations reuse existing nodes and add missing links without
+   duplicates.
+9. Functional contradiction handling is non-destructive and records conflicts.
+10. Response extraction returns ranked, deduplicated, cycle-free paths within
+    configured limits.
+11. ReasoningResult exposes status, matches, response, trust, promotions,
+    conflicts, and diagnostics.
+12. All existing Module 1 smoke tests still pass.
+13. New reasoning smoke tests pass.
+14. The solution builds with zero warnings and zero errors.
+15. No external NuGet packages or graph libraries are added.
+
+================================================================================
+20. OUT OF SCOPE AND FUTURE WORK
+================================================================================
+
+Out of scope for this implementation:
+
+- Module 3 NLP ingestion and NLG output.
+- Module 4 upper-ontology population.
+- WPF UI design beyond an optional hook.
+- Disk persistence.
+- External graph database integration.
+- Network calls.
+- Embedding/vector similarity.
+- Full probabilistic inference beyond the approved trust formula.
+- General graph edit distance.
+- Branched mini-graph matching in the first release.
+- Full transactional rollback.
+- Concurrent reasoning.
+
+Future work:
+
+- Branched mini-graph and multi-chain matching.
+- Persistent label and adjacency indexes.
+- Functional relationship metadata in the ontology.
+- Link-level provenance and confidence exposed in the graph model.
+- Trust evidence persistence and pruning.
+- Query clarification/faceted response objects for Module 3.
+- Explanation traces for inferred links.
+- Performance profiling on large graphs.
+
+================================================================================
+21. IMPLEMENTATION NOTES
+================================================================================
+
+- Follow existing naming and style conventions in the repository.
+- Keep comments minimal and only where behavior is non-obvious.
+- Prefer records for immutable contracts.
+- Keep reasoning classes internal unless a later module explicitly needs them.
+- Do not add external dependencies.
+- Do not modify Module 1 behavior beyond the label/alias prerequisite and any
+  strictly necessary internal helpers.
+- Preserve existing public APIs where possible.
+- Preserve the existing smoke-test harness style: simple PASS/FAIL lines and a
+  nonzero exit code on failure.
+- Use the Windows dotnet executable from WSL because the local Linux dotnet
+  installation is incomplete.
+
+END OF MODULE 2 PLAN

@@ -11,8 +11,13 @@
         protected float weightUp, weightDown;
         protected int timeToLive;
         protected NodeLifetime lifetime;
+        private readonly List<string> aliases = new List<string>();
         private DataPointer? dataPointer;
         private bool disposed;
+
+        public string? Label { get; private set; }
+
+        public IReadOnlyCollection<string> Aliases => aliases.AsReadOnly();
 
         public Node()
             : this(Guid.NewGuid(), NodeTypes.Basics, NodeLifetime.Temporary, DefaultTimeToLive)
@@ -134,6 +139,57 @@
         public Guid Get_ID()
         {
             return ID;
+        }
+
+        public void Set_Label(string? label)
+        {
+            Label = NormalizeLabel(label);
+        }
+
+        public bool Add_Alias(string alias)
+        {
+            string? normalized = NormalizeLabel(alias);
+
+            if (normalized is null)
+                return false;
+
+            if (Has_Label(normalized) || Has_Alias(normalized))
+                return false;
+
+            aliases.Add(normalized);
+            return true;
+        }
+
+        public bool Remove_Alias(string alias)
+        {
+            string? normalized = NormalizeLabel(alias);
+
+            if (normalized is null)
+                return false;
+
+            int index = aliases.FindIndex(
+                existing => string.Equals(existing, normalized, StringComparison.OrdinalIgnoreCase));
+
+            if (index < 0)
+                return false;
+
+            aliases.RemoveAt(index);
+            return true;
+        }
+
+        public bool Has_Label(string value, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+        {
+            return Label is not null && string.Equals(Label, value, comparison);
+        }
+
+        public bool Has_Alias(string value, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+        {
+            return aliases.Exists(existing => string.Equals(existing, value, comparison));
+        }
+
+        private static string? NormalizeLabel(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
 
         public DataPointer? Get_DataPointer()

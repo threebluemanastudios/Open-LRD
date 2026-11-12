@@ -104,13 +104,13 @@ namespace OPEN_LRD
         // Adds a two-way connection between the source and destination nodes.
         public bool AddConnection(Guid sourceID, Guid destinationID)
         {
-            return AddConnections(sourceID, destinationID, LinkClass.basic, (int)ForwardLinkTypes.basic, true);
+            return AddConnections(sourceID, destinationID, LinkClass.basic, ForwardLinkTypes.basic.Id, true);
         }
 
         // Adds a two-way connection between the source and destination nodes.
         public bool AddConnection(Guid sourceID, Guid destinationID, LinkClass linkClass)
         {
-            return AddConnections(sourceID, destinationID, linkClass, (int)ForwardLinkTypes.basic, true);
+            return AddConnections(sourceID, destinationID, linkClass, ForwardLinkTypes.basic.Id, true);
         }
 
         public bool AddConnection(Guid sourceID, Guid destinationID, LinkClass linkClass, int linkType)
@@ -121,12 +121,12 @@ namespace OPEN_LRD
         // Adds a single directed connection from the source node to the destination node.
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID)
         {
-            return AddConnections(sourceID, destinationID, LinkClass.basic, (int)ForwardLinkTypes.basic, false);
+            return AddConnections(sourceID, destinationID, LinkClass.basic, ForwardLinkTypes.basic.Id, false);
         }
 
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID, LinkClass linkClass)
         {
-            return AddConnections(sourceID, destinationID, linkClass, (int)ForwardLinkTypes.basic, false);
+            return AddConnections(sourceID, destinationID, linkClass, ForwardLinkTypes.basic.Id, false);
         }
 
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID, LinkClass linkClass, int linkType)
@@ -227,9 +227,9 @@ namespace OPEN_LRD
                 if (criteria.MaxWeightDown.HasValue)
                     results = results.Where(node => node.Get_WeightDown() <= criteria.MaxWeightDown.Value);
 
-                if (criteria.LinkClass.HasValue)
+                if (criteria.LinkClass is not null)
                     results = results.Where(node => node.Get_ReferenceLinks().Any(
-                        link => link.Classification == criteria.LinkClass.Value));
+                        link => link.Classification == criteria.LinkClass));
             }
 
             return results.ToList();
@@ -253,6 +253,25 @@ namespace OPEN_LRD
         public IReadOnlyList<Web_Node> FindByLifetime(NodeLifetime lifetime)
         {
             return FindNodes(new NodeSearchCriteria { Lifetime = lifetime });
+        }
+
+        public IReadOnlyList<Web_Node> FindByLabel(string label, NodeTypes? type = null)
+        {
+            if (!initialized || nodes is null || string.IsNullOrWhiteSpace(label))
+                return Array.Empty<Web_Node>();
+
+            string trimmedLabel = label.Trim();
+
+            return nodes.Values
+                .Where(node => (type is null || node.Get_NodeType() == type)
+                    && (node.Has_Label(trimmedLabel) || node.Has_Alias(trimmedLabel)))
+                .ToList();
+        }
+
+        public bool TryFindByLabel(string label, out IReadOnlyList<Web_Node> foundNodes)
+        {
+            foundNodes = FindByLabel(label);
+            return foundNodes.Count > 0;
         }
 
         public IReadOnlyList<Web_Node> FindByLinkClass(LinkClass linkClass)

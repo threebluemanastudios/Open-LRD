@@ -3,24 +3,6 @@
     public class NodeTypes
     {
 
-        /*
-         * public enum NodeTypes
-    {
-        Basic,      // string, int, char, float, etc.
-        Dictionary, // Word definitions
-        Object,     // physical items - non-individual / non-specific
-        Concept,    // non-physical ideas
-        Entity,     // specific person, specific company, specific building, specific pet, specific object etc.
-        Name,       // proper names
-        Source,     // base code, multi-media, web, newspaper, magazine, dictionary, encyclopedia, book (fiction/non-fiction), library, research paper, person,
-        Location,   // coordinates, address, geo marker,
-        Event,      // time and location specific, global, galactic, universal, scope and duration?
-        RawData,    // images, sounds, videos, documents, etc.
-
-    }
-         * 
-         */
-
         private static readonly Dictionary<int, NodeTypes> _registry = new();
 
         public static readonly NodeTypes Empties = Register(1, "Emtpy");

@@ -9,13 +9,13 @@ Still a major work-in-progress.
 This project is currently divided into several "modules".
 
 
-Module 1: The Graph Backend (Core and Data Storage) <-- Currently working here.
+Module 1: The Graph Backend (Core and Data Storage) - Complete.
 
 This module contains the definitions for the Node and Link classes as well as methods for creating nodes, linking them together, storing them in a dictionary, and searching through the dictionary.
 It also manages the temporary Node Lifecyle, incrementing its promotion weight when a temporary node reference can be verified, and if the Time-To-Live (TTL) expires before that node reaches the promotion threshold it is purged.
 
 
-Module 2: The Reasoning Engine
+Module 2: The Reasoning Engine - Complete.
 
 This module runs trust scale calculations and performs the Subgraph matching to integrate new node chains into the node web dictionary and extract response node chains.
 

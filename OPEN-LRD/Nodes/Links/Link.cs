@@ -1,31 +1,5 @@
 namespace OPEN_LRD.Nodes.Links
 {
-    public enum ForwardLinkTypes
-    {
-        basic,
-
-    }
-
-    public enum InverseLinkTypes
-    {
-        basic,
-
-    }
-
-    public enum LinkClass
-    { 
-        empty,
-        basic,
-        map_locations,
-        events,
-        actions,
-        spacial,
-        temporal,
-        sources,
-        identities,
-
-    }
-
     public sealed record Link
     {
         public Guid SourceID { get; }
@@ -80,8 +54,7 @@ namespace OPEN_LRD.Nodes.Links
 
         private static ForwardLinkTypes FromForwardId(int id)
         {
-            ForwardLinkTypes value = (ForwardLinkTypes)id;
-            if (!Enum.IsDefined(value))
+            if (!ForwardLinkTypes.TryFromId(id, out ForwardLinkTypes value))
                 throw new ArgumentOutOfRangeException(nameof(id), id, "Unknown forward link type.");
 
             return value;
@@ -89,8 +62,7 @@ namespace OPEN_LRD.Nodes.Links
 
         private static InverseLinkTypes FromInverseId(int id)
         {
-            InverseLinkTypes value = (InverseLinkTypes)id;
-            if (!Enum.IsDefined(value))
+            if (!InverseLinkTypes.TryFromId(id, out InverseLinkTypes value))
                 throw new ArgumentOutOfRangeException(nameof(id), id, "Unknown inverse link type.");
 
             return value;

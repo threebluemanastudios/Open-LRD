@@ -25,12 +25,15 @@ namespace OPEN_LRD.SmokeTests
             Run("Maintenance link cleanup", TestMaintenanceLinkCleanup);
             Run("Query and response chains", TestQueryAndResponseChains);
             Run("NodeTypes name lookup", TestNodeTypesNameLookup);
+            Run("Runtime link type registries", TestRuntimeLinkTypeRegistries);
+            Run("Link type registry concurrency", TestLinkTypeRegistryConcurrency);
+            ReasoningTests.RunAll();
 
             Console.WriteLine($"{_passed} passed, {_failed} failed");
             Environment.ExitCode = _failed == 0 ? 0 : 1;
         }
 
-        private static void Run(string name, Action test)
+        internal static void Run(string name, Action test)
         {
             try
             {
@@ -45,13 +48,13 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
-        private static void Assert(bool condition, string message)
+        internal static void Assert(bool condition, string message)
         {
             if (!condition)
                 throw new InvalidOperationException(message);
         }
 
-        private static void AssertThrows<T>(Action action, string message) where T : Exception
+        internal static void AssertThrows<T>(Action action, string message) where T : Exception
         {
             try
             {
@@ -296,6 +299,106 @@ namespace OPEN_LRD.SmokeTests
         {
             Assert(ReferenceEquals(NodeTypes.FromName("Concept"), NodeTypes.Concepts), "name lookup should be case-insensitive");
             Assert(ReferenceEquals(NodeTypes.FromName("not-a-real-type"), NodeTypes.Empties), "unknown names should return Empties");
+        }
+
+        private static void TestRuntimeLinkTypeRegistries()
+        {
+            Assert(ForwardLinkTypes.basic.Id == 0, "basic forward link ID should remain zero");
+            Assert(InverseLinkTypes.basic.Id == 0, "basic inverse link ID should remain zero");
+            Assert(ReferenceEquals(ForwardLinkTypes.FromId(0), ForwardLinkTypes.basic), "forward ID lookup should return the seeded instance");
+            Assert(ReferenceEquals(InverseLinkTypes.FromId(0), InverseLinkTypes.basic), "inverse ID lookup should return the seeded instance");
+            Assert(ReferenceEquals(ForwardLinkTypes.FromName("BASIC"), ForwardLinkTypes.basic), "forward name lookup should be case-insensitive");
+            Assert(ReferenceEquals(InverseLinkTypes.FromName("BASIC"), InverseLinkTypes.basic), "inverse name lookup should be case-insensitive");
+            Assert(ForwardLinkTypes.GetAll().Any(linkType => ReferenceEquals(linkType, ForwardLinkTypes.basic)), "forward registry should expose seeded values");
+            Assert(InverseLinkTypes.GetAll().Any(linkType => ReferenceEquals(linkType, InverseLinkTypes.basic)), "inverse registry should expose seeded values");
+
+            Assert(!ForwardLinkTypes.TryFromId(99999, out _), "unknown forward IDs should not resolve");
+            Assert(!InverseLinkTypes.TryFromId(99999, out _), "unknown inverse IDs should not resolve");
+            Assert(ReferenceEquals(ForwardLinkTypes.FromId(99999), ForwardLinkTypes.basic), "unknown forward IDs should fall back to basic");
+            Assert(ReferenceEquals(InverseLinkTypes.FromId(99999), InverseLinkTypes.basic), "unknown inverse IDs should fall back to basic");
+
+            Assert(LinkClass.empty.Id == 0, "empty link class ID should remain zero");
+            Assert(LinkClass.basic.Id == 1, "basic link class ID should remain one");
+            Assert(LinkClass.map_locations.Id == 2, "map_locations link class ID should remain two");
+            Assert(LinkClass.events.Id == 3, "events link class ID should remain three");
+            Assert(LinkClass.actions.Id == 4, "actions link class ID should remain four");
+            Assert(LinkClass.spatial.Id == 5, "spatial link class ID should remain five");
+            Assert(LinkClass.temporal.Id == 6, "temporal link class ID should remain six");
+            Assert(LinkClass.sources.Id == 7, "sources link class ID should remain seven");
+            Assert(LinkClass.identities.Id == 8, "identities link class ID should remain eight");
+
+            Assert(ReferenceEquals(LinkClass.FromId(5), LinkClass.spatial), "spatial ID lookup should return the seeded instance");
+            Assert(ReferenceEquals(LinkClass.FromName("SPATIAL"), LinkClass.spatial), "spatial name lookup should be case-insensitive");
+            Assert(ReferenceEquals(LinkClass.FromId(99999), LinkClass.empty), "unknown link classes should fall back to empty");
+            Assert(!LinkClass.TryFromId(99999, out _), "unknown link class IDs should not resolve");
+            Assert(!LinkClass.GetAll().Any(linkClass => string.Equals(linkClass.Name, "spacial", StringComparison.OrdinalIgnoreCase)), "the spacial typo should not be registered");
+
+            const int customForwardID = 10001;
+            const int customInverseID = 10002;
+            const int customClassID = 10003;
+
+            ForwardLinkTypes customForward = ForwardLinkTypes.Register(customForwardID, "custom_forward");
+            InverseLinkTypes customInverse = InverseLinkTypes.Register(customInverseID, "custom_inverse");
+            LinkClass customClass = LinkClass.Register(customClassID, "custom_class");
+
+            Assert(ReferenceEquals(ForwardLinkTypes.FromId(customForwardID), customForward), "registered forward type should resolve by ID");
+            Assert(ReferenceEquals(InverseLinkTypes.FromId(customInverseID), customInverse), "registered inverse type should resolve by ID");
+            Assert(ReferenceEquals(LinkClass.FromId(customClassID), customClass), "registered link class should resolve by ID");
+            Assert(ReferenceEquals(ForwardLinkTypes.FromName("CUSTOM_FORWARD"), customForward), "registered forward type should resolve by name");
+            Assert(ReferenceEquals(InverseLinkTypes.FromName("CUSTOM_INVERSE"), customInverse), "registered inverse type should resolve by name");
+            Assert(ReferenceEquals(LinkClass.FromName("CUSTOM_CLASS"), customClass), "registered link class should resolve by name");
+            Assert(customForward.ToString() == "custom_forward", "forward registry should preserve its name");
+            Assert(customInverse.ToString() == "custom_inverse", "inverse registry should preserve its name");
+            Assert(customClass.ToString() == "custom_class", "link class registry should preserve its name");
+
+            Guid source = Guid.NewGuid();
+            Guid destination = Guid.NewGuid();
+            Link customLink = new Link(source, destination, customForwardID, customInverseID, customClass);
+
+            Assert(ReferenceEquals(customLink.ForwardLink, customForward), "links should resolve registered forward IDs");
+            Assert(ReferenceEquals(customLink.InverseLink, customInverse), "links should resolve registered inverse IDs");
+            Assert(ReferenceEquals(customLink.Classification, customClass), "links should retain registered link classes");
+
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => new Link(source, destination, 99999, 0, LinkClass.basic),
+                "unknown forward link IDs should still be rejected");
+
+            LRD_Core core = NewCore();
+            Guid first = core.GenerateNewNode();
+            Guid second = core.GenerateNewNode();
+
+            Assert(core.AddDirectedConnection(first, second, customClass), "registered link classes should work with the core");
+            Assert(core.FindByLinkClass(customClass).Any(node => node.ID == first), "registered link classes should be searchable");
+        }
+
+        private static void TestLinkTypeRegistryConcurrency()
+        {
+            const int iterations = 200;
+            const int forwardBase = 100000;
+            const int inverseBase = 200000;
+            const int classBase = 300000;
+
+            Parallel.For(0, iterations, index =>
+            {
+                int forwardID = forwardBase + index;
+                int inverseID = inverseBase + index;
+                int classID = classBase + index;
+
+                ForwardLinkTypes forward = ForwardLinkTypes.Register(forwardID, $"forward_{index}");
+                InverseLinkTypes inverse = InverseLinkTypes.Register(inverseID, $"inverse_{index}");
+                LinkClass linkClass = LinkClass.Register(classID, $"class_{index}");
+
+                Assert(ReferenceEquals(ForwardLinkTypes.FromId(forwardID), forward), "concurrent forward lookup should return the registered instance");
+                Assert(ReferenceEquals(InverseLinkTypes.FromId(inverseID), inverse), "concurrent inverse lookup should return the registered instance");
+                Assert(ReferenceEquals(LinkClass.FromId(classID), linkClass), "concurrent link class lookup should return the registered instance");
+                Assert(ReferenceEquals(ForwardLinkTypes.FromName($"FORWARD_{index}"), forward), "concurrent forward name lookup should succeed");
+                Assert(ReferenceEquals(InverseLinkTypes.FromName($"INVERSE_{index}"), inverse), "concurrent inverse name lookup should succeed");
+                Assert(ReferenceEquals(LinkClass.FromName($"CLASS_{index}"), linkClass), "concurrent link class name lookup should succeed");
+
+                _ = ForwardLinkTypes.GetAll().Count();
+                _ = InverseLinkTypes.GetAll().Count();
+                _ = LinkClass.GetAll().Count();
+            });
         }
     }
 }
