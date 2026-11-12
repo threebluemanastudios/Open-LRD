@@ -340,6 +340,8 @@ namespace OPEN_LRD.NLP
 
         public NlpAnswer? Answer { get; init; }
 
+        public NlpCommand? Command { get; init; }
+
         public IReadOnlyList<SessionProvenanceEntry> Provenance { get; init; } =
             Array.Empty<SessionProvenanceEntry>();
     }

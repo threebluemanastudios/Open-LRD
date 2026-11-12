@@ -283,7 +283,7 @@
             <TabItem Header="Module Limits">
                 <TextBlock Margin="12"
                            TextWrapping="Wrap"
-                           Text="Module 3 does not provide durable persistence, Import, Export, or Visualizer support. The separate Tools window remains the placeholder for those planned tools." />
+                           Text="Core and conversation logs can be exported and imported from the Tools window. Pipeline attachments are process-local and are not persisted. Replacing core state invalidates open workbench sessions. Visualizer support remains planned." />
             </TabItem>
         </TabControl>
 

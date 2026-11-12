@@ -1,0 +1,377 @@
+OPEN-LRD
+ADDITIONAL TOOLS PLAN
+MODULE 3 PHASE 9: LOG PERSISTENCE AND VISUALIZER DISTANCE PREP
+
+Status: Implemented. Full solution builds with zero warnings and zero errors;
+        82 smoke tests pass. Manual WPF log verification is pending.
+Scope: Tools window import/export, versioned log persistence, transient chain
+       companion logs, and link distance definitions for the future visualizer.
+Constraint: Native C# and WPF with no external libraries. Use System.Text.Json.
+
+================================================================================
+1. CONFIRMED DECISIONS
+================================================================================
+
+- Core and conversation data use a versioned, human-readable JSON snapshot with
+  the .lrdlog extension.
+- The core log contains graph data, conversation state, and runtime type
+  definitions.
+- Query/response chains are written to a separate companion log whose filename
+  has _trans appended before the extension.
+  Example: session.lrdlog -> session_trans.lrdlog
+- Import supports Merge and Replace modes, selected by the user.
+- Merge keeps existing data on ID conflicts, imports non-conflicting data, and
+  reports skipped conflicts.
+- Core logs and transient logs are imported separately.
+- Pipeline attachments are never persisted.
+- Link distances use normalized, positive doubles with LinkClass defaults and
+  optional ForwardLinkTypes overrides.
+- Import/export controls live in the existing Tools window.
+
+================================================================================
+2. CORE LOG FORMAT
+================================================================================
+
+Main file: selected-name.lrdlog
+
+Header:
+- format = open-lrd-core-log
+- version = 1
+- exportedAtUtc
+- transientFile (optional companion filename, not an absolute path)
+
+Type definitions:
+- nodeTypes: id and name
+- linkClasses: id and name
+- forwardLinkTypes: id and name
+- inverseLinkTypes: id and name
+- relations: id, name, inverseName
+
+Nodes:
+- id
+- nodeTypeId and nodeTypeName
+- lifetime
+- ttl
+- weightUp and weightDown
+- label
+- aliases
+- dataPointer: location, mediaType, byteLength, checksum
+
+Links:
+- sourceId and destinationId
+- forwardTypeId and forwardTypeName
+- inverseTypeId and inverseTypeName
+- linkClassId and linkClassName
+
+Conversations:
+- id
+- all NlpOptions values
+- turnIndex and sequence
+- focusNodeId
+- lastSubjectNodeId
+- lastObjectNodeId
+- lastQualifierNodeId
+- lastAnswerNodeId
+- mentions in sequence order
+- provenance in sequence order
+
+Excluded from the main log:
+- query and response chains
+- pipeline IDs
+- pipeline-to-conversation mappings
+
+================================================================================
+3. TRANSIENT LOG FORMAT
+================================================================================
+
+Companion file: selected-name_trans.lrdlog
+
+Header:
+- format = open-lrd-transient-log
+- version = 1
+- exportedAtUtc
+- coreFile (optional parent core-log filename for display only)
+
+Contents:
+- type definitions, so the transient log can be imported independently
+- ordered query chains
+- ordered response chains
+
+Each chain contains:
+- ordered chain-node records with the same metadata as graph nodes
+- links between chain nodes with full type and class information
+
+Pipeline attachments are excluded because pipeline IDs are process-local.
+
+================================================================================
+4. PERSISTENCE LAYER
+================================================================================
+
+Add OPEN-LRD/Persistence/:
+- CoreLogDocument.cs: versioned core-log DTOs and JSON settings
+- TransientLogDocument.cs: versioned transient-log DTOs
+- CoreLogExporter.cs: deterministic export and atomic file replacement
+- CoreLogImporter.cs: parse, validate, merge, replace, and conversion
+- PersistenceResult.cs: export/import summaries, counts, warnings, and errors
+
+Use dedicated DTOs instead of serializing domain objects directly.
+
+Export rules:
+- Sort nodes by GUID string.
+- Sort links by source, destination, forward type, inverse type, and class.
+- Sort conversations by ID.
+- Sort mentions and provenance by sequence.
+- Preserve temporary nodes, weights, TTLs, labels, aliases, and DataPointers.
+- Include all registered runtime type definitions.
+- Write to temporary files and move them into place only after serialization.
+- Export both logs in one action when Include Transient Chains is checked.
+
+Transient filename rule:
+- <base without extension>_trans<original extension>
+
+================================================================================
+5. IMPORT VALIDATION
+================================================================================
+
+Validate the full document before mutating core state:
+- supported format and schema version
+- required fields and non-empty GUIDs
+- duplicate node, link, conversation, and type IDs
+- TTL, weights, labels, aliases, and DataPointer values
+- link endpoints and forward/inverse/class type definitions
+- conversation option and sequence values
+- bounded file size, item counts, chain sizes, and string lengths
+
+Conversation references to missing graph nodes are allowed with warnings because
+expired temporary nodes can remain in conversation history.
+
+Malformed input must not change graph, conversation, or transient-chain state.
+Global runtime type registries may retain newly registered non-conflicting types,
+but conflicting definitions are not overwritten.
+
+================================================================================
+6. IMPORT MODES
+================================================================================
+
+Replace:
+- Build replacement graph and conversation collections before applying them.
+- Swap the complete state into LRD_Core only after validation succeeds.
+- Clear query/response chains and pipeline attachments.
+- Existing workbench sessions become stale and must be refreshed or reattached.
+- Global runtime type registries cannot be unregistered; existing definitions
+  remain available.
+
+Merge:
+- Preserve existing nodes, conversations, and type definitions.
+- Skip identical duplicate nodes and links.
+- If an imported node ID exists with different data:
+  - keep the existing node
+  - skip the imported node
+  - skip imported links that touch the conflicting node
+  - report the conflict
+- Add non-conflicting nodes and links.
+- Skip duplicate links and links with incompatible type definitions.
+- Add conversations with new IDs.
+- Keep existing conversations on ID conflict.
+- Preserve existing query/response chains and pipeline mappings.
+
+================================================================================
+7. TRANSIENT IMPORT
+================================================================================
+
+Transient import is a separate Tools action.
+
+Merge:
+- Append imported query/response chains.
+- Preserve existing chains.
+- Skip exact duplicate chain signatures.
+
+Replace:
+- Clear current query and response chains.
+- Restore the imported chains.
+
+Chain restoration:
+- Recreate Chain_Node instances with type, lifetime, TTL, weights, label,
+  aliases, and DataPointer.
+- Recreate one shared Link instance per chain edge.
+- Assign LinkNext and LinkPrevious consistently.
+- Reject duplicate chain-node IDs or ambiguous incoming/outgoing edges.
+
+================================================================================
+8. CORE AND CONVERSATION API CHANGES
+================================================================================
+
+LRD_Core:
+- Add atomic replacement of graph and conversation state.
+- Add insertion of an existing ConversationContext for merge import.
+- Add atomic replacement of query/response chains.
+
+ConversationContext:
+- Expose its NlpOptions for persistence.
+- Add validated state restoration for counters, focus, mentions, and provenance.
+
+RelationRegistry:
+- Add enumeration of registered relations.
+- Add controlled restoration of relation IDs, names, and inverse names.
+- Advance the next-ID allocator beyond restored IDs.
+- Preserve existing definitions on conflict.
+
+NodeTypes, LinkClass, ForwardLinkTypes, and InverseLinkTypes:
+- Rehydrate missing definitions by ID.
+- Keep existing definitions when an ID/name conflict occurs.
+- Skip imported links whose type IDs and names cannot be reconciled.
+
+================================================================================
+9. LINK DISTANCE DEFINITIONS
+================================================================================
+
+Add OPEN-LRD/Visualization/LinkDistanceDefinitions.cs.
+
+Resolution order:
+1. ForwardLinkTypes override
+2. LinkClass default
+3. Global fallback of 1.0
+
+Initial normalized defaults:
+- identities: 0.50
+- map_locations: 0.75
+- basic: 1.00
+- events: 1.00
+- actions: 1.25
+- temporal: 1.25
+- spatial: 1.50
+- sources: 1.75
+- empty: 2.00
+
+Validate that distances are finite and greater than zero. Definitions are code
+metadata and are not written to core logs.
+
+================================================================================
+10. TOOLS WINDOW UI
+================================================================================
+
+Replace the Tools placeholder with:
+
+Export section:
+- Export Logs button
+- Include Transient Chains checkbox, checked by default
+- last exported path display
+
+Import section:
+- Merge and Replace radio buttons, default Merge
+- Import Core Log button
+- Import Transient Log button
+- separate file dialog for each import type
+
+Status section:
+- import/export counts
+- added and skipped items
+- warnings and validation errors
+- reminder that replaced core state invalidates open workbench sessions
+
+Confirmations:
+- Replace core import warns that graph and conversations will be replaced.
+- Replace transient import warns that query/response chains will be replaced.
+- Merge import explains that existing conflicting IDs are kept.
+
+Use Microsoft.Win32 file dialogs.
+
+================================================================================
+11. TESTS
+================================================================================
+
+Add OPEN-LRD.SmokeTests/PersistenceTests.cs and register it in Program.cs.
+
+Core persistence tests:
+- graph, node metadata, DataPointer, and conversation round trip
+- link direction, type, class, and runtime relation restoration
+- replace import
+- merge import with existing conflicts kept
+- idempotent repeated merge
+- invalid JSON, version, IDs, links, types, and oversized input
+- no graph mutation after failed import
+- deterministic export with a fixed timestamp
+
+Transient persistence tests:
+- query/response chain round trip
+- separate transient merge and replace
+- chain links and metadata preservation
+- malformed transient log rejection
+
+Link distance tests:
+- every built-in class default
+- forward-type override precedence
+- fallback for unregistered classes
+- invalid distance rejection
+- registry concurrency
+
+Update OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj to compile
+Persistence/**/*.cs and Visualization/**/*.cs.
+
+================================================================================
+12. DOCUMENTATION
+================================================================================
+
+- Mark Phase 8 manual WPF verification complete.
+- Create AdditionalTools.txt as the Phase 9 plan record.
+- Update Module_3_Plan.txt, README.md, and ReadMe2.md.
+- Document log naming, Merge/Replace behavior, conflict policy, and limitations.
+- Remove claims that Tools is only a placeholder and that conversation data can
+  never leave memory.
+- Update the stale persistence note in NlpWorkbenchWindow.xaml.
+
+================================================================================
+13. VERIFICATION
+================================================================================
+
+Build:
+  "/mnt/c/Program Files/dotnet/dotnet.exe" build OPEN-LRD.slnx --nologo
+
+Smoke tests:
+  "/mnt/c/Program Files/dotnet/dotnet.exe" run \
+    --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build
+
+Manual WPF checks:
+1. Launch Core and open Tools.
+2. Export logs and verify the _trans companion file.
+3. Import core with Merge; confirm existing conflicts are preserved.
+4. Import core with Replace; confirm graph and conversations are restored.
+5. Import transient logs separately with Merge and Replace.
+6. Confirm invalid files report errors without changing current state.
+
+================================================================================
+14. EXPECTED FILES
+================================================================================
+
+Modified:
+- OPEN-LRD/LRD_Core.cs
+- OPEN-LRD/NLP/ConversationContext.cs
+- OPEN-LRD/NLP/RelationRegistry.cs
+- OPEN-LRD/Nodes/Chain_Node.cs
+- OPEN-LRD/Tools.xaml
+- OPEN-LRD/Tools.xaml.cs
+- OPEN-LRD/NlpWorkbenchWindow.xaml
+- OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj
+- OPEN-LRD.SmokeTests/Program.cs
+- Module_3_Phase_8_Plan.txt
+- Module_3_Plan.txt
+- README.md
+- ReadMe2.md
+
+Added:
+- OPEN-LRD/Persistence/CoreLogDocument.cs
+- OPEN-LRD/Persistence/TransientLogDocument.cs
+- OPEN-LRD/Persistence/CoreLogExporter.cs
+- OPEN-LRD/Persistence/CoreLogImporter.cs
+- OPEN-LRD/Persistence/PersistenceResult.cs
+- OPEN-LRD/Visualization/LinkDistanceDefinitions.cs
+- OPEN-LRD.SmokeTests/PersistenceTests.cs
+- AdditionalTools.txt
+
+Non-goals:
+- WPF visualizer rendering.
+- Visualizer UI controls.
+- Graph editing UI.
+- Persisting live pipeline attachments.
+- Background/threaded import or export.
+- Changing log format outside schema version 1.

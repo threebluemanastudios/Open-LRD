@@ -31,12 +31,15 @@
                 Click="Launch_Button_Click" 
                 Content="Launch Core"
                 />
-        <Button Content="Tools" 
+        <Button x:Name="ToolsButton"
+                Content="Tools"
                 HorizontalAlignment="Left" 
                 Height="59" 
                 Margin="88,308,0,0" 
                 VerticalAlignment="Top" 
                 Width="103" 
+                IsEnabled="False"
+                ToolTip="Launch Core before opening Tools."
                 Click="Tools_Button_Click"
                 />
         <Button x:Name="NlpWorkbenchButton"

@@ -19,6 +19,7 @@ namespace OPEN_LRD.NLP
         public int TemporaryNodeTimeToLive { get; init; } = Node.DefaultTimeToLive;
         public bool EnableConversationContext { get; init; } = true;
         public bool EnablePronounResolution { get; init; } = true;
+        public string FirstPersonSpeakerLabel { get; init; } = "User";
         public bool EnableSessionProvenance { get; init; } = true;
         public bool UseSessionProvenanceInAnswers { get; init; } = true;
         public int MaxConversationMentions { get; init; } = 32;

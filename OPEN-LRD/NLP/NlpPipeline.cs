@@ -118,33 +118,77 @@ namespace OPEN_LRD.NLP
             NlpResult analysis = Analyze(text);
 
             if (analysis.Status == NlpStatus.InvalidInput || analysis.Parsed is null)
-            {
-                IReadOnlyList<string> invalidDiagnostics = Deduplicate(analysis.Diagnostics);
-                string reason = invalidDiagnostics.FirstOrDefault() ?? "Text is required.";
-                NlpAnswer invalid = new NlpAnswer(
-                    AnswerStatus.InvalidInput,
-                    AnswerKind.None,
-                    "I can't answer that question yet. " + reason,
-                    null,
-                    null,
-                    Array.Empty<AnswerCandidate>(),
-                    Array.Empty<GraphPath>(),
-                    null,
-                    null,
-                    false,
-                    0.0,
-                    invalidDiagnostics);
+                return CreateInvalidAskResult(analysis);
 
-                return new NlpResult(NlpStatus.InvalidInput, invalidDiagnostics, analysis.Parsed)
+            if (CommandRecognizer.TryRecognize(analysis.Parsed, out NlpCommand command))
+                return ExecuteCommand(command, analysis);
+
+            conversation.BeginTurn();
+            return AnswerAnalyzed(analysis, updateConversation: true);
+        }
+
+        private NlpResult ExecuteCommand(NlpCommand command, NlpResult analysis)
+        {
+            List<string> diagnostics = analysis.Diagnostics
+                .Where(message => !message.Contains(
+                    "Imperative input is parsed but not ingested.",
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            diagnostics.AddRange(command.Diagnostics);
+
+            if (command.NeedsClarification)
+            {
+                NlpAnswer clarification = CommandProcessor.CreateClarification(command);
+                diagnostics.AddRange(clarification.Diagnostics);
+
+                return new NlpResult(
+                    NlpStatus.Ambiguous,
+                    Deduplicate(diagnostics),
+                    analysis.Parsed)
                 {
-                    Answer = invalid
+                    Frames = analysis.Frames,
+                    Answer = clarification,
+                    Command = command
                 };
             }
 
-            conversation.BeginTurn();
+            if (command.TargetKind == CommandTargetKind.Query)
+            {
+                NlpResult queryAnalysis = Analyze(command.TargetText);
+                NlpResult result = queryAnalysis.Status == NlpStatus.InvalidInput
+                    || queryAnalysis.Parsed is null
+                    ? CreateInvalidAskResult(queryAnalysis)
+                    : AnswerAnalyzed(queryAnalysis, updateConversation: false);
 
+                return result with
+                {
+                    Diagnostics = Deduplicate(diagnostics.Concat(result.Diagnostics).ToList()),
+                    Command = command
+                };
+            }
+
+            NlpAnswer answer = CommandProcessor.ExecuteFixed(
+                command,
+                core,
+                conversation,
+                options);
+            diagnostics.AddRange(answer.Diagnostics);
+
+            return new NlpResult(
+                MapAnswerStatus(answer.Status),
+                Deduplicate(diagnostics),
+                analysis.Parsed)
+            {
+                Frames = analysis.Frames,
+                Answer = answer,
+                Command = command
+            };
+        }
+
+        private NlpResult AnswerAnalyzed(NlpResult analysis, bool updateConversation)
+        {
             EntityResolver resolver = new EntityResolver(core, conversation, options);
-            QuestionAnalysis question = QuestionAnalyzer.Analyze(analysis.Parsed, resolver, options);
+            QuestionAnalysis question = QuestionAnalyzer.Analyze(analysis.Parsed!, resolver, options);
 
             List<string> diagnostics = new List<string>();
             diagnostics.AddRange(analysis.Diagnostics);
@@ -173,8 +217,11 @@ namespace OPEN_LRD.NLP
             NlpAnswer answer = AnswerGenerator.Generate(question, evaluations, core, options, conversation);
             diagnostics.AddRange(answer.Diagnostics);
 
-            if (answer.Status is AnswerStatus.Answered or AnswerStatus.Yes or AnswerStatus.No)
+            if (updateConversation
+                && answer.Status is AnswerStatus.Answered or AnswerStatus.Yes or AnswerStatus.No)
+            {
                 UpdateAskConversation(question, answer);
+            }
 
             NlpStatus status = MapAnswerStatus(answer.Status);
 
@@ -184,6 +231,30 @@ namespace OPEN_LRD.NLP
                 Question = question,
                 Answer = answer,
                 ReasoningResults = evaluations.Select(evaluation => evaluation.Result).ToArray()
+            };
+        }
+
+        private static NlpResult CreateInvalidAskResult(NlpResult analysis)
+        {
+            IReadOnlyList<string> invalidDiagnostics = Deduplicate(analysis.Diagnostics);
+            string reason = invalidDiagnostics.FirstOrDefault() ?? "Text is required.";
+            NlpAnswer invalid = new NlpAnswer(
+                AnswerStatus.InvalidInput,
+                AnswerKind.None,
+                "I can't answer that question yet. " + reason,
+                null,
+                null,
+                Array.Empty<AnswerCandidate>(),
+                Array.Empty<GraphPath>(),
+                null,
+                null,
+                false,
+                0.0,
+                invalidDiagnostics);
+
+            return new NlpResult(NlpStatus.InvalidInput, invalidDiagnostics, analysis.Parsed)
+            {
+                Answer = invalid
             };
         }
 

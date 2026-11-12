@@ -1,0 +1,328 @@
+OPEN-LRD
+MODULE 3: THE NLP PIPELINE
+PHASE 8 IMPLEMENTATION PLAN
+
+Phase: 8 (post-completion enhancement)
+Title: Tools gating, first-person speaker identity, and read-only Ask commands
+Status: Implemented. Phases 1-7 are implemented and passing; manual WPF
+        acceptance verification is complete. Phase 9 later replaced the Tools
+        placeholder with log import/export controls.
+Scope owner: Module 3 (README numbering).
+Reference design: README.md, ReadMe2.md, Module_3_Plan.txt, and
+                   Module_3_Phase_7_Plan.txt.
+Implementation constraint: native C#, WPF, no external libraries or packages.
+Current baseline: full solution builds with zero warnings and zero errors;
+                  67 smoke tests pass.
+
+================================================================================
+1. PHASE 8 GOAL AND DELIVERABLES
+================================================================================
+
+Phase 8 adds three focused usability and language features after the Phase 7
+integration baseline:
+
+1. Gate the existing Tools button until core initialization succeeds.
+   At the Phase 8 baseline, the Tools window was still a placeholder for
+   Import, Export, and Visualizer. It must not open before Launch Core has
+   initialized the graph.
+
+2. Add configurable first-person speaker identity to ingestion.
+   I/me/my/mine/myself and we/us/our/ours/ourselves resolve to one reusable
+   speaker node. The label is configurable through NlpOptions and defaults to
+   "User". Second-person pronouns remain unsupported.
+
+3. Add subjectless command recognition to Ask.
+   Commands beginning with output, print, respond, or reply are recognized when
+   they are directed at the core and have no subject. Commands support a query
+   target or a fixed target: facts, graph, conversation, summary, or node <id>.
+   Commands are read-only: they do not mutate the graph, conversation turn,
+   mentions, focus, or provenance. Missing or ambiguous targets produce a
+   clarification question in the answer area.
+
+================================================================================
+2. REQUIRED NEW FILES
+================================================================================
+
+1. OPEN-LRD/NLP/CommandRecognizer.cs
+   - Detects and classifies subjectless Ask commands.
+   - Does not execute commands and does not reference WPF.
+   - Returns a command record containing verb, target kind, target text, optional
+     node ID, and clarification state.
+
+2. OPEN-LRD/NLP/CommandProcessor.cs
+   - Builds read-only answers for fixed command targets.
+   - Formats facts, graph summaries, conversation summaries, combined summaries,
+     and node details.
+   - Produces clarification answers for missing or ambiguous targets.
+   - Does not mutate the graph or conversation.
+
+3. Module_3_Phase_8_Plan.txt
+   - This document.
+
+================================================================================
+3. REQUIRED MODIFIED FILES
+================================================================================
+
+4. OPEN-LRD/MainWindow.xaml
+   - Name the Tools button.
+   - Disable it initially and add a launch-first tooltip.
+
+5. OPEN-LRD/MainWindow.xaml.cs
+   - Enable Tools only after successful core initialization.
+   - Guard the Tools click handler against premature invocation.
+
+6. OPEN-LRD/NLP/NlpOptions.cs
+   - Add FirstPersonSpeakerLabel with default "User".
+
+7. OPEN-LRD/NLP/EntityResolver.cs
+   - Resolve first-person pronouns to the configured speaker node before
+     conversation-antecedent resolution.
+   - Reuse one node for multiple first-person frames in a single operation.
+   - Report ambiguity when the configured label matches multiple nodes.
+   - Never create a graph node from a question.
+
+8. OPEN-LRD/NLP/ConversationContext.cs
+   - Stop rejecting first-person pronouns with the second-person diagnostic.
+   - Keep second-person rejection explicit.
+
+9. OPEN-LRD/NLP/NlpTypes.cs
+   - Add command metadata to NlpResult so tests and future UI can inspect command
+     recognition without adding a new status enum.
+
+10. OPEN-LRD/NLP/NlpPipeline.cs
+    - Recognize commands in Ask only, after analysis and before question
+      processing.
+    - Refactor the question path so commands can evaluate a query without
+      beginning a turn or updating conversation state.
+    - Return fixed-target, query-target, and clarification results in
+      NlpResult.Answer.
+
+11. OPEN-LRD.SmokeTests/NlpTests.cs
+    - Update pronoun tests that previously expected first-person rejection.
+    - Add first-person speaker identity tests.
+    - Add command recognition, clarification, and read-only tests.
+    - Register new test groups in NlpTests.RunAll.
+
+12. README.md
+    - Document Tools gating, first-person speaker identity, and Ask commands.
+
+13. ReadMe2.md
+    - Update Module 3 current status and NLP workflow.
+    - Describe commands as Ask-only and read-only.
+
+14. Module_3_Plan.txt
+    - Record Phase 8 as a post-completion enhancement.
+    - Preserve historical Phase 1-7 definitions.
+
+================================================================================
+4. TOOLS GATING
+================================================================================
+
+- Tools starts disabled, matching the NLP Workbench button behavior.
+- Launch_Button_Click enables Tools only when LRD_Core.initialized is true.
+- Tools_Button_Click performs the same defensive check and shows a short message
+  if invoked before initialization.
+- The Tools window content remains unchanged.
+
+Acceptance:
+- Tools is disabled on application start.
+- Tools is enabled after Launch Core succeeds.
+- Tools opens the Tools window (later populated by Phase 9).
+- Tools cannot be opened through the normal click path before initialization.
+
+================================================================================
+5. FIRST-PERSON SPEAKER IDENTITY
+================================================================================
+
+Design:
+
+- NlpOptions.FirstPersonSpeakerLabel defaults to "User".
+- Blank labels fall back to "User".
+- First-person pronouns resolve to one NodeTypes.Entities node with that label.
+- The node is created lazily by normal ingestion, not by Ask.
+- Both singular and plural first-person forms map to the configured speaker
+  node. Reflexive first-person forms use the same node and remain subject to
+  the existing self-loop guard.
+- Second-person pronouns, indefinite pronouns, and unresolved third-person
+  pronouns keep their current behavior.
+
+Resolution order in EntityResolver:
+
+1. If the argument is a first-person pronoun, resolve speaker identity.
+2. If a cached speaker node ID exists for this resolver and still exists in the
+   graph, reuse it.
+3. Otherwise find NodeTypes.Entities nodes by the configured label.
+4. One match: reuse it.
+5. Multiple matches: return ambiguity and do not ingest.
+6. No match: allocate a stable node ID through CreateNodeId and return it with
+   IsPronoun = false. ChainBuilder creates the node during ingestion only.
+7. Non-first-person pronouns continue through ConversationContext.
+
+Acceptance:
+- Ingesting "I work at Acme." creates or reuses the configured speaker node.
+- No literal "I" or "we" node is created.
+- Multiple first-person statements in one operation reuse one node.
+- "Where do I work?" answers after speaker ingestion.
+- A custom FirstPersonSpeakerLabel is honored.
+- Asking before any speaker ingestion returns no-match without graph mutation.
+- Second-person pronouns remain unsupported.
+
+================================================================================
+6. ASK COMMAND RECOGNITION
+================================================================================
+
+Recognition:
+
+- Commands are recognized only in Ask, never in Ingest.
+- Ignore leading punctuation and an optional "please".
+- The first content word must be output, print, respond, or reply.
+- The command has no subject before the verb.
+- Optional separators after the verb: with, to, about, or colon punctuation.
+- Command matching is lexical and case-insensitive; no Lexicon verbs are added.
+
+Targets:
+
+Fixed:
+- facts, all facts, data, all data
+- graph
+- conversation, session
+- summary
+- node <guid>
+
+Query:
+- A remainder beginning with a wh-word or auxiliary is treated as a question.
+- A remainder after an explicit with/to/about separator is treated as a query.
+- Add a question mark when a question-like remainder lacks one.
+- A remainder that is neither fixed nor question-like asks for clarification.
+
+Clarification:
+- Missing target: ask what to output and list supported targets.
+- "node" without an ID: ask which node ID to show.
+- Invalid or missing node: return no-match or clarification without guessing.
+- A subject before the command verb means the input is not a command.
+
+Execution:
+
+- Refactor the normal Ask body into a private method with an
+  updateConversation flag.
+- Normal Ask begins a turn and updates focus/mentions as before.
+- Commands do not begin a turn and do not update focus, mentions, turn index, or
+  provenance.
+- Query commands may read existing conversation context for pronoun resolution.
+- Fixed targets read directly from LRD_Core and ConversationContext.
+- Command output appears in Answer.Text and Answer.ShortAnswer so the existing
+  NLP Workbench answer and summary display works without a new result pane.
+
+Fixed-target formatting:
+
+- facts: sorted directed links with source label, relation name, target label,
+  and link class; truncate by MaxAnswerTextLength with a diagnostic.
+- graph: node count, directed link count, and node-type counts.
+- conversation: conversation ID, turn, focus, mention/provenance counts, and
+  last subject/object/qualifier/answer node IDs.
+- summary: graph summary plus conversation summary.
+- node <guid>: label, type, lifetime, aliases, incoming links, and outgoing
+  links; set AnswerNodeID when found.
+
+Status mapping:
+- Successful fixed or query command: NlpStatus.Answered.
+- Missing or ambiguous target: NlpStatus.Ambiguous.
+- Invalid node or no matching query result: NlpStatus.NoMatch or the existing
+  query result status, as appropriate.
+- NlpResult.Command records the recognized verb and target kind.
+
+Acceptance:
+- All four command verbs work.
+- Query and fixed targets work.
+- Commands work only through Ask.
+- Commands are deterministic.
+- Graph counts, conversation turn, mentions, focus, and provenance are unchanged.
+- Clarification prompts appear in Answer.Text for incomplete commands.
+
+================================================================================
+7. TESTS
+================================================================================
+
+Update existing tests:
+
+- Replace first-person rejection expectations with second-person cases where a
+  deliberately unsupported pronoun is required.
+- Keep third-person and indefinite-pronoun behavior unchanged.
+
+Add test groups:
+
+1. NLP first-person speaker identity
+   - Default and configured speaker labels.
+   - No literal pronoun nodes.
+   - Shared speaker node across statements and frames.
+   - First-person question answering after ingestion.
+   - Ask-before-ingest remains read-only.
+   - Label collision produces ambiguity.
+   - Second-person remains unsupported.
+
+2. NLP command recognition
+   - output, print, respond, and reply.
+   - Query targets and all fixed targets.
+   - Optional please and separator forms.
+   - Subject-prefixed input is not a command.
+   - Ingest does not recognize commands.
+
+3. NLP command clarification and read-only
+   - Missing, unknown, and node-without-ID clarification.
+   - Invalid node ID handling.
+   - Graph and conversation state unchanged.
+   - Deterministic command output.
+
+================================================================================
+8. VERIFICATION COMMANDS
+================================================================================
+
+Run from the repository root.
+
+Build the complete solution:
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" build OPEN-LRD.slnx
+
+Build the smoke-test project with warnings treated as errors:
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" build \
+        OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj -warnaserror
+
+Run the complete smoke suite:
+
+    "/mnt/c/Program Files/dotnet/dotnet.exe" run \
+        --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build
+
+Manual WPF check on Windows:
+
+1. Start the application; confirm Tools is disabled.
+2. Launch Core; confirm Tools becomes enabled and opens the Tools window.
+3. Open NLP Workbench and ingest "I work at Acme."
+4. Ask "Where do I work?" and confirm the answer is Acme.
+5. Ask "Output", "Print facts", "Print graph", "Respond with where I work",
+   and "Reply summary"; confirm output appears in the answer/summary area.
+6. Confirm command execution does not add nodes, links, turns, mentions, or
+   provenance entries.
+
+Expected result:
+- Zero warnings.
+- Zero errors.
+- All existing and new smoke tests pass.
+- The manual WPF checklist passes on Windows.
+
+================================================================================
+9. NON-GOALS
+================================================================================
+
+- No second-person pronoun support.
+- No command execution from the Ingest pane.
+- No mutating commands such as reset, delete, promote, or clear.
+- No new command window or result grid.
+- No durable conversation persistence in the Phase 8 baseline.
+- No changes to the placeholder Tools window contents in the Phase 8 baseline.
+- No external libraries or packages.
+
+Phase 9 note: the Tools placeholder has since been replaced by versioned
+.lrdlog export/import controls. Phase 8 manual WPF verification is complete.
+
+(End of Phase 8 plan.)

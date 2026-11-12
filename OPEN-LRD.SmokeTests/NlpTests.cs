@@ -41,6 +41,9 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP session provenance", TestNlpSessionProvenance);
             Program.Run("NLP session provenance caveats", TestNlpSessionProvenanceCaveats);
             Program.Run("NLP conversation read-only and determinism", TestNlpConversationReadOnlyAndDeterminism);
+            Program.Run("NLP first-person speaker identity", TestNlpFirstPersonSpeakerIdentity);
+            Program.Run("NLP command recognition", TestNlpCommandRecognition);
+            Program.Run("NLP command clarification and read-only", TestNlpCommandClarificationAndReadOnly);
             Program.Run("NLP workbench lifecycle", TestNlpWorkbenchLifecycle);
             Program.Run("NLP workbench operations", TestNlpWorkbenchOperations);
             Program.Run("NLP workbench state and stale sessions", TestNlpWorkbenchStateAndStaleSessions);
@@ -1032,18 +1035,26 @@ namespace OPEN_LRD.SmokeTests
             Assert(freshCore.FindByLabel("she").Count == 0, "an unresolved pronoun must not create a placeholder node");
 
             NlpResult firstPerson = fresh.Ingest("I work at Acme.");
-            Assert(firstPerson.Status == NlpStatus.Unsupported, $"expected Unsupported but got {firstPerson.Status}");
-            Assert(
-                firstPerson.Diagnostics.Any(message => message.Contains("First- and second-person", StringComparison.OrdinalIgnoreCase)),
-                "first-person statement pronouns should be unsupported");
-            Assert(CountNodes(freshCore) == 0 && CountLinks(freshCore) == 0, "a first-person statement must not mutate the graph");
+            Assert(firstPerson.Status == NlpStatus.Ingested, $"expected Ingested but got {firstPerson.Status}: {string.Join("; ", firstPerson.Diagnostics)}");
+            Assert(freshCore.FindByLabel("User", NodeTypes.Entities).Count == 1, "first-person ingestion should create one speaker node");
+            Assert(freshCore.FindByLabel("I").Count == 0, "first-person ingestion must not create a literal pronoun node");
 
+            NlpResult secondPerson = fresh.Ingest("You work at Globex.");
+            Assert(secondPerson.Status == NlpStatus.Unsupported, $"expected Unsupported but got {secondPerson.Status}");
+            Assert(
+                secondPerson.Diagnostics.Any(message => message.Contains("Second-person", StringComparison.OrdinalIgnoreCase)),
+                "second-person statement pronouns should be unsupported");
+
+            int nodesBeforeIndefinite = CountNodes(freshCore);
+            int linksBeforeIndefinite = CountLinks(freshCore);
             NlpResult indefinite = fresh.Ingest("Someone works at Acme.");
             Assert(indefinite.Status == NlpStatus.Unsupported, $"expected Unsupported but got {indefinite.Status}");
             Assert(
                 indefinite.Diagnostics.Any(message => message.Contains("Indefinite", StringComparison.OrdinalIgnoreCase)),
                 "indefinite statement pronouns should be unsupported");
-            Assert(CountNodes(freshCore) == 0 && CountLinks(freshCore) == 0, "an indefinite statement must not mutate the graph");
+            Assert(
+                CountNodes(freshCore) == nodesBeforeIndefinite && CountLinks(freshCore) == linksBeforeIndefinite,
+                "an indefinite statement must not mutate the graph");
         }
 
         private static void TestNlpConversationFollowUpQuestions()
@@ -1089,11 +1100,11 @@ namespace OPEN_LRD.SmokeTests
                 "a fresh session should report a missing antecedent");
             Assert(CountNodes(freshCore) == 0, "failed pronoun questions must not create nodes");
 
-            NlpResult firstPerson = fresh.Ask("Where do I work?");
-            Assert(firstPerson.Status == NlpStatus.Unsupported, $"expected Unsupported but got {firstPerson.Status}");
+            NlpResult secondPerson = fresh.Ask("Where do you work?");
+            Assert(secondPerson.Status == NlpStatus.Unsupported, $"expected Unsupported but got {secondPerson.Status}");
             Assert(
-                firstPerson.Diagnostics.Any(message => message.Contains("First- and second-person", StringComparison.OrdinalIgnoreCase)),
-                "first-person pronouns should be rejected with an explicit diagnostic");
+                secondPerson.Diagnostics.Any(message => message.Contains("Second-person", StringComparison.OrdinalIgnoreCase)),
+                "second-person pronouns should be rejected with an explicit diagnostic");
         }
 
         private static void TestNlpConversationAmbiguityAndSharing()
@@ -1153,7 +1164,7 @@ namespace OPEN_LRD.SmokeTests
 
             Guid? sharedFocus = pipelineC.Conversation.FocusNodeID;
             int sharedMentions = pipelineC.Conversation.Mentions.Count;
-            NlpResult sharedFailure = pipelineA.Ask("Where do I work?");
+            NlpResult sharedFailure = pipelineA.Ask("Where do you work?");
             Assert(sharedFailure.Status == NlpStatus.Unsupported, $"expected Unsupported but got {sharedFailure.Status}");
             Assert(pipelineC.Conversation.FocusNodeID == sharedFocus, "a failed shared question must not change focus");
             Assert(pipelineC.Conversation.Mentions.Count == sharedMentions, "a failed shared question must not add mentions");
@@ -1251,7 +1262,7 @@ namespace OPEN_LRD.SmokeTests
             Guid? lastQualifier = pipeline.Conversation.LastQualifierNodeID;
             int mentionCount = pipeline.Conversation.Mentions.Count;
 
-            NlpResult unsupported = pipeline.Ask("Where do I work?");
+            NlpResult unsupported = pipeline.Ask("Where do you work?");
             Assert(unsupported.Status == NlpStatus.Unsupported, $"expected Unsupported but got {unsupported.Status}");
             Assert(pipeline.Conversation.FocusNodeID == focus, "failed questions should not change focus");
             Assert(pipeline.Conversation.LastSubjectNodeID == lastSubject, "failed questions should not change subject focus");
@@ -1259,7 +1270,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(pipeline.Conversation.LastQualifierNodeID == lastQualifier, "failed questions should not change qualifier focus");
             Assert(pipeline.Conversation.Mentions.Count == mentionCount, "failed questions should not add mentions");
 
-            NlpResult failedIngest = pipeline.Ingest("I work at Globex.");
+            NlpResult failedIngest = pipeline.Ingest("You work at Globex.");
             Assert(failedIngest.Status == NlpStatus.Unsupported, $"expected Unsupported but got {failedIngest.Status}");
             Assert(pipeline.Conversation.FocusNodeID == focus, "failed ingestion should not change focus");
             Assert(pipeline.Conversation.Mentions.Count == mentionCount, "failed ingestion should not add mentions");
@@ -1470,6 +1481,214 @@ namespace OPEN_LRD.SmokeTests
             Assert(isolated.Conversation.TurnIndex == 0, "a new conversation should start with a zero turn counter");
             Assert(isolated.Conversation.Mentions.Count == 0, "a new conversation should start with no mentions");
             Assert(isolated.Conversation.Provenance.Count == 0, "a new conversation should start with no provenance");
+        }
+
+        private static void TestNlpFirstPersonSpeakerIdentity()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+            NlpResult ingested = pipeline.Ingest("I work at Acme. I live in Paris.");
+            Assert(
+                ingested.Status == NlpStatus.Ingested,
+                $"first-person ingestion failed with {ingested.Status}: {string.Join("; ", ingested.Diagnostics)}");
+
+            List<Web_Node> users = core.FindByLabel("User", NodeTypes.Entities).ToList();
+            List<Web_Node> acmes = core.FindByLabel("Acme").ToList();
+            List<Web_Node> parises = core.FindByLabel("Paris").ToList();
+            Assert(users.Count == 1, $"expected one User node but found {users.Count}; labels={string.Join(", ", core.FindNodes().Select(node => node.Label ?? "(none)"))}");
+            Assert(acmes.Count == 1, $"expected one Acme node but found {acmes.Count}; labels={string.Join(", ", core.FindNodes().Select(node => node.Label ?? "(none)"))}");
+            Assert(parises.Count == 1, $"expected one Paris node but found {parises.Count}; labels={string.Join(", ", core.FindNodes().Select(node => node.Label ?? "(none)"))}");
+            Guid user = users[0].ID;
+            Guid acme = acmes[0].ID;
+            Guid paris = parises[0].ID;
+            Assert(core.FindByLabel("I").Count == 0, "the literal pronoun I must not become a node");
+            Assert(core.FindByLabel("i").Count == 0, "the lowercase pronoun i must not become a node");
+            Assert(
+                core.GetLinks(user).Any(link => link.DestinationID == acme && link.ForwardLink.Name == "work_at"),
+                "I should connect the speaker to Acme");
+            Assert(
+                core.GetLinks(user).Any(link => link.DestinationID == paris && link.ForwardLink.Name == "live_in"),
+                "both first-person frames should use the same speaker node");
+
+            NlpResult whereWork = pipeline.Ask("Where do I work?");
+            Assert(
+                whereWork.Status == NlpStatus.Answered,
+                $"expected Answered but got {whereWork.Status}: {string.Join("; ", whereWork.Diagnostics)}");
+            Assert(whereWork.Answer?.ShortAnswer == "Acme", $"expected Acme but got {whereWork.Answer?.ShortAnswer}");
+
+            LRD_Core pluralCore = NewCore();
+            NlpPipeline plural = new NlpPipeline(pluralCore);
+            NlpResult pluralIngest = plural.Ingest("We work at Globex.");
+            Assert(
+                pluralIngest.Status == NlpStatus.Ingested,
+                $"plural first-person ingestion failed with {pluralIngest.Status}: {string.Join("; ", pluralIngest.Diagnostics)}");
+            Assert(pluralCore.FindByLabel("User", NodeTypes.Entities).Count == 1, "plural first person should use the speaker node");
+            Assert(pluralCore.FindByLabel("We").Count == 0 && pluralCore.FindByLabel("we").Count == 0, "the literal pronoun we must not become a node");
+
+            LRD_Core customCore = NewCore();
+            NlpOptions customOptions = new NlpOptions { FirstPersonSpeakerLabel = "Speaker" };
+            NlpPipeline custom = new NlpPipeline(customCore, customOptions);
+            NlpResult customIngest = custom.Ingest("I work at Initech.");
+            Assert(
+                customIngest.Status == NlpStatus.Ingested,
+                $"custom speaker ingestion failed with {customIngest.Status}: {string.Join("; ", customIngest.Diagnostics)}");
+            Assert(customCore.FindByLabel("Speaker", NodeTypes.Entities).Count == 1, "the configured speaker label should be used");
+            Assert(customCore.FindByLabel("User", NodeTypes.Entities).Count == 0, "the default label should not be created when configured otherwise");
+
+            LRD_Core freshCore = NewCore();
+            NlpPipeline fresh = new NlpPipeline(freshCore);
+            int nodeCount = CountNodes(freshCore);
+            int linkCount = CountLinks(freshCore);
+            NlpResult beforeIngest = fresh.Ask("Where do I work?");
+            Assert(
+                beforeIngest.Status is NlpStatus.NoMatch or NlpStatus.Unsupported,
+                $"expected NoMatch or Unsupported but got {beforeIngest.Status}");
+            Assert(
+                CountNodes(freshCore) == nodeCount && CountLinks(freshCore) == linkCount,
+                "a first-person question must not create the speaker node");
+
+            LRD_Core collisionCore = NewCore();
+            AddNode(collisionCore, NodeTypes.Entities, "User", NodeLifetime.Permanent);
+            AddNode(collisionCore, NodeTypes.Entities, "User", NodeLifetime.Permanent);
+            NlpPipeline collision = new NlpPipeline(collisionCore);
+            int collisionNodes = CountNodes(collisionCore);
+            int collisionLinks = CountLinks(collisionCore);
+            NlpResult ambiguous = collision.Ingest("I work at Acme.");
+            Assert(ambiguous.Status == NlpStatus.Unsupported, $"expected Unsupported but got {ambiguous.Status}");
+            Assert(
+                ambiguous.Diagnostics.Any(message => message.Contains("multiple", StringComparison.OrdinalIgnoreCase)),
+                "a speaker label collision should produce an ambiguity diagnostic");
+            Assert(
+                CountNodes(collisionCore) == collisionNodes && CountLinks(collisionCore) == collisionLinks,
+                "an ambiguous speaker identity must not mutate the graph");
+        }
+
+        private static void TestNlpCommandRecognition()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+            Assert(pipeline.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "command fixture ingestion failed");
+
+            foreach (string verb in new[] { "Output", "Print", "Respond", "Reply" })
+            {
+                NlpResult query = pipeline.Ask($"{verb} where does Alice work.");
+                Assert(
+                    query.Status == NlpStatus.Answered,
+                    $"{verb} query command failed with {query.Status}: {string.Join("; ", query.Diagnostics)}");
+                Assert(query.Answer?.ShortAnswer == "Acme", $"{verb} query should answer Acme");
+                Assert(query.Command?.TargetKind == CommandTargetKind.Query, $"{verb} should be recognized as a query command");
+            }
+
+            NlpResult facts = pipeline.Ask("Print facts.");
+            Assert(facts.Status == NlpStatus.Answered, $"facts command failed with {facts.Status}");
+            Assert(facts.Command?.TargetKind == CommandTargetKind.Facts, "facts should be a fixed command target");
+            Assert(facts.Answer?.Text.Contains("Alice", StringComparison.OrdinalIgnoreCase) == true, "facts output should include Alice");
+            Assert(facts.Answer?.Text.Contains("work_at", StringComparison.OrdinalIgnoreCase) == true, "facts output should include the relation");
+
+            NlpResult graph = pipeline.Ask("Output graph.");
+            Assert(graph.Status == NlpStatus.Answered, $"graph command failed with {graph.Status}");
+            Assert(graph.Command?.TargetKind == CommandTargetKind.Graph, "graph should be a fixed command target");
+            Assert(graph.Answer?.Text.Contains("Graph:", StringComparison.OrdinalIgnoreCase) == true, "graph output should include the graph summary");
+
+            NlpResult conversation = pipeline.Ask("Respond conversation.");
+            Assert(conversation.Status == NlpStatus.Answered, $"conversation command failed with {conversation.Status}");
+            Assert(conversation.Command?.TargetKind == CommandTargetKind.Conversation, "conversation should be a fixed command target");
+            Assert(
+                conversation.Answer?.Text.Contains("Conversation", StringComparison.OrdinalIgnoreCase) == true,
+                "conversation output should include the conversation summary");
+
+            NlpResult summary = pipeline.Ask("Reply summary.");
+            Assert(summary.Status == NlpStatus.Answered, $"summary command failed with {summary.Status}");
+            Assert(summary.Command?.TargetKind == CommandTargetKind.Summary, "summary should be a fixed command target");
+            Assert(summary.Answer?.Text.Contains("Graph:", StringComparison.OrdinalIgnoreCase) == true, "summary should include the graph summary");
+            Assert(
+                summary.Answer?.Text.Contains("Conversation", StringComparison.OrdinalIgnoreCase) == true,
+                "summary should include the conversation summary");
+
+            Guid alice = core.FindByLabel("Alice", NodeTypes.Entities).Single().ID;
+            NlpResult node = pipeline.Ask($"Output node {alice}.");
+            Assert(node.Status == NlpStatus.Answered, $"node command failed with {node.Status}");
+            Assert(node.Command?.TargetKind == CommandTargetKind.Node, "node should be a fixed command target");
+            Assert(node.Answer?.AnswerNodeID == alice, "node output should identify the node");
+            Assert(node.Answer?.Text.Contains("Alice", StringComparison.OrdinalIgnoreCase) == true, "node output should include the label");
+
+            NlpResult please = pipeline.Ask("Please output with where does Alice work.");
+            Assert(please.Status == NlpStatus.Answered, $"please command failed with {please.Status}");
+            Assert(please.Answer?.ShortAnswer == "Acme", "please should be an optional command prefix");
+
+            NlpResult notCommand = pipeline.Ask("Alice output facts.");
+            Assert(notCommand.Command is null, "a subject before the verb must not be recognized as a command");
+
+            NlpResult ingestCommand = pipeline.Ingest("Output facts.");
+            Assert(ingestCommand.Command is null, "Ingest must not recognize commands");
+            Assert(ingestCommand.Status == NlpStatus.Unsupported, $"expected Unsupported but got {ingestCommand.Status}");
+        }
+
+        private static void TestNlpCommandClarificationAndReadOnly()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+            Assert(pipeline.Ingest("Alice works at Acme.").Status == NlpStatus.Ingested, "command fixture ingestion failed");
+
+            int nodeCount = CountNodes(core);
+            int linkCount = CountLinks(core);
+            int turn = pipeline.Conversation.TurnIndex;
+            int mentions = pipeline.Conversation.Mentions.Count;
+            int provenance = pipeline.Conversation.Provenance.Count;
+            Guid? focus = pipeline.Conversation.FocusNodeID;
+            Guid? lastSubject = pipeline.Conversation.LastSubjectNodeID;
+            Guid? lastObject = pipeline.Conversation.LastObjectNodeID;
+            Guid? lastQualifier = pipeline.Conversation.LastQualifierNodeID;
+            Guid? lastAnswer = pipeline.Conversation.LastAnswerNodeID;
+
+            NlpResult missingTarget = pipeline.Ask("Output");
+            Assert(missingTarget.Status == NlpStatus.Ambiguous, $"expected Ambiguous but got {missingTarget.Status}");
+            Assert(missingTarget.Command?.NeedsClarification == true, "a missing target should request clarification");
+            Assert(
+                missingTarget.Answer?.Text.Contains("What should I", StringComparison.OrdinalIgnoreCase) == true,
+                "a missing target should ask what to output");
+
+            NlpResult missingNodeID = pipeline.Ask("Print node");
+            Assert(missingNodeID.Status == NlpStatus.Ambiguous, $"expected Ambiguous but got {missingNodeID.Status}");
+            Assert(
+                missingNodeID.Answer?.Text.Contains("Which node ID", StringComparison.OrdinalIgnoreCase) == true,
+                "a node command without an ID should ask for one");
+
+            NlpResult invalidNodeID = pipeline.Ask("Output node not-a-guid");
+            Assert(invalidNodeID.Status == NlpStatus.Ambiguous, $"expected Ambiguous but got {invalidNodeID.Status}");
+            Assert(
+                invalidNodeID.Answer?.Text.Contains("Which node ID", StringComparison.OrdinalIgnoreCase) == true,
+                "an invalid node ID should ask for a valid one");
+
+            NlpResult unknownTarget = pipeline.Ask("Output banana");
+            Assert(unknownTarget.Status == NlpStatus.Ambiguous, $"expected Ambiguous but got {unknownTarget.Status}");
+            Assert(
+                unknownTarget.Answer?.Text.Contains("What should I", StringComparison.OrdinalIgnoreCase) == true,
+                "an unknown target should request clarification");
+
+            Guid absent = Guid.NewGuid();
+            NlpResult absentNode = pipeline.Ask($"Output node {absent}");
+            Assert(absentNode.Status == NlpStatus.NoMatch, $"expected NoMatch but got {absentNode.Status}");
+            Assert(
+                absentNode.Answer?.Text.Contains(absent.ToString(), StringComparison.OrdinalIgnoreCase) == true,
+                "a missing node should identify the requested ID");
+
+            NlpResult query = pipeline.Ask("Print where does Alice work.");
+            Assert(query.Status == NlpStatus.Answered, $"query command failed with {query.Status}");
+            Assert(query.Answer?.ShortAnswer == "Acme", "a query command should return the answer");
+
+            NlpResult repeated = pipeline.Ask("Print where does Alice work.");
+            Assert(repeated.Answer?.Text == query.Answer?.Text, "command output should be deterministic");
+
+            Assert(CountNodes(core) == nodeCount && CountLinks(core) == linkCount, "commands must not mutate the graph");
+            Assert(pipeline.Conversation.TurnIndex == turn, "commands must not begin a conversation turn");
+            Assert(pipeline.Conversation.Mentions.Count == mentions, "commands must not add mentions");
+            Assert(pipeline.Conversation.Provenance.Count == provenance, "commands must not add provenance");
+            Assert(pipeline.Conversation.FocusNodeID == focus, "commands must not change focus");
+            Assert(pipeline.Conversation.LastSubjectNodeID == lastSubject, "commands must not change subject focus");
+            Assert(pipeline.Conversation.LastObjectNodeID == lastObject, "commands must not change object focus");
+            Assert(pipeline.Conversation.LastQualifierNodeID == lastQualifier, "commands must not change qualifier focus");
+            Assert(pipeline.Conversation.LastAnswerNodeID == lastAnswer, "commands must not change the last answer");
         }
 
         private static void TestNlpWorkbenchLifecycle()

@@ -6,22 +6,95 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:OPEN_LRD"
         mc:Ignorable="d"
-        Title="Tools" 
-        Height="450" 
-        Width="800">
-    <Grid>
-        <TextBox HorizontalAlignment="Left" 
-                 Height="318" 
-                 Margin="109,56,0,0" 
-                 TextWrapping="Wrap" 
-                 Text="Planned Tools:
-                 Import
-                 Export
-                 Visualizer
-                 " 
-                 VerticalAlignment="Top" 
-                 Width="513" 
-                 />
+        Title="Tools"
+        Height="620"
+        Width="820"
+        MinHeight="520"
+        MinWidth="700">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
+        <GroupBox Grid.Row="0" Header="Export" Padding="8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <WrapPanel Grid.Row="0">
+                    <Button x:Name="ExportLogsButton"
+                            Padding="12,4"
+                            Click="ExportLogs_Button_Click"
+                            Content="Export Logs" />
+                    <CheckBox x:Name="IncludeTransientCheckBox"
+                              Margin="16,0,0,0"
+                              VerticalAlignment="Center"
+                              IsChecked="True"
+                              Content="Include Transient Chains" />
+                </WrapPanel>
+                <TextBlock Grid.Row="1"
+                           Margin="0,8,0,0"
+                           Text="The core log stores graph and conversation data. Transient chains use a separate companion log." />
+                <WrapPanel Grid.Row="2" Margin="0,8,0,0">
+                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Text="Last export:" />
+                    <TextBlock x:Name="LastExportPathText"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="(none)" />
+                </WrapPanel>
+            </Grid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="1" Header="Import" Padding="8" Margin="0,8,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <WrapPanel Grid.Row="0">
+                    <TextBlock Margin="0,0,10,0" VerticalAlignment="Center" Text="Mode:" />
+                    <RadioButton x:Name="MergeModeRadio"
+                                 Margin="0,0,16,0"
+                                 VerticalAlignment="Center"
+                                 GroupName="ImportModeGroup"
+                                 IsChecked="True"
+                                 Content="Merge" />
+                    <RadioButton x:Name="ReplaceModeRadio"
+                                 VerticalAlignment="Center"
+                                 GroupName="ImportModeGroup"
+                                 Content="Replace" />
+                </WrapPanel>
+                <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+                    <Button x:Name="ImportCoreLogButton"
+                            Padding="12,4"
+                            Click="ImportCoreLog_Button_Click"
+                            Content="Import Core Log" />
+                    <Button x:Name="ImportTransientLogButton"
+                            Margin="10,0,0,0"
+                            Padding="12,4"
+                            Click="ImportTransientLog_Button_Click"
+                            Content="Import Transient Log" />
+                </WrapPanel>
+                <TextBlock Grid.Row="2"
+                           Margin="0,8,0,0"
+                           TextWrapping="Wrap"
+                           Text="Merge keeps existing data when IDs conflict. Replace swaps the selected state after validation. Pipeline attachments are never imported or exported." />
+            </Grid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="2" Header="Status" Padding="8" Margin="0,8,0,0">
+            <TextBox x:Name="StatusBox"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled"
+                     Text="Ready." />
+        </GroupBox>
     </Grid>
 </Window>

@@ -25,6 +25,11 @@ namespace OPEN_LRD.Nodes
         {
         }
 
+        public Chain_Node(Guid ID, NodeTypes TYPE, NodeLifetime lifetime, int TTL)
+            : base(ID, TYPE, lifetime, TTL)
+        {
+        }
+
         public Chain_Node(Guid ID, int TYPE, int TTL, Link SOURCE, Link DESTINATION)
             : base(ID, NodeTypes.FromId(TYPE), TTL)
         {

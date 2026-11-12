@@ -2,9 +2,11 @@ OPEN-LRD
 MODULE 3: THE NLP PIPELINE
 IMPLEMENTATION PLAN
 
-Status: Approved. Phases 1-7 implemented; manual WPF acceptance verification pending.
+Status: Approved. Phases 1-8 implemented; Phase 8 manual WPF acceptance
+        verified. Phase 9 Additional Tools implemented and covered by smoke tests.
 Scope owner: Module 3 (README numbering).
-Reference design: README.md, ReadMe2.md, and Module_2_Plan.txt.
+Reference design: README.md, ReadMe2.md, Module_2_Plan.txt,
+                  Module_3_Phase_8_Plan.txt, and AdditionalTools.txt.
 Implementation constraint: Native C# with no external library dependencies.
 
 ================================================================================
@@ -36,7 +38,7 @@ Module 3 is NOT responsible for:
 - Branched graph matching; Module 3 emits linear chains only.
 - Full event reification, temporal logic, or durable lexical storage.
 - Upper-ontology rules, type hierarchies, or selectional restrictions.
-- Persistence to disk or an external graph database.
+- Automatic persistence, background saves, or an external graph database.
 
 ================================================================================
 2. ACCEPTED DESIGN DECISIONS
@@ -123,7 +125,7 @@ Integration constraints:
 - NodeTypes currently provides Empties, Basics, Dictionaries, Objects,
   Concepts, Entities, Names, Sources, Locations, Events, and RawData.
 
-Current gaps that Module 3 must account for:
+Initial gaps that Module 3 had to account for:
 
 - No tokenizer, POS tagger, parser, NER, or language generation exists.
 - No predicate relation vocabulary exists beyond basic link types.
@@ -490,6 +492,22 @@ Phase 7: Integration and documentation
 - Update README.md and ReadMe2.md Module 3 status.
 - Optional WPF Tools window hook after the pipeline is stable.
 
+Phase 8: Usability and identity enhancements (post-completion)
+- Gate the Tools button until core initialization succeeds.
+- Add configurable first-person speaker identity with a default "User" node.
+- Add read-only Ask commands for output, print, respond, and reply.
+- Support query targets plus facts, graph, conversation, summary, and node <id>.
+- Clarify incomplete or ambiguous commands in the answer area.
+- Add smoke tests and update Module 3 documentation.
+
+Phase 9: Additional Tools (post-completion)
+- Export graph and conversation state to versioned .lrdlog JSON snapshots.
+- Export query and response chains to separate _trans companion logs.
+- Import core and transient logs with Merge or Replace modes.
+- Keep existing data on Merge ID conflicts and report skipped items.
+- Add link distance definitions for the future visualizer.
+- Add persistence and link-distance smoke tests.
+
 ================================================================================
 9. KNOWN LIMITATIONS
 ================================================================================
@@ -500,8 +518,14 @@ Phase 7: Integration and documentation
 - Negation, modality, tense, and hypotheticals are not fully represented in the
   graph initially.
 - Direct relation links replace full event reification in the MVP.
-- Lexical storage and durable provenance are session-scoped initially.
+- Lexical storage remains session-scoped. Graph and conversation state can be
+  exported to or imported from .lrdlog files through Tools; pipeline
+  attachments are process-local and are never persisted.
 - Ambiguity is surfaced rather than silently resolved.
+- Second-person pronouns remain unsupported.
+- First-person singular and plural forms share one configurable speaker node;
+  group membership and plural semantics are not represented separately.
+- Ask commands are read-only and support only fixed targets or question text.
 - Module 4 will add ontology relations, type hierarchies, and selectional
   restrictions.
 
@@ -518,5 +542,9 @@ Phase 7: Integration and documentation
 - Follow-up questions resolve recent pronouns from conversation context.
 - Ambiguous, unsupported, rejected, and no-match inputs produce honest
   diagnostics.
+- Core and conversation state survive export and import round trips.
+- Transient chain logs export separately and preserve chain links and metadata.
+- Invalid or conflicting imports either change no state or follow the selected
+  Merge/Replace conflict policy.
 - Full solution builds with zero warnings and zero errors.
 - All Module 1, Module 2, and Module 3 smoke tests pass.

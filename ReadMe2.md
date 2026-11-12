@@ -25,7 +25,7 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 |---|---|---|---|
 | 1 | The Graph Backend (Core and Data Storage) | Nodes, links, storage, search, memory lifecycle | Complete |
 | 2 | The Reasoning Engine | Subgraph matching, trust, contradiction resolution, response extraction | Complete |
-| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | In Progress (Phase 7 of 7) |
+| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | In Progress (Phase 9 Additional Tools) |
 | 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts and structural rules | Planned |
 
 ## Module 1: The Graph Backend
@@ -148,39 +148,57 @@ entity resolution, chain construction, Reasoning Engine ingestion, question
 analysis, answer generation, yes/no answers, evidence text, ambiguity and
 no-match diagnostics, conversation context, third-person pronoun resolution,
 focus tracking, shared conversation IDs, session provenance, and the NLP
-Workbench integration, with smoke tests for the workbench facade. Final manual
-WPF acceptance verification remains before Module 3 is marked complete.
+Workbench integration, with smoke tests for the workbench facade. Phase 8 adds
+configurable first-person speaker identity, read-only Ask commands, and Tools
+button gating until core initialization; its manual WPF verification is
+complete. Phase 9 adds versioned .lrdlog export and import in Tools, separate
+transient-chain companion logs, Merge/Replace conflict policies, and link
+distance definitions for the future visualizer. Manual Phase 9 log checks
+remain before Module 3 is marked complete.
 
 `NlpPipeline.Analyze(...)` parses text into tokens, chunks, clauses, typed
 mentions, and relation frames. `NlpPipeline.Ingest(...)` resolves entities,
 builds temporary chains, provisions the required anchor, applies the trust
 precheck, records per-chain session provenance, updates conversation focus, and
-merges through the Reasoning Engine. `NlpPipeline.Ask(...)` analyzes a
-question, resolves contextual pronouns, builds bounded query variants,
-evaluates them with the Reasoning Engine, and generates read-only wh or yes/no
-answers with session-provenance caveats when applicable. Conversation state is
-owned by `LRD_Core` and shared only by pipelines constructed with the same
-conversation ID; it is bounded, resettable, and never stored in graph nodes.
+merges through the Reasoning Engine. First-person forms resolve to one
+conversation speaker node whose label is configured by
+`NlpOptions.FirstPersonSpeakerLabel` and defaults to `User`; second-person
+pronouns remain unsupported. `NlpPipeline.Ask(...)` analyzes a question,
+resolves contextual pronouns, builds bounded query variants, evaluates them
+with the Reasoning Engine, and generates read-only wh or yes/no answers with
+session-provenance caveats when applicable. Ask also recognizes subjectless
+commands beginning with output, print, respond, or reply. Commands accept a
+question or the fixed targets facts, graph, conversation, summary, or
+node <id>; incomplete targets return a clarification question. Commands are
+read-only and do not begin a turn or update mentions, focus, or provenance.
+Conversation state is owned by `LRD_Core` and shared only by pipelines
+constructed with the same conversation ID; it is bounded, resettable, and never
+stored in graph nodes.
 
 `NlpWorkbench` provides a UI-independent facade for conversation creation,
 attachment by ID, reset, removal, clear-all, Ingest, Ask, and read-only state
 snapshots. `NlpWorkbenchWindow` uses it for the end-to-end desktop workflow and
 shows diagnostics, candidates, evidence, frames, chains, mentions, focus, and
-session provenance. The existing Tools window remains a separate placeholder
-for Import, Export, and Visualizer and is not converted into the workbench.
-Conversation state remains in memory only. See `Module_3_Plan.txt` for the full
-phased plan.
+session provenance. The existing Tools window handles log export and import; it
+is not converted into the workbench, and Visualizer rendering remains planned.
+Conversation state is held in memory for the active core session and can be
+exported to or restored from .lrdlog files. Merging keeps existing data on ID
+conflicts, while replacing core state invalidates open workbench sessions. See
+`Module_3_Plan.txt` and `AdditionalTools.txt` for the full phased plans.
 
 ### NLP Workbench Workflow
 
-1. Launch Core.
+1. Launch Core. Tools and NLP Workbench remain disabled until the core is initialized.
 2. Open NLP Workbench.
-3. Ingest a fact, optionally supplying source and topic node IDs.
+3. Ingest a fact, optionally supplying source and topic node IDs. First-person
+   forms resolve to the configured speaker node.
 4. Ask a follow-up question.
 5. Inspect answer evidence, diagnostics, candidates, frames, mentions, and
    session provenance.
-6. Create or attach conversations to compare isolated and shared context.
-7. Reset or remove sessions without changing graph data.
+6. Run read-only Ask commands such as "Print facts", "Output graph",
+   "Respond summary", or "Reply where does Alice work".
+7. Create or attach conversations to compare isolated and shared context.
+8. Reset or remove sessions without changing graph data.
 
 ## Module 4: Upper Ontology
 

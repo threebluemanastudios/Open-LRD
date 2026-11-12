@@ -18,6 +18,7 @@ namespace OPEN_LRD.NLP
         private readonly LRD_Core core;
         private readonly ConversationContext? conversation;
         private readonly NlpOptions options;
+        private Guid? firstPersonSpeakerNodeID;
 
         public EntityResolver(
             LRD_Core core,
@@ -38,6 +39,14 @@ namespace OPEN_LRD.NLP
                 ? label.ToLowerInvariant()
                 : argument.Lemma;
             List<string> aliases = BuildAliases(label, lemma, argument.NodeType);
+
+            if (argument.IsPronoun
+                && options.EnablePronounResolution
+                && Lexicon.TryGetPronounInfo(argument.SurfaceText, out PronounInfo pronoun)
+                && pronoun.Person == PronounPerson.First)
+            {
+                return ResolveFirstPerson(pronoun);
+            }
 
             if (argument.IsPronoun)
             {
@@ -203,6 +212,101 @@ namespace OPEN_LRD.NLP
             while (nodeID == Guid.Empty || core.TryGetNode(nodeID, out _));
 
             return nodeID;
+        }
+
+        private EntityResolution ResolveFirstPerson(PronounInfo pronoun)
+        {
+            string speakerLabel = string.IsNullOrWhiteSpace(options.FirstPersonSpeakerLabel)
+                ? "User"
+                : options.FirstPersonSpeakerLabel.Trim();
+            string lemma = speakerLabel.ToLowerInvariant();
+
+            if (firstPersonSpeakerNodeID.HasValue
+                && core.TryGetNode(firstPersonSpeakerNodeID.Value, out Web_Node? cachedNode)
+                && cachedNode is not null
+                && (cachedNode.Has_Label(speakerLabel) || cachedNode.Has_Alias(speakerLabel)))
+            {
+                return CreateFirstPersonResolution(
+                    cachedNode,
+                    speakerLabel,
+                    lemma,
+                    new[] { $"First-person pronoun '{pronoun.Surface}' resolved to speaker '{speakerLabel}'." });
+            }
+
+            List<Web_Node> matches = core
+                .FindByLabel(speakerLabel, NodeTypes.Entities)
+                .GroupBy(node => node.ID)
+                .Select(group => group.First())
+                .ToList();
+
+            if (matches.Count > 1)
+            {
+                firstPersonSpeakerNodeID = null;
+                return new EntityResolution(
+                    speakerLabel,
+                    lemma,
+                    NodeTypes.Entities,
+                    BuildAliases(speakerLabel, lemma, NodeTypes.Entities),
+                    null,
+                    matches.Select(node => node.ID).ToArray(),
+                    true,
+                    false,
+                    new[]
+                    {
+                        $"First-person speaker label '{speakerLabel}' matches multiple nodes."
+                    });
+            }
+
+            if (matches.Count == 1)
+            {
+                Web_Node match = matches[0];
+                firstPersonSpeakerNodeID = match.ID;
+                return CreateFirstPersonResolution(
+                    match,
+                    speakerLabel,
+                    lemma,
+                    new[] { $"First-person pronoun '{pronoun.Surface}' resolved to speaker '{speakerLabel}'." });
+            }
+
+            Guid nodeID = firstPersonSpeakerNodeID ?? CreateNodeId();
+            firstPersonSpeakerNodeID = nodeID;
+
+            return new EntityResolution(
+                speakerLabel,
+                lemma,
+                NodeTypes.Entities,
+                BuildAliases(speakerLabel, lemma, NodeTypes.Entities),
+                nodeID,
+                Array.Empty<Guid>(),
+                false,
+                false,
+                new[] { $"First-person pronoun '{pronoun.Surface}' resolved to speaker '{speakerLabel}'." });
+        }
+
+        private static EntityResolution CreateFirstPersonResolution(
+            Web_Node node,
+            string speakerLabel,
+            string lemma,
+            IReadOnlyList<string> diagnostics)
+        {
+            string label = string.IsNullOrWhiteSpace(node.Label)
+                ? speakerLabel
+                : node.Label!;
+            List<string> aliases = MergeAliases(label, node.Aliases);
+
+            foreach (string alias in BuildAliases(label, label.ToLowerInvariant(), node.Get_NodeType()))
+                AddAlias(aliases, label, alias);
+
+            return new EntityResolution(
+                label,
+                lemma,
+                node.Get_NodeType(),
+                aliases,
+                node.ID,
+                new[] { node.ID },
+                false,
+                false,
+                diagnostics);
         }
 
         private List<Web_Node> FindCandidates(string label, NodeTypes? type)

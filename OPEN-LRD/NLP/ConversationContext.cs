@@ -94,6 +94,8 @@ namespace OPEN_LRD.NLP
 
         public Guid ConversationID { get; }
 
+        internal NlpOptions Options => options;
+
         public int TurnIndex { get; private set; }
 
         public int Sequence { get; private set; }
@@ -216,7 +218,7 @@ namespace OPEN_LRD.NLP
                     new[] { $"Value '{surfaceText}' is not a recognized pronoun." });
             }
 
-            if (info.Person is PronounPerson.First or PronounPerson.Second)
+            if (info.Person == PronounPerson.First)
             {
                 return new PronounResolution(
                     null,
@@ -225,7 +227,19 @@ namespace OPEN_LRD.NLP
                     Array.Empty<Guid>(),
                     false,
                     false,
-                    new[] { "First- and second-person pronouns are not supported in this session." });
+                    new[] { "First-person pronouns are resolved to the configured speaker node." });
+            }
+
+            if (info.Person == PronounPerson.Second)
+            {
+                return new PronounResolution(
+                    null,
+                    null,
+                    expectedType,
+                    Array.Empty<Guid>(),
+                    false,
+                    false,
+                    new[] { "Second-person pronouns are not supported in this session." });
             }
 
             if (info.IsReflexive)
@@ -393,6 +407,70 @@ namespace OPEN_LRD.NLP
             return provenance
                 .Where(entry => entry.IsUsableForAnswer && PathMatches(entry, path))
                 .ToList();
+        }
+
+        internal void RestoreState(
+            int turnIndex,
+            int sequence,
+            Guid? focusNodeID,
+            Guid? lastSubjectNodeID,
+            Guid? lastObjectNodeID,
+            Guid? lastQualifierNodeID,
+            Guid? lastAnswerNodeID,
+            IEnumerable<ConversationMention> restoredMentions,
+            IEnumerable<SessionProvenanceEntry> restoredProvenance)
+        {
+            ArgumentNullException.ThrowIfNull(restoredMentions);
+            ArgumentNullException.ThrowIfNull(restoredProvenance);
+
+            if (turnIndex < 0)
+                throw new ArgumentOutOfRangeException(nameof(turnIndex), "Turn index cannot be negative.");
+
+            if (sequence < 0)
+                throw new ArgumentOutOfRangeException(nameof(sequence), "Sequence cannot be negative.");
+
+            List<ConversationMention> mentionList = restoredMentions.ToList();
+            List<SessionProvenanceEntry> provenanceList = restoredProvenance.ToList();
+
+            int mentionLimit = Math.Max(1, options.MaxConversationMentions);
+            int provenanceLimit = Math.Max(1, options.MaxSessionProvenanceEntries);
+
+            if (mentionList.Count > mentionLimit)
+                throw new InvalidOperationException(
+                    $"Conversation mentions exceed the configured limit of {mentionLimit}.");
+
+            if (provenanceList.Count > provenanceLimit)
+                throw new InvalidOperationException(
+                    $"Conversation provenance exceeds the configured limit of {provenanceLimit}.");
+
+            if (mentionList.Any(mention => mention.Sequence <= 0))
+                throw new InvalidOperationException("Conversation mention sequences must be positive.");
+
+            if (provenanceList.Any(entry => entry.Sequence <= 0))
+                throw new InvalidOperationException("Conversation provenance sequences must be positive.");
+
+            int highestMentionSequence = mentionList.Count == 0
+                ? 0
+                : mentionList.Max(mention => mention.Sequence);
+            int highestProvenanceSequence = provenanceList.Count == 0
+                ? 0
+                : provenanceList.Max(entry => entry.Sequence);
+
+            if (sequence < highestMentionSequence || sequence < highestProvenanceSequence)
+                throw new InvalidOperationException(
+                    "Conversation sequence must be at least as large as every restored entry sequence.");
+
+            TurnIndex = turnIndex;
+            Sequence = sequence;
+            FocusNodeID = focusNodeID;
+            LastSubjectNodeID = lastSubjectNodeID;
+            LastObjectNodeID = lastObjectNodeID;
+            LastQualifierNodeID = lastQualifierNodeID;
+            LastAnswerNodeID = lastAnswerNodeID;
+            mentions.Clear();
+            mentions.AddRange(mentionList);
+            provenance.Clear();
+            provenance.AddRange(provenanceList);
         }
 
         public void Clear()

@@ -67,6 +67,99 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        internal static IReadOnlyList<RelationLinkType> GetAll()
+        {
+            lock (sync)
+            {
+                return byId.Values
+                    .OrderBy(relation => relation.Id)
+                    .ToArray();
+            }
+        }
+
+        internal static bool TryRestore(
+            int id,
+            string name,
+            string inverseName,
+            out string? error)
+        {
+            error = null;
+
+            if (id <= LastReservedOntologyId)
+            {
+                error = $"Relation ID {id} falls in the reserved ontology range.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(inverseName))
+            {
+                error = "Relation names cannot be empty.";
+                return false;
+            }
+
+            string relationName = name.Trim();
+            string inverse = inverseName.Trim();
+
+            lock (sync)
+            {
+                if (byId.TryGetValue(id, out RelationLinkType? existing))
+                {
+                    if (string.Equals(existing.Name, relationName, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(existing.InverseName, inverse, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    error = $"Relation ID {id} is already registered as '{existing.Name}'.";
+                    return false;
+                }
+
+                if (byName.TryGetValue(relationName, out RelationLinkType? existingByName))
+                {
+                    error = $"Relation '{relationName}' is already registered with ID {existingByName.Id}.";
+                    return false;
+                }
+
+                ForwardLinkTypes? existingForward = null;
+
+                if (ForwardLinkTypes.TryFromId(id, out ForwardLinkTypes forwardMatch))
+                {
+                    if (!string.Equals(forwardMatch.Name, relationName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        error = $"Forward link type ID {id} is already registered as '{forwardMatch.Name}'.";
+                        return false;
+                    }
+
+                    existingForward = forwardMatch;
+                }
+
+                InverseLinkTypes? existingInverse = null;
+
+                if (InverseLinkTypes.TryFromId(id, out InverseLinkTypes inverseMatch))
+                {
+                    if (!string.Equals(inverseMatch.Name, inverse, StringComparison.OrdinalIgnoreCase))
+                    {
+                        error = $"Inverse link type ID {id} is already registered as '{inverseMatch.Name}'.";
+                        return false;
+                    }
+
+                    existingInverse = inverseMatch;
+                }
+
+                ForwardLinkTypes forward = existingForward ?? ForwardLinkTypes.Register(id, relationName);
+                InverseLinkTypes inverseType = existingInverse ?? InverseLinkTypes.Register(id, inverse);
+                RelationLinkType relation = new RelationLinkType(id, relationName, inverse, forward, inverseType);
+
+                byName[relationName] = relation;
+                byId[id] = relation;
+
+                if (id >= nextId)
+                    nextId = (long)id + 1;
+
+                return true;
+            }
+        }
+
         public static string Normalize(string lemma, string? particle = null)
         {
             if (string.IsNullOrWhiteSpace(lemma))

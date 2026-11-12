@@ -108,6 +108,50 @@ namespace OPEN_LRD
             return new ReadOnlyDictionary<Guid, ConversationContext>(conversations);
         }
 
+        internal bool AddExistingConversation(ConversationContext conversation)
+        {
+            ArgumentNullException.ThrowIfNull(conversation);
+
+            if (!initialized || conversations is null || pipelineConversations is null)
+                return false;
+
+            return conversations.TryAdd(conversation.ConversationID, conversation);
+        }
+
+        internal void ReplaceGraphAndConversations(
+            IReadOnlyDictionary<Guid, Web_Node> replacementNodes,
+            IReadOnlyDictionary<Guid, ConversationContext> replacementConversations)
+        {
+            ArgumentNullException.ThrowIfNull(replacementNodes);
+            ArgumentNullException.ThrowIfNull(replacementConversations);
+
+            Dictionary<Guid, Web_Node> newNodes = new Dictionary<Guid, Web_Node>(replacementNodes);
+            Dictionary<Guid, ConversationContext> newConversations =
+                new Dictionary<Guid, ConversationContext>(replacementConversations);
+
+            foreach ((Guid nodeID, Web_Node node) in newNodes)
+            {
+                if (node is null || node.ID != nodeID)
+                    throw new InvalidOperationException("Replacement node dictionary keys must match node IDs.");
+            }
+
+            foreach ((Guid conversationID, ConversationContext conversation) in newConversations)
+            {
+                if (conversation is null || conversation.ConversationID != conversationID)
+                {
+                    throw new InvalidOperationException(
+                        "Replacement conversation dictionary keys must match conversation IDs.");
+                }
+            }
+
+            nodes = newNodes;
+            conversations = newConversations;
+            pipelineConversations = new Dictionary<Guid, Guid>();
+            queryChain = new LinkedList<Chain_Node>();
+            responseChain = new LinkedList<Chain_Node>();
+            initialized = true;
+        }
+
         public void ClearConversations()
         {
             conversations?.Clear();
@@ -544,6 +588,21 @@ namespace OPEN_LRD
                 return null;
 
             return new LinkedList<Chain_Node>(responseChain);
+        }
+
+        internal void ReplaceTransientChains(
+            LinkedList<Chain_Node>? replacementQuery,
+            LinkedList<Chain_Node>? replacementResponse)
+        {
+            if (!initialized)
+                throw new InvalidOperationException("The core must be initialized before restoring transient chains.");
+
+            queryChain = replacementQuery is null
+                ? new LinkedList<Chain_Node>()
+                : new LinkedList<Chain_Node>(replacementQuery);
+            responseChain = replacementResponse is null
+                ? new LinkedList<Chain_Node>()
+                : new LinkedList<Chain_Node>(replacementResponse);
         }
 
         public void RunMaintenanceCycle()

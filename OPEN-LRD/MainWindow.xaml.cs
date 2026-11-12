@@ -26,6 +26,7 @@ namespace OPEN_LRD
                 {
                     WelcomeBox.Text = "Core Running";
                     LaunchButton.Visibility = Visibility.Hidden;
+                    ToolsButton.IsEnabled = true;
                     NlpWorkbenchButton.IsEnabled = true;
                 }
             }
@@ -39,6 +40,12 @@ namespace OPEN_LRD
 
         private void Tools_Button_Click(object sender, RoutedEventArgs e)
         {
+            if (thunderCore is null || !thunderCore.initialized)
+            {
+                MessageBox.Show("Launch Core before opening Tools.");
+                return;
+            }
+
             Tools ToolsPage = new Tools();
             ToolsPage.Show();
             return;
