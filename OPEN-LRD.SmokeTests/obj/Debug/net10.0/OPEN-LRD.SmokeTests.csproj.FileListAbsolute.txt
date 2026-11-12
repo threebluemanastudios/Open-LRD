@@ -1,0 +1,14 @@
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.AssemblyInfoInputs.cache
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.AssemblyInfo.cs
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.csproj.CoreCompileInputs.cache
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\bin\Debug\net10.0\OPEN-LRD.SmokeTests.exe
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\bin\Debug\net10.0\OPEN-LRD.SmokeTests.deps.json
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\bin\Debug\net10.0\OPEN-LRD.SmokeTests.runtimeconfig.json
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\bin\Debug\net10.0\OPEN-LRD.SmokeTests.dll
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\bin\Debug\net10.0\OPEN-LRD.SmokeTests.pdb
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.dll
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\refint\OPEN-LRD.SmokeTests.dll
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.pdb
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.genruntimeconfig.cache
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\ref\OPEN-LRD.SmokeTests.dll

@@ -1,0 +1,139 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\nodetypes.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\nodetypes.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\lrd_core.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\lrd_core.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\mainwindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\mainwindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\links\\link.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\links\\link.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\chain_node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\chain_node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|c:\\users\\three\\source\\repos\\open-lrd\\open-lrd\\nodes\\web_node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{13F3AB37-4E65-5E47-096B-92719EC63601}|OPEN-LRD\\OPEN-LRD.csproj|solutionrelative:open-lrd\\nodes\\web_node.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "MainWindow.xaml.cs",
+              "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\MainWindow.xaml.cs",
+              "RelativeDocumentMoniker": "OPEN-LRD\\MainWindow.xaml.cs",
+              "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\MainWindow.xaml.cs",
+              "RelativeToolTip": "OPEN-LRD\\MainWindow.xaml.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAswAEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-09T10:07:29.612Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "NodeTypes.cs",
+              "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\NodeTypes.cs",
+              "RelativeDocumentMoniker": "OPEN-LRD\\Nodes\\NodeTypes.cs",
+              "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\NodeTypes.cs",
+              "RelativeToolTip": "OPEN-LRD\\Nodes\\NodeTypes.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-09T09:21:49.493Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Node.cs",
+              "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Node.cs",
+              "RelativeDocumentMoniker": "OPEN-LRD\\Nodes\\Node.cs",
+              "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Node.cs",
+              "RelativeToolTip": "OPEN-LRD\\Nodes\\Node.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-08T04:08:34.353Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "Link.cs",
+              "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Links\\Link.cs",
+              "RelativeDocumentMoniker": "OPEN-LRD\\Nodes\\Links\\Link.cs",
+              "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Links\\Link.cs",
+              "RelativeToolTip": "OPEN-LRD\\Nodes\\Links\\Link.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-06T08:10:32.036Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "Chain_Node.cs",
+              "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Chain_Node.cs",
+              "RelativeDocumentMoniker": "OPEN-LRD\\Nodes\\Chain_Node.cs",
+              "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Chain_Node.cs",
+              "RelativeToolTip": "OPEN-LRD\\Nodes\\Chain_Node.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-31T08:29:39.408Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "Web_Node.cs",
+              "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Web_Node.cs",
+              "RelativeDocumentMoniker": "OPEN-LRD\\Nodes\\Web_Node.cs",
+              "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\Nodes\\Web_Node.cs",
+              "RelativeToolTip": "OPEN-LRD\\Nodes\\Web_Node.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-31T07:55:57.759Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "LRD_Core.cs",
+              "DocumentMoniker": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\LRD_Core.cs",
+              "RelativeDocumentMoniker": "OPEN-LRD\\LRD_Core.cs",
+              "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\LRD_Core.cs",
+              "RelativeToolTip": "OPEN-LRD\\LRD_Core.cs",
+              "ViewState": "AgIAAMQAAAAAAAAAAAA6wAIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-31T07:31:24.766Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

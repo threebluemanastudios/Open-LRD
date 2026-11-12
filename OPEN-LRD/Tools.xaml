@@ -1,0 +1,27 @@
+﻿<Window x:Class="OPEN_LRD.Tools"
+        x:Name="ToolsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:OPEN_LRD"
+        mc:Ignorable="d"
+        Title="Tools" 
+        Height="450" 
+        Width="800">
+    <Grid>
+        <TextBox HorizontalAlignment="Left" 
+                 Height="318" 
+                 Margin="109,56,0,0" 
+                 TextWrapping="Wrap" 
+                 Text="Planned Tools:
+                 Import
+                 Export
+                 Visualizer
+                 " 
+                 VerticalAlignment="Top" 
+                 Width="513" 
+                 />
+
+    </Grid>
+</Window>

@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/Solution Items/" />
+  <Project Path="OPEN-LRD/OPEN-LRD.csproj" />
+  <Project Path="OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj" />
+</Solution>
