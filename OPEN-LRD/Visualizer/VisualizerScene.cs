@@ -23,7 +23,12 @@ namespace OPEN_LRD.Visualizer
             FarPlaneDistance = 5000.0
         };
         private readonly List<GeometryModel3D> geometryModels = new List<GeometryModel3D>();
+        private readonly Dictionary<int, GeometryModel3D> nodeModels = new Dictionary<int, GeometryModel3D>();
+        private readonly Dictionary<int, (GeometryModel3D Model, int ClassId)> linkModels = new Dictionary<int, (GeometryModel3D, int)>();
+        private readonly FlyCamera flyCamera = new FlyCamera();
 
+        private GeometryModel3D? selectedHighlightModel;
+        private GeometryModel3D? hoveredHighlightModel;
         private Vector3 center;
         private float radius;
 
@@ -34,6 +39,8 @@ namespace OPEN_LRD.Visualizer
             camera.Position = new Point3D(0.0, 0.0, -10.0);
             camera.LookDirection = InitialLookDirection;
             viewport.Camera = camera;
+
+            SyncFlyCameraFromCamera();
 
             sceneGroup.Children.Add(new AmbientLight(Color.FromRgb(90, 90, 90)));
             sceneGroup.Children.Add(new DirectionalLight(
@@ -46,7 +53,15 @@ namespace OPEN_LRD.Visualizer
             viewport.Children.Add(new ModelVisual3D { Content = sceneGroup });
         }
 
+        public FlyCamera FlyCamera => flyCamera;
+
+        public float Radius => radius;
+
+        public Vector3 Center => center;
+
         public bool HasGeometry => geometryModels.Count > 0;
+
+        public int GeometryModelCount => geometryModels.Count;
 
         public void Apply(SceneGeometry geometry, GraphColorMap colors)
         {
@@ -58,14 +73,18 @@ namespace OPEN_LRD.Visualizer
             foreach (NodeMeshBatch batch in geometry.NodeBatches)
             {
                 Material material = CreateNodeMaterial(colors.GetNodeColor(batch.NodeTypeId));
-                AddModel(batch.Mesh, material, backMaterial: null);
+                GeometryModel3D? model = AddModel(batch.Mesh, material, backMaterial: null);
+                if (model is not null)
+                    nodeModels[batch.NodeTypeId] = model;
             }
 
             foreach (LinkMeshBatch batch in geometry.LinkBatches)
             {
                 Material material = CreateLinkMaterial(
                     colors.GetLinkColor(batch.ForwardTypeId, batch.ClassId));
-                AddModel(batch.Mesh, material, material);
+                GeometryModel3D? model = AddModel(batch.Mesh, material, material);
+                if (model is not null)
+                    linkModels[batch.ForwardTypeId] = (model, batch.ClassId);
             }
 
             center = geometry.Center;
@@ -73,11 +92,29 @@ namespace OPEN_LRD.Visualizer
             FrameAll();
         }
 
+        public void UpdateMaterials(GraphColorMap colors)
+        {
+            ArgumentNullException.ThrowIfNull(colors);
+
+            foreach ((int nodeTypeId, GeometryModel3D model) in nodeModels)
+            {
+                model.Material = CreateNodeMaterial(colors.GetNodeColor(nodeTypeId));
+            }
+
+            foreach ((int forwardTypeId, (GeometryModel3D model, int classId)) in linkModels)
+            {
+                Material material = CreateLinkMaterial(colors.GetLinkColor(forwardTypeId, classId));
+                model.Material = material;
+                model.BackMaterial = material;
+            }
+        }
+
         public void Clear()
         {
             ClearGeometry();
             center = default;
             radius = 0f;
+            SyncFlyCameraFromCamera();
         }
 
         public void FrameAll()
@@ -86,6 +123,13 @@ namespace OPEN_LRD.Visualizer
                 return;
 
             Frame(center, Math.Max(radius, 0.5f));
+            SyncFlyCameraFromCamera();
+        }
+
+        public void FrameTarget(Vector3 target, float targetRadius)
+        {
+            Frame(target, Math.Max(targetRadius, 0.5f));
+            SyncFlyCameraFromCamera();
         }
 
         public void ResetView()
@@ -93,6 +137,101 @@ namespace OPEN_LRD.Visualizer
             camera.UpDirection = new Vector3D(0.0, 1.0, 0.0);
             camera.LookDirection = InitialLookDirection;
             FrameAll();
+        }
+
+        public CameraView GetCameraView()
+        {
+            double width = viewport.ActualWidth > 1.0 ? viewport.ActualWidth : 1600.0;
+            double height = viewport.ActualHeight > 1.0 ? viewport.ActualHeight : 900.0;
+
+            return new CameraView(
+                ToVector3(camera.Position),
+                ToVector3(camera.LookDirection),
+                ToVector3(camera.UpDirection),
+                camera.FieldOfView,
+                width,
+                height,
+                camera.NearPlaneDistance,
+                camera.FarPlaneDistance);
+        }
+
+        public void SyncCameraFromFlyCamera()
+        {
+            camera.Position = ToPoint3D(flyCamera.Position);
+            camera.LookDirection = ToVector3D(flyCamera.LookDirection);
+            camera.UpDirection = ToVector3D(flyCamera.Up);
+        }
+
+        public void SyncFlyCameraFromCamera()
+        {
+            Vector3 look = ToVector3(camera.LookDirection);
+            float length = look.Length();
+            if (length > 1e-6f)
+            {
+                Vector3 norm = look / length;
+                double pitch = Math.Asin(Math.Clamp(norm.Y, -1f, 1f));
+                double yaw = Math.Atan2(norm.X, norm.Z);
+                flyCamera.SetPose(ToVector3(camera.Position), yaw, pitch);
+            }
+        }
+
+        public void SetSelectedHighlight(Vector3? position, double cubeSize)
+        {
+            if (selectedHighlightModel is not null)
+            {
+                sceneGroup.Children.Remove(selectedHighlightModel);
+                selectedHighlightModel = null;
+            }
+
+            if (!position.HasValue)
+                return;
+
+            MeshData meshData = GraphMeshBuilder.BuildHighlightCube(position.Value, cubeSize);
+            Material material = CreateSelectionHighlightMaterial();
+            selectedHighlightModel = new GeometryModel3D(CreateMesh(meshData), material);
+            selectedHighlightModel.Freeze();
+            sceneGroup.Children.Add(selectedHighlightModel);
+        }
+
+        public void SetHoveredHighlight(Vector3? position, double cubeSize)
+        {
+            if (hoveredHighlightModel is not null)
+            {
+                sceneGroup.Children.Remove(hoveredHighlightModel);
+                hoveredHighlightModel = null;
+            }
+
+            if (!position.HasValue)
+                return;
+
+            MeshData meshData = GraphMeshBuilder.CreateCube(position.Value, cubeSize * 1.08);
+            Material material = CreateHoverHighlightMaterial();
+            hoveredHighlightModel = new GeometryModel3D(CreateMesh(meshData), material);
+            hoveredHighlightModel.Freeze();
+            sceneGroup.Children.Add(hoveredHighlightModel);
+        }
+
+        private static Material CreateSelectionHighlightMaterial()
+        {
+            MaterialGroup group = new MaterialGroup();
+            SolidColorBrush brush = CreateBrush(new RgbColor(79, 195, 247)); // Bright cyan
+            SolidColorBrush emissiveBrush = CreateBrush(new RgbColor(50, 140, 200));
+            group.Children.Add(new EmissiveMaterial(emissiveBrush));
+            group.Children.Add(new DiffuseMaterial(brush));
+            group.Children.Add(new SpecularMaterial(new SolidColorBrush(Colors.White), 60.0));
+            group.Freeze();
+            return group;
+        }
+
+        private static Material CreateHoverHighlightMaterial()
+        {
+            MaterialGroup group = new MaterialGroup();
+            SolidColorBrush brush = CreateBrush(new RgbColor(255, 213, 79)); // Amber / Gold
+            SolidColorBrush emissiveBrush = CreateBrush(new RgbColor(160, 130, 40));
+            group.Children.Add(new EmissiveMaterial(emissiveBrush));
+            group.Children.Add(new DiffuseMaterial(brush));
+            group.Freeze();
+            return group;
         }
 
         private void Frame(System.Numerics.Vector3 target, float targetRadius)
@@ -119,26 +258,40 @@ namespace OPEN_LRD.Visualizer
             camera.FarPlaneDistance = framed.FarPlaneDistance;
         }
 
-        private void AddModel(MeshData data, Material material, Material? backMaterial)
+        private GeometryModel3D? AddModel(MeshData data, Material material, Material? backMaterial)
         {
             if (data.IsEmpty)
-                return;
+                return null;
 
             GeometryModel3D model = new GeometryModel3D(CreateMesh(data), material)
             {
                 BackMaterial = backMaterial
             };
-            model.Freeze();
             geometryModels.Add(model);
             sceneGroup.Children.Add(model);
+            return model;
         }
 
         private void ClearGeometry()
         {
+            if (selectedHighlightModel is not null)
+            {
+                sceneGroup.Children.Remove(selectedHighlightModel);
+                selectedHighlightModel = null;
+            }
+
+            if (hoveredHighlightModel is not null)
+            {
+                sceneGroup.Children.Remove(hoveredHighlightModel);
+                hoveredHighlightModel = null;
+            }
+
             foreach (GeometryModel3D model in geometryModels)
                 sceneGroup.Children.Remove(model);
 
             geometryModels.Clear();
+            nodeModels.Clear();
+            linkModels.Clear();
         }
 
         private static MeshGeometry3D CreateMesh(MeshData data)

@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:OPEN_LRD.Visualizer"
         mc:Ignorable="d"
         Title="OPEN-LRD Visualizer"
         WindowStyle="None"
@@ -14,6 +15,23 @@
         Loaded="Window_Loaded"
         PreviewKeyDown="Window_PreviewKeyDown"
         Closed="Window_Closed">
+    <Window.Resources>
+        <Style TargetType="TabItem">
+            <Setter Property="Background" Value="#171C27" />
+            <Setter Property="Foreground" Value="#9FB0C6" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#1F2636" />
+                    <Setter Property="Foreground" Value="#4FC3F7" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -51,12 +69,25 @@
                             Padding="12,4"
                             Click="FrameAll_Button_Click"
                             Content="Frame All"
-                            ToolTip="Frame the whole graph." />
+                            ToolTip="Frame the whole graph (or selection). F key also frames." />
                     <Button x:Name="ResetViewButton"
+                            Margin="0,0,8,0"
                             Padding="12,4"
                             Click="ResetView_Button_Click"
                             Content="Reset View"
-                            ToolTip="Return to the initial camera orientation." />
+                            ToolTip="Return to the initial camera orientation. R key also resets." />
+                    <ToggleButton x:Name="ToggleLabelsButton"
+                                  Margin="0,0,8,0"
+                                  Padding="10,4"
+                                  Click="ToggleLabels_Button_Click"
+                                  IsChecked="True"
+                                  Content="Labels (L)"
+                                  ToolTip="Toggle node label overlay. L key also toggles." />
+                    <Button x:Name="HelpButton"
+                            Padding="10,4"
+                            Click="Help_Button_Click"
+                            Content="Help (?)"
+                            ToolTip="View controls and keyboard shortcuts (F1 or ?)." />
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -88,10 +119,17 @@
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="320" />
+                <ColumnDefinition Width="340" />
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0" ClipToBounds="True">
+            <Grid x:Name="ViewportHost"
+                  Grid.Column="0"
+                  ClipToBounds="True"
+                  Focusable="True"
+                  MouseDown="ViewportHost_MouseDown"
+                  MouseUp="ViewportHost_MouseUp"
+                  MouseMove="ViewportHost_MouseMove"
+                  MouseWheel="ViewportHost_MouseWheel">
                 <Grid.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                         <GradientStop Offset="0" Color="#111827" />
@@ -99,7 +137,30 @@
                     </LinearGradientBrush>
                 </Grid.Background>
 
-                <Viewport3D x:Name="GraphViewport" ClipToBounds="True" />
+                <Viewport3D x:Name="GraphViewport" ClipToBounds="True" IsHitTestVisible="False" />
+                <local:GraphLabelOverlay x:Name="LabelOverlay" ClipToBounds="True" IsHitTestVisible="False" />
+
+                <Border x:Name="TruncationBanner"
+                        VerticalAlignment="Top"
+                        HorizontalAlignment="Stretch"
+                        Background="#D9C65100"
+                        BorderBrush="#FF8F00"
+                        BorderThickness="0,0,0,1"
+                        Padding="14,6"
+                        Visibility="Collapsed">
+                    <DockPanel LastChildFill="True">
+                        <Button DockPanel.Dock="Right"
+                                Padding="8,2"
+                                FontSize="11"
+                                Click="DismissTruncationBanner_Click"
+                                Content="Dismiss" />
+                        <TextBlock x:Name="TruncationBannerText"
+                                   VerticalAlignment="Center"
+                                   Foreground="#FFF3E0"
+                                   FontWeight="SemiBold"
+                                   Text="Warning: Graph truncated to render limit." />
+                    </DockPanel>
+                </Border>
 
                 <Border x:Name="ProgressOverlay"
                         Background="#B30A0D13"
@@ -133,74 +194,257 @@
                                    Text="Launch Core and add or load knowledge first." />
                     </StackPanel>
                 </Border>
+
+                <Border x:Name="HelpOverlay"
+                        Background="#B3000000"
+                        Visibility="Collapsed">
+                    <Border Width="480"
+                            Background="#171C27"
+                            BorderBrush="#3D4A60"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="20"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                        <StackPanel>
+                            <DockPanel LastChildFill="False" Margin="0,0,0,14">
+                                <TextBlock DockPanel.Dock="Left"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="#4FC3F7"
+                                           Text="3D Visualizer Controls" />
+                                <Button DockPanel.Dock="Right"
+                                        Padding="10,3"
+                                        Click="CloseHelp_Click"
+                                        Content="Close" />
+                            </DockPanel>
+                            <TextBlock Margin="0,0,0,6" Foreground="#E6EDF7" FontWeight="SemiBold" Text="Flight Navigation" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• W / S — Fly forward / backward" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• A / D — Strafe left / right" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• E / Q — Move up / down" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Left or Right Shift — 4x speed boost" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Right-Click Drag — Look around (yaw &amp; pitch)" />
+                            <TextBlock Margin="0,0,0,10" Foreground="#C7D3E2" Text="• Mouse Wheel — Adjust flight speed (0.5x to 4.0x)" />
+
+                            <TextBlock Margin="0,0,0,6" Foreground="#E6EDF7" FontWeight="SemiBold" Text="Selection &amp; Inspection" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Left-Click on node — Select node &amp; inspect details" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Left-Click on empty space — Clear selection" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Hover on node — Show details in bottom status bar" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• F — Frame selection (or all nodes if none selected)" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• R — Reset view to initial framed orientation" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• L — Toggle 2D node labels overlay" />
+                            <TextBlock Foreground="#C7D3E2" Text="• Esc — Close Visualizer" />
+                        </StackPanel>
+                    </Border>
+                </Border>
             </Grid>
 
             <Border Grid.Column="1"
-                    Padding="14"
                     Background="#121722"
                     BorderBrush="#2E3644"
                     BorderThickness="1,0,0,0">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <TextBlock Margin="0,0,0,8"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="#8AB4F8"
-                                   Text="GRAPH" />
-                        <TextBlock x:Name="SummaryNodesText"
-                                   Margin="0,0,0,4"
-                                   Foreground="#D7E2F0"
-                                   Text="Nodes: 0" />
-                        <TextBlock x:Name="SummaryLinksText"
-                                   Margin="0,0,0,4"
-                                   Foreground="#D7E2F0"
-                                   Text="Links: 0" />
-                        <TextBlock x:Name="SummaryClassesText"
-                                   Margin="0,0,0,4"
-                                   Foreground="#D7E2F0"
-                                   Text="Node classes: 0" />
-                        <TextBlock x:Name="SummaryTypesText"
-                                   Margin="0,0,0,4"
-                                   Foreground="#D7E2F0"
-                                   Text="Link types: 0" />
+                <TabControl x:Name="SideTabControl"
+                            Background="Transparent"
+                            BorderThickness="0">
+                    <TabItem Header="Node Colors">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,10">
+                                <TextBlock DockPanel.Dock="Left"
+                                           VerticalAlignment="Center"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="#8AB4F8"
+                                           Text="Node Class Colors" />
+                                <Button x:Name="ResetNodeColorsButton"
+                                        DockPanel.Dock="Right"
+                                        Padding="8,2"
+                                        Click="ResetNodeColors_Click"
+                                        Content="Reset Defaults"
+                                        ToolTip="Reset node color overrides to defaults." />
+                            </DockPanel>
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="NodeColorsPanel" />
+                            </ScrollViewer>
+                        </Grid>
+                    </TabItem>
 
-                        <TextBlock Margin="0,14,0,8"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="#8AB4F8"
-                                   Text="LAYOUT" />
-                        <TextBlock x:Name="LayoutTimeText"
-                                   Margin="0,0,0,4"
-                                   Foreground="#D7E2F0"
-                                   Text="Layout: (not run)" />
-                        <TextBlock x:Name="SummaryRadiusText"
-                                   Foreground="#D7E2F0"
-                                   Text="Radius: (not run)" />
+                    <TabItem Header="Link Colors">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,10">
+                                <TextBlock DockPanel.Dock="Left"
+                                           VerticalAlignment="Center"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="#8AB4F8"
+                                           Text="Forward Link Colors" />
+                                <Button x:Name="ResetLinkColorsButton"
+                                        DockPanel.Dock="Right"
+                                        Padding="8,2"
+                                        Click="ResetLinkColors_Click"
+                                        Content="Reset Defaults"
+                                        ToolTip="Reset link color overrides to defaults." />
+                            </DockPanel>
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <StackPanel x:Name="LinkColorsPanel" />
+                                    <Expander x:Name="ClassColorsExpander"
+                                              Margin="0,14,0,0"
+                                              Header="Advanced: LinkClass Fallbacks"
+                                              Foreground="#8AB4F8"
+                                              FontWeight="SemiBold">
+                                        <StackPanel x:Name="ClassColorsPanel" Margin="4,8,4,4" />
+                                    </Expander>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </TabItem>
 
-                        <TextBlock Margin="0,14,0,8"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="#8AB4F8"
-                                   Text="WARNINGS" />
-                        <TextBlock x:Name="WarningsText"
-                                   TextWrapping="Wrap"
-                                   Foreground="#F0B86E"
-                                   Text="None." />
+                    <TabItem Header="View">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12">
+                            <StackPanel>
+                                <TextBlock Margin="0,0,0,6"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="#8AB4F8"
+                                           Text="GRAPH METRICS" />
+                                <TextBlock x:Name="SummaryNodesText" Margin="0,0,0,3" Foreground="#D7E2F0" Text="Nodes: 0" />
+                                <TextBlock x:Name="SummaryLinksText" Margin="0,0,0,3" Foreground="#D7E2F0" Text="Links: 0" />
+                                <TextBlock x:Name="SummaryClassesText" Margin="0,0,0,3" Foreground="#D7E2F0" Text="Node classes: 0" />
+                                <TextBlock x:Name="SummaryTypesText" Margin="0,0,0,3" Foreground="#D7E2F0" Text="Link types: 0" />
 
-                        <TextBlock Margin="0,14,0,8"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="#8AB4F8"
-                                   Text="CONTROLS" />
-                        <TextBlock Margin="0,0,0,4"
-                                   TextWrapping="Wrap"
-                                   Foreground="#9FB0C6"
-                                   Text="Esc closes the visualizer. The Close (Esc) button does the same." />
-                        <TextBlock TextWrapping="Wrap"
-                                   Foreground="#9FB0C6"
-                                   Text="Fly navigation, labels, and color controls arrive in later phases." />
-                    </StackPanel>
-                </ScrollViewer>
+                                <TextBlock Margin="0,12,0,6"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="#8AB4F8"
+                                           Text="LAYOUT METRICS" />
+                                <TextBlock x:Name="LayoutTimeText" Margin="0,0,0,3" Foreground="#D7E2F0" Text="Layout: (not run)" />
+                                <TextBlock x:Name="SummaryRadiusText" Margin="0,0,0,3" Foreground="#D7E2F0" Text="Radius: (not run)" />
+
+                                <TextBlock Margin="0,14,0,6"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="#8AB4F8"
+                                           Text="VIEW &amp; LAYOUT SETTINGS" />
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Spread:" />
+                                    <TextBlock x:Name="SpreadValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="6.0" />
+                                </DockPanel>
+                                <Slider x:Name="SpreadSlider"
+                                        Minimum="1.0"
+                                        Maximum="20.0"
+                                        Value="6.0"
+                                        TickFrequency="0.5"
+                                        IsSnapToTickEnabled="True"
+                                        ValueChanged="SpreadSlider_ValueChanged"
+                                        Margin="0,0,0,8" />
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Cube Size:" />
+                                    <TextBlock x:Name="CubeSizeValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="1.0" />
+                                </DockPanel>
+                                <Slider x:Name="CubeSizeSlider"
+                                        Minimum="0.2"
+                                        Maximum="3.0"
+                                        Value="1.0"
+                                        TickFrequency="0.1"
+                                        IsSnapToTickEnabled="True"
+                                        ValueChanged="CubeSizeSlider_ValueChanged"
+                                        Margin="0,0,0,8" />
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Line Width:" />
+                                    <TextBlock x:Name="LineWidthValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="0.15" />
+                                </DockPanel>
+                                <Slider x:Name="LineWidthSlider"
+                                        Minimum="0.02"
+                                        Maximum="0.8"
+                                        Value="0.15"
+                                        TickFrequency="0.01"
+                                        IsSnapToTickEnabled="True"
+                                        ValueChanged="LineWidthSlider_ValueChanged"
+                                        Margin="0,0,0,8" />
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Max Visible Labels:" />
+                                    <TextBlock x:Name="MaxLabelsValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="1000" />
+                                </DockPanel>
+                                <Slider x:Name="MaxLabelsSlider"
+                                        Minimum="50"
+                                        Maximum="3000"
+                                        Value="1000"
+                                        TickFrequency="50"
+                                        IsSnapToTickEnabled="True"
+                                        ValueChanged="MaxLabelsSlider_ValueChanged"
+                                        Margin="0,0,0,10" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <Button x:Name="ApplySettingsButton"
+                                            Margin="0,0,8,0"
+                                            Padding="10,3"
+                                            Click="ApplySettings_Click"
+                                            Content="Apply Layout"
+                                            ToolTip="Recompute layout with current view options." />
+                                    <Button x:Name="ResetViewSettingsButton"
+                                            Padding="10,3"
+                                            Click="ResetViewSettings_Click"
+                                            Content="Reset View"
+                                            ToolTip="Reset view settings to defaults." />
+                                </StackPanel>
+
+                                <Border x:Name="SelectionCard"
+                                        Margin="0,6,0,10"
+                                        Padding="10"
+                                        Background="#181F2E"
+                                        BorderBrush="#3D4A60"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Visibility="Collapsed">
+                                    <StackPanel>
+                                        <DockPanel LastChildFill="False" Margin="0,0,0,6">
+                                            <TextBlock DockPanel.Dock="Left"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#4FC3F7"
+                                                       Text="SELECTED NODE" />
+                                            <Button x:Name="ClearSelectionButton"
+                                                    DockPanel.Dock="Right"
+                                                    Padding="8,2"
+                                                    FontSize="11"
+                                                    Click="ClearSelection_Button_Click"
+                                                    Content="Clear"
+                                                    ToolTip="Clear current selection (or click empty space)." />
+                                        </DockPanel>
+                                        <TextBlock x:Name="SelectedLabelText" Margin="0,0,0,3" FontWeight="SemiBold" Foreground="#FFFFFF" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="SelectedIdText" Margin="0,0,0,3" FontSize="11" Foreground="#8AB4F8" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="SelectedTypeText" Margin="0,0,0,3" Foreground="#D7E2F0" />
+                                        <TextBlock x:Name="SelectedLifetimeText" Margin="0,0,0,3" Foreground="#D7E2F0" />
+                                        <TextBlock x:Name="SelectedDegreeText" Margin="0,0,0,3" Foreground="#D7E2F0" />
+                                        <TextBlock x:Name="SelectedAliasesText" Foreground="#9FB0C6" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Margin="0,8,0,6"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="#8AB4F8"
+                                           Text="WARNINGS" />
+                                <TextBlock x:Name="WarningsText"
+                                           TextWrapping="Wrap"
+                                           Foreground="#F0B86E"
+                                           Text="None." />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+                </TabControl>
             </Border>
         </Grid>
 
@@ -210,10 +454,15 @@
                 BorderBrush="#2E3644"
                 BorderThickness="0,1,0,0">
             <DockPanel LastChildFill="True">
+                <TextBlock x:Name="SpeedText"
+                           DockPanel.Dock="Right"
+                           Margin="16,0,0,0"
+                           Foreground="#8AB4F8"
+                           Text="Speed: 1.0x (Shift 4x)" />
                 <TextBlock DockPanel.Dock="Right"
                            Margin="16,0,0,0"
                            Foreground="#6F7F94"
-                           Text="Esc closes" />
+                           Text="R reset · F frame · L labels · Esc close · ? help" />
                 <TextBlock x:Name="StatusText"
                            Foreground="#C7D3E2"
                            Text="Ready."

@@ -14,7 +14,7 @@ Target: .NET 10 WPF (net10.0-windows), existing LRD_Core singleton graph.
 1. FEASIBILITY ANSWER
 ================================================================================
 
-Yes. Everything requested can be built with C# and WPF using only the .NET
+Yes, everything requested can be built with C# and WPF using only the .NET
 base class library and the WPF assemblies that ship with the framework. No
 NuGet package, no third-party 3D engine, and no native DLLs are required.
 
@@ -827,17 +827,25 @@ Phase 3: Scene and window shell (complete)
   Visualizer button implemented; 2 scene tests added; 139 smoke tests passing in
   total; both projects build with zero warnings and zero errors.
 
-Phase 4: Navigation and inspection
+Phase 4: Navigation and inspection (complete)
 - Add FlyCameraController and the rendering loop.
 - Add keyboard movement, mouse look, wheel speed, R/F/L keys, frame all, hover,
   selection (cleared by clicking empty space), and the GraphLabelOverlay.
 - Verify no leaks after close and no camera drift when inactive.
+- Status: FlyCameraController, GraphLabelOverlay, ray-AABB picking, selection
+  card, and hover highlights implemented; 139 smoke tests passing, 222 UI
+  checklist tests passing; builds clean with 0 warnings/0 errors.
 
-Phase 5: Colors, settings, and polish
+Phase 5: Colors, settings, and polish (complete)
 - Add the three-tab side panel, color rows, swatches, reset, live material
   updates, JSON persistence, and warnings/status.
 - Add optional LinkClass fallback colors.
 - Add truncation banners and the controls help overlay.
+- Status: Three-tab side panel (Node Colors, Link Colors, View), color swatches
+  with 24-color dropdowns, live material updates via scene.UpdateMaterials(),
+  LinkClass fallbacks, JSON settings persistence, truncation banner, and Help
+  overlay implemented; 139 smoke tests passing, 245 UI tests passing with zero
+  warnings and zero errors.
 
 Phase 6: Performance, documentation, acceptance
 - Tune batches, caps, label limits, and layout iteration budgets.

@@ -72,6 +72,25 @@ namespace OPEN_LRD.Visualization
             return RemoveColor(classColors, classId);
         }
 
+        public void ClearNodeColors()
+        {
+            if (nodeColors.Count == 0)
+                return;
+
+            nodeColors.Clear();
+            RaiseChanged();
+        }
+
+        public void ClearLinkColors()
+        {
+            if (linkColors.Count == 0 && classColors.Count == 0)
+                return;
+
+            linkColors.Clear();
+            classColors.Clear();
+            RaiseChanged();
+        }
+
         public void Reset()
         {
             if (nodeColors.Count == 0 && linkColors.Count == 0 && classColors.Count == 0)

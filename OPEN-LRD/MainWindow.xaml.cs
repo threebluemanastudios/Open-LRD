@@ -97,6 +97,8 @@ namespace OPEN_LRD
             }
 
             visualizerWindow = new VisualizerWindow(thunderCore);
+            if (this.IsLoaded)
+                visualizerWindow.Owner = this;
             visualizerWindow.Closed += (_, _) => visualizerWindow = null;
             visualizerWindow.Show();
         }

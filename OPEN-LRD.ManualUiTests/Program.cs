@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -9,10 +10,14 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using OPEN_LRD;
 using OPEN_LRD.Nodes;
+using OPEN_LRD.Nodes.Links;
 using OPEN_LRD.Persistence;
+using OPEN_LRD.Visualization;
+using OPEN_LRD.Visualizer;
 
 namespace OPEN_LRD.ManualUiTests
 {
@@ -52,6 +57,7 @@ namespace OPEN_LRD.ManualUiTests
                 RunSection7_SafetyLimits();
                 RunSection8_CancellationAndBusyGating();
                 RunSection9_ConversationContinuityAndEncoding();
+                RunSection11_VisualizerWindow();
                 RunSection10_SignOff();
             }
             catch (Exception ex)
@@ -790,6 +796,346 @@ namespace OPEN_LRD.ManualUiTests
             bool hasBom = fileBytes.Length >= 3 && fileBytes[0] == 0xEF && fileBytes[1] == 0xBB && fileBytes[2] == 0xBF;
             Check(hasBom, "small-valid.txt verified as UTF-8 with BOM.");
             Check(aliceNode is not null && aliceNode.Label is not null && !aliceNode.Label.Contains("\uFEFF"), "Alice label contains no stray BOM characters.");
+        }
+
+        // ================================================================================
+        // 11. 3D VISUALIZER SHELL AND LIFECYCLE (Phase 3)
+        // ================================================================================
+        private static void RunSection11_VisualizerWindow()
+        {
+            Console.WriteLine("\n--- SECTION 11: 3D VISUALIZER SHELL AND LIFECYCLE (Phase 3) ---");
+
+            // 1. MainWindow gating
+            MainWindow mainWindow = new MainWindow();
+            mainWindow.Show();
+            DoEvents();
+
+            Check(mainWindow.VisualizerButton is not null, "MainWindow has a dedicated VisualizerButton.");
+            Check(!mainWindow.VisualizerButton!.IsEnabled, "VisualizerButton is disabled before Launch Core.");
+            Check(mainWindow.VisualizerButton.ToolTip?.ToString()?.Contains("Launch Core") == true,
+                "VisualizerButton tooltip prompts to launch Core first.");
+
+            // Launch core via click handler
+            MethodInfo? launchClick = typeof(MainWindow).GetMethod(
+                "Launch_Button_Click",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            launchClick?.Invoke(mainWindow, new object[] { mainWindow.LaunchButton, new RoutedEventArgs() });
+            DoEvents();
+
+            Check(mainWindow.VisualizerButton.IsEnabled, "VisualizerButton is enabled after successful Core launch.");
+
+            // 2. Open VisualizerWindow from MainWindow
+            MethodInfo? visualizerClick = typeof(MainWindow).GetMethod(
+                "Visualizer_Button_Click",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            visualizerClick?.Invoke(mainWindow, new object[] { mainWindow.VisualizerButton, new RoutedEventArgs() });
+            DoEvents();
+
+            FieldInfo? winField = typeof(MainWindow).GetField(
+                "visualizerWindow",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            VisualizerWindow? visualizerWin = winField?.GetValue(mainWindow) as VisualizerWindow;
+
+            Check(visualizerWin is not null, "Visualizer_Button_Click creates and displays VisualizerWindow.");
+            Check(visualizerWin?.WindowStyle == WindowStyle.None, "VisualizerWindow uses WindowStyle.None (borderless).");
+            Check(visualizerWin?.WindowState == WindowState.Maximized, "VisualizerWindow opens WindowState.Maximized (fullscreen).");
+            Check(visualizerWin?.ResizeMode == ResizeMode.NoResize, "VisualizerWindow uses ResizeMode.NoResize.");
+            Check(visualizerWin?.ShowInTaskbar == true, "VisualizerWindow shows in taskbar.");
+            Check(visualizerWin?.Title == "OPEN-LRD Visualizer", "VisualizerWindow title is 'OPEN-LRD Visualizer'.");
+
+            // 3. Single-instance activation
+            visualizerWin!.WindowState = WindowState.Minimized;
+            visualizerClick?.Invoke(mainWindow, new object[] { mainWindow.VisualizerButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.WindowState == WindowState.Maximized, "Subsequent Visualizer button click restores minimized window to Maximized.");
+            Check(ReferenceEquals(winField?.GetValue(mainWindow), visualizerWin), "Subsequent click reuses single instance (no duplicate window).");
+
+            // 4. Empty state verification
+            LRD_Core.Instance.InitializeCore();
+            Task emptyRefresh = visualizerWin.RefreshGraphForTestingAsync();
+            while (!emptyRefresh.IsCompleted)
+            {
+                DoEvents();
+                Thread.Sleep(10);
+            }
+            emptyRefresh.GetAwaiter().GetResult();
+            DoEvents();
+
+            Check(visualizerWin.EmptyStateOverlay.Visibility == Visibility.Visible, "Empty graph displays EmptyStateOverlay.");
+            Check(visualizerWin.SummaryNodesText.Text.Contains("0"), "Summary shows 0 nodes.");
+            Check(!visualizerWin.FrameAllButton.IsEnabled, "FrameAllButton is disabled on empty graph.");
+            Check(!visualizerWin.RecomputeButton.IsEnabled, "RecomputeButton is disabled on empty graph.");
+            Check(!visualizerWin.ResetViewButton.IsEnabled, "ResetViewButton is disabled on empty graph.");
+            Check(!visualizerWin.Scene.HasGeometry, "VisualizerScene contains no geometry on empty graph.");
+
+            // 5. Populated scene verification
+            Guid n1 = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            Guid n2 = Guid.Parse("00000000-0000-0000-0000-000000000002");
+            Guid n3 = Guid.Parse("00000000-0000-0000-0000-000000000003");
+            Web_Node node1 = new Web_Node(n1, NodeTypes.Basics, NodeLifetime.Permanent, 100);
+            node1.Set_Label("Node Alpha");
+            Web_Node node2 = new Web_Node(n2, NodeTypes.Basics, NodeLifetime.Permanent, 100);
+            node2.Set_Label("Node Beta");
+            Web_Node node3 = new Web_Node(n3, NodeTypes.Concepts, NodeLifetime.Permanent, 100);
+            node3.Set_Label("Node Gamma");
+            LRD_Core.Instance.AddExistingNode(node1);
+            LRD_Core.Instance.AddExistingNode(node2);
+            LRD_Core.Instance.AddExistingNode(node3);
+            LRD_Core.Instance.AddConnection(n1, n2);
+            LRD_Core.Instance.AddConnection(n2, n3);
+
+            Task populatedRefresh = visualizerWin.RefreshGraphForTestingAsync();
+            while (!populatedRefresh.IsCompleted)
+            {
+                DoEvents();
+                Thread.Sleep(10);
+            }
+            populatedRefresh.GetAwaiter().GetResult();
+            DoEvents();
+
+            Check(visualizerWin.EmptyStateOverlay.Visibility == Visibility.Collapsed, "Populated graph hides EmptyStateOverlay.");
+            Check(visualizerWin.ProgressOverlay.Visibility == Visibility.Collapsed, "ProgressOverlay is collapsed after layout.");
+            Check(visualizerWin.Scene.HasGeometry, "VisualizerScene has geometry after refresh.");
+            Check(visualizerWin.Scene.GeometryModelCount >= 2, $"VisualizerScene has model batches (count: {visualizerWin.Scene.GeometryModelCount}).");
+            Check(visualizerWin.SummaryNodesText.Text.Contains("3"), $"Summary reports 3 nodes (actual: '{visualizerWin.SummaryNodesText.Text}').");
+            Check(visualizerWin.SummaryLinksText.Text.Contains("2"), $"Summary reports 2 links (actual: '{visualizerWin.SummaryLinksText.Text}').");
+            Check(visualizerWin.SummaryClassesText.Text.Contains("2"), $"Summary reports 2 node classes (actual: '{visualizerWin.SummaryClassesText.Text}').");
+            Check(visualizerWin.SummaryTypesText.Text.Contains("1"), $"Summary reports 1 link type (actual: '{visualizerWin.SummaryTypesText.Text}').");
+            Check(visualizerWin.LayoutTimeText.Text.Contains("iteration"), $"Layout summary reports iterations (actual: '{visualizerWin.LayoutTimeText.Text}').");
+            Check(visualizerWin.SummaryRadiusText.Text.Contains("units"), $"Layout summary reports radius (actual: '{visualizerWin.SummaryRadiusText.Text}').");
+            Check(visualizerWin.FrameAllButton.IsEnabled, "FrameAllButton is enabled on populated graph.");
+            Check(visualizerWin.RecomputeButton.IsEnabled, "RecomputeButton is enabled on populated graph.");
+            Check(visualizerWin.ResetViewButton.IsEnabled, "ResetViewButton is enabled on populated graph.");
+
+            // 6. Toolbar actions
+            MethodInfo? frameClick = typeof(VisualizerWindow).GetMethod("FrameAll_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            frameClick?.Invoke(visualizerWin, new object[] { visualizerWin.FrameAllButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.StatusText.Text == "Framed all nodes.", "FrameAllButton sets status to 'Framed all nodes.'");
+
+            MethodInfo? resetClick = typeof(VisualizerWindow).GetMethod("ResetView_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            resetClick?.Invoke(visualizerWin, new object[] { visualizerWin.ResetViewButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.StatusText.Text == "View reset.", "ResetViewButton sets status to 'View reset.'");
+
+            MethodInfo? recomputeClick = typeof(VisualizerWindow).GetMethod("Recompute_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            recomputeClick?.Invoke(visualizerWin, new object[] { visualizerWin.RecomputeButton, new RoutedEventArgs() });
+            WaitForCondition(() => !visualizerWin.IsLoading, 10000, "Recompute layout completion");
+            Check(visualizerWin.StatusText.Text.Contains("Showing 3 nodes"), $"Recompute layout completes successfully: '{visualizerWin.StatusText.Text}'");
+
+            // 7. Phase 4: Fly Navigation, Speed & Mouse Look
+            Check(visualizerWin.Controller is not null, "FlyCameraController is attached to the window.");
+            Check(visualizerWin.Controller!.SpeedMultiplier == 1.0, "Initial speed multiplier is 1.0.");
+            visualizerWin.Controller.SpeedMultiplier = 2.0;
+            Check(visualizerWin.Controller.SpeedMultiplier == 2.0, "SpeedMultiplier can be adjusted.");
+            Check(visualizerWin.SpeedText.Text.Contains("2.0x"), $"SpeedText updates to reflect speed multiplier (actual: '{visualizerWin.SpeedText.Text}').");
+
+            Vector3 initialPos = visualizerWin.Controller.FlyCamera.Position;
+            visualizerWin.Controller.FlyCamera.Move(1.0, 0.0, 0.0, 10.0, 0.1);
+            visualizerWin.Scene.SyncCameraFromFlyCamera();
+            Check(visualizerWin.Controller.FlyCamera.Position != initialPos, "FlyCamera.Move translates the camera position.");
+
+            double initialYaw = visualizerWin.Controller.FlyCamera.Yaw;
+            double initialPitch = visualizerWin.Controller.FlyCamera.Pitch;
+            visualizerWin.Controller.FlyCamera.Look(15.0, 10.0);
+            visualizerWin.Scene.SyncCameraFromFlyCamera();
+            Check(visualizerWin.Controller.FlyCamera.Yaw != initialYaw, "FlyCamera.Look updates Yaw.");
+            Check(visualizerWin.Controller.FlyCamera.Pitch != initialPitch, "FlyCamera.Look updates Pitch.");
+
+            // 8. Phase 4: Label Overlay & 'L' Key Toggle
+            Check(visualizerWin.Labels.ShowLabels, "LabelOverlay ShowLabels is true by default.");
+            MethodInfo? previewKey = typeof(VisualizerWindow).GetMethod("Window_PreviewKeyDown", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            KeyEventArgs lKeyEvent = new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                new System.Windows.Interop.HwndSource(0, 0, 0, 0, 0, "", IntPtr.Zero),
+                0,
+                Key.L)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent
+            };
+            previewKey?.Invoke(visualizerWin, new object[] { visualizerWin, lKeyEvent });
+            DoEvents();
+
+            Check(!visualizerWin.Labels.ShowLabels, "'L' key toggles LabelOverlay ShowLabels to false.");
+            Check(visualizerWin.ToggleLabelsButton.IsChecked == false, "'L' key updates ToggleLabelsButton.IsChecked to false.");
+
+            previewKey?.Invoke(visualizerWin, new object[] { visualizerWin, lKeyEvent });
+            DoEvents();
+
+            Check(visualizerWin.Labels.ShowLabels, "'L' key toggles LabelOverlay ShowLabels back to true.");
+            Check(visualizerWin.ToggleLabelsButton.IsChecked == true, "'L' key updates ToggleLabelsButton.IsChecked to true.");
+
+            // 9. Phase 4: Ray-AABB Picking & Selection Card
+            CameraView camView = visualizerWin.Scene.GetCameraView();
+            Vector3 node0Pos = visualizerWin.Geometry!.Layout.Positions[0];
+            Check(camView.TryProject(node0Pos, out Vector2 node0Screen, out _), "Node 0 projects to visible screen space.");
+
+            int? hitPick = visualizerWin.PickNodeForTesting(new Point(node0Screen.X, node0Screen.Y));
+            Check(hitPick == 0, $"Ray-AABB picking accurately hits Node 0 at ({node0Screen.X:F0}, {node0Screen.Y:F0}) (actual hit: {hitPick}).");
+
+            int? missPick = visualizerWin.PickNodeForTesting(new Point(-1000, -1000));
+            Check(missPick is null, "Ray-AABB picking misses when ray points outside scene.");
+
+            // Select node 0
+            visualizerWin.SelectNodeForTesting(0);
+            DoEvents();
+
+            Check(visualizerWin.SelectedIndex == 0, "Selected node index is set to 0.");
+            Check(visualizerWin.SelectionCard.Visibility == Visibility.Visible, "SelectionCard is visible when a node is selected.");
+            Check(visualizerWin.SelectedLabelText.Text.Contains("Node Alpha"), $"Selection card displays node label (actual: '{visualizerWin.SelectedLabelText.Text}').");
+            Check(visualizerWin.SelectedIdText.Text.Contains(n1.ToString()), "Selection card displays node GUID.");
+            Check(visualizerWin.SelectedTypeText.Text.Contains("Basic"), $"Selection card displays node type (actual: '{visualizerWin.SelectedTypeText.Text}').");
+            Check(visualizerWin.Labels.SelectedNodeIndex == 0, "LabelOverlay reflects SelectedNodeIndex = 0.");
+
+            // 'F' key frames selection when one exists
+            KeyEventArgs fKeyEvent = new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                new System.Windows.Interop.HwndSource(0, 0, 0, 0, 0, "", IntPtr.Zero),
+                0,
+                Key.F)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent
+            };
+            previewKey?.Invoke(visualizerWin, new object[] { visualizerWin, fKeyEvent });
+            DoEvents();
+            Check(visualizerWin.StatusText.Text == "Framed selected node.", "'F' key frames selected node when selection exists.");
+
+            // Hover node 1
+            visualizerWin.HoverNodeForTesting(1);
+            DoEvents();
+
+            Check(visualizerWin.HoveredIndex == 1, "Hovered node index is set to 1.");
+            Check(visualizerWin.StatusText.Text.Contains("Node Beta"), $"Status bar displays hovered node info (actual: '{visualizerWin.StatusText.Text}').");
+            Check(visualizerWin.Labels.HoveredNodeIndex == 1, "LabelOverlay reflects HoveredNodeIndex = 1.");
+
+            visualizerWin.HoverNodeForTesting(null);
+            DoEvents();
+            Check(visualizerWin.HoveredIndex is null, "Hovered index cleared.");
+
+            // Clear selection via Clear button
+            MethodInfo? clearSelectionClick = typeof(VisualizerWindow).GetMethod("ClearSelection_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            clearSelectionClick?.Invoke(visualizerWin, new object[] { visualizerWin.ClearSelectionButton, new RoutedEventArgs() });
+            DoEvents();
+
+            Check(visualizerWin.SelectedIndex is null, "ClearSelectionButton clears the selected node.");
+            Check(visualizerWin.SelectionCard.Visibility == Visibility.Collapsed, "SelectionCard collapses when selection is cleared.");
+
+            // 'F' key frames all nodes when no selection exists
+            previewKey?.Invoke(visualizerWin, new object[] { visualizerWin, fKeyEvent });
+            DoEvents();
+            Check(visualizerWin.StatusText.Text == "Framed all nodes.", "'F' key frames all nodes when no selection exists.");
+
+            // 10. Phase 5: Three-Tab Side Panel, Colors, Swatches, Fallbacks & Reset
+            Check(visualizerWin.SideTabControl.Items.Count == 3, "Side panel has 3 tabs (Node Colors, Link Colors, View).");
+            Check(visualizerWin.NodeColorsPanel.Children.Count >= 2, $"Node colors panel has rows for node types (count: {visualizerWin.NodeColorsPanel.Children.Count}).");
+            Check(visualizerWin.LinkColorsPanel.Children.Count >= 1, $"Link colors panel has rows for forward link types (count: {visualizerWin.LinkColorsPanel.Children.Count}).");
+            Check(visualizerWin.ClassColorsPanel.Children.Count >= 8, $"Class colors panel has rows for link classes (count: {visualizerWin.ClassColorsPanel.Children.Count}).");
+
+            // Live color override and material update
+            RgbColor overrideColor = new RgbColor(220, 60, 60); // Red
+            visualizerWin.ColorsMap.SetNodeColor(NodeTypes.Concepts.Id, overrideColor);
+            DoEvents();
+            Check(visualizerWin.ColorsMap.GetNodeColor(NodeTypes.Concepts.Id) == overrideColor, "Node color override applied to GraphColorMap.");
+
+            visualizerWin.ColorsMap.SetLinkColor(ForwardLinkTypes.basic.Id, overrideColor);
+            DoEvents();
+            Check(visualizerWin.ColorsMap.GetLinkColor(ForwardLinkTypes.basic.Id, 0) == overrideColor, "Link color override applied to GraphColorMap.");
+
+            visualizerWin.ColorsMap.SetClassColor(LinkClass.identities.Id, overrideColor);
+            DoEvents();
+            Check(visualizerWin.ColorsMap.GetClassColor(LinkClass.identities.Id) == overrideColor, "Class fallback override applied to GraphColorMap.");
+
+            // Reset color defaults
+            MethodInfo? resetNodeColors = typeof(VisualizerWindow).GetMethod("ResetNodeColors_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            resetNodeColors?.Invoke(visualizerWin, new object[] { visualizerWin.ResetNodeColorsButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.ColorsMap.NodeColors.Count == 0, "ResetNodeColors clears all node color overrides.");
+
+            MethodInfo? resetLinkColors = typeof(VisualizerWindow).GetMethod("ResetLinkColors_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            resetLinkColors?.Invoke(visualizerWin, new object[] { visualizerWin.ResetLinkColorsButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.ColorsMap.LinkColors.Count == 0 && visualizerWin.ColorsMap.ClassColors.Count == 0, "ResetLinkColors clears all link and class overrides.");
+
+            // 11. Phase 5: View Sliders, Settings & Persistence
+            visualizerWin.SpreadSlider.Value = 7.5;
+            visualizerWin.CubeSizeSlider.Value = 1.2;
+            visualizerWin.LineWidthSlider.Value = 0.2;
+            visualizerWin.MaxLabelsSlider.Value = 500;
+            DoEvents();
+
+            Check(visualizerWin.Options.Spread == 7.5, "SpreadSlider updates options.Spread.");
+            Check(visualizerWin.Options.CubeSize == 1.2, "CubeSizeSlider updates options.CubeSize.");
+            Check(visualizerWin.Options.LineWidth == 0.2, "LineWidthSlider updates options.LineWidth.");
+            Check(visualizerWin.Options.MaxLabels == 500, "MaxLabelsSlider updates options.MaxLabels.");
+            Check(visualizerWin.Labels.MaxLabels == 500, "MaxLabels updates LabelOverlay.MaxLabels.");
+
+            visualizerWin.SaveSettingsForTesting();
+            string settingsPath = VisualizerSettings.GetDefaultPath();
+            Check(File.Exists(settingsPath), $"Visualizer settings saved to JSON file: {settingsPath}");
+
+            string settingsJson = File.ReadAllText(settingsPath);
+            Check(settingsJson.Contains("\"spread\": 7.5"), "Saved settings JSON contains updated spread (7.5).");
+            Check(settingsJson.Contains("\"cubeSize\": 1.2"), "Saved settings JSON contains updated cubeSize (1.2).");
+
+            // Reset view settings
+            MethodInfo? resetViewSettings = typeof(VisualizerWindow).GetMethod("ResetViewSettings_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            resetViewSettings?.Invoke(visualizerWin, new object[] { visualizerWin.ResetViewSettingsButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.Options.Spread == 6.0, "ResetViewSettings restores default Spread (6.0).");
+            Check(visualizerWin.Options.CubeSize == 1.0, "ResetViewSettings restores default CubeSize (1.0).");
+
+            // 12. Phase 5: Help Overlay
+            Check(visualizerWin.HelpOverlay.Visibility == Visibility.Collapsed, "HelpOverlay is collapsed by default.");
+            MethodInfo? helpClick = typeof(VisualizerWindow).GetMethod("Help_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            helpClick?.Invoke(visualizerWin, new object[] { visualizerWin.HelpButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.HelpOverlay.Visibility == Visibility.Visible, "Help button opens HelpOverlay.");
+
+            // Esc while HelpOverlay is visible closes overlay without closing the window
+            KeyEventArgs escOverlayEvent = new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                new System.Windows.Interop.HwndSource(0, 0, 0, 0, 0, "", IntPtr.Zero),
+                0,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent
+            };
+            previewKey?.Invoke(visualizerWin, new object[] { visualizerWin, escOverlayEvent });
+            DoEvents();
+            Check(visualizerWin.HelpOverlay.Visibility == Visibility.Collapsed, "Esc closes HelpOverlay while keeping VisualizerWindow open.");
+            Check(!visualizerWin.IsClosed, "VisualizerWindow remains open after dismissing HelpOverlay.");
+
+            // 13. Esc closes window
+            KeyEventArgs escEvent = new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                new System.Windows.Interop.HwndSource(0, 0, 0, 0, 0, "", IntPtr.Zero),
+                0,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent
+            };
+            previewKey?.Invoke(visualizerWin, new object[] { visualizerWin, escEvent });
+            DoEvents();
+
+            Check(visualizerWin!.IsClosed, "Esc key triggers window Close (IsClosed == true).");
+            Check(!visualizerWin.Scene.HasGeometry, "Closed window clears scene geometry.");
+            Check(winField?.GetValue(mainWindow) is null, "Closed window nulls MainWindow's instance reference.");
+
+            // 8. Toolbar Close (Esc) button on fresh window
+            visualizerClick?.Invoke(mainWindow, new object[] { mainWindow.VisualizerButton, new RoutedEventArgs() });
+            DoEvents();
+            VisualizerWindow? freshWin = winField?.GetValue(mainWindow) as VisualizerWindow;
+            Check(freshWin is not null, "New VisualizerWindow opens cleanly after previous window closed.");
+
+            MethodInfo? closeClick = typeof(VisualizerWindow).GetMethod("Close_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            closeClick?.Invoke(freshWin, new object[] { freshWin!.CloseButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(freshWin!.IsClosed, "Toolbar Close (Esc) button closes the window.");
+            Check(winField?.GetValue(mainWindow) is null, "Toolbar close nulls MainWindow's instance reference.");
+
+            mainWindow.Close();
+            DoEvents();
         }
 
         // ================================================================================

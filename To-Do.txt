@@ -278,19 +278,92 @@ Recommended fixture script (PowerShell):
 
 
 ================================================================================
-10. SIGN-OFF
+10. 3D VISUALIZER SHELL, NAVIGATION, INSPECTION, AND COLORS (Phases 3, 4 & 5)
 ================================================================================
 
-Automated verification: 139 passed, 0 failed (smoke suite); 153 passed, 0 failed (WPF STA UI test suite).
-Manual sections run: Sections 0 through 9        Passed: All (153/153)  Failed: 0
+[x] MainWindow dedicated Visualizer button:
+      - Disabled before Launch Core with tooltip "Launch Core before opening the Visualizer."
+      - Enabled after successful Launch Core click.
+      - Launches VisualizerWindow in its own separate top-level window (not embedded in Tools).
+[x] Fullscreen borderless window properties:
+      - WindowStyle = None
+      - WindowState = Maximized
+      - ResizeMode = NoResize
+      - ShowInTaskbar = True
+      - Title = "OPEN-LRD Visualizer"
+[x] Single-instance pattern:
+      - Clicking Visualizer in MainWindow when already open restores (if minimized) and activates the instance.
+      - Does not create duplicate visualizer windows.
+[x] Empty graph state:
+      - EmptyStateOverlay is visible.
+      - Summary displays "Nodes: 0 of 0" and "Links: 0 of 0".
+      - Frame All, Recompute Layout, and Reset View buttons are disabled.
+      - VisualizerScene contains 0 geometry models.
+[x] Populated scene:
+      - Adding knowledge and clicking Refresh populates Viewport3D with lit cubes and link lines.
+      - EmptyStateOverlay collapses.
+      - Summary shows correct node count, link count, class count, and type count.
+      - Layout metrics report iteration count, convergence, elapsed time, and scene radius.
+      - Frame All, Recompute Layout, and Reset View buttons become enabled.
+[x] Fly navigation & mouse look:
+      - FlyCameraController integrates WASD/QE movement in rendering loop.
+      - Shift key boosts speed 4x.
+      - Mouse wheel adjusts base speed multiplier (0.5x to 4.0x) and updates HUD speed indicator.
+      - Right-mouse drag computes yaw/pitch with +/-85 degree clamp and moves look direction.
+      - Movement pauses when window is inactive or text input is focused.
+[x] Label overlay & toggle:
+      - GraphLabelOverlay draws dark rounded badges with formatted text.
+      - Nearest label budget and distance sorting keep rendering fast.
+      - Selected and hovered nodes receive distinct highlight borders and top z-order.
+      - 'L' key and toolbar ToggleLabels button toggle label visibility.
+[x] Ray-AABB picking & selection:
+      - Left-click on node cube selects node; highlights cube with emissive cyan mesh.
+      - View tab displays dedicated SelectionCard with ID, label, type, lifetime, degree, and aliases.
+      - Left-click on empty space or clicking Clear button clears selection and collapses SelectionCard.
+      - Hover over node highlights cube with amber mesh and updates status bar with label, type, and degree.
+[x] Three-tab side panel:
+      - TabControl contains "Node Colors", "Link Colors", and "View".
+      - "Node Colors" lists node classes with colored swatches and 24-color dropdowns.
+      - "Link Colors" lists forward link types with swatches and dropdowns.
+      - "Advanced: LinkClass Fallbacks" expander lists link classes with swatches and dropdowns.
+      - "Reset Defaults" buttons restore deterministic palette mappings.
+[x] Live material updates:
+      - Changing color dropdown replaces model materials immediately with no layout or geometry rebuild.
+[x] View settings sliders & persistence:
+      - Spread, Cube Size, Line Width, and Max Labels sliders update view options.
+      - "Apply Layout" recomputes distance layout with current settings.
+      - "Reset View" restores default view settings.
+      - Settings serialize atomically to %LOCALAPPDATA%/OPEN-LRD/visualizer-settings.json.
+[x] Truncation banner & controls help:
+      - Warning banner displays when node/link caps are exceeded.
+      - Help overlay toggled via Help (?) button or F1/? and dismissed via Esc/close.
+[x] Camera framing & shortcuts:
+      - 'F' key frames selected node when selection exists; frames all nodes when none exists.
+      - 'R' key and toolbar Reset View button restore initial framed view.
+      - Recompute Layout reruns distance layout and updates metrics.
+[x] Window exit paths:
+      - Pressing Esc triggers PreviewKeyDown, sets e.Handled = true, and calls Close().
+      - Window cleans up: stops rendering loop, cancels active layout token, clears scene geometry, and nulls MainWindow instance reference.
+      - Toolbar Close (Esc) button runs the same clean close path.
+      - Reopening from MainWindow after close creates a clean new instance.
+
+
+================================================================================
+11. SIGN-OFF
+================================================================================
+
+Automated verification: 139 passed, 0 failed (smoke suite); 245 passed, 0 failed (WPF STA UI test suite).
+Sections run: Sections 0 through 10 (Text Import + 3D Visualizer Phases 3, 4 & 5)
+Passed: All (245/245)  Failed: 0
 
 Issues found (step, expected, actual, screenshot/log path):
 
   1. Fixed: TextImportCancel_Button_Click previously updated status even when no import was active; now returns immediately when textImport is null.
   2. Fixed: Tools.xaml.cs async UI continuations required DispatcherSynchronizationContext in test harnesses.
+  3. Fixed: VisualizerWindow safely checks this.IsLoaded before setting Owner in MainWindow to avoid unshown window owner exceptions.
 
 Notes:
   All checklist verification executed through WPF STA UI test runner (OPEN-LRD.ManualUiTests)
-  exercising the actual Tools window controls, handlers, and background import worker.
+  exercising the actual Tools and Visualizer window controls, 3D viewport, handlers, and background workers.
 
 Tester signature: ThreeBlueManaStudios - Automated UI Runner (WPF STA)   Date: 2026-11-13
