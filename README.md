@@ -246,9 +246,3 @@ Planned. No ontology bootstrap or curated loading pipeline exists yet.
 4. Connect the modules into an end-to-end ingest, reason, and answer loop.
 5. Add stress tests for ambiguity, contradictions, cycles, trust loss, and large graphs.
 6. Add maintenance passes for graph refactoring, graph compression, and inferred-memory cleanup.
-
-## Source Note
-
-- `README.md` defines the authoritative four-module order and current project scope.
-- *Building a Cognitive Knowledge Graph* supplies the conceptual architecture: graph storage, memory lifecycle, subgraph matching, trust, provenance, entity disambiguation, event-centric ontology, and bounded reasoning.
-- The PDF's Python/NetworkX example is historical; the project target remains native C#.
