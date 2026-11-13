@@ -5,24 +5,7 @@
   },
   "compilationOptions": {},
   "targets": {
-    ".NETCoreApp,Version=v10.0": {
-      "GraphNetworkLibrary/1.0.1": {
-        "runtime": {
-          "lib/netstandard2.0/GraphLibrary.dll": {
-            "assemblyVersion": "1.0.1.0",
-            "fileVersion": "1.0.1.0"
-          }
-        }
-      }
-    }
+    ".NETCoreApp,Version=v10.0": {}
   },
-  "libraries": {
-    "GraphNetworkLibrary/1.0.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-GQA0dxUymVF7SPYQ0d1dOY9LVdV+BpogBpIFdeTok7ThTMA/lOLdOvWiIeKp8A5d6RWroUioTjmOe58zMzC9QA==",
-      "path": "graphnetworklibrary/1.0.1",
-      "hashPath": "graphnetworklibrary.1.0.1.nupkg.sha512"
-    }
-  }
+  "libraries": {}
 }
