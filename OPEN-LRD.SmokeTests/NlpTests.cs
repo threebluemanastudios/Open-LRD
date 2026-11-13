@@ -21,6 +21,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP relation registry", TestNlpRelationRegistry);
             Program.Run("NLP relation extraction patterns", TestNlpRelationExtractionPatterns);
             Program.Run("NLP relation extraction exclusions", TestNlpRelationExtractionExclusions);
+            Program.Run("NLP coordination and negation", TestNlpCoordinationAndNegation);
             Program.Run("NLP chain building", TestNlpChainBuilding);
             Program.Run("NLP reasoning ingestion", TestNlpReasoningIngestion);
             Program.Run("NLP ingestion safety", TestNlpIngestionSafety);
@@ -372,6 +373,11 @@ namespace OPEN_LRD.SmokeTests
             Assert(byId.Name == "work_at", "ID lookup should return the registered relation");
             Assert(RelationRegistry.TryGet("at", out RelationLinkType spatial), "spatial prepositions should be seeded");
             Assert(spatial.Id != workAt.Id, "distinct relations should have distinct IDs");
+
+            Assert(
+                RelationRegistry.TryGet(RelationRegistry.AntonymRelationName, out RelationLinkType antonym),
+                "the antonym relation should be reserved for Module 4");
+            Assert(antonym.Id == RelationRegistry.AntonymLinkTypeId, "the antonym relation should keep its reserved ID");
         }
 
         private static void TestNlpRelationExtractionPatterns()
@@ -468,6 +474,81 @@ namespace OPEN_LRD.SmokeTests
 
             NlpResult imperative = pipeline.Analyze("Please open the door.");
             Assert(imperative.Frames.Count == 0, "imperative input should not be ingested as assertions");
+        }
+
+        private static void TestNlpCoordinationAndNegation()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+
+            NlpResult subjectCoordination = pipeline.Analyze("Alice and Bob play chess.");
+            Assert(subjectCoordination.Frames.Count == 2, "coordinated subjects should produce one frame per subject");
+            Assert(
+                subjectCoordination.Frames.Any(frame => frame.Arguments.Any(
+                    argument => argument.Role == FrameRole.Subject && argument.SurfaceText == "Alice")),
+                "the first coordinated subject should be extracted");
+            Assert(
+                subjectCoordination.Frames.Any(frame => frame.Arguments.Any(
+                    argument => argument.Role == FrameRole.Subject && argument.SurfaceText == "Bob")),
+                "the second coordinated subject should be extracted");
+            Assert(
+                subjectCoordination.Frames.All(frame => frame.Coordination == CoordinationKind.Conjunction),
+                "subject coordination should be marked as a conjunction");
+
+            NlpResult verbCoordination = pipeline.Analyze("Alice buys and sells a car.");
+            Assert(verbCoordination.Frames.Count == 2, "coordinated verbs should produce one frame per verb");
+            Assert(
+                verbCoordination.Frames.Any(frame => frame.RelationName == "buy"),
+                "the first coordinated verb should be extracted");
+            Assert(
+                verbCoordination.Frames.Any(frame => frame.RelationName == "sell"),
+                "the second coordinated verb should be extracted");
+
+            NlpResult disjunction = pipeline.Analyze("Alice sees Bob or Carol.");
+            Assert(disjunction.Frames.Count == 2, "disjunction should produce one frame per alternative");
+            Assert(
+                disjunction.Frames.All(frame => frame.Coordination == CoordinationKind.Disjunction),
+                "object alternatives should be marked as disjunctions");
+            Assert(
+                disjunction.Frames.Select(frame => frame.CoordinationGroup).Distinct().Count() == 1,
+                "disjunction alternatives should share a coordination group");
+
+            NlpResult combined = pipeline.Analyze("Alice and Bob see Carol or Dave.");
+            Assert(combined.Frames.Count == 4, "combined subject and object coordination should produce a cross product");
+            Assert(
+                combined.Frames.All(frame => frame.Coordination == CoordinationKind.Disjunction),
+                "combined coordination should be marked as a disjunction");
+
+            NlpResult negatedComplement = pipeline.Analyze("Alice is not hot.");
+            Assert(negatedComplement.Frames.Count == 1, "negated complement should produce one frame");
+            RelationFrame negatedFrame = negatedComplement.Frames[0];
+            Assert(negatedFrame.Negation == NegationKind.Complement, "complement negation should be recorded");
+            Assert(negatedFrame.Ingestible, "negated complements should be ingestible");
+            AssertArgument(negatedFrame, FrameRole.Object, "not hot");
+
+            NlpResult negatedLocation = pipeline.Analyze("The cat is not inside the house.");
+            Assert(negatedLocation.Frames.Count == 1, "negated location complement should produce one frame");
+            Assert(
+                negatedLocation.Frames[0].Negation == NegationKind.Complement,
+                "negated location should be recorded as a complement negation");
+            AssertArgument(negatedLocation.Frames[0], FrameRole.Object, "not inside");
+
+            LRD_Core ingestCore = NewCore();
+            NlpPipeline ingestPipeline = new NlpPipeline(ingestCore);
+            Assert(
+                ingestPipeline.Ingest("Alice is not hot.").Status == NlpStatus.Ingested,
+                "negated complement should ingest");
+            Assert(
+                ingestCore.FindByLabel("not hot").Any(),
+                "a negated concept node should be created");
+            Assert(
+                !ingestCore.FindByLabel("hot").Any(),
+                "the negated concept should not merge with the positive concept");
+
+            NlpResult negatedVerb = pipeline.Analyze("Alice does not see Bob.");
+            Assert(negatedVerb.Frames.Count == 1, "negated verb should still produce a frame");
+            Assert(negatedVerb.Frames[0].Negation == NegationKind.Predicate, "verb negation should be recorded");
+            Assert(!negatedVerb.Frames[0].Ingestible, "negated verbs should not be ingested");
         }
 
         private static void TestNlpChainBuilding()

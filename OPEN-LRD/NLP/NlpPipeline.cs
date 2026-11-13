@@ -530,7 +530,10 @@ namespace OPEN_LRD.NLP
                 temporaryNodeIDs,
                 result.GraphMutated,
                 IsSuccessfulIngestion(result.Status),
-                result.Diagnostics);
+                result.Diagnostics,
+                frame.Coordination,
+                frame.CoordinationGroup,
+                frame.Negation);
         }
 
         private void UpdateIngestionConversation(

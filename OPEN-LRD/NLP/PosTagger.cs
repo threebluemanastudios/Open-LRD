@@ -203,6 +203,14 @@ namespace OPEN_LRD.NLP
             if (Lexicon.IsKnownVerb(value) || Lexicon.IsIrregularVerbForm(value))
                 return !afterDeterminer;
 
+            if (value.EndsWith("s", StringComparison.Ordinal)
+                && !value.EndsWith("ss", StringComparison.Ordinal)
+                && value.Length > 1
+                && Lexicon.IsKnownVerb(value[..^1]))
+            {
+                return !afterDeterminer;
+            }
+
             if (value.EndsWith("ing", StringComparison.Ordinal) && value.Length > 3)
             {
                 if (afterAuxiliary)

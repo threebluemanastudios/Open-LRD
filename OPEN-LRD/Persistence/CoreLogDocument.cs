@@ -214,6 +214,12 @@ namespace OPEN_LRD.Persistence
         public bool IsUsableForAnswer { get; set; }
 
         public List<string> Diagnostics { get; set; } = new List<string>();
+
+        public int Coordination { get; set; }
+
+        public int CoordinationGroup { get; set; }
+
+        public int Negation { get; set; }
     }
 
     internal static class NlpOptionsLogMapper

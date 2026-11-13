@@ -131,6 +131,14 @@ namespace OPEN_LRD.NLP
                     continue;
                 }
 
+                if (tokens[index].PartOfSpeech == PartOfSpeech.Adjective)
+                {
+                    int adjectiveStart = index;
+                    int adjectiveEnd = ConsumeAdjectivePhrase(tokens, index, end, out index);
+                    chunks.Add(new Chunk(ChunkKind.AdjectivePhrase, sentenceIndex, adjectiveStart, adjectiveEnd));
+                    continue;
+                }
+
                 if (tokens[index].PartOfSpeech is PartOfSpeech.Verb or PartOfSpeech.Auxiliary)
                 {
                     int verbStart = index;
@@ -176,6 +184,21 @@ namespace OPEN_LRD.NLP
             return index - 1;
         }
 
+        private static int ConsumeAdjectivePhrase(
+            IReadOnlyList<Token> tokens,
+            int start,
+            int end,
+            out int next)
+        {
+            int index = start;
+
+            while (index <= end && tokens[index].PartOfSpeech == PartOfSpeech.Adjective)
+                index++;
+
+            next = index;
+            return index - 1;
+        }
+
         private static int ConsumeVerbPhrase(
             IReadOnlyList<Token> tokens,
             int start,
@@ -184,12 +207,25 @@ namespace OPEN_LRD.NLP
         {
             int index = start;
 
-            while (index <= end
-                && tokens[index].PartOfSpeech is PartOfSpeech.Verb
+            while (index <= end)
+            {
+                if (tokens[index].PartOfSpeech is PartOfSpeech.Verb
                     or PartOfSpeech.Auxiliary
                     or PartOfSpeech.Adverb)
-            {
-                index++;
+                {
+                    index++;
+                    continue;
+                }
+
+                if (tokens[index].PartOfSpeech == PartOfSpeech.Conjunction
+                    && index + 1 <= end
+                    && tokens[index + 1].PartOfSpeech is PartOfSpeech.Verb or PartOfSpeech.Auxiliary)
+                {
+                    index++;
+                    continue;
+                }
+
+                break;
             }
 
             next = index;
@@ -273,13 +309,26 @@ namespace OPEN_LRD.NLP
                     && chunk.StartToken > predicate.EndToken
                     && !IsInsidePrepositionalPhrase(chunk, chunks));
 
+            bool isCopula = false;
+
             if (complement is not null)
             {
-                bool isCopula = sentence.Tokens
+                isCopula = sentence.Tokens
                     .Skip(predicate.StartToken)
                     .Take(predicate.EndToken - predicate.StartToken + 1)
                     .Any(token => token.Lemma == "be");
+            }
+            else
+            {
+                complement = chunks.FirstOrDefault(
+                    chunk => chunk.Kind == ChunkKind.AdjectivePhrase
+                        && chunk.StartToken > predicate.EndToken
+                        && !IsInsidePrepositionalPhrase(chunk, chunks));
+                isCopula = complement is not null;
+            }
 
+            if (complement is not null)
+            {
                 arguments.Add(new ClauseArgument(
                     isCopula ? ClauseRole.Complement : ClauseRole.Object,
                     complement.StartToken,

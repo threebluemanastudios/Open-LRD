@@ -103,16 +103,17 @@ namespace OPEN_LRD.NLP
             List<ClauseArgument> qualifierSpans = clause.Arguments
                 .Where(argument => argument.Role == ClauseRole.Qualifier)
                 .ToList();
+            ClauseArgument? predicateSpan = FindArgument(clause, ClauseRole.Predicate);
+            List<Token> predicateTokens = predicateSpan is null
+                ? new List<Token>()
+                : sentence.Tokens
+                    .Skip(predicateSpan.StartToken)
+                    .Take(predicateSpan.EndToken - predicateSpan.StartToken + 1)
+                    .ToList();
             List<Token> clauseTokens = sentence.Tokens
                 .Skip(clause.StartToken)
                 .Take(clause.EndToken - clause.StartToken + 1)
                 .ToList();
-            List<Token> predicateTokens = FindArgument(clause, ClauseRole.Predicate) is ClauseArgument predicateSpan
-                ? sentence.Tokens
-                    .Skip(predicateSpan.StartToken)
-                    .Take(predicateSpan.EndToken - predicateSpan.StartToken + 1)
-                    .ToList()
-                : new List<Token>();
 
             if (subjectSpan is null)
             {
@@ -120,11 +121,106 @@ namespace OPEN_LRD.NLP
                 return;
             }
 
+            Token? negatorToken = clauseTokens.LastOrDefault(
+                token => negators.Contains(token.Normalized)
+                    || token.Normalized.Contains("n't", StringComparison.Ordinal));
+            bool negated = negatorToken is not null;
+
+            Token? overallMainVerb = FindMainVerb(predicateTokens);
+            bool overallHasBeAuxiliary = predicateTokens.Any(
+                token => token.PartOfSpeech == PartOfSpeech.Auxiliary && token.Lemma == "be");
+            ClauseArgument? byQualifier = qualifierSpans.FirstOrDefault(
+                span => GetQualifierNounPhrase(sentence, clause, span) is QualifierPhrase phrase
+                    && string.Equals(phrase.Preposition, "by", StringComparison.OrdinalIgnoreCase));
+            bool passive = overallHasBeAuxiliary
+                && overallMainVerb is not null
+                && overallMainVerb.Lemma != "be"
+                && byQualifier is not null;
+
+            List<(int Start, int End)> subjectSegments = SplitCoordinatedSpan(
+                sentence,
+                subjectSpan.StartToken,
+                subjectSpan.EndToken,
+                IsNounHeadToken,
+                out CoordinationKind subjectCoordination);
+
+            if (subjectSegments.Count == 0)
+                subjectSegments.Add((subjectSpan.StartToken, subjectSpan.EndToken));
+
+            if (passive && subjectSegments.Count > 1)
+            {
+                subjectSegments = new List<(int Start, int End)>
+                {
+                    (subjectSpan.StartToken, subjectSpan.EndToken)
+                };
+                subjectCoordination = CoordinationKind.None;
+            }
+
+            CoordinationKind predicateCoordination = CoordinationKind.None;
+            List<(int Start, int End)> predicateSegments = predicateSpan is null
+                ? new List<(int Start, int End)>()
+                : SplitCoordinatedSpan(
+                    sentence,
+                    predicateSpan.StartToken,
+                    predicateSpan.EndToken,
+                    IsVerbHeadToken,
+                    out predicateCoordination);
+
+            if (predicateSegments.Count == 0)
+                predicateSegments.Add((clause.StartToken, clause.StartToken - 1));
+
+            CoordinationKind coordination = Combine(subjectCoordination, predicateCoordination);
+            int coordinationGroup = (sentence.Index + 1) * 1000 + clause.Index;
+
+            foreach ((int subjectStart, int subjectEnd) in subjectSegments)
+            {
+                foreach ((int predicateStart, int predicateEnd) in predicateSegments)
+                {
+                    List<Token> groupTokens = predicateEnd < predicateStart
+                        ? new List<Token>()
+                        : sentence.Tokens
+                            .Skip(predicateStart)
+                            .Take(predicateEnd - predicateStart + 1)
+                            .ToList();
+
+                    ExtractClauseCore(
+                        sentence,
+                        clause,
+                        parsed,
+                        subjectStart,
+                        subjectEnd,
+                        groupTokens,
+                        negated,
+                        negatorToken,
+                        qualifierSpans,
+                        coordination,
+                        coordinationGroup,
+                        frames,
+                        diagnostics);
+                }
+            }
+        }
+
+        private static void ExtractClauseCore(
+            Sentence sentence,
+            Clause clause,
+            ParsedText parsed,
+            int subjectStart,
+            int subjectEnd,
+            List<Token> predicateTokens,
+            bool negated,
+            Token? negatorToken,
+            List<ClauseArgument> qualifierSpans,
+            CoordinationKind coordination,
+            int coordinationGroup,
+            List<RelationFrame> frames,
+            List<string> diagnostics)
+        {
             FrameArgument? subject = CreateArgument(
                 sentence,
                 parsed,
-                subjectSpan.StartToken,
-                subjectSpan.EndToken,
+                subjectStart,
+                subjectEnd,
                 FrameRole.Subject,
                 null);
 
@@ -141,9 +237,6 @@ namespace OPEN_LRD.NLP
                 .Where(token => token.PartOfSpeech == PartOfSpeech.Auxiliary)
                 .Select(token => token.Lemma)
                 .FirstOrDefault(lemma => modals.Contains(lemma));
-            bool negated = clauseTokens.Any(
-                token => negators.Contains(token.Normalized)
-                    || token.Normalized.Contains("n't", StringComparison.Ordinal));
 
             ClauseArgument? objectSpan = FindArgument(clause, ClauseRole.Object);
             ClauseArgument? complementSpan = FindArgument(clause, ClauseRole.Complement);
@@ -164,6 +257,8 @@ namespace OPEN_LRD.NLP
             FrameArgument primaryObject;
             List<FrameArgument> qualifiers = new List<FrameArgument>();
             double patternConfidence;
+            NegationKind negation = negated ? NegationKind.Predicate : NegationKind.None;
+            QualifierPhrase? negatedQualifier = null;
 
             if (passive)
             {
@@ -183,15 +278,13 @@ namespace OPEN_LRD.NLP
                 }
 
                 subject = agent;
-                primaryObject = subjectSpan is not null
-                    ? CreateArgument(
-                        sentence,
-                        parsed,
-                        subjectSpan.StartToken,
-                        subjectSpan.EndToken,
-                        FrameRole.Object,
-                        null)!
-                    : subject;
+                primaryObject = CreateArgument(
+                    sentence,
+                    parsed,
+                    subjectStart,
+                    subjectEnd,
+                    FrameRole.Object,
+                    null)!;
 
                 predicateLemma = mainVerb!.Lemma;
                 relationName = RelationRegistry.Normalize(mainVerb.Lemma);
@@ -201,18 +294,82 @@ namespace OPEN_LRD.NLP
             }
             else if (mainVerb is null && hasBeAuxiliary && complementSpan is not null)
             {
-                primaryObject = CreateArgument(
+                int complementStart = complementSpan.StartToken;
+
+                if (negated
+                    && negatorToken is not null
+                    && negatorToken.TokenIndex == complementSpan.StartToken - 1)
+                {
+                    complementStart = negatorToken.TokenIndex;
+                    negation = NegationKind.Complement;
+                }
+
+                FrameArgument? complement = CreateArgument(
                     sentence,
                     parsed,
-                    complementSpan.StartToken,
+                    complementStart,
                     complementSpan.EndToken,
                     FrameRole.Object,
-                    null)!;
+                    null);
 
+                if (complement is null)
+                {
+                    diagnostics.Add("A relation object could not be resolved into a mention.");
+                    return;
+                }
+
+                if (negation == NegationKind.Complement)
+                    complement = complement with { Lemma = complement.SurfaceText };
+
+                primaryObject = complement;
                 predicateLemma = "be";
                 relationName = RelationRegistry.Normalize("be");
                 linkClass = LinkClass.identities;
                 patternConfidence = 0.95;
+            }
+            else if (mainVerb is null && hasBeAuxiliary && qualifierSpans.Count > 0)
+            {
+                QualifierPhrase? phrase = FindFirstQualifierPhrase(sentence, clause, qualifierSpans);
+
+                if (phrase is null)
+                {
+                    diagnostics.Add("A copula complement could not be resolved into a mention.");
+                    return;
+                }
+
+                int complementStart = phrase.PrepositionToken;
+
+                if (negated
+                    && negatorToken is not null
+                    && negatorToken.TokenIndex == phrase.PrepositionToken - 1)
+                {
+                    complementStart = negatorToken.TokenIndex;
+                    negation = NegationKind.Complement;
+                    negatedQualifier = phrase;
+                }
+
+                FrameArgument? complement = CreateArgument(
+                    sentence,
+                    parsed,
+                    complementStart,
+                    phrase.PrepositionToken,
+                    FrameRole.Object,
+                    null);
+
+                if (complement is null)
+                {
+                    diagnostics.Add("A copula complement could not be resolved into a mention.");
+                    return;
+                }
+
+                if (negation == NegationKind.Complement)
+                    complement = complement with { Lemma = complement.SurfaceText };
+
+                primaryObject = complement;
+                predicateLemma = "be";
+                relationName = RelationRegistry.Normalize("be");
+                linkClass = LinkClass.identities;
+                patternConfidence = 0.90;
             }
             else if (mainVerb is null)
             {
@@ -242,13 +399,17 @@ namespace OPEN_LRD.NLP
             }
             else if (objectSpan is not null)
             {
-                List<(int Start, int End)> segments = SplitObjectSpan(
+                List<(int Start, int End)> segments = SplitCoordinatedSpan(
                     sentence,
                     objectSpan.StartToken,
-                    objectSpan.EndToken);
+                    objectSpan.EndToken,
+                    IsNounHeadToken,
+                    out CoordinationKind objectCoordination);
 
                 if (segments.Count > 1)
                 {
+                    CoordinationKind frameCoordination = Combine(coordination, objectCoordination);
+
                     foreach ((int start, int end) in segments)
                     {
                         FrameArgument? coordinatedObject = CreateArgument(
@@ -268,6 +429,7 @@ namespace OPEN_LRD.NLP
                             parsed,
                             qualifierSpans,
                             passive ? byQualifier : null,
+                            null,
                             qualifiers);
 
                         AddFrame(
@@ -280,10 +442,13 @@ namespace OPEN_LRD.NLP
                             RelationRegistry.Normalize(mainVerb.Lemma),
                             LinkClass.actions,
                             negated,
+                            negation,
                             modal,
                             tense,
                             Voice.Active,
                             0.90,
+                            frameCoordination,
+                            coordinationGroup,
                             frames,
                             diagnostics);
 
@@ -343,6 +508,7 @@ namespace OPEN_LRD.NLP
                 parsed,
                 qualifierSpans,
                 passive ? byQualifier : null,
+                negatedQualifier,
                 qualifiers);
 
             AddFrame(
@@ -355,10 +521,13 @@ namespace OPEN_LRD.NLP
                 relationName,
                 linkClass,
                 negated,
+                negation,
                 modal,
                 tense,
                 voice,
                 patternConfidence,
+                coordination,
+                coordinationGroup,
                 frames,
                 diagnostics);
         }
@@ -373,17 +542,20 @@ namespace OPEN_LRD.NLP
             string relationName,
             LinkClass linkClass,
             bool negated,
+            NegationKind negation,
             string? modal,
             Tense tense,
             Voice voice,
             double patternConfidence,
+            CoordinationKind coordination,
+            int coordinationGroup,
             List<RelationFrame> frames,
             List<string> diagnostics)
         {
             double confidence = Math.Min(
                 Math.Min(subject.Confidence, primaryObject.Confidence),
                 patternConfidence);
-            bool ingestible = !negated
+            bool ingestible = negation != NegationKind.Predicate
                 && modal is null
                 && !subject.IsPronoun
                 && !primaryObject.IsPronoun
@@ -397,11 +569,18 @@ namespace OPEN_LRD.NLP
 
             List<string> frameDiagnostics = new List<string>();
 
-            if (negated)
+            if (negation == NegationKind.Predicate)
                 diagnostics.Add($"Skipped negated relation '{relationName}'.");
+            else if (negation == NegationKind.Complement)
+                diagnostics.Add(
+                    $"Ingested negated complement '{primaryObject.SurfaceText}' for relation '{relationName}'.");
 
             if (modal is not null)
                 diagnostics.Add($"Skipped modal relation '{relationName}' (modal '{modal}').");
+
+            if (coordination == CoordinationKind.Disjunction)
+                diagnostics.Add(
+                    $"Relation '{relationName}' was ingested as a disjunction alternative (group {coordinationGroup}).");
 
             frames.Add(new RelationFrame(
                 predicateLemma,
@@ -418,7 +597,10 @@ namespace OPEN_LRD.NLP
                 clause.EndToken,
                 confidence,
                 ingestible,
-                frameDiagnostics));
+                frameDiagnostics,
+                coordination,
+                coordinationGroup,
+                negation));
         }
 
         private static void AppendQualifiers(
@@ -427,6 +609,7 @@ namespace OPEN_LRD.NLP
             ParsedText parsed,
             List<ClauseArgument> qualifierSpans,
             ClauseArgument? excluded,
+            QualifierPhrase? negatedQualifier,
             List<FrameArgument> qualifiers)
         {
             foreach (ClauseArgument span in qualifierSpans)
@@ -443,18 +626,27 @@ namespace OPEN_LRD.NLP
                 if (phrase is null)
                     continue;
 
+                string? preposition = phrase.Preposition;
+
+                if (negatedQualifier is not null
+                    && phrase.StartToken == negatedQualifier.StartToken
+                    && phrase.EndToken == negatedQualifier.EndToken)
+                {
+                    preposition = "not_" + preposition;
+                }
+
                 FrameArgument? argument = CreateArgument(
                     sentence,
                     parsed,
                     phrase.StartToken,
                     phrase.EndToken,
                     FrameRole.Qualifier,
-                    phrase.Preposition);
+                    preposition);
 
                 if (argument is null)
                     continue;
 
-                FrameRole role = ClassifyQualifier(argument.NodeType, argument.Kind, phrase.Preposition);
+                FrameRole role = ClassifyQualifier(argument.NodeType, argument.Kind, preposition);
                 qualifiers.Add(argument with { Role = role });
             }
         }
@@ -526,7 +718,11 @@ namespace OPEN_LRD.NLP
                 ? prepositionToken.Normalized
                 : prepositionToken.Lemma;
 
-            return new QualifierPhrase(preposition, nounPhrase.StartToken, nounPhrase.EndToken);
+            return new QualifierPhrase(
+                preposition,
+                prepositionalPhrase.StartToken,
+                nounPhrase.StartToken,
+                nounPhrase.EndToken);
         }
 
         internal static FrameArgument? CreateArgument(
@@ -686,36 +882,79 @@ namespace OPEN_LRD.NLP
             return Tense.Present;
         }
 
-        private static List<(int Start, int End)> SplitObjectSpan(
+        private static List<(int Start, int End)> SplitCoordinatedSpan(
             Sentence sentence,
             int start,
-            int end)
+            int end,
+            Func<Token, bool> isHead,
+            out CoordinationKind coordination)
         {
+            coordination = CoordinationKind.None;
             List<(int Start, int End)> segments = new List<(int Start, int End)>();
             int segmentStart = start;
+            bool found = false;
 
             for (int index = start; index <= end; index++)
             {
                 Token token = sentence.Tokens[index];
 
                 if (token.PartOfSpeech != PartOfSpeech.Conjunction
-                    || (token.Normalized != "and" && token.Normalized != "or"))
+                    || (token.Normalized != "and"
+                        && token.Normalized != "or"
+                        && token.Normalized != "nor"))
                 {
                     continue;
                 }
 
-                if (!HasNounToken(sentence, segmentStart, index - 1)
-                    || !HasNounToken(sentence, index + 1, end))
+                if (!HasHead(sentence, segmentStart, index - 1, isHead)
+                    || !HasHead(sentence, index + 1, end, isHead))
                 {
                     continue;
                 }
 
+                found = true;
+                coordination = Combine(
+                    coordination,
+                    token.Normalized == "and"
+                        ? CoordinationKind.Conjunction
+                        : CoordinationKind.Disjunction);
                 segments.Add(TrimSpan(sentence, segmentStart, index - 1));
                 segmentStart = index + 1;
             }
 
             segments.Add(TrimSpan(sentence, segmentStart, end));
-            return segments.Where(segment => segment.Start <= segment.End).ToList();
+            List<(int Start, int End)> result = segments
+                .Where(segment => segment.Start <= segment.End)
+                .ToList();
+
+            if (!found)
+                coordination = CoordinationKind.None;
+
+            return result;
+        }
+
+        private static CoordinationKind Combine(CoordinationKind left, CoordinationKind right)
+        {
+            if (left == CoordinationKind.Disjunction || right == CoordinationKind.Disjunction)
+                return CoordinationKind.Disjunction;
+
+            if (left == CoordinationKind.Conjunction || right == CoordinationKind.Conjunction)
+                return CoordinationKind.Conjunction;
+
+            return CoordinationKind.None;
+        }
+
+        private static bool IsNounHeadToken(Token token)
+        {
+            return token.PartOfSpeech is PartOfSpeech.Noun
+                or PartOfSpeech.ProperNoun
+                or PartOfSpeech.Pronoun
+                or PartOfSpeech.Number;
+        }
+
+        private static bool IsVerbHeadToken(Token token)
+        {
+            return token.PartOfSpeech is PartOfSpeech.Verb or PartOfSpeech.Auxiliary;
         }
 
         private static (int Start, int End) TrimSpan(Sentence sentence, int start, int end)
@@ -735,17 +974,12 @@ namespace OPEN_LRD.NLP
             return (start, end);
         }
 
-        private static bool HasNounToken(Sentence sentence, int start, int end)
+        private static bool HasHead(Sentence sentence, int start, int end, Func<Token, bool> isHead)
         {
             for (int index = start; index <= end; index++)
             {
-                if (sentence.Tokens[index].PartOfSpeech is PartOfSpeech.Noun
-                    or PartOfSpeech.ProperNoun
-                    or PartOfSpeech.Pronoun
-                    or PartOfSpeech.Number)
-                {
+                if (isHead(sentence.Tokens[index]))
                     return true;
-                }
             }
 
             return false;
@@ -756,6 +990,10 @@ namespace OPEN_LRD.NLP
             return clause.Arguments.FirstOrDefault(argument => argument.Role == role);
         }
 
-        private sealed record QualifierPhrase(string Preposition, int StartToken, int EndToken);
+        private sealed record QualifierPhrase(
+            string Preposition,
+            int PrepositionToken,
+            int StartToken,
+            int EndToken);
     }
 }

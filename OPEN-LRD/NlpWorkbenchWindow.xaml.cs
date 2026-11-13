@@ -96,7 +96,12 @@ namespace OPEN_LRD
 
             ExecuteOperation(
                 "Ingest",
-                () => workbench.Ingest(IngestInput.Text, sourceNodeID, topicNodeID));
+                () => workbench.Ingest(IngestInput.Text, sourceNodeID, topicNodeID),
+                result =>
+                {
+                    if (result.Status == NlpStatus.Ingested)
+                        IngestInput.Clear();
+                });
         }
 
         private void Ask_Button_Click(object sender, RoutedEventArgs e)
@@ -267,7 +272,7 @@ namespace OPEN_LRD
             }
         }
 
-        private void ExecuteOperation(string operation, Func<NlpResult> action)
+        private void ExecuteOperation(string operation, Func<NlpResult> action, Action<NlpResult>? onCompleted = null)
         {
             if (workbench.State?.HasSession != true)
             {
@@ -281,6 +286,7 @@ namespace OPEN_LRD
                 RefreshWorkbench();
                 ShowResult(operation, result);
                 SetStatus($"{operation} completed.");
+                onCompleted?.Invoke(result);
             }
             catch (Exception ex)
             {
@@ -351,7 +357,7 @@ namespace OPEN_LRD
                     frame.Arguments.Select(argument => $"{argument.Role}: {argument.SurfaceText}"));
                 rows.Add(new FrameRow(
                     "Frame",
-                    $"{frame.RelationName} ({frame.LinkClass}) [{arguments}] ingestible={frame.Ingestible}"));
+                    $"{frame.RelationName} ({frame.LinkClass}) [{arguments}] ingestible={frame.Ingestible} coordination={frame.Coordination} group={frame.CoordinationGroup} negation={frame.Negation}"));
             }
 
             foreach (LinkedList<Nodes.Chain_Node> chain in result.Chains)

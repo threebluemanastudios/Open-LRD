@@ -25,7 +25,7 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 |---|---|---|---|
 | 1 | The Graph Backend (Core and Data Storage) | Nodes, links, storage, search, memory lifecycle | Complete |
 | 2 | The Reasoning Engine | Subgraph matching, trust, contradiction resolution, response extraction | Complete |
-| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | In Progress (Phase 9 Additional Tools) |
+| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | In Progress (Phases 1–9 complete) |
 | 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts and structural rules | Planned |
 
 ## Module 1: The Graph Backend
@@ -153,8 +153,18 @@ configurable first-person speaker identity, read-only Ask commands, and Tools
 button gating until core initialization; its manual WPF verification is
 complete. Phase 9 adds versioned .lrdlog export and import in Tools, separate
 transient-chain companion logs, Merge/Replace conflict policies, and link
-distance definitions for the future visualizer. Manual Phase 9 log checks
-remain before Module 3 is marked complete.
+distance definitions for the future visualizer. Manual Phase 9 log checks are
+complete for export and core import; transient import is verified as a valid
+no-op when the companion contains no chains.
+
+Relation extraction also handles coordination and negation (a post-completion
+enhancement). "and" produces one frame per conjunct, with subject, verb, and
+object coordination composing as a cross product; "or" ingests each alternative
+as a separate positive fact that shares a disjunction group. Negated complements
+become ingestible "not X" concept nodes and are marked with
+`NegationKind.Complement`, while negated action verbs are parsed and reported but
+not ingested. Coordination and negation markers are recorded per frame in session
+provenance, and the `antonym` relation is reserved for Module 4.
 
 `NlpPipeline.Analyze(...)` parses text into tokens, chunks, clauses, typed
 mentions, and relation frames. `NlpPipeline.Ingest(...)` resolves entities,
@@ -183,7 +193,14 @@ session provenance. The existing Tools window handles log export and import; it
 is not converted into the workbench, and Visualizer rendering remains planned.
 Conversation state is held in memory for the active core session and can be
 exported to or restored from .lrdlog files. Merging keeps existing data on ID
-conflicts, while replacing core state invalidates open workbench sessions. See
+conflicts, while replacing core state invalidates open workbench sessions.
+Transient companion logs are snapshots of the chains currently held by
+`LRD_Core`, not accumulated workbench history. Ingest-only sessions normally
+produce empty `queryChains` and `responseChains`; importing such a file succeeds
+with zero chains added. To exercise transient persistence manually, run an Ask
+that produces a response path before exporting. The current workbench path
+records a response chain for a successful answer but does not populate the core
+query chain, so `queryChains` may remain empty even after Ask. See
 `Module_3_Plan.txt` and `AdditionalTools.txt` for the full phased plans.
 
 ### NLP Workbench Workflow
@@ -191,7 +208,8 @@ conflicts, while replacing core state invalidates open workbench sessions. See
 1. Launch Core. Tools and NLP Workbench remain disabled until the core is initialized.
 2. Open NLP Workbench.
 3. Ingest a fact, optionally supplying source and topic node IDs. First-person
-   forms resolve to the configured speaker node.
+   forms resolve to the configured speaker node. The input box clears after a
+   successful ingest (status `Ingested`); it is kept on diagnostics or failures.
 4. Ask a follow-up question.
 5. Inspect answer evidence, diagnostics, candidates, frames, mentions, and
    session provenance.

@@ -12,3 +12,4 @@ C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\refin
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.pdb
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.genruntimeconfig.cache
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\ref\OPEN-LRD.SmokeTests.dll
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD.SmokeTests\obj\Debug\net10.0\OPEN-LRD.SmokeTests.sourcelink.json

@@ -244,7 +244,10 @@ namespace OPEN_LRD.Persistence
                 TemporaryNodeIds = entry.TemporaryNodeIDs.ToList(),
                 GraphMutated = entry.GraphMutated,
                 IsUsableForAnswer = entry.IsUsableForAnswer,
-                Diagnostics = entry.Diagnostics.ToList()
+                Diagnostics = entry.Diagnostics.ToList(),
+                Coordination = (int)entry.Coordination,
+                CoordinationGroup = entry.CoordinationGroup,
+                Negation = (int)entry.Negation
             };
         }
 

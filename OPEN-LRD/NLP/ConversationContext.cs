@@ -75,7 +75,10 @@ namespace OPEN_LRD.NLP
         IReadOnlyList<Guid> TemporaryNodeIDs,
         bool GraphMutated,
         bool IsUsableForAnswer,
-        IReadOnlyList<string> Diagnostics);
+        IReadOnlyList<string> Diagnostics,
+        CoordinationKind Coordination = CoordinationKind.None,
+        int CoordinationGroup = 0,
+        NegationKind Negation = NegationKind.None);
 
     internal sealed class ConversationContext
     {

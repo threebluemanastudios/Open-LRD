@@ -899,7 +899,7 @@ Step 7: Full verification
 - Fix any nullable, unused, or naming warnings introduced by Phase 4.
 
 Step 8: Documentation
-- Update README.md and ReadMe2.md to say Phase 4 is complete and Phase 5
+- Update README.md to say Phase 4 is complete and Phase 5
   (question analysis and answer generation) is next.
 - Do not claim Phase 5-7 work in the same change.
 
@@ -958,7 +958,7 @@ Explicitly deferred to later phases:
   AnswerGenerator, ambiguity/no-match answers, and question-chain tests.
 - Phase 6: ConversationContext, pronoun resolution, focus tracking, session
   provenance, and follow-up questions.
-- Phase 7: README/ReadMe2 final status, optional WPF Tools window integration,
+- Phase 7: README final status, optional WPF Tools window integration,
   and full-solution documentation pass.
 
 Known limitations after Phase 4:

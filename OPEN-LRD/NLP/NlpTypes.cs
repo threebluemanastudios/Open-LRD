@@ -171,6 +171,20 @@ namespace OPEN_LRD.NLP
         Passive
     }
 
+    internal enum CoordinationKind
+    {
+        None,
+        Conjunction,
+        Disjunction
+    }
+
+    internal enum NegationKind
+    {
+        None,
+        Predicate,
+        Complement
+    }
+
     internal sealed record FrameArgument(
         FrameRole Role,
         string SurfaceText,
@@ -199,7 +213,10 @@ namespace OPEN_LRD.NLP
         int EndToken,
         double Confidence,
         bool Ingestible,
-        IReadOnlyList<string> Diagnostics);
+        IReadOnlyList<string> Diagnostics,
+        CoordinationKind Coordination = CoordinationKind.None,
+        int CoordinationGroup = 0,
+        NegationKind Negation = NegationKind.None);
 
     internal sealed record RelationExtractionResult(
         IReadOnlyList<RelationFrame> Frames,

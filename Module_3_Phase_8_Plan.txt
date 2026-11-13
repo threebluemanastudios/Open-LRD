@@ -8,7 +8,7 @@ Status: Implemented. Phases 1-7 are implemented and passing; manual WPF
         acceptance verification is complete. Phase 9 later replaced the Tools
         placeholder with log import/export controls.
 Scope owner: Module 3 (README numbering).
-Reference design: README.md, ReadMe2.md, Module_3_Plan.txt, and
+Reference design: README.md, Module_3_Plan.txt, and
                    Module_3_Phase_7_Plan.txt.
 Implementation constraint: native C#, WPF, no external libraries or packages.
 Current baseline: full solution builds with zero warnings and zero errors;
@@ -106,11 +106,7 @@ integration baseline:
 12. README.md
     - Document Tools gating, first-person speaker identity, and Ask commands.
 
-13. ReadMe2.md
-    - Update Module 3 current status and NLP workflow.
-    - Describe commands as Ask-only and read-only.
-
-14. Module_3_Plan.txt
+13. Module_3_Plan.txt
     - Record Phase 8 as a post-completion enhancement.
     - Preserve historical Phase 1-7 definitions.
 

@@ -2,11 +2,13 @@ OPEN-LRD
 MODULE 3: THE NLP PIPELINE
 IMPLEMENTATION PLAN
 
-Status: Approved. Phases 1-8 implemented; Phase 8 manual WPF acceptance
-        verified. Phase 9 Additional Tools implemented and covered by smoke tests.
+Status: Approved. Phases 1-9 implemented. Phase 8 manual WPF acceptance is
+        verified. Phase 9 Additional Tools is implemented, covered by smoke
+        tests, and manually verified for export and core import. Phase 10 adds
+        coordination and negation handling.
 Scope owner: Module 3 (README numbering).
-Reference design: README.md, ReadMe2.md, Module_2_Plan.txt,
-                  Module_3_Phase_8_Plan.txt, and AdditionalTools.txt.
+Reference design: README.md, Module_2_Plan.txt, Module_3_Phase_8_Plan.txt,
+                  and AdditionalTools.txt.
 Implementation constraint: Native C# with no external library dependencies.
 
 ================================================================================
@@ -23,7 +25,8 @@ Module 3 is responsible for:
 - Noun, verb, and prepositional phrase chunking.
 - Named-entity detection and semantic type assignment.
 - Subject-verb-object relation extraction.
-- Copula, possession, coordination, and prepositional qualifier handling.
+- Copula, possession, coordination, negation, and prepositional qualifier
+  handling.
 - Pronoun and conversation-context resolution.
 - Text-to-chain ingestion through the Reasoning Engine.
 - Question analysis and query-chain construction.
@@ -62,10 +65,15 @@ Module 3 is NOT responsible for:
    "Alice works at Acme" becomes Alice --work_at/actions--> Acme.
    Full event-node reification for time, place, and participants is deferred.
 
-5. Assertion-only ingestion initially.
+5. Assertion-only ingestion initially, with a complement-negation exception.
    Negated, hypothetical, and strongly modal statements are parsed and
-   reported, but not merged as positive facts until Module 4 adds polarity and
-   modality handling.
+   reported, but not merged as positive facts until Module 4 adds full polarity
+   and modality handling. As an exception, negated complements (adjectives and
+   prepositional locations, such as "not hot" or "not inside") are ingested as
+   explicit "not X" concept nodes; the NegationKind.Complement marker records
+   the polarity. Negated action verbs remain non-ingestible and produce a
+   diagnostic. Antonym linking is deferred to Module 4; only the antonym
+   relation is reserved here.
 
 6. Question chains are oriented around known anchors.
    Response extraction starts from a terminal query node. Build query chains so
@@ -171,7 +179,8 @@ Create under OPEN-LRD/NLP/:
     frames.
 
 11. RelationRegistry.cs
-    Stable predicate-to-link-type registration and lookup.
+    Stable predicate-to-link-type registration and lookup. Reserves the
+    antonym relation at a fixed ID for Module 4.
 
 12. EntityResolver.cs
     Label and alias lookup, pronoun resolution, and context focus.
@@ -190,6 +199,17 @@ Create under OPEN-LRD/NLP/:
 
 17. NlpPipeline.cs
     Pipeline facade combining analysis, ingestion, and answering.
+
+18. CommandRecognizer.cs
+    Read-only Ask command recognition for output, print, respond, and reply.
+
+19. CommandProcessor.cs
+    Fixed command target handling for facts, graph, conversation, summary, and
+    node <id>.
+
+20. NlpWorkbench.cs
+    UI-independent workbench facade for conversation lifecycle, Ingest, Ask, and
+    read-only state snapshots.
 
 Update OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj to include:
 
@@ -255,10 +275,12 @@ Proposed FrameArgument roles:
 
 Proposed RelationFrame fields:
 
-- PredicateLemma
+- RelationName
 - LinkClass
 - Arguments
-- Negated
+- Coordination (CoordinationKind: None, Conjunction, Disjunction)
+- CoordinationGroup
+- Negation (NegationKind: None, Predicate, Complement)
 - Modal
 - Tense
 - Voice
@@ -341,9 +363,14 @@ gazetteers. Avoid large hardcoded encyclopedic lists.
 - Transitive: X sees Y -> X --see--> Y.
 - Verb plus preposition: X works at Y -> X --work_at--> Y.
 - Prepositional location and time -> spatial or temporal classification.
-- Coordination -> fan out multiple frames.
+- Coordination -> "and" fans out one frame per conjunct (subject, verb, and
+  object coordination compose as a cross product); "or" ingests each alternative
+  with a shared disjunction group.
 - Passive normalization if practical: Y was seen by X -> X --see--> Y.
-- Negation and modality -> preserve flags, but do not ingest as positive.
+- Negated complements (adjectives and prepositional locations) -> ingest as
+  explicit "not X" concepts marked NegationKind.Complement.
+- Negated action verbs and modality -> preserve flags and diagnostics, but do
+  not ingest as positive.
 - Unsupported complex patterns -> diagnostics and no merge.
 
 6.7 Chain construction
@@ -489,7 +516,7 @@ Phase 6: Context and provenance
 
 Phase 7: Integration and documentation
 - Full solution build and smoke tests.
-- Update README.md and ReadMe2.md Module 3 status.
+- Update README.md Module 3 status.
 - Optional WPF Tools window hook after the pipeline is stable.
 
 Phase 8: Usability and identity enhancements (post-completion)
@@ -508,6 +535,18 @@ Phase 9: Additional Tools (post-completion)
 - Add link distance definitions for the future visualizer.
 - Add persistence and link-distance smoke tests.
 
+Phase 10: Coordination and negation (post-completion)
+- Fan out "and" coordination across subjects, verbs, and objects as a cross
+  product of frames.
+- Ingest "or" alternatives as separate positive facts with a shared disjunction
+  group.
+- Ingest negated complements (adjectives and prepositional locations) as
+  explicit "not X" concepts marked NegationKind.Complement.
+- Keep negated action verbs parsed but non-ingestible with a diagnostic.
+- Record coordination and negation markers in session provenance.
+- Reserve the antonym relation for Module 4 without linking antonyms.
+- Add coordination and negation smoke tests and update documentation.
+
 ================================================================================
 9. KNOWN LIMITATIONS
 ================================================================================
@@ -515,12 +554,17 @@ Phase 9: Additional Tools (post-completion)
 - Rule-based English only; no statistical accuracy guarantees.
 - Linear chains only; complex multi-clause and branched facts are split or
   rejected.
-- Negation, modality, tense, and hypotheticals are not fully represented in the
-  graph initially.
+- Negated complements are ingested as explicit "not X" concepts, but full
+  polarity, modality, tense, hypotheticals, and antonym linking remain
+  unrepresented in the graph.
 - Direct relation links replace full event reification in the MVP.
 - Lexical storage remains session-scoped. Graph and conversation state can be
   exported to or imported from .lrdlog files through Tools; pipeline
   attachments are process-local and are never persisted.
+- Transient companion logs reflect only chains currently held by LRD_Core, not
+  accumulated workbench history. Ingest-only sessions normally produce empty
+  companions, importing an empty companion is valid, and the workbench Ask path
+  does not currently populate the core query chain.
 - Ambiguity is surfaced rather than silently resolved.
 - Second-person pronouns remain unsupported.
 - First-person singular and plural forms share one configurable speaker node;
@@ -540,10 +584,14 @@ Phase 9: Additional Tools (post-completion)
 - Ingesting the same fact twice is idempotent.
 - Ask("Who works at Acme?") returns the expected entity and a response path.
 - Follow-up questions resolve recent pronouns from conversation context.
+- Coordinated "and" input produces one frame per conjunct, "or" alternatives
+  share a disjunction group, and negated complements ingest as "not X" concepts
+  while negated action verbs produce a diagnostic and are not ingested.
 - Ambiguous, unsupported, rejected, and no-match inputs produce honest
   diagnostics.
 - Core and conversation state survive export and import round trips.
-- Transient chain logs export separately and preserve chain links and metadata.
+- Transient chain logs export separately and preserve chain links and metadata
+  when the core contains chains; empty companions import as a successful no-op.
 - Invalid or conflicting imports either change no state or follow the selected
   Merge/Replace conflict policy.
 - Full solution builds with zero warnings and zero errors.

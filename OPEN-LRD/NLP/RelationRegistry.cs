@@ -13,6 +13,8 @@ namespace OPEN_LRD.NLP
     {
         public const int FirstPredicateLinkTypeId = 1000;
         public const int LastReservedOntologyId = 999;
+        public const int AntonymLinkTypeId = 2000000;
+        public const string AntonymRelationName = "antonym";
 
         private static readonly object sync = new object();
         private static readonly Dictionary<string, RelationLinkType> byName =
@@ -32,6 +34,8 @@ namespace OPEN_LRD.NLP
             {
                 GetOrRegister(name);
             }
+
+            TryRestore(AntonymLinkTypeId, AntonymRelationName, "inverse_antonym", out _);
         }
 
         public static RelationLinkType GetOrRegister(string relationName)

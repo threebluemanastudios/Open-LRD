@@ -3,7 +3,9 @@ ADDITIONAL TOOLS PLAN
 MODULE 3 PHASE 9: LOG PERSISTENCE AND VISUALIZER DISTANCE PREP
 
 Status: Implemented. Full solution builds with zero warnings and zero errors;
-        82 smoke tests pass. Manual WPF log verification is pending.
+        83 smoke tests pass. Manual WPF log verification is complete for export
+        and core import; transient import with an ingest-only companion
+        correctly adds zero chains.
 Scope: Tools window import/export, versioned log persistence, transient chain
        companion logs, and link distance definitions for the future visualizer.
 Constraint: Native C# and WPF with no external libraries. Use System.Text.Json.
@@ -73,7 +75,9 @@ Conversations:
 - lastQualifierNodeId
 - lastAnswerNodeId
 - mentions in sequence order
-- provenance in sequence order
+- provenance in sequence order; each entry records the relation, roles, source
+  and topic IDs, graph-mutation flags, and the coordination kind, coordination
+  group, and negation kind used when the fact was extracted
 
 Excluded from the main log:
 - query and response chains
@@ -96,6 +100,12 @@ Contents:
 - type definitions, so the transient log can be imported independently
 - ordered query chains
 - ordered response chains
+
+The chain lists are a snapshot of the chains currently held by LRD_Core, not a
+history of every workbench operation. Empty queryChains and responseChains are
+valid; an ingest-only session normally produces an empty companion log. The
+current workbench Ask path records a response chain for a successful answer but
+does not populate the core query chain.
 
 Each chain contains:
 - ordered chain-node records with the same metadata as graph nodes
@@ -125,6 +135,8 @@ Export rules:
 - Include all registered runtime type definitions.
 - Write to temporary files and move them into place only after serialization.
 - Export both logs in one action when Include Transient Chains is checked.
+- Write the transient companion even when both chain lists are empty; empty
+  lists are valid and importing them is a successful no-op.
 
 Transient filename rule:
 - <base without extension>_trans<original extension>
@@ -314,7 +326,7 @@ Persistence/**/*.cs and Visualization/**/*.cs.
 
 - Mark Phase 8 manual WPF verification complete.
 - Create AdditionalTools.txt as the Phase 9 plan record.
-- Update Module_3_Plan.txt, README.md, and ReadMe2.md.
+- Update Module_3_Plan.txt and README.md.
 - Document log naming, Merge/Replace behavior, conflict policy, and limitations.
 - Remove claims that Tools is only a placeholder and that conversation data can
   never leave memory.
@@ -333,10 +345,13 @@ Smoke tests:
 
 Manual WPF checks:
 1. Launch Core and open Tools.
-2. Export logs and verify the _trans companion file.
+2. Export logs and verify the _trans companion file. With an ingest-only
+   session, expect empty queryChains and responseChains.
 3. Import core with Merge; confirm existing conflicts are preserved.
 4. Import core with Replace; confirm graph and conversations are restored.
-5. Import transient logs separately with Merge and Replace.
+5. Import transient logs separately with Merge and Replace. Importing an empty
+   companion is a successful no-op that adds zero chains. Run an Ask that
+   produces a response path before export to test non-empty restoration.
 6. Confirm invalid files report errors without changing current state.
 
 ================================================================================
@@ -356,7 +371,6 @@ Modified:
 - Module_3_Phase_8_Plan.txt
 - Module_3_Plan.txt
 - README.md
-- ReadMe2.md
 
 Added:
 - OPEN-LRD/Persistence/CoreLogDocument.cs

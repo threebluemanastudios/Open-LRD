@@ -6,7 +6,7 @@ Phase: 7 of 7
 Title: Integration, NLP Workbench, and final documentation
 Status: Planned. Phases 1-6 are complete and passing.
 Scope owner: Module 3 (README numbering).
-Reference design: README.md, ReadMe2.md, Module_3_Plan.txt, and
+Reference design: README.md, Module_3_Plan.txt, and
                    Module_3_Phase_4_Plan.txt through Module_3_Phase_6_Plan.txt.
 Implementation constraint: native C#, WPF, no external libraries or packages.
 Current baseline: full solution builds with zero warnings and zero errors;
@@ -53,7 +53,7 @@ Required outcomes:
    WPF controls themselves remain covered by a documented manual UI checklist
    because the smoke-test project targets net10.0 and does not reference WPF.
 
-6. Update README.md and ReadMe2.md to describe Module 3 as Phase 7 of 7.
+6. Update README.md to describe Module 3 as Phase 7 of 7.
    After Phase 7 acceptance passes, Module 3 may be marked complete.
 
 7. Perform the final verification pass:
@@ -125,12 +125,6 @@ Required modified files:
    - Add a concise NLP Workbench usage section.
    - State the supported workflow and the remaining Module 3 limits.
    - Continue to describe the separate Tools window as a placeholder.
-
-9. ReadMe2.md
-   - Update the module table and Current Status section.
-   - Describe session controls, inspection, and the end-to-end WPF workflow.
-   - Distinguish the NLP Workbench window from the placeholder Tools window.
-   - Do not claim durable persistence, import/export, or graph visualization.
 
 10. Module_3_Plan.txt
     - Update the plan status line after Phase 7 acceptance.
@@ -1003,7 +997,7 @@ Step 9: Manual WPF workflow verification
 - Confirm graph counts do not change on Ask, Reset, Remove, or Clear.
 
 Step 10: Documentation
-- Update README.md, ReadMe2.md, and the Module_3_Plan.txt status line.
+- Update README.md and the Module_3_Plan.txt status line.
 - Use Phase 7 of 7 wording before final acceptance.
 - After the complete checklist passes, mark Module 3 complete.
 
@@ -1280,43 +1274,14 @@ Add or update a concise section covering:
 - Pronoun, ambiguity, trust, and no-match limitations from Phases 1-6 still
   apply.
 
-12.2 ReadMe2.md
-
-Update:
-
-- The module table row for Module 3.
-- The Current Status section from Phases 1-6 to Phases 1-7.
-- The NLP section's description of the WPF workbench and session controls.
-- A clear distinction between the NLP Workbench window and the placeholder
-  Tools window.
-
-Add a short workflow:
-
-1. Launch Core.
-2. Open NLP Workbench.
-3. Ingest a fact.
-4. Ask a follow-up question.
-5. Inspect answer evidence, mentions, and provenance.
-6. Create or attach conversations to compare isolated and shared context.
-7. Reset or remove sessions without changing graph data.
-
-Do not claim:
-
-- Durable provenance.
-- Save/load persistence.
-- Import/export support.
-- Graph visualization.
-- Multi-user or remote sessions.
-- Statistical accuracy guarantees.
-
-12.3 Module_3_Plan.txt
+12.2 Module_3_Plan.txt
 
 - Change the status line after Phase 7 acceptance to indicate Phases 1-7
   complete.
 - Leave the historical phase descriptions intact.
 - Do not rewrite Phase 7 scope beyond integration and documentation.
 
-12.4 Status wording
+12.3 Status wording
 
 Preferred status progression:
 
@@ -1328,7 +1293,7 @@ Do not mark Module 3 complete before:
 - The workbench tests pass.
 - The manual WPF checklist passes.
 - The full solution builds with zero warnings and zero errors.
-- README.md and ReadMe2.md are updated.
+- README.md is updated.
 
 ================================================================================
 13. PHASE 7 ACCEPTANCE CRITERIA
@@ -1361,7 +1326,7 @@ Phase 7 is complete when all of the following are true:
 17. All existing 61 smoke tests still pass.
 18. Full solution build succeeds with zero warnings and zero errors.
 19. The manual WPF checklist passes on Windows.
-20. README.md, ReadMe2.md, and Module_3_Plan.txt reflect Phase 7 accurately.
+20. README.md and Module_3_Plan.txt reflect Phase 7 accurately.
 21. Module 3 is marked complete only after all above conditions pass.
 22. Import, Export, Visualizer, durable persistence, and graph editing are not
     claimed as implemented.
@@ -1433,7 +1398,6 @@ Expected changed files:
 - OPEN-LRD/MainWindow.xaml.cs                   (launch and single-window logic)
 - OPEN-LRD.SmokeTests/NlpTests.cs               (new workbench tests)
 - README.md                                     (Phase 7 completion wording)
-- ReadMe2.md                                    (Phase 7 completion wording)
 - Module_3_Plan.txt                             (final status line)
 
 No changes expected in:
@@ -1491,7 +1455,7 @@ Expected final result:
 - All existing Module 1, Module 2, and Module 3 Phase 1-6 tests pass.
 - All new workbench tests pass.
 - The manual WPF checklist passes on Windows.
-- README.md and ReadMe2.md describe Module 3 as complete only after all checks
+- README.md describes Module 3 as complete only after all checks
   pass.
 
 ================================================================================

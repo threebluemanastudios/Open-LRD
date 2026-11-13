@@ -7,7 +7,7 @@ Title: Conversation context, pronoun resolution, focus tracking, and session
        provenance
 Status: Planned. Phases 1-5 complete and passing.
 Scope owner: Module 3 (README numbering).
-Reference design: README.md, ReadMe2.md, Module_3_Plan.txt,
+Reference design: README.md, Module_3_Plan.txt,
 Module_3_Phase_4_Plan.txt, and Module_3_Phase_5_Plan.txt.
 Implementation constraint: native C# only, no external libraries.
 
@@ -98,7 +98,7 @@ Required modified files:
     - Update the Phase 5 pronoun test that currently expects a Phase 6
       placeholder diagnostic.
 
-11. README.md and ReadMe2.md
+11. README.md
     - Mark Module 3 as Phase 6 of 7 after all tests pass.
     - Describe conversation context, pronoun resolution, focus tracking,
       shared conversation IDs, and session provenance.
@@ -286,7 +286,7 @@ OPEN-LRD/NLP/NlpPipeline.cs
 OPEN-LRD.SmokeTests/NlpTests.cs
     Adds Phase 6 test groups and updates the Phase 5 placeholder assertion.
 
-README.md and ReadMe2.md
+README.md
     Status and feature wording updates after green tests.
 
 ================================================================================
@@ -1501,7 +1501,7 @@ Step 9: Tests
   issues.
 
 Step 10: Documentation
-- Update README.md and ReadMe2.md to Phase 6 of 7 after tests pass.
+- Update README.md to Phase 6 of 7 after tests pass.
 - Describe supported follow-ups, pronoun limits, explicit conversation sharing,
   conversation-ID isolation, and session-provenance caveats.
 - Do not claim durable provenance or Phase 7 work.

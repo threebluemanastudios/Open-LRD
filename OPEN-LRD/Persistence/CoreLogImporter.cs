@@ -1064,7 +1064,10 @@ namespace OPEN_LRD.Persistence
                     entryLog.TemporaryNodeIds.ToArray(),
                     entryLog.GraphMutated,
                     entryLog.IsUsableForAnswer,
-                    entryLog.Diagnostics.ToArray()));
+                    entryLog.Diagnostics.ToArray(),
+                    (CoordinationKind)entryLog.Coordination,
+                    entryLog.CoordinationGroup,
+                    (NegationKind)entryLog.Negation));
             }
 
             ConversationContext conversation = new ConversationContext(log.Id, options);
