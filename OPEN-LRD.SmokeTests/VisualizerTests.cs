@@ -38,6 +38,7 @@ namespace OPEN_LRD.SmokeTests
             Run("Visualizer layout distance fidelity", TestLayoutDistanceFidelity);
             Run("Visualizer layout collision spacing", TestLayoutCollisionSpacing);
             Run("Visualizer layout component packing", TestLayoutComponentPacking);
+            Run("Visualizer layout spherical cloud distribution", TestLayoutSphericalCloudDistribution);
             Run("Visualizer layout center and bounds", TestLayoutCenterAndBounds);
             Run("Visualizer layout cancellation", TestLayoutCancellation);
             Run("Visualizer layout progress", TestLayoutProgress);
@@ -844,6 +845,69 @@ namespace OPEN_LRD.SmokeTests
             Assert(
                 Vector3.Distance(result.Positions[0], result.Positions[1]) <= 6f * 1.1f,
                 "packing should translate whole components without stretching their links");
+        }
+
+        private static void TestLayoutSphericalCloudDistribution()
+        {
+            LRD_Core core = NewCore();
+
+            // 5 disconnected pairs
+            for (int i = 1; i <= 10; i++)
+                AddNode(core, NodeId(i), NodeTypes.Basics);
+
+            for (int i = 1; i <= 5; i++)
+                core.AddConnection(NodeId(i * 2 - 1), NodeId(i * 2));
+
+            GraphSnapshot snapshot = GraphSnapshot.FromCore(core);
+            LayoutResult result = DistanceLayout3D.Compute(snapshot);
+
+            // Verify 3D non-collinear distribution across components
+            List<Vector3> centroids = new List<Vector3>();
+            for (int i = 0; i < 5; i++)
+            {
+                Vector3 c = (result.Positions[i * 2] + result.Positions[i * 2 + 1]) * 0.5f;
+                centroids.Add(c);
+            }
+
+            // Check that components span all 3 axes (X, Y, Z)
+            float minX = centroids.Min(c => c.X), maxX = centroids.Max(c => c.X);
+            float minY = centroids.Min(c => c.Y), maxY = centroids.Max(c => c.Y);
+            float minZ = centroids.Min(c => c.Z), maxZ = centroids.Max(c => c.Z);
+
+            float spanX = maxX - minX;
+            float spanY = maxY - minY;
+            float spanZ = maxZ - minZ;
+
+            Assert(spanX > 2f, "component centroids should distribute across X axis");
+            Assert(spanY > 2f, "component centroids should distribute across Y axis");
+            Assert(spanZ > 2f, "component centroids should distribute across Z axis");
+
+            // Isolated nodes test
+            LRD_Core isoCore = NewCore();
+            for (int i = 1; i <= 40; i++)
+                AddNode(isoCore, NodeId(i), NodeTypes.Concepts);
+
+            GraphSnapshot isoSnapshot = GraphSnapshot.FromCore(isoCore);
+            VisualizerOptions options = new VisualizerOptions();
+            LayoutResult isoResult = DistanceLayout3D.Compute(isoSnapshot, options);
+
+            Assert(isoResult.NodeCount == 40, "all isolated nodes should be placed");
+
+            float isoSpanX = isoResult.BoundsMaximum.X - isoResult.BoundsMinimum.X;
+            float isoSpanY = isoResult.BoundsMaximum.Y - isoResult.BoundsMinimum.Y;
+            float isoSpanZ = isoResult.BoundsMaximum.Z - isoResult.BoundsMinimum.Z;
+
+            Assert(isoSpanX > 2f && isoSpanY > 2f && isoSpanZ > 2f, "isolated cloud should span all 3 dimensions");
+
+            // Verify minimum spacing between all isolated nodes
+            for (int a = 0; a < isoResult.Positions.Count; a++)
+            {
+                for (int b = a + 1; b < isoResult.Positions.Count; b++)
+                {
+                    float dist = Vector3.Distance(isoResult.Positions[a], isoResult.Positions[b]);
+                    Assert(dist >= options.MinSpacing * 0.99f, $"isolated nodes {a} and {b} should respect min spacing (was {dist})");
+                }
+            }
         }
 
         private static void TestLayoutCenterAndBounds()

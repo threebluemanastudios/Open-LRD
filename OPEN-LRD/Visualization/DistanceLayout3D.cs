@@ -357,14 +357,15 @@ namespace OPEN_LRD.Visualization
                             continue;
 
                         Vector3 candidate = SphereDirection(counter++);
-                        Vector3 direction = parentDirection * 0.6f + candidate * 0.8f;
 
-                        if (direction.LengthSquared() < 1e-8f)
-                            direction = candidate;
+                        // Deflect if pointing directly back into the incoming parent direction
+                        if (parentDirection.LengthSquared() > 0.5f && Vector3.Dot(candidate, -parentDirection) > 0.8f)
+                        {
+                            candidate = Vector3.Normalize(candidate + parentDirection * 0.6f);
+                        }
 
-                        direction = Vector3.Normalize(direction);
-                        component.Directions[neighbor] = direction;
-                        positions[neighbor] = positions[current] + direction * meanRestLength;
+                        component.Directions[neighbor] = candidate;
+                        positions[neighbor] = positions[current] + candidate * meanRestLength;
                         assigned[localIndex[neighbor]] = true;
                         queue.Enqueue(neighbor);
                     }
@@ -583,17 +584,18 @@ namespace OPEN_LRD.Visualization
             float margin = (float)Math.Max(0.25 * options.Spread, MinimumCollisionDistance);
             List<PlacedSphere> placed = new List<PlacedSphere>(components.Count);
 
-            foreach (Component component in components)
+            for (int compIndex = 0; compIndex < components.Count; compIndex++)
             {
                 if (cancellationToken.IsCancellationRequested)
                     return true;
 
+                Component component = components[compIndex];
                 component.Centroid = ComputeComponentCentroid(positions, component);
                 component.Radius = ComputeComponentRadius(positions, component);
 
                 Vector3 target = placed.Count == 0
                     ? Vector3.Zero
-                    : FindPackSpot(placed, component.Radius, margin);
+                    : FindPackSpot(placed, compIndex, component.Radius, margin);
                 Vector3 offset = target - component.Centroid;
 
                 foreach (int nodeIndex in component.Nodes)
@@ -609,34 +611,43 @@ namespace OPEN_LRD.Visualization
                 return true;
 
             float spacing = (float)Math.Max(options.MinSpacing * 1.5, 0.1);
-            int side = 1;
+            int count = isolated.Count;
 
-            while ((long)side * side * side < isolated.Count)
-                side++;
+            // Uniform 3D spherical volume distribution for isolated nodes
+            float cloudRadius = count > 1
+                ? spacing * MathF.Cbrt(count) * 0.95f
+                : 0f;
 
-            float halfExtent = (side - 1) * 0.5f * spacing;
-            float targetY = 0f;
+            Vector3 targetCenter = placed.Count == 0
+                ? Vector3.Zero
+                : FindPackSpot(placed, placed.Count, cloudRadius, margin);
 
-            if (placed.Count > 0)
+            for (int index = 0; index < count; index++)
             {
-                float lowest = float.PositiveInfinity;
+                float r = count > 1
+                    ? cloudRadius * MathF.Cbrt((index + 0.5f) / count)
+                    : 0f;
 
-                foreach (PlacedSphere sphere in placed)
-                    lowest = Math.Min(lowest, sphere.Center.Y - sphere.Radius);
-
-                targetY = lowest - halfExtent - spacing;
+                Vector3 dir = SphereDirection(index + 1);
+                positions[isolated[index]] = targetCenter + dir * r;
             }
 
-            for (int index = 0; index < isolated.Count; index++)
+            // Ensure all isolated nodes respect minimum collision spacing
+            float[] tempDisplacement = new float[positions.Length];
+            for (int pass = 0; pass < 8; pass++)
             {
-                int x = index % side;
-                int y = index / side % side;
-                int z = index / (side * side);
+                Array.Clear(tempDisplacement);
+                SeparateCollisions(positions, (float)options.MinSpacing, tempDisplacement);
 
-                positions[isolated[index]] = new Vector3(
-                    (x - (side - 1) * 0.5f) * spacing,
-                    (y - (side - 1) * 0.5f) * spacing + targetY,
-                    (z - (side - 1) * 0.5f) * spacing);
+                float maxDisp = 0f;
+                foreach (float d in tempDisplacement)
+                {
+                    if (d > maxDisp)
+                        maxDisp = d;
+                }
+
+                if (maxDisp < 1e-4f)
+                    break;
             }
 
             return false;
@@ -644,40 +655,65 @@ namespace OPEN_LRD.Visualization
 
         private static Vector3 FindPackSpot(
             IReadOnlyList<PlacedSphere> placed,
+            int componentIndex,
             float radius,
             float margin)
         {
-            float outerBound = 0f;
+            if (placed.Count == 0)
+                return Vector3.Zero;
 
-            foreach (PlacedSphere sphere in placed)
-                outerBound = Math.Max(outerBound, sphere.Center.Length() + sphere.Radius);
+            Vector3 bestSpot = Vector3.Zero;
+            float bestDistanceSq = float.PositiveInfinity;
 
-            float step = Math.Max(radius + margin, 0.5f);
-
-            for (int attempt = 0; attempt < PackingAttempts; attempt++)
+            const int directionCandidates = 24;
+            for (int d = 0; d < directionCandidates; d++)
             {
-                Vector3 candidate = SphereDirection(attempt + 1)
-                    * (outerBound + radius + margin + attempt * step);
-                bool fits = true;
+                int dirIndex = componentIndex * directionCandidates + d + 1;
+                Vector3 dir = SphereDirection(dirIndex);
+
+                float requiredDistance = 0f;
 
                 foreach (PlacedSphere sphere in placed)
                 {
-                    if (Vector3.Distance(candidate, sphere.Center)
-                        < sphere.Radius + radius + margin)
+                    float combinedRadius = sphere.Radius + radius + margin;
+                    float proj = Vector3.Dot(sphere.Center, dir);
+                    float perpSq = sphere.Center.LengthSquared() - proj * proj;
+
+                    if (perpSq < combinedRadius * combinedRadius)
+                    {
+                        float halfChord = MathF.Sqrt(Math.Max(0f, combinedRadius * combinedRadius - Math.Max(0f, perpSq)));
+                        float blockedFar = proj + halfChord;
+                        if (blockedFar > requiredDistance)
+                            requiredDistance = blockedFar;
+                    }
+                }
+
+                Vector3 candidate = dir * requiredDistance;
+                bool fits = true;
+                foreach (PlacedSphere sphere in placed)
+                {
+                    float minSeparation = sphere.Radius + radius + margin;
+                    if (Vector3.DistanceSquared(candidate, sphere.Center) < minSeparation * minSeparation * 0.999f)
                     {
                         fits = false;
                         break;
                     }
                 }
 
-                if (fits)
-                    return candidate;
+                if (fits && requiredDistance * requiredDistance < bestDistanceSq)
+                {
+                    bestDistanceSq = requiredDistance * requiredDistance;
+                    bestSpot = candidate;
+                }
             }
 
-            return new Vector3(
-                outerBound + radius + margin + PackingAttempts * step,
-                0f,
-                0f);
+            if (float.IsFinite(bestDistanceSq))
+                return bestSpot;
+
+            float outer = 0f;
+            foreach (PlacedSphere s in placed)
+                outer = Math.Max(outer, s.Center.Length() + s.Radius);
+            return SphereDirection(componentIndex + 1) * (outer + radius + margin);
         }
 
         private static Vector3 ComputeComponentCentroid(

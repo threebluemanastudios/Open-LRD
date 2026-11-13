@@ -279,8 +279,8 @@ Upper Ontology, Load GCIDE Lexicon (subset, letter, and entry cap with progress
 and cancel), and Export Ontology Log actions. Nineteen structural relations
 occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
 (2,000,000). The smoke suite adds eleven Module 4 checks, thirteen
-text-import checks, and thirty-two visualizer model/math/layout checks, for
-139 passing tests in total. The distance layout is deterministic and reports
+text-import checks, and thirty-three visualizer model/math/layout checks, for
+140 passing tests in total. The distance layout is deterministic and reports
 progress and cancellation. See `Module_4_Plan.txt` for the full
 plan, `AdditionalTools.txt` section 16 for the text import tool, and
 `Visualizer_Plan.txt` for the 3D visualizer.
