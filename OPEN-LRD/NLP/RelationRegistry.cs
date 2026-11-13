@@ -89,12 +89,6 @@ namespace OPEN_LRD.NLP
         {
             error = null;
 
-            if (id <= LastReservedOntologyId)
-            {
-                error = $"Relation ID {id} falls in the reserved ontology range.";
-                return false;
-            }
-
             if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(inverseName))
             {
                 error = "Relation names cannot be empty.";
@@ -103,6 +97,12 @@ namespace OPEN_LRD.NLP
 
             string relationName = name.Trim();
             string inverse = inverseName.Trim();
+
+            if (id <= LastReservedOntologyId && !IsOntologyRelationRegistered(id, relationName, inverse))
+            {
+                error = $"Relation ID {id} falls in the reserved ontology range.";
+                return false;
+            }
 
             lock (sync)
             {
@@ -162,6 +162,87 @@ namespace OPEN_LRD.NLP
 
                 return true;
             }
+        }
+
+        // Registers a fixed structural relation from the reserved ontology range
+        // (IDs 1-999). Unlike predicate registration, this deliberately permits
+        // IDs at or below LastReservedOntologyId.
+        internal static bool RegisterOntologyRelation(
+            int id,
+            string name,
+            string inverseName,
+            out string? error)
+        {
+            error = null;
+
+            if (id <= 0 || id > LastReservedOntologyId)
+            {
+                error = $"Ontology relation ID {id} is outside the reserved range 1-{LastReservedOntologyId}.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(inverseName))
+            {
+                error = "Relation names cannot be empty.";
+                return false;
+            }
+
+            string relationName = name.Trim();
+            string inverse = inverseName.Trim();
+
+            lock (sync)
+            {
+                if (byId.TryGetValue(id, out RelationLinkType? existing))
+                {
+                    if (string.Equals(existing.Name, relationName, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(existing.InverseName, inverse, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    error = $"Relation ID {id} is already registered as '{existing.Name}'.";
+                    return false;
+                }
+
+                if (byName.TryGetValue(relationName, out RelationLinkType? existingByName))
+                {
+                    error = $"Relation '{relationName}' is already registered with ID {existingByName.Id}.";
+                    return false;
+                }
+
+                ForwardLinkTypes forward = ForwardLinkTypes.Register(id, relationName);
+                InverseLinkTypes inverseType = InverseLinkTypes.Register(id, inverse);
+                RelationLinkType relation = new RelationLinkType(id, relationName, inverse, forward, inverseType);
+
+                byName[relationName] = relation;
+                byId[id] = relation;
+                return true;
+            }
+        }
+
+        // Returns true when the supplied ID names an already-registered ontology
+        // relation, either in this registry or in the forward/inverse registries.
+        internal static bool IsOntologyRelationRegistered(int id, string? name, string? inverseName)
+        {
+            if (id <= 0 || id > LastReservedOntologyId)
+                return false;
+
+            string relationName = name?.Trim() ?? string.Empty;
+            string inverse = inverseName?.Trim() ?? string.Empty;
+
+            lock (sync)
+            {
+                if (byId.TryGetValue(id, out RelationLinkType? existing))
+                {
+                    return string.Equals(existing.Name, relationName, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(existing.InverseName, inverse, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            return ForwardLinkTypes.TryFromId(id, out ForwardLinkTypes forward)
+                && string.Equals(forward.Name, relationName, StringComparison.OrdinalIgnoreCase)
+                && InverseLinkTypes.TryFromId(id, out InverseLinkTypes inverseType)
+                && string.Equals(inverseType.Name, inverse, StringComparison.OrdinalIgnoreCase);
         }
 
         public static string Normalize(string lemma, string? particle = null)

@@ -25,8 +25,8 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 |---|---|---|---|
 | 1 | The Graph Backend (Core and Data Storage) | Nodes, links, storage, search, memory lifecycle | Complete |
 | 2 | The Reasoning Engine | Subgraph matching, trust, contradiction resolution, response extraction | Complete |
-| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | In Progress (Phases 1–9 complete) |
-| 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts and structural rules | Planned |
+| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | In Progress (Phases 1–10 complete) |
+| 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts, structural rules, and curated GCIDE lexical loading | Complete (Phases 1-7) |
 
 ## Module 1: The Graph Backend
 
@@ -166,6 +166,17 @@ become ingestible "not X" concept nodes and are marked with
 not ingested. Coordination and negation markers are recorded per frame in session
 provenance, and the `antonym` relation is reserved for Module 4.
 
+Two later post-completion fixes harden question answering and ingestion. Copula
+questions whose wh-word asks for the entity — "Who is a douche?" — are
+classified as subject questions anchored on the complement, so the query runs
+`?who --is--> douche` and matches "Jeff --is--> douche", while copula
+"What is Alice?" stays object-anchored on Alice. Ingestion now builds and merges
+each frame's chains before moving to the next frame, so repeated mentions of one
+entity in a multi-sentence text reuse a single temporary node instead of
+creating duplicates that make later frames ambiguous. Smoke tests cover
+"Who is a douche?", "Who is married to Cody?", and a multi-sentence ingest that
+asserts one node per entity.
+
 `NlpPipeline.Analyze(...)` parses text into tokens, chunks, clauses, typed
 mentions, and relation frames. `NlpPipeline.Ingest(...)` resolves entities,
 builds temporary chains, provisions the required anchor, applies the trust
@@ -189,8 +200,9 @@ stored in graph nodes.
 attachment by ID, reset, removal, clear-all, Ingest, Ask, and read-only state
 snapshots. `NlpWorkbenchWindow` uses it for the end-to-end desktop workflow and
 shows diagnostics, candidates, evidence, frames, chains, mentions, focus, and
-session provenance. The existing Tools window handles log export and import; it
-is not converted into the workbench, and Visualizer rendering remains planned.
+session provenance. The existing Tools window handles log export and import,
+large text-file ingestion, and ontology loading; it is not converted into the
+workbench, and Visualizer rendering remains planned.
 Conversation state is held in memory for the active core session and can be
 exported to or restored from .lrdlog files. Merging keeps existing data on ID
 conflicts, while replacing core state invalidates open workbench sessions.
@@ -202,6 +214,18 @@ that produces a response path before exporting. The current workbench path
 records a response chain for a successful answer but does not populate the core
 query chain, so `queryChains` may remain empty even after Ask. See
 `Module_3_Plan.txt` and `AdditionalTools.txt` for the full phased plans.
+
+Large text-file import in Tools closes the per-call NLP limits gap. A file is
+split paragraph-first, then by sentence, and finally by a safe hard split into
+chunks bounded by the configurable character and sentence budgets. All chunks
+share one `NlpPipeline` and conversation, so pronoun and focus resolution carry
+across adjacent chunks. The importer validates optional Source/Topic GUIDs
+before mutating the graph, creates or reuses a permanent `Source` node with a
+file `DataPointer` when Source is blank, continues after unsupported or failing
+chunks, reports per-chunk counts, and supports a strictly read-only dry run plus
+configurable file-size and chunk-count safety limits. Limit failures are retried
+by splitting the chunk at a sentence boundary up to a depth of three. Partial
+knowledge is retained by design; cancellation stops after the current chunk.
 
 ### NLP Workbench Workflow
 
@@ -242,7 +266,36 @@ query chain, so `queryChains` may remain empty even after Ask. See
 
 ### Current Status
 
-Planned. No ontology bootstrap or curated loading pipeline exists yet.
+Complete. The hardcoded upper ontology (base concepts, structural relations,
+type hierarchy, and reality rules) and the curated GCIDE ETL that loads the
+bundled dictionary corpus are implemented. The foundation bootstrap is
+permanent and idempotent; the GCIDE loader parses the `CIDE.*` files into
+lexical word nodes and semantic sense nodes with synonym, antonym, hypernym,
+part-of-speech, and definition links. Loading is on demand and persists through
+the versioned `.lrdlog` export and import path. The Tools window exposes Seed
+Upper Ontology, Load GCIDE Lexicon (subset, letter, and entry cap with progress
+and cancel), and Export Ontology Log actions. Nineteen structural relations
+occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
+(2,000,000). The smoke suite adds eleven Module 4 checks and thirteen
+text-import checks, for 107 passing tests in total. See `Module_4_Plan.txt` for the full
+plan and `AdditionalTools.txt` section 16 for the text import tool.
+
+### Data Source
+
+The bundled `gcide-0.54` dictionary corpus used by the Module 4 ETL is the GNU
+Collaborative International Dictionary of English, sourced from
+https://kaikki.org/dictionary/English/words/index.html and licensed under the
+GNU General Public License v3.
+
+## License
+
+Open-LRD is released under the GNU General Public License v3 (GPLv3).
+
+The bundled `gcide-0.54` dictionary corpus is the GNU Collaborative
+International Dictionary of English, sourced from
+https://kaikki.org/dictionary/English/words/index.html and licensed under the
+GNU General Public License v3. See `gcide-0.54/gcide-0.54/COPYING` for its
+full terms.
 
 ## Cross-Cutting Principles
 
@@ -255,6 +308,7 @@ Planned. No ontology bootstrap or curated loading pipeline exists yet.
 - **The system should be self-optimizing but not self-corrupting.**
 - **Shared link-type registries support concurrent registration and lookup.**
 - **The implementation remains native C# with no external libraries.**
+- **The project and its bundled GCIDE corpus are GPLv3.**
 
 ## Suggested Delivery Roadmap
 

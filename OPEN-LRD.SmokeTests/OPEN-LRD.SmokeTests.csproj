@@ -12,6 +12,7 @@
     <Compile Include="../OPEN-LRD/Nodes/**/*.cs" />
     <Compile Include="../OPEN-LRD/Reasoning/**/*.cs" />
     <Compile Include="../OPEN-LRD/NLP/**/*.cs" />
+    <Compile Include="../OPEN-LRD/Ontology/**/*.cs" />
     <Compile Include="../OPEN-LRD/Persistence/**/*.cs" />
     <Compile Include="../OPEN-LRD/Visualization/**/*.cs" />
     <Compile Include="../OPEN-LRD/LRD_Core.cs" />

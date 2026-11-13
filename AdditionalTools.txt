@@ -389,3 +389,314 @@ Non-goals:
 - Persisting live pipeline attachments.
 - Background/threaded import or export.
 - Changing log format outside schema version 1.
+
+================================================================================
+15. MODULE 4 ADDENDUM: ONTOLOGY TOOLS
+================================================================================
+
+Status: Implemented alongside Module 4 Phases 1-7. Both projects build clean
+        and 94 smoke tests pass.
+
+Additional Tools window actions:
+- Seed Upper Ontology: calls OntologyLoader.BuildFoundation, which creates the
+  permanent catalog concepts, part-of-speech categories, reality nodes, and
+  structural is_a/has_reality links. Idempotent.
+- Load GCIDE Lexicon...: folder picker plus subset (semantic subset, whole
+  corpus, single letter), optional letter, and max-entries cap. Runs on a
+  background task with an indeterminate progress bar, status text, and Cancel.
+- Export Ontology Log: writes the core graph, including the loaded lexicon, to
+  a versioned .lrdlog without transient chains.
+
+Persistence notes:
+- Ontology relations occupy reserved IDs 1-19. CoreLogImporter registers the
+  ontology relation table before validating imported type definitions, so a log
+  containing them round-trips through Merge or Replace.
+- Node types 12-20 and link classes 9-12 serialize with the existing
+  TypeDefinitionLog. No format version change is required.
+
+Expected additional files:
+- OPEN-LRD/Ontology/OntologyTypes.cs
+- OPEN-LRD/Ontology/OntologyRelations.cs
+- OPEN-LRD/Ontology/OntologyCatalog.cs
+- OPEN-LRD/Ontology/UpperOntologyBootstrap.cs
+- OPEN-LRD/Ontology/OntologyValidator.cs
+- OPEN-LRD/Ontology/OntologyOptions.cs
+- OPEN-LRD/Ontology/OntologyLoader.cs
+- OPEN-LRD/Ontology/Gcide/GcideMarkup.cs
+- OPEN-LRD/Ontology/Gcide/GcideEntry.cs
+- OPEN-LRD/Ontology/Gcide/GcideEntryReader.cs
+- OPEN-LRD/Ontology/Gcide/GcideCorpusLoader.cs
+- OPEN-LRD/Ontology/Gcide/GcideLoadOptions.cs
+- OPEN-LRD.SmokeTests/OntologyTests.cs
+- Module_4_Plan.txt
+
+================================================================================
+16. PLANNED TOOL: LARGE TEXT FILE IMPORT
+================================================================================
+
+Status: Implemented. The chunker, importer, Import-box controls, and thirteen
+        text-import smoke tests are in place. See 16.13 for implementation
+        notes and verification.
+Scope: Add a text-file ingestion action to the Import box of the Tools window
+       so a file larger than the per-call NLP limits can be ingested.
+Constraint: Native C# and WPF with no external libraries.
+
+16.1 CONFIRMED DECISIONS
+
+- Chunking is paragraph-first with a sentence fallback, then a hard split for
+  a single oversized sentence.
+- A failing chunk does not stop the import. Processing continues and the run
+  reports per-chunk outcomes. Successfully ingested knowledge remains.
+- Provenance uses two optional GUID boxes (Source Node ID, Topic Node ID). When
+  Source is blank, the tool creates a permanent Source node named after the
+  file and points its DataPointer at the file path.
+- All chunks share one NlpPipeline and one conversation, so pronoun and focus
+  resolution can carry across adjacent chunks.
+- The tool supports a Dry run checkbox and editable safety limits for file size
+  and chunk count.
+
+16.2 WHY CHUNKING IS REQUIRED
+
+NlpPipeline.Ingest calls Analyze, which enforces NlpOptions per call:
+
+  MaxCharacters     = 20,000 characters
+  MaxSentences      = 50 sentences
+  MaxTokens         = 2,000 tokens
+  MaxChainsPerText  = 64 chains
+
+A file of any useful size therefore has to be split into bounded Ingest calls.
+Each call still completes a normal conversation turn and normal graph writes.
+
+16.3 UI: IMPORT BOX ADDITIONS
+
+Add a "Text File Import" sub-section inside the existing Import GroupBox in
+OPEN-LRD/Tools.xaml, below the core/transient log buttons:
+
+  File:      [ read-only path box .................. ] [Browse...]
+  Source ID: [ optional GUID ]   Topic ID: [ optional GUID ]
+  [x] Dry run    Max file MB: [ 50 ]   Max chunks: [ 10000 ]
+  [Import Text File] [Cancel]   [determinate progress bar]
+  status: "Ready. 0 chunks."
+
+Naming convention for the controls:
+- TextImportPathBox, TextImportBrowseButton
+- TextImportSourceBox, TextImportTopicBox
+- TextImportDryRunCheckBox
+- TextImportMaxMegabytesBox, TextImportMaxChunksBox
+- TextImportButton, TextImportCancelButton
+- TextImportProgressBar, TextImportStatusText
+
+Behavior:
+- All new controls are enabled only when LRD_Core.initialized is true,
+  matching the existing EnsureCoreInitialized gate.
+- While an import runs, disable the new controls and the existing log import
+  buttons; Cancel stays enabled. Only one file import may run at a time.
+- Browse uses OpenFileDialog with "Text files (*.txt;*.md;*.log)|*.txt;*.md;*.log|All files (*.*)|*.*".
+- The window MinHeight grows to fit the extra rows. Keep the Status box as the
+  final star-sized row.
+
+16.4 CHUNKING ALGORITHM
+
+1. Read the file with StreamReader(UTF8, detectEncodingFromByteOrderMarks:
+   true). Reject a file whose first 8 KB contain a NUL byte as binary.
+2. Enforce the file-size limit before reading the whole body.
+3. Split the raw text on blank lines into paragraphs. Do this before
+   TextNormalizer.Normalize because normalization collapses blank lines.
+4. Normalize each paragraph with TextNormalizer.Normalize. Skip paragraphs that
+   normalize to empty.
+5. Budget: MaxChunkCharacters = 15,000 by default (headroom under the 20,000
+   per-call cap), MaxSentencesPerChunk = 40, MaxChunks = user value.
+6. Paragraph fits: emit it as one chunk when it is within the character and
+   sentence budgets.
+7. Paragraph too large: obtain sentence spans and greedily pack sentences into
+   chunks up to the budgets.
+8. A single sentence still over budget: hard-split at the last comma, semicolon,
+   or space before the limit. Never drop text.
+9. Safety retry: if Ingest returns InvalidInput for sentence/token limits, split
+   the chunk in half at the nearest sentence boundary and retry each half
+   (maximum depth 3). Record a failure if a single sentence still cannot pass.
+
+Sentence spans reuse the tokenizer's boundary rules. Factor
+TextTokenizer.FindSentenceSpans into an internal helper (for example
+TextChunker.FindSentenceSpans) so the tokenizer and the importer agree on
+sentence boundaries. No behavior change to Tokenize is intended.
+
+16.5 IMPORT RUNNER
+
+New type: OPEN-LRD/NLP/TextFileImporter.cs
+
+Options (TextImportOptions):
+- FilePath, SourceNodeID?, TopicNodeID?
+- DryRun
+- MaxFileBytes (default 50 MB), MaxChunks (default 10,000)
+- MaxChunkCharacters (default 15,000)
+- Progress callback and CancellationToken
+
+Result (TextImportResult):
+- FilePath, ConversationID?
+- TotalCharacters, ChunkCount, ProcessedChunks
+- IngestedChunks, UnsupportedChunks, FailedChunks, SkippedChunks
+- Truncated (chunk cap reached), Cancelled
+- SourceNodeID?, Diagnostics (bounded list)
+
+Run flow:
+1. Validate inputs and GUIDs before touching the graph. An invalid Source or
+   Topic GUID aborts with no graph mutation.
+2. Read, validate, normalize, and chunk the file.
+3. Dry run: stop here. Report characters, paragraphs, chunks, and sentence
+   count. Do not create a pipeline, conversation, source node, or graph nodes.
+4. Create the provenance source node when Source is blank:
+   NodeTypes.Sources, NodeLifetime.Permanent, label "Source: <file name>",
+   DataPointer.FromFilePath(path). Reuse an existing node with the same label
+   and type instead of duplicating it.
+5. Create one NlpPipeline(core, options) with a new conversation. Keep and
+   report ConversationID so the user can attach to it later in the Workbench.
+6. For each chunk, honoring cancellation between chunks:
+   - Call Ingest(chunk.Text, sourceNodeID, topicNodeID).
+   - Count the NlpStatus (Ingested, Unsupported, InvalidInput, other).
+   - On InvalidInput from a limit, apply the split-and-retry rule.
+   - Catch per-chunk exceptions, count them as FailedChunks, keep the message.
+7. Dispose the pipeline in a finally block. The conversation stays in the core
+   and is exported normally; the user may remove it in the Workbench.
+8. Report a summary. Diagnostics are capped (for example 100 entries) with a
+   final "additional diagnostics omitted" line.
+
+Chunk cap behavior: stop after MaxChunks, set Truncated, and report that the
+remainder of the file was not imported. Nothing is rolled back.
+
+16.6 FAILURE AND CANCELLATION POLICY
+
+- Partial knowledge is expected and accepted.
+- Cancellation completes the current chunk, then stops. Already-ingested chunks
+  remain.
+- Limit failures are retried by splitting; only an unsplittable chunk is
+  counted as failed.
+- Unsupported text (no relation frames) is reported, not treated as an error.
+
+16.7 THREADING
+
+Run the import with Task.Run and marshal progress and status updates through the
+dispatcher, mirroring the Module 4 GCIDE load. The core graph is not
+thread-safe: the operator must not run Workbench ingestion or log import at the
+same time. This is documented as a limitation rather than solved here.
+
+16.8 TEST PLAN
+
+Add OPEN-LRD.SmokeTests/TextImportTests.cs and call TextImportTests.RunAll()
+from Program.Main. The NLP compile glob already covers the new files.
+
+1. Chunker paragraph grouping: blank lines separate chunks; short paragraphs
+   are not split.
+2. Chunker sentence fallback: a long paragraph splits at sentence boundaries,
+   and concatenating chunks reproduces the normalized text.
+3. Hard split: a single sentence over the budget is cut at a safe boundary
+   without dropping characters.
+4. Budgets: every chunk stays within MaxChunkCharacters and
+   MaxSentencesPerChunk.
+5. Shared conversation: two chunks where the second uses a pronoun referring
+   to the first chunk's subject ingest with the pronoun resolved.
+6. Continue on failure: a chunk with no ingestible frames sits between two
+   valid chunks; the valid chunks ingest and the summary counts the skip.
+7. Limit retry: force a chunk over MaxSentences and assert it is split and
+   ingested rather than dropped.
+8. Auto Source node: blank Source creates one permanent Source node with the
+   file label and DataPointer; a provided GUID is used as-is; an unknown GUID
+   aborts with no nodes added.
+9. Dry run: reports chunk counts and leaves the graph, conversation registry,
+   and transient chains unchanged.
+10. Safety limits: an oversized file is rejected; MaxChunks stops processing
+    and sets Truncated.
+11. Encoding: UTF-8 with and without BOM and CRLF input both import; a binary
+    file is rejected.
+12. Cancellation: a pre-cancelled token reports Cancelled and ingests nothing.
+13. Full solution build and all existing tests still pass.
+
+16.9 IMPLEMENTATION PHASES
+
+Phase 1: Chunking primitives
+- Add TextChunker (paragraph split, sentence packing, hard split) and the
+  internal sentence-span helper.
+- Tests 1-4.
+
+Phase 2: Import runner
+- Add TextFileImporter with options/result, provenance, shared pipeline,
+  retries, limits, cancellation.
+- Tests 5-12.
+
+Phase 3: Tools UI
+- Add the Text File Import controls, picker, validation, progress, and cancel.
+- Manual WPF checks: dry run, real file, cancel mid-run, invalid GUID.
+
+Phase 4: Documentation and acceptance
+- Update this addendum status, README Module 3 status, and Module_3_Plan.txt
+  with the text-import tool.
+- Full solution build and smoke run.
+
+16.10 EXPECTED FILES
+
+Added:
+- OPEN-LRD/NLP/TextFileImporter.cs
+- OPEN-LRD/NLP/TextChunker.cs
+- OPEN-LRD.SmokeTests/TextImportTests.cs
+
+Modified:
+- OPEN-LRD/NLP/TextTokenizer.cs (expose sentence spans internally)
+- OPEN-LRD/Tools.xaml
+- OPEN-LRD/Tools.xaml.cs
+- OPEN-LRD.SmokeTests/Program.cs
+- README.md
+- Module_3_Plan.txt
+- AdditionalTools.txt
+
+16.11 KNOWN LIMITATIONS
+
+- Not transactional: failures and cancellation leave partial knowledge.
+- Very large imports create many conversation turns; mention and provenance
+  caps mean early context is eventually evicted, so pronoun continuity weakens
+  deep into a file.
+- The graph is not thread-safe, so concurrent Workbench use during an import is
+  unsupported.
+- Sentence boundaries inherit the tokenizer heuristics; abbreviations can still
+  split incorrectly.
+- Plain text only. PDF, DOCX, HTML, and CSV are out of scope.
+- Import trade-offs: Markdown headings, bullet markers, and tables are ingested
+  as ordinary text and may produce no frames.
+- No cross-file deduplication beyond the existing reasoning-engine behavior.
+
+16.12 ACCEPTANCE CRITERIA
+
+- A file larger than 20,000 characters imports without InvalidInput caused by
+  the per-call limits.
+- Every chunk is within the documented budgets; concatenating chunks loses no
+  non-whitespace content.
+- A blank Source creates one permanent Source node with a file DataPointer; a
+  supplied Source/Topic GUID is validated before mutation.
+- All chunks share one conversation, and the ConversationID is reported.
+- Dry run mutates nothing.
+- Failures are reported per chunk and do not stop later chunks; cancellation
+  stops promptly after the current chunk.
+- The solution builds with zero warnings and zero errors, and all existing
+  tests plus TextImportTests pass.
+
+16.13 IMPLEMENTATION NOTES
+
+- Added OPEN-LRD/NLP/TextChunker.cs and OPEN-LRD/NLP/TextFileImporter.cs.
+- TextTokenizer.FindSentenceSpans moved to TextChunker.FindSentenceSpans so
+  tokenization and chunking share one boundary rule. Tokenize behavior is
+  unchanged.
+- The Tools Import box adds the file picker, optional Source/Topic GUIDs, dry
+  run, editable Max file MB and Max chunks, Import/Cancel, a determinate
+  progress bar, and a status line. The import runs with Task.Run and marshals
+  progress through the dispatcher; log and ontology actions are disabled while
+  it runs.
+- The importer retries InvalidInput limit failures by splitting at the nearest
+  sentence boundary up to depth 3, counts unsupported text separately from
+  failures, and caps diagnostics at 100 entries plus an omission line.
+- Pagination counts ProcessedChunks per top-level chunk. A chunk that splits
+  and ingests after a retry counts once as ingested; any failure diagnostics are
+  still recorded.
+- The large-file check builds a normalized fixture above 20,000 characters,
+  asserts every chunk stays within both the chunk and per-call character and
+  sentence budgets, then imports the file and verifies all chunks are processed.
+- Verification: both projects build with zero warnings and zero errors; all
+  107 smoke tests pass, including the thirteen text-import checks.

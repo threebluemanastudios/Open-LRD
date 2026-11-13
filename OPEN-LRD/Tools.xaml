@@ -7,12 +7,13 @@
         xmlns:local="clr-namespace:OPEN_LRD"
         mc:Ignorable="d"
         Title="Tools"
-        Height="620"
-        Width="820"
-        MinHeight="520"
-        MinWidth="700">
+        Height="800"
+        Width="860"
+        MinHeight="700"
+        MinWidth="760">
     <Grid Margin="10">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -55,6 +56,13 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <WrapPanel Grid.Row="0">
                     <TextBlock Margin="0,0,10,0" VerticalAlignment="Center" Text="Mode:" />
@@ -84,10 +92,149 @@
                            Margin="0,8,0,0"
                            TextWrapping="Wrap"
                            Text="Merge keeps existing data when IDs conflict. Replace swaps the selected state after validation. Pipeline attachments are never imported or exported." />
+
+                <Separator Grid.Row="3" Margin="0,10,0,6" />
+
+                <TextBlock Grid.Row="4" FontWeight="SemiBold" Text="Text File Import" />
+
+                <Grid Grid.Row="5" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Margin="0,0,6,0"
+                               VerticalAlignment="Center"
+                               Text="File:" />
+                    <TextBox x:Name="TextImportPathBox"
+                             Grid.Column="1"
+                             VerticalAlignment="Center"
+                             IsReadOnly="True" />
+                    <Button x:Name="TextImportBrowseButton"
+                            Grid.Column="2"
+                            Margin="8,0,0,0"
+                            Padding="12,4"
+                            Click="TextImportBrowse_Button_Click"
+                            Content="Browse..." />
+                </Grid>
+
+                <WrapPanel Grid.Row="6" Margin="0,6,0,0">
+                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Text="Source ID:" />
+                    <TextBox x:Name="TextImportSourceBox"
+                             Width="250"
+                             Margin="0,0,14,0" />
+                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Text="Topic ID:" />
+                    <TextBox x:Name="TextImportTopicBox"
+                             Width="250" />
+                </WrapPanel>
+
+                <WrapPanel Grid.Row="7" Margin="0,6,0,0">
+                    <CheckBox x:Name="TextImportDryRunCheckBox"
+                              VerticalAlignment="Center"
+                              Content="Dry run" />
+                    <TextBlock Margin="16,0,6,0" VerticalAlignment="Center" Text="Max file MB:" />
+                    <TextBox x:Name="TextImportMaxMegabytesBox"
+                             Width="60"
+                             Text="50" />
+                    <TextBlock Margin="16,0,6,0" VerticalAlignment="Center" Text="Max chunks:" />
+                    <TextBox x:Name="TextImportMaxChunksBox"
+                             Width="70"
+                             Text="10000" />
+                </WrapPanel>
+
+                <WrapPanel Grid.Row="8" Margin="0,8,0,0">
+                    <Button x:Name="TextImportButton"
+                            Padding="12,4"
+                            Click="TextImport_Button_Click"
+                            Content="Import Text File" />
+                    <Button x:Name="TextImportCancelButton"
+                            Margin="10,0,0,0"
+                            Padding="12,4"
+                            IsEnabled="False"
+                            Click="TextImportCancel_Button_Click"
+                            Content="Cancel" />
+                    <ProgressBar x:Name="TextImportProgressBar"
+                                 Width="180"
+                                 Height="16"
+                                 Margin="10,0,0,0"
+                                 Minimum="0"
+                                 Maximum="100" />
+                </WrapPanel>
+
+                <TextBlock x:Name="TextImportStatusText"
+                           Grid.Row="9"
+                           Margin="0,6,0,0"
+                           TextWrapping="Wrap"
+                           Text="Ready. 0 chunks." />
             </Grid>
         </GroupBox>
 
-        <GroupBox Grid.Row="2" Header="Status" Padding="8" Margin="0,8,0,0">
+        <GroupBox Grid.Row="2" Header="Ontology" Padding="8" Margin="0,8,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <WrapPanel Grid.Row="0">
+                    <Button x:Name="SeedOntologyButton"
+                            Padding="12,4"
+                            Click="SeedOntology_Button_Click"
+                            Content="Seed Upper Ontology" />
+                    <Button x:Name="LoadGcideButton"
+                            Margin="10,0,0,0"
+                            Padding="12,4"
+                            Click="LoadGcide_Button_Click"
+                            Content="Load GCIDE Lexicon..." />
+                    <Button x:Name="ExportOntologyButton"
+                            Margin="10,0,0,0"
+                            Padding="12,4"
+                            Click="ExportOntology_Button_Click"
+                            Content="Export Ontology Log" />
+                </WrapPanel>
+                <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Text="Subset:" />
+                    <ComboBox x:Name="CorpusSubsetCombo"
+                              Width="150"
+                              Margin="0,0,12,0"
+                              SelectedIndex="0">
+                        <ComboBoxItem Content="Semantic subset" />
+                        <ComboBoxItem Content="Whole corpus" />
+                        <ComboBoxItem Content="Single letter" />
+                    </ComboBox>
+                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Text="Letter:" />
+                    <TextBox x:Name="CorpusLetterBox"
+                             Width="32"
+                             MaxLength="1"
+                             Margin="0,0,12,0" />
+                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Text="Max entries (0 = all):" />
+                    <TextBox x:Name="CorpusMaxEntriesBox"
+                             Width="70"
+                             Text="2000" />
+                </WrapPanel>
+                <WrapPanel Grid.Row="2" Margin="0,8,0,0">
+                    <ProgressBar x:Name="OntologyProgressBar"
+                                 Width="220"
+                                 Height="16"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Margin="0,0,10,0" />
+                    <Button x:Name="CancelOntologyButton"
+                            Padding="12,4"
+                            IsEnabled="False"
+                            Click="CancelOntology_Button_Click"
+                            Content="Cancel" />
+                    <TextBlock x:Name="OntologyStatusText"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="No ontology load running." />
+                </WrapPanel>
+            </Grid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="3" Header="Status" Padding="8" Margin="0,8,0,0">
             <TextBox x:Name="StatusBox"
                      IsReadOnly="True"
                      AcceptsReturn="True"

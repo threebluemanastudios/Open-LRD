@@ -1,5 +1,7 @@
 # Prerequisites
 *.d
+github.com/
+gcide-0.54/
 
 # Compiled Object files
 *.slo
@@ -74,5 +76,4 @@ vcpkg_installed/
 Testing/
 .cache/
 .logs/
-github.com/
-gcide-0.54/
+*.md

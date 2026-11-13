@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OPEN-LRD")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e8fe7e90def3eb26f786bb158b9d6eea0c259e2e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e92c33ae075a71ec13d7dfd81045382e1e398afe")]
 [assembly: System.Reflection.AssemblyProductAttribute("OPEN-LRD")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OPEN-LRD")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

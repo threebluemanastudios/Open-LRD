@@ -316,6 +316,7 @@ namespace OPEN_LRD.NLP
             EntityResolver resolver = new EntityResolver(core, conversation, options);
             List<LinkedList<Chain_Node>> chains = new List<LinkedList<Chain_Node>>();
             List<RelationFrame> chainFrames = new List<RelationFrame>();
+            List<ReasoningResult> results = new List<ReasoningResult>();
 
             foreach (RelationFrame frame in ingestibleFrames)
             {
@@ -333,6 +334,7 @@ namespace OPEN_LRD.NLP
 
                     chains.Add(chain);
                     chainFrames.Add(frame);
+                    results.Add(IngestChain(chain, sourceNodeID, topicNodeID, diagnostics));
                 }
 
                 if (chains.Count >= options.MaxChainsPerText)
@@ -347,11 +349,6 @@ namespace OPEN_LRD.NLP
                     Frames = analysis.Frames
                 };
             }
-
-            List<ReasoningResult> results = new List<ReasoningResult>(chains.Count);
-
-            foreach (LinkedList<Chain_Node> chain in chains)
-                results.Add(IngestChain(chain, sourceNodeID, topicNodeID, diagnostics));
 
             List<SessionProvenanceEntry> provenance = new List<SessionProvenanceEntry>();
 

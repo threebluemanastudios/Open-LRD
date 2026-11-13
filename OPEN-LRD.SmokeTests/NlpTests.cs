@@ -756,6 +756,14 @@ namespace OPEN_LRD.SmokeTests
             Assert(isDoctor.RelationName == "is", $"expected is but got {isDoctor.RelationName}");
             Assert(isDoctor.LinkClass == LinkClass.identities, "copula questions should use identities");
 
+            QuestionAnalysis whoIsDouche = AnalyzeQuestion(pipeline, core, "Who is a douche?");
+            Assert(whoIsDouche.Type == QuestionType.WhSubject, $"expected WhSubject but got {whoIsDouche.Type}");
+            Assert(whoIsDouche.RelationName == "is", $"expected is but got {whoIsDouche.RelationName}");
+            Assert(
+                whoIsDouche.Object?.SurfaceText.Contains("douche", StringComparison.OrdinalIgnoreCase) == true,
+                "the who-is anchor should be the complement douche");
+            Assert(whoIsDouche.AnchorRole == FrameRole.Object, "the who-is complement should be the object anchor");
+
             QuestionAnalysis doesWork = AnalyzeQuestion(pipeline, core, "Does Alice work at Acme?");
             Assert(doesWork.Type == QuestionType.YesNo, $"expected YesNo but got {doesWork.Type}");
             Assert(
@@ -830,6 +838,35 @@ namespace OPEN_LRD.SmokeTests
             Assert(
                 copula.Answer?.ShortAnswer?.Contains("doctor", StringComparison.OrdinalIgnoreCase) == true,
                 $"expected doctor but got {copula.Answer?.ShortAnswer}");
+
+            LRD_Core doucheCore = NewCore();
+            NlpPipeline douchePipeline = new NlpPipeline(doucheCore);
+            Assert(douchePipeline.Ingest("Jeff is a douche.").Status == NlpStatus.Ingested, "douche ingestion failed");
+
+            NlpResult whoDouche = douchePipeline.Ask("Who is a douche?");
+            Assert(whoDouche.Status == NlpStatus.Answered, $"expected Answered but got {whoDouche.Status}: {string.Join("; ", whoDouche.Diagnostics)}");
+            Assert(whoDouche.Answer?.ShortAnswer == "Jeff", $"expected Jeff but got {whoDouche.Answer?.ShortAnswer}");
+
+            LRD_Core marryCore = NewCore();
+            NlpPipeline marryPipeline = new NlpPipeline(marryCore);
+            Assert(marryPipeline.Ingest("Mehri is married to Cody.").Status == NlpStatus.Ingested, "marry ingestion failed");
+
+            NlpResult whoMarried = marryPipeline.Ask("Who is married to Cody?");
+            Assert(whoMarried.Status == NlpStatus.Answered, $"expected Answered but got {whoMarried.Status}: {string.Join("; ", whoMarried.Diagnostics)}");
+            Assert(whoMarried.Answer?.ShortAnswer == "Mehri", $"expected Mehri but got {whoMarried.Answer?.ShortAnswer}");
+
+            LRD_Core multiCore = NewCore();
+            NlpPipeline multiPipeline = new NlpPipeline(multiCore);
+            Assert(
+                multiPipeline.Ingest("Mehri works for Eagle Metal.\nMehri is married to Cody.").Status == NlpStatus.Ingested,
+                "multi-sentence ingestion failed");
+            Assert(
+                multiCore.FindByLabel("Mehri", NodeTypes.Entities).Count == 1,
+                "repeated mentions in one text should reuse a single node");
+
+            NlpResult multiMarried = multiPipeline.Ask("Who is married to Cody?");
+            Assert(multiMarried.Status == NlpStatus.Answered, $"expected Answered but got {multiMarried.Status}: {string.Join("; ", multiMarried.Diagnostics)}");
+            Assert(multiMarried.Answer?.ShortAnswer == "Mehri", $"expected Mehri but got {multiMarried.Answer?.ShortAnswer}");
 
             LRD_Core timeCore = NewCore();
             NlpPipeline timePipeline = new NlpPipeline(timeCore);

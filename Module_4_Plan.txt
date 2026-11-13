@@ -1,0 +1,458 @@
+OPEN-LRD
+MODULE 4: UPPER ONTOLOGY AND GCIDE LEXICAL LOAD
+IMPLEMENTATION PLAN
+
+Status: Implemented (Phases 1-7). Both projects build with zero warnings and
+        zero errors; 94 smoke tests pass, including eleven Module 4 checks and
+        a sample load from the bundled GCIDE corpus.
+Scope owner: Module 4 (README numbering).
+Reference design: README.md, Module_2_Plan.txt, Module_3_Plan.txt.
+Data source: gcide-0.54/ (GNU Collaborative International Dictionary of
+        English), sourced from
+        https://kaikki.org/dictionary/English/words/index.html
+License: Open-LRD is released under the GNU General Public License v3.
+        The bundled gcide-0.54 dictionary is also GPLv3 (see
+        gcide-0.54/gcide-0.54/COPYING).
+Implementation constraint: Native C# with no external library dependencies.
+
+================================================================================
+1. PURPOSE AND SCOPE
+================================================================================
+
+Module 4 bootstraps an empty graph with foundational knowledge and provides
+the curated ETL path that loads the GCIDE corpus into it. It has two halves:
+
+1. Hardcoded upper ontology: top-level concepts, structural relations, the
+   type hierarchy, domain/range expectations, and reality rules. Permanent,
+   small, deterministic.
+2. GCIDE ETL: a streaming parser and loader that maps the 26 CIDE.* files
+   (131,569 headwords, ~61 MB) into lexical Word nodes and semantic
+   Sense/Concept nodes with IS_A, SYNONYM, ANTONYM, IS_NAMED, HAS_POS, and
+   related structural links.
+
+Module 4 is responsible for:
+
+- Base concepts such as Entity, Event, Time, Location, and other top-level
+  categories.
+- Structural relationships such as IS_A, PART_OF, CAUSES, HAS_PROPERTY,
+  PARTICIPATED_IN, HAS_TIME, HAS_LOCATION, and IS_NAMED.
+- Type hierarchies and domain/range expectations for relationships.
+- Rules that distinguish real, fictional, conditional, and hypothetical
+  knowledge.
+- Startup population routines for a new graph.
+- Curated loading from reputable sources through an ETL path.
+- Giving new facts enough structure to attach to the graph without hardcoding
+  specific world facts.
+
+Module 4 is NOT responsible for:
+
+- Statistical NLP, machine learning, embeddings, or external packages.
+- Genus-differentia mining of definition prose (deferred).
+- Enforcing selectional restrictions inside the matcher (advisory only here).
+- Languages other than English.
+- Background persistence or an external graph database.
+- Treating dictionary prose as ground truth; the corpus is historical.
+
+================================================================================
+2. ACCEPTED DESIGN DECISIONS
+================================================================================
+
+1. Native C# only. No external libraries.
+
+2. Ontology relations occupy the reserved 1-999 ID range
+   (RelationRegistry.LastReservedOntologyId = 999) with fixed, hardcoded IDs
+   so they are stable across runs and match the Module 3 reservation.
+
+3. Direct graph population, not ReasoningEngine.Ingest. Structured markup is
+   not natural language; bypassing trust and matching keeps a 131k-entry load
+   tractable and deterministic. Permanent nodes and links are written through
+   LRD_Core.AddExistingNode and LRD_Core.AddDirectedConnection.
+
+4. Lexical/semantic separation (README rule). One Lexeme node per headword
+   form, one Sense node per definition, joined by HAS_SENSE and IS_NAMED.
+
+5. Idempotent load. Re-running the loader reuses existing permanent nodes
+   (matched by label and type) and skips duplicate links.
+
+6. On-demand with persistence. OntologyLoader.Build produces an in-memory
+   graph, then exports a versioned .lrdlog; later runs import it through the
+   existing Tools path. Startup stays fast.
+
+7. GCIDE is read-only input, kept as a sibling gcide-0.54/ folder. Derived
+   data is separate. The GPLv3 notice is preserved.
+
+================================================================================
+3. CURRENT BASELINE AND INTEGRATION POINTS
+================================================================================
+
+- LRD_Core.InitializeCore() (LRD_Core.cs:26-34) is the only startup routine;
+  no bootstrap exists. Web_Node is internal, so all new code must compile into
+  the OPEN_LRD assembly or the SmokeTests compile globs.
+
+- Node and link APIs: AddExistingNode (LRD_Core.cs:210),
+  AddDirectedConnection(src, dst, LinkClass, int) (LRD_Core.cs:292),
+  FindByLabel(label, type) (LRD_Core.cs:418), FindByType (LRD_Core.cs:408).
+
+- Link(src, dst, forwardId, inverseId, class) requires both IDs to be
+  registered already (Link.cs:35).
+
+- Registries are flat, thread-safe, last-write-wins. NodeTypes IDs 1-11 are
+  used; LinkClass IDs 0-8 are used; ForwardLinkTypes and InverseLinkTypes use
+  only basic (0). New values are additive.
+
+- Reserved-ID conflict to fix: RelationRegistry.TryRestore rejects IDs <= 999
+  (RelationRegistry.cs:92-96) and CoreLogImporter.ValidateTypeDefinitions
+  rejects imported relation IDs <= 999 (CoreLogImporter.cs:414-418). Both must
+  be relaxed for ontology relations.
+
+- SmokeTests csproj compiles explicit globs (Nodes, Reasoning, NLP,
+  Persistence, Visualization, LRD_Core.cs). A new Ontology/ folder needs a new
+  glob. Program.Main (Program.cs:12-36) calls each XxxTests.RunAll().
+
+- Build and test (WSL):
+    "/mnt/c/Program Files/dotnet/dotnet.exe" build \
+        OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --nologo
+    "/mnt/c/Program Files/dotnet/dotnet.exe" run \
+        --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build
+
+================================================================================
+4. FILE LAYOUT AND RESPONSIBILITIES
+================================================================================
+
+Create under OPEN-LRD/Ontology/:
+
+1. OntologyTypes.cs
+   New NodeTypes registrations (Categories, Lexemes, Senses, Properties, Times,
+   Fields, Taxa, Realities, Relations) and new LinkClass registrations
+   (ontology, lexicon, taxonomy, properties).
+
+2. OntologyRelations.cs
+   Fixed 1-999 relation table (id, name, inverse, class) and
+   RegisterOntologyRelations(); integration shim into RelationRegistry.
+
+3. OntologyCatalog.cs
+   Hardcoded upper-ontology concept nodes, structural hierarchy edges, the
+   domain/range table, and the reality partition.
+
+4. UpperOntologyBootstrap.cs
+   Populate(LRD_Core): creates catalog nodes and links permanently and
+   idempotently.
+
+5. OntologyOptions.cs
+   Feature flags: AutoSeedFoundation, subset policy, caps, source and topic IDs.
+
+6. OntologyValidator.cs
+   Domain/range and reality-status helpers (advisory; used by tests and later
+   by reasoning).
+
+7. Gcide/GcideMarkup.cs
+   Entity-escape decoding (\'xx, <word/ entities, <br/), tag helpers.
+
+8. Gcide/GcideEntry.cs
+   Immutable records: GcideEntry, GcideSense, GcideRelation.
+
+9. Gcide/GcideEntryReader.cs
+   Streaming <p>-block reader over CIDE.*; IEnumerable<GcideEntry>.
+
+10. Gcide/GcideCorpusLoader.cs
+    ETL: entries to nodes and links in LRD_Core.
+
+11. Gcide/GcideLoadOptions.cs
+    Subset selection, caps, progress callback, cancellation token.
+
+12. OntologyLoader.cs
+    Facade: BuildFoundation, LoadCorpus, LoadAndExport, LoadFromLog.
+
+Add OPEN-LRD.SmokeTests/OntologyTests.cs and call OntologyTests.RunAll() from
+Program after PersistenceTests.RunAll() (Program.cs:32).
+
+Update OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj to include:
+
+    <Compile Include="../OPEN-LRD/Ontology/**/*.cs" />
+
+================================================================================
+5. CORE DATA MODEL ADDITIONS
+================================================================================
+
+New NodeTypes (additive, IDs 12 and above):
+- Categories (ontology category nodes)
+- Lexemes (word forms)
+- Senses (definitions)
+- Properties
+- Times
+- Fields
+- Taxa
+- Realities
+- Relations
+
+New LinkClass (additive, IDs 9 and above):
+- ontology, lexicon, taxonomy, properties
+
+Fixed ontology relation IDs (1-999; forward and inverse share the ID):
+
+  ID  Name            Inverse         Class       Purpose
+   1  is_a            has_subtype     ontology    hypernym/hyponym
+   2  instance_of     has_instance    ontology    type membership
+   3  part_of         has_part        ontology    mereology
+   4  has_property    property_of     properties  attributes
+   5  causes          caused_by       ontology    causation
+   6  participated_in has_participant ontology    event roles
+   7  has_time        time_of         temporal    event time
+   8  has_location    location_of     spatial     event/entity place
+   9  is_named        names           lexicon     concept to word
+  10  has_sense       sense_of        lexicon     word to sense
+  11  synonym         synonym         lexicon     symmetric
+  12  related_to      related_to      lexicon     associative
+  13  has_pos         pos_of          lexicon     part of speech
+  14  has_field       field_of        lexicon     domain
+  15  member_of       has_member      ontology    membership
+  16  composed_of     component_of    ontology    composition
+  17  produces        produced_by     ontology    production
+  18  uses            used_by         ontology    tool/process
+  19  has_reality     reality_of      ontology    real/fictional/etc.
+
+antonym stays at RelationRegistry.AntonymLinkTypeId = 2,000,000 (Module 3
+reservation, RelationRegistry.cs:16). Module 4 now actually creates antonym
+links.
+
+Foundation concept nodes (OntologyCatalog), all NodeTypes.Categories and
+permanent:
+- Entity (root), PhysicalEntity, AbstractEntity, Object, Substance,
+  LivingThing, Person, Organization, Artifact, Event, Process, State,
+  Activity, Time, Location, Property, Quantity, Relation, Concept, Lexeme.
+- POS nodes: Noun, Verb, Adjective, Adverb, Pronoun, Preposition,
+  Conjunction, Interjection.
+- Reality nodes: Real, Fictional, Hypothetical, Conditional.
+
+Structural edges use is_a, part_of, has_property, and related relations. Every
+foundation node gets has_reality --> Real by default.
+
+================================================================================
+6. GCIDE CORPUS FORMAT
+================================================================================
+
+- 26 files CIDE.A through CIDE.Z, ~61 MB, SGML-like tags. Paragraphs are
+  <p>...</p> (232,491 total; 131,569 contain <hw>).
+
+- Entry paragraph shape:
+  <p><ent>dog</ent><br/>
+  <hw>dog</hw> <pos>n.</pos> <sn>1.</sn> <def>...</def><br/>
+  <syn>...</syn> [<source>...</source>]</p>
+
+- Tags to consume: <ent> (ASCII index headword), <hw> (accented headword),
+  <pos> (part of speech), <sn> (sense number), <def> (definition), <syn>,
+  <altname>, <asp>/<altsp>, <ant> (antonym), <stype> (subtypes of headword),
+  <isa> (supertype of headword), <fld> (field), <source>, taxonomy tags
+  (<kingdom> through <gen>), and relational tags (<part>/<partof>,
+  <member>/<membof>, <causes>/<causedby>, <produces>/<prodby>,
+  <uses>/<usedby>, <stage>/<stageof>).
+
+- Observed semantic tag counts: <syn> 10,387; <altname> 7,937; <stype> 2,554;
+  <ant> 1,084; <isa> 195. <pos> 144,521; <def> 179,781; <fld> 49,973.
+
+- Special escapes to decode (webfont.txt): \'xx hex codes (e.g. \'94 = o
+  with diaeresis) and <word/ entities; <br/ becomes a break or space. The
+  parser must not misread <br/, <or/, <and/ as elements.
+
+- <p> tags do not nest cleanly with <note> and <cs>; the reader must tolerate
+  mismatches (per the GCIDE README and tagset.txt).
+
+================================================================================
+7. PIPELINE ALGORITHMS
+================================================================================
+
+7.1 Markup decoding
+- Single pass replacing \'xx and <entity/ with Unicode; normalize whitespace;
+  keep optional source spans.
+
+7.2 Entry reading
+- Stream each file, split on <p> and </p>, and emit an entry only when the
+  block contains <hw>. GcideEntryReader.Read(path) yields lazily and never
+  buffers the whole corpus.
+
+7.3 Entry parsing
+- Extract headword (<ent> preferred, else cleaned <hw>), POS list, and per
+  sense {sn, def text, source, fld}. Collect relation targets: synonyms,
+  altnames, antonyms, stype, isa, taxa, parts, and related tags. Resolve
+  target phrases to headword keys (normalized, lowercased, spaces and hyphens
+  unified).
+
+7.4 Graph mapping
+- Headword to Lexeme node; label is the normalized ASCII headword; aliases
+  are the <hw> form and <asp> variants (deduped by Node.Add_Alias).
+- Each sense to a Sense node (NodeTypes.Senses); label is a truncated or
+  cleaned definition or a stable word#senseN key; definition text stored via
+  DataPointer or label.
+- Lexeme --has_sense--> Sense; Sense --is_named--> Lexeme;
+  Lexeme --synonym--> Lexeme (symmetric, added both directions);
+  Lexeme --antonym--> Lexeme (ID 2,000,000);
+  Lexeme --is_a--> target for <isa> (the target is the supertype) and
+  <stype> (the target is the subtype);
+  Lexeme --has_pos--> POS node; Sense --has_field--> Field node.
+- Unresolved relation targets are skipped by default (counted as
+  diagnostics); GcideLoadOptions.ResolutionMode may instead create temporary
+  placeholders.
+
+7.5 Idempotence and merge
+- Before creating, FindByLabel(label, type) and reuse an existing permanent
+  node. AddDirectedConnection dedupes links through Web_Node.Add_Link.
+
+================================================================================
+8. LOADING STRATEGY
+================================================================================
+
+- Foundation load (UpperOntologyBootstrap.Populate): about 50 nodes and 80
+  links; cheap and deterministic; gated by OntologyOptions.AutoSeedFoundation
+  (default false per the on-demand decision, exposed as a Tools button).
+
+- Corpus load (GcideCorpusLoader) is driven by GcideLoadOptions:
+  - Subset: All, ByLetter(char), SemanticOnly (entries carrying any of
+    stype/isa/ant/syn/altname), ByPartOfSpeech, MaxEntries(int).
+  - MaxEntries cap, progress callback, and CancellationToken. The recommended
+    default is SemanticOnly with a cap (fast demo); a full load is opt-in.
+
+- Persist: after build, CoreLogExporter writes a versioned .lrdlog; later runs
+  use CoreLogImporter through the existing Tools import. New node types, link
+  classes, and ontology relations serialize through the existing
+  TypeDefinitionLog.
+
+- Persistence fix required: relax CoreLogImporter.cs:414-418 and
+  RelationRegistry.TryRestore (RelationRegistry.cs:92-96) so ontology
+  relations (1-999) can be exported and restored. Approach: register ontology
+  relations first (populating ForwardLinkTypes and InverseLinkTypes), then have
+  TryRestore and the importer accept an ID <= 999 only when it matches an
+  already-registered ontology relation name; otherwise keep rejecting. Add
+  RelationRegistry.RegisterOntologyRelation(id, name, inverseName) that
+  bypasses the <= 999 guard.
+
+================================================================================
+9. DOMAIN/RANGE AND REALITY RULES
+================================================================================
+
+- OntologyValidator encodes a domain/range table for structural relations,
+  for example:
+    is_a:          Concept -> Concept
+    has_time:      Event -> Time
+    has_location:  Event or Entity -> Location
+    has_property:  Entity -> Property
+    is_named:      Concept -> Lexeme
+
+- RealityRule: a concept's reality status is Real unless it is reachable under
+  Fictional, Hypothetical, or Conditional through is_a or instance_of.
+  Helpers: GetRealityStatus(node) and IsConsistent(link).
+
+- These are advisory for now (tests and future matcher filtering). No
+  enforcement in SubgraphMatcher in this module.
+
+================================================================================
+10. TOOLS AND UI INTEGRATION
+================================================================================
+
+Add to Tools.xaml and Tools.xaml.cs:
+
+- "Seed Upper Ontology" button: UpperOntologyBootstrap.Populate (idempotent).
+- "Load GCIDE Lexicon..." button: folder picker and subset/cap dialog; runs
+  GcideCorpusLoader in the background with progress and cancel.
+- "Export Ontology Log" button: writes the .lrdlog through the existing
+  exporter.
+- Gate all buttons on LRD_Core.initialized (mirrors the Phase 8 gating
+  pattern).
+
+================================================================================
+11. TEST PLAN
+================================================================================
+
+Add OPEN-LRD.SmokeTests/OntologyTests.cs and call OntologyTests.RunAll() from
+Program.
+
+1. Foundation bootstrap creates expected root nodes and is_a edges; all
+   Permanent; idempotent on a second call.
+2. Ontology relation IDs are in 1-999; forward and inverse share the ID;
+   TryGetById resolves; antonym is unchanged at 2,000,000.
+3. Link construction with ontology IDs succeeds only after registration.
+4. Markup decoding: \'94 to o-umlaut; <br/ handling; <or/ not treated as an
+   element; tolerance for unbalanced <p>.
+5. Entry parsing on an embedded sample string: headword, POS, senses,
+   synonyms, antonym, stype/isa extraction.
+6. Corpus mapping: a small synthetic corpus produces Lexeme and Sense nodes
+   with has_sense, is_named, synonym, antonym, and is_a links; word and sense
+   counts match the input.
+7. Idempotence: loading twice creates no duplicate nodes or links.
+8. Subset policy: MaxEntries, SemanticOnly, and ByLetter honor caps and
+   filters.
+9. Persistence round-trip: export then import restores ontology relations
+   (<= 999), node types, link classes, and links; the importer accepts them.
+10. Domain/range validator flags a known-bad relation; the reality rule
+    classifies a fictional subtree.
+11. Real corpus sample: 25 tagged entries from the bundled gcide-0.54 folder
+    parse and map into Lexeme and Sense nodes when the corpus is present.
+12. Full solution build and all existing tests still pass.
+
+================================================================================
+12. IMPLEMENTATION PHASES
+================================================================================
+
+Phase 1: Scaffold
+- Create the Ontology/ folder and the csproj glob.
+- Add OntologyTypes.cs and OntologyRelations.cs (with the reserved-ID
+  registration fix).
+- Add the OntologyTests scaffold and README and plan stubs.
+- Verify the build is green.
+
+Phase 2: Foundation
+- OntologyCatalog, UpperOntologyBootstrap, and OntologyValidator.
+- Tests 1, 2, 3, and 10.
+
+Phase 3: GCIDE primitives
+- GcideMarkup, GcideEntry, and GcideEntryReader.
+- Tests 4 and 5.
+
+Phase 4: ETL mapping
+- GcideCorpusLoader and GcideLoadOptions.
+- Tests 6, 7, and 8.
+
+Phase 5: Persistence and loader facade
+- OntologyLoader and the importer and registry fixes.
+- Tests 9 and 11.
+
+Phase 6: Tools UI
+- Buttons, folder picker, and progress and cancel wiring.
+
+Phase 7: Documentation and acceptance
+- Update README Module 4 status.
+- Finalize Module_4_Plan.txt and AdditionalTools.txt.
+- Full solution build and smoke run.
+
+================================================================================
+13. KNOWN LIMITATIONS
+================================================================================
+
+- Definitions are 1890s-era and occasionally inaccurate or offensive (per the
+  GCIDE README); they are treated as historical lexical data, not truth.
+- Only a fraction of entries carry explicit semantic tags, so the type
+  hierarchy is sparse without genus-differentia mining (deferred).
+- Domain/range and reality rules are advisory, not enforced in matching yet.
+- A full-corpus load is memory and CPU heavy (roughly 300k nodes and 400k+
+  links); the default is a curated subset.
+- The persistence importer keeps 64 MB / 100k-node / 500k-link safety caps
+  from Module 3, so a full-corpus .lrdlog needs a future cap change. Curated
+  subsets, including the 2,000-entry default, fit comfortably.
+- Multiword and phrase headwords resolve best-effort by normalized string
+  match.
+
+================================================================================
+14. ACCEPTANCE CRITERIA
+================================================================================
+
+- The foundation bootstrap is permanent, idempotent, and yields the documented
+  concept and relation set.
+- Ontology relations occupy 1-999 with stable IDs; antonym remains at
+  2,000,000; Module 3 predicate allocation is unaffected.
+- The GCIDE parser decodes escapes and extracts entries, senses, and relations
+  from a sample.
+- Loading a subset creates Word and Sense nodes with has_sense, is_named,
+  synonym, antonym, is_a, and has_pos links; reloading is idempotent.
+- Ontology data survives a .lrdlog export and import round trip, including
+  relation IDs <= 999.
+- The solution builds with zero warnings and zero errors; all Module 1-3 tests
+  plus the new OntologyTests pass; no external packages are added.

@@ -22,3 +22,4 @@ C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\Tools.ba
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\NlpWorkbenchWindow.g.cs
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\NlpWorkbenchWindow.baml
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\OPEN-LRD.sourcelink.json
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\bin\Debug\net10.0-windows\OPEN-LRD.exe

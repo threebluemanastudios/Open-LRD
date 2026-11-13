@@ -29,6 +29,10 @@ namespace OPEN_LRD.Persistence
                 return result;
             }
 
+            // Ontology relations occupy the reserved 1-999 range, so they must
+            // be registered before imported IDs can be validated or restored.
+            OPEN_LRD.Ontology.OntologyRelations.EnsureRegistered();
+
             CoreLogDocument? document = ReadDocument<CoreLogDocument>(
                 path,
                 CoreLogFormat.Core,
@@ -141,6 +145,10 @@ namespace OPEN_LRD.Persistence
                 result.Errors.Add("The core must be initialized before importing a log.");
                 return result;
             }
+
+            // Ontology relations occupy the reserved 1-999 range, so they must
+            // be registered before imported IDs can be validated or restored.
+            OPEN_LRD.Ontology.OntologyRelations.EnsureRegistered();
 
             TransientLogDocument? document = ReadDocument<TransientLogDocument>(
                 path,
@@ -411,7 +419,11 @@ namespace OPEN_LRD.Persistence
 
             foreach (RelationTypeLog relation in definitions.Relations)
             {
-                if (relation.Id <= RelationRegistry.LastReservedOntologyId)
+                if (relation.Id <= RelationRegistry.LastReservedOntologyId
+                    && !RelationRegistry.IsOntologyRelationRegistered(
+                        relation.Id,
+                        relation.Name,
+                        relation.InverseName))
                 {
                     result.Errors.Add(
                         $"Relation ID {relation.Id} falls in the reserved ontology range.");

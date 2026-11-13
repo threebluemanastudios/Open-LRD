@@ -2,10 +2,12 @@ OPEN-LRD
 MODULE 3: THE NLP PIPELINE
 IMPLEMENTATION PLAN
 
-Status: Approved. Phases 1-9 implemented. Phase 8 manual WPF acceptance is
+Status: Approved. Phases 1-12 implemented. Phase 8 manual WPF acceptance is
         verified. Phase 9 Additional Tools is implemented, covered by smoke
         tests, and manually verified for export and core import. Phase 10 adds
-        coordination and negation handling.
+        coordination and negation handling. Phase 11 adds copula who-question
+        orientation and per-frame ingestion reuse. Phase 12 adds large text-file
+        import.
 Scope owner: Module 3 (README numbering).
 Reference design: README.md, Module_2_Plan.txt, Module_3_Phase_8_Plan.txt,
                   and AdditionalTools.txt.
@@ -211,6 +213,14 @@ Create under OPEN-LRD/NLP/:
     UI-independent workbench facade for conversation lifecycle, Ingest, Ask, and
     read-only state snapshots.
 
+21. TextChunker.cs
+    Paragraph splitting, sentence packing, shared sentence spans, and safe hard
+    splits for bounded ingestion.
+
+22. TextFileImporter.cs
+    Multi-chunk text-file ingestion with provenance, limit retries, progress,
+    cancellation, and safety limits.
+
 Update OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj to include:
 
     <Compile Include="../OPEN-LRD/NLP/**/*.cs" />
@@ -388,6 +398,10 @@ gazetteers. Avoid large hardcoded encyclopedic lists.
 
 - Parse text and extract frames.
 - For each supported frame, build a chain and call ReasoningEngine.Ingest.
+- Build and merge each frame's chains before processing the next frame, so
+  repeated mentions within one text reuse the temporary node created by an
+  earlier frame instead of creating duplicate nodes that make later frames
+  ambiguous.
 - Aggregate statuses, diagnostics, promoted nodes, and trust results.
 - Record session provenance with source text span, source ID, topic ID, frame,
   and relation link keys.
@@ -407,6 +421,10 @@ gazetteers. Avoid large hardcoded encyclopedic lists.
 - Resolve known mentions and pronouns from context.
 - Build a query frame with a wh placeholder.
 - Orient the chain so a known entity is terminal for response extraction.
+- Treat copula Who/Whom questions as subject questions: the wh-word is the
+  unknown subject and the post-copula phrase is the known anchor, so
+  "Who is a douche?" queries ?who --is--> douche. Copula What/Which questions
+  remain object questions, so "What is Alice?" anchors on Alice.
 
 6.10 Answer generation
 
@@ -467,9 +485,13 @@ Required test groups:
 
 7. Question answering
    - Who works at Acme? returns the expected entity.
+   - Who is a douche? returns the entity named by the copula fact.
+   - What is Alice? remains object-anchored on Alice.
    - What did Alice see? returns the expected object.
    - Is Alice a doctor? returns yes or no.
    - Where does she work? resolves she from context.
+   - A multi-sentence text mentioning one entity several times creates a single
+     node for that entity and still answers follow-up questions.
    - Ambiguous and no-match questions produce honest answers.
 
 8. Output
@@ -547,6 +569,24 @@ Phase 10: Coordination and negation (post-completion)
 - Reserve the antonym relation for Module 4 without linking antonyms.
 - Add coordination and negation smoke tests and update documentation.
 
+Phase 11: Question orientation and ingestion reuse (post-completion)
+- Classify copula Who/Whom questions as subject questions anchored on the
+  post-copula complement; keep copula What/Which questions object-anchored.
+- Build and merge each frame's chains before the next frame so repeated
+  mentions in one text reuse a single temporary node.
+- Add who-is answer tests and a multi-sentence reuse test, and update
+  documentation.
+
+Phase 12: Large text-file import (post-completion, AdditionalTools section 16)
+- Split files paragraph-first, then by sentence, with a safe hard split.
+- Share one pipeline and conversation across chunks for pronoun continuity.
+- Validate Source/Topic GUIDs and create or reuse a permanent Source node.
+- Retry limit failures by splitting at a sentence boundary up to depth three.
+- Continue after unsupported or failing chunks and report per-chunk counts.
+- Add dry run plus configurable file-size and chunk-count safety limits.
+- Add Tools controls, progress, and cancellation for the import.
+- Add text-import smoke tests and update documentation.
+
 ================================================================================
 9. KNOWN LIMITATIONS
 ================================================================================
@@ -570,6 +610,10 @@ Phase 10: Coordination and negation (post-completion)
 - First-person singular and plural forms share one configurable speaker node;
   group membership and plural semantics are not represented separately.
 - Ask commands are read-only and support only fixed targets or question text.
+- Large text-file import is not transactional; failures and cancellation leave
+  partial knowledge. Very long imports evict early conversation mentions, so
+  pronoun continuity weakens deep into a file. Plain text only; PDF, DOCX,
+  HTML, and CSV are out of scope.
 - Module 4 will add ontology relations, type hierarchies, and selectional
   restrictions.
 
@@ -583,6 +627,10 @@ Phase 10: Coordination and negation (post-completion)
   permanent mutation.
 - Ingesting the same fact twice is idempotent.
 - Ask("Who works at Acme?") returns the expected entity and a response path.
+- Ask("Who is a douche?") returns the entity named by the copula fact, while
+  Ask("What is Alice?") stays anchored on Alice.
+- A text that mentions one entity across multiple sentences creates a single
+  node for that entity.
 - Follow-up questions resolve recent pronouns from conversation context.
 - Coordinated "and" input produces one frame per conjunct, "or" alternatives
   share a disjunction group, and negated complements ingest as "not X" concepts
@@ -594,5 +642,12 @@ Phase 10: Coordination and negation (post-completion)
   when the core contains chains; empty companions import as a successful no-op.
 - Invalid or conflicting imports either change no state or follow the selected
   Merge/Replace conflict policy.
+- A text file larger than the per-call NLP limits imports in bounded chunks,
+  every chunk respects the documented budgets, and concatenation loses no
+  non-whitespace content.
+- A blank Source creates one permanent Source node with a file DataPointer, and
+  invalid Source/Topic GUIDs abort before any graph mutation.
+- Text-import dry run mutates nothing; failures are reported per chunk without
+  stopping later chunks; cancellation stops after the current chunk.
 - Full solution builds with zero warnings and zero errors.
 - All Module 1, Module 2, and Module 3 smoke tests pass.

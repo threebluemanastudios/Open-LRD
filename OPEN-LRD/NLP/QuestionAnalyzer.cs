@@ -225,6 +225,7 @@ namespace OPEN_LRD.NLP
                 quantityQuestion,
                 leadingPreposition,
                 passive,
+                copula,
                 byQualifier,
                 invertedSubject,
                 auxIndex,
@@ -704,6 +705,7 @@ namespace OPEN_LRD.NLP
             bool quantityQuestion,
             string? leadingPreposition,
             bool passive,
+            bool copula,
             QualifierPhrase? byQualifier,
             FrameArgument? invertedSubject,
             int auxIndex,
@@ -729,7 +731,8 @@ namespace OPEN_LRD.NLP
                 if (passive && byQualifier is not null)
                     return QuestionType.WhObject;
 
-                bool inverted = auxIndex > whIndex && invertedSubject is not null;
+                bool copulaEntityQuestion = copula && wh is WhKind.Who or WhKind.Whom;
+                bool inverted = auxIndex > whIndex && invertedSubject is not null && !copulaEntityQuestion;
                 return inverted ? QuestionType.WhObject : QuestionType.WhSubject;
             }
 
