@@ -68,6 +68,7 @@ compile_commands.json
 # vcpkg
 vcpkg_installed/
 .vs/
+*.AssemblyInfo*
 
 # debug information files
 *.dwo
