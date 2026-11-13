@@ -13,4 +13,8 @@
     <Folder Include="Tools\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OPEN-LRD.ManualUiTests" />
+  </ItemGroup>
+
 </Project>

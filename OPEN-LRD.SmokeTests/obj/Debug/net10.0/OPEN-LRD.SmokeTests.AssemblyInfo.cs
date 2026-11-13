@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OPEN-LRD.SmokeTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e92c33ae075a71ec13d7dfd81045382e1e398afe")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3fcbc2d02dbb89298b702f22540f0e8d56c2cfb8")]
 [assembly: System.Reflection.AssemblyProductAttribute("OPEN-LRD.SmokeTests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OPEN-LRD.SmokeTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -243,7 +243,10 @@ namespace OPEN_LRD
 
         private void TextImportCancel_Button_Click(object sender, RoutedEventArgs e)
         {
-            textImport?.Cancel();
+            if (textImport is null)
+                return;
+
+            textImport.Cancel();
             SetTextImportStatus("Cancelling after the current chunk...");
         }
 

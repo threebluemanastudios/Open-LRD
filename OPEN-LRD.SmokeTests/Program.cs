@@ -32,6 +32,7 @@ namespace OPEN_LRD.SmokeTests
             PersistenceTests.RunAll();
             OntologyTests.RunAll();
             TextImportTests.RunAll();
+            VisualizerTests.RunAll();
 
             Console.WriteLine($"{_passed} passed, {_failed} failed");
             Environment.ExitCode = _failed == 0 ? 0 : 1;

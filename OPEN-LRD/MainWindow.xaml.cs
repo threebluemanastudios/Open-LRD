@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using OPEN_LRD.Visualizer;
 
 namespace OPEN_LRD
 {
@@ -10,6 +11,7 @@ namespace OPEN_LRD
     {
         private LRD_Core? thunderCore = LRD_Core.Instance;
         private NlpWorkbenchWindow? nlpWorkbenchWindow;
+        private VisualizerWindow? visualizerWindow;
 
         public MainWindow()
         {
@@ -27,6 +29,7 @@ namespace OPEN_LRD
                     WelcomeBox.Text = "Core Running";
                     LaunchButton.Visibility = Visibility.Hidden;
                     ToolsButton.IsEnabled = true;
+                    VisualizerButton.IsEnabled = true;
                     NlpWorkbenchButton.IsEnabled = true;
                 }
             }
@@ -74,6 +77,28 @@ namespace OPEN_LRD
             };
             nlpWorkbenchWindow.Closed += (_, _) => nlpWorkbenchWindow = null;
             nlpWorkbenchWindow.Show();
+        }
+
+        private void Visualizer_Button_Click(object sender, RoutedEventArgs e)
+        {
+            if (thunderCore is null || !thunderCore.initialized)
+            {
+                MessageBox.Show("Launch Core before opening the Visualizer.");
+                return;
+            }
+
+            if (visualizerWindow is not null)
+            {
+                if (visualizerWindow.WindowState == WindowState.Minimized)
+                    visualizerWindow.WindowState = WindowState.Maximized;
+
+                visualizerWindow.Activate();
+                return;
+            }
+
+            visualizerWindow = new VisualizerWindow(thunderCore);
+            visualizerWindow.Closed += (_, _) => visualizerWindow = null;
+            visualizerWindow.Show();
         }
     }
     

@@ -202,7 +202,9 @@ snapshots. `NlpWorkbenchWindow` uses it for the end-to-end desktop workflow and
 shows diagnostics, candidates, evidence, frames, chains, mentions, focus, and
 session provenance. The existing Tools window handles log export and import,
 large text-file ingestion, and ontology loading; it is not converted into the
-workbench, and Visualizer rendering remains planned.
+workbench, and Visualizer rendering remains planned. The visualizer's pure
+snapshot, distance-layout, color, projection, camera, mesh, and settings layer is
+implemented and tested ahead of the WPF window.
 Conversation state is held in memory for the active core session and can be
 exported to or restored from .lrdlog files. Merging keeps existing data on ID
 conflicts, while replacing core state invalidates open workbench sessions.
@@ -276,9 +278,12 @@ the versioned `.lrdlog` export and import path. The Tools window exposes Seed
 Upper Ontology, Load GCIDE Lexicon (subset, letter, and entry cap with progress
 and cancel), and Export Ontology Log actions. Nineteen structural relations
 occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
-(2,000,000). The smoke suite adds eleven Module 4 checks and thirteen
-text-import checks, for 107 passing tests in total. See `Module_4_Plan.txt` for the full
-plan and `AdditionalTools.txt` section 16 for the text import tool.
+(2,000,000). The smoke suite adds eleven Module 4 checks, thirteen
+text-import checks, and thirty-two visualizer model/math/layout checks, for
+139 passing tests in total. The distance layout is deterministic and reports
+progress and cancellation. See `Module_4_Plan.txt` for the full
+plan, `AdditionalTools.txt` section 16 for the text import tool, and
+`Visualizer_Plan.txt` for the 3D visualizer.
 
 ### Data Source
 

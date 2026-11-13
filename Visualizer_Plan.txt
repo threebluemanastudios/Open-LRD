@@ -1,0 +1,977 @@
+OPEN-LRD
+VISUALIZER TOOL: 3D LINK-DISTANCE GRAPH VIEW
+IMPLEMENTATION PLAN
+
+Status: Phase 2 complete. Pure model, math, and distance layout implemented and
+        tested; WPF scene and window are not started.
+Scope owner: Additional Tools (follows AdditionalTools.txt section 16).
+Reference design: README.md, Module_2_Plan.txt, Module_3_Plan.txt,
+                  AdditionalTools.txt, and LinkDistanceDefinitions.cs.
+Implementation constraint: Native C# with no external library dependencies.
+Target: .NET 10 WPF (net10.0-windows), existing LRD_Core singleton graph.
+
+================================================================================
+1. FEASIBILITY ANSWER
+================================================================================
+
+Yes. Everything requested can be built with C# and WPF using only the .NET
+base class library and the WPF assemblies that ship with the framework. No
+NuGet package, no third-party 3D engine, and no native DLLs are required.
+
+WPF already provides the hard parts:
+
+  Requirement             Native support
+  ----------------------  -----------------------------------------------------
+  3D scene and camera     System.Windows.Media.Media3D.Viewport3D,
+                          PerspectiveCamera, ModelVisual3D, Model3DGroup
+  Cube geometry           MeshGeometry3D with explicit vertices, normals, and
+                          triangle indices
+  Lighting and color      AmbientLight, DirectionalLight, DiffuseMaterial,
+                          SpecularMaterial, EmissiveMaterial, MaterialGroup
+  Continuous animation    System.Windows.Threading / CompositionTarget.Rendering
+  Color dropdowns         ComboBox, ItemsControl, data binding
+  Text rendering          FormattedText and DrawingContext in a 2D overlay
+  Math                    System.Numerics.Vector3, Matrix4x4, and plain
+                          double math in the BCL
+  Settings persistence    System.Text.Json in the BCL
+
+Two capabilities need custom code because WPF does not expose them directly:
+
+1. Line primitives. Viewport3D has no DrawLine. Each link is rendered as a
+   very thin crossed-quad mesh (two perpendicular quads) or a small 4-sided
+   prism. All links of one type are merged into a single MeshGeometry3D so the
+   cost is one model per link type, not one model per link.
+
+2. 3D text. True per-face 3D text (Viewport2DVisual3D or text-as-geometry) is
+   expensive and hard to read at a distance. Instead, a transparent
+   FrameworkElement overlays the Viewport3D and draws every visible node label
+   with FormattedText, projecting the 3D node center to 2D each frame. Labels
+   therefore always face the viewer and stay legible. The trade-off is that
+   labels are not depth-occluded by cubes; this is documented as a limitation.
+
+This is a normal WPF 3D application, not a research project. The only real
+engineering risks are large-graph layout time and fill rate, both addressed by
+batching, caps, and background layout in section 12.
+
+================================================================================
+2. PURPOSE AND SCOPE
+================================================================================
+
+The Visualizer is a read-only inspection tool. It takes a snapshot of the
+current LRD_Core graph and shows it as a navigable 3D point cloud:
+
+- Every node is a shaded cube whose color is chosen per node class.
+- Every link is a colored line between two cubes, colored per link type.
+- Cube spacing is derived from the existing link-distance definitions.
+- The node alias/label is drawn over its cube.
+- The user flies through the cloud with mouse look and keyboard movement.
+
+The Visualizer is responsible for:
+
+- Snapshotting nodes and links without mutating the graph.
+- Computing deterministic 3D positions from link distances.
+- Rendering cubes, labels, and colored links with WPF 3D.
+- Letting the user choose a color for every node class and link type.
+- Fly/orbit navigation, framing, hover, and selection.
+- Persisting color and view choices locally.
+- Staying responsive and cancellable on large graphs.
+
+The Visualizer is NOT responsible for:
+
+- Editing nodes, links, or colors stored in the graph itself.
+- Layout persistence in .lrdlog files.
+- Graph search, filtering by fact, or NLP question answering.
+- Statistical layout, embeddings, or machine learning.
+- Shadows, transparency sorting, or cinematic rendering.
+- Arrowheads or link direction semantics (deferred; see limitations).
+
+================================================================================
+3. ACCEPTED DESIGN DECISIONS
+================================================================================
+
+1. Native C# and WPF only. No external libraries or native dependencies.
+
+2. A new full-size VisualizerWindow is opened from a new MainWindow button,
+   not embedded in Tools. Tools stays focused on import/export/ontology.
+
+3. The graph is captured as an immutable GraphSnapshot on the UI thread before
+   any background work. Layout runs on a worker task and never touches
+   LRD_Core or WPF objects.
+
+4. All algorithm code lives under OPEN-LRD/Visualization/ and is WPF-free so
+   the net10.0 smoke-test project can compile and test it. All WPF-specific
+   code lives under OPEN-LRD/Visualizer/ so it is not pulled into the smoke
+   project's Visualization/**/*.cs glob.
+
+5. Link distance comes from LinkDistanceDefinitions.GetDistance(link), which
+   already resolves forward-type overrides before link-class defaults before
+   the global 1.0 fallback. The layout does not invent its own distances.
+
+6. Spacing is enforced primarily by position-based distance constraints, with
+   short-range collision separation and weak gravity. This honors link
+   distances directly instead of relying on a hard-to-tune force equilibrium.
+
+7. Reciprocal links are stored once per endpoint. The snapshot deduplicates
+   them by unordered endpoint pair plus forward type plus link class, and the
+   visualizer treats them as undirected lines. Direction is deferred.
+
+8. Node colors are keyed by NodeTypes.Id. Link colors are keyed primarily by
+   ForwardLinkTypes.Id, with LinkClass colors as an optional fallback.
+
+9. Color choices use a fixed named palette (24 entries) in a ComboBox. A free
+   color picker is deferred; WPF has no built-in color dialog and a custom
+   picker is unnecessary for the first release.
+
+10. Layout is deterministic: sorted node/edge order, no random numbers, fixed
+    iteration order, and no parallel floating-point reductions.
+
+11. Layout and geometry are rebuilt only on Refresh or Recompute Layout.
+    Color changes swap materials; they never recompute positions.
+
+12. The Visualizer caps how much it renders and reports truncation. It never
+    silently drops nodes.
+
+================================================================================
+4. CURRENT BASELINE AND INTEGRATION POINTS
+================================================================================
+
+- LRD_Core.Instance is a singleton. InitializeCore() resets the dictionary,
+  query/response chains, and conversations. The Visualizer requires
+  initialized == true and is disabled before Launch Core.
+
+- GetDictionary() returns a read-only wrapper over the live node dictionary.
+  FindNodes, FindByLabel, and GetLinks are also available. Enumerating these
+  collections is only safe on the UI thread because the core has no locking.
+
+- Web_Node is internal, so the snapshot builder must compile into OPEN_LRD or
+  the smoke-test source globs. Both are true today.
+
+- Node exposes ID, Label, Aliases, Get_NodeType(), Get_Lifetime(), TTL, and
+  Get_DataPointer(). The display label is Label, else first alias, else the
+  first eight characters of the GUID.
+
+- Links are stored per node as referenceLinks. A bidirectional connection
+  creates one record on each endpoint, and each record contains the same
+  ForwardLinkTypes and LinkClass. A snapshot that enumerates every node's
+  links therefore sees every undirected edge twice. Deduplication is required.
+
+- LinkDistanceDefinitions.GetDistance(Link) resolves, in order:
+    a. ForwardLinkTypes override, if present.
+    b. LinkClass default (identities 0.50, map_locations 0.75, basic 1.00,
+       events 1.00, actions 1.25, temporal 1.25, spatial 1.50, sources 1.75,
+       empty 2.00).
+    c. Fallback 1.0.
+  Distances are finite and greater than zero by validation.
+
+- NodeTypes.GetAll() and ForwardLinkTypes.GetAll() expose the live registries.
+  Runtime ontology and NLP relation types may be registered after startup, so
+  the color lists must be rebuilt from the union of the registries and the
+  types actually present in the snapshot.
+
+- OPEN-LRD.SmokeTests targets net10.0 (no WPF) and compiles
+  ../OPEN-LRD/Visualization/**/*.cs. New pure algorithm files are therefore
+  automatically testable; WPF files must not be placed under Visualization/.
+
+- The main window currently has Launch Core, Tools, and NLP Workbench buttons.
+  Tools and Workbench follow the "one instance, activate if open" pattern; the
+  Visualizer should do the same.
+
+================================================================================
+5. FILE LAYOUT AND RESPONSIBILITIES
+================================================================================
+
+Pure, testable, no WPF types (under OPEN-LRD/Visualization/):
+
+1. GraphSnapshot.cs
+   Immutable snapshot: NodeRecord (Id, TypeId, TypeName, Lifetime, Label,
+   DisplayLabel, Aliases, Degree) and LinkRecord (AIndex, BIndex, ForwardTypeId,
+   ForwardTypeName, ClassId, ClassName, Distance). Deduplicates reciprocal
+   links, skips self-links and links with missing endpoints, counts every skip,
+   and applies render limits. Also exposes the union of node/link type IDs.
+
+2. VisualizerOptions.cs
+   Layout and rendering options with validation: Spread, CubeSize, LineWidth,
+   MaxIterations, ConvergenceTolerance, MinSpacingFactor, Gravity, MaxNodes,
+   MaxLinks, MaxLabels, LabelCharacterLimit, and defaults.
+
+3. DistanceLayout3D.cs
+   Deterministic distance-driven layout. Input: GraphSnapshot and options.
+   Output: LayoutResult (positions, bounds, centroid, radius, iterations,
+   converged flag, elapsed time, warnings). Uses System.Numerics.Vector3.
+
+4. LayoutResult.cs
+   Immutable result plus derived frame helpers (bounds center/radius).
+
+5. GraphColorPalette.cs
+   RgbColor struct, named ColorChoice list (24 entries), deterministic default
+   assignment, and palette lookup. No System.Drawing.
+
+6. GraphColorMap.cs
+   Node/link color overrides keyed by type ID, fallback to link-class color,
+   then palette default. Raises a change event for the window.
+
+7. VisualizerSettings.cs
+   JSON DTO and atomic load/save of colors and view options. Versioned schema.
+   Corrupt or missing files are ignored with a warning.
+
+8. MeshData.cs and GraphMeshBuilder.cs
+   WPF-free mesh construction: unit cube (24 vertices, 36 indices), merged node
+   cubes, crossed-quad link strips with offsets for parallel edges, and
+   highlight cube. Output is float arrays plus int indices.
+
+9. ProjectionMath.cs
+   CameraView record and pure projection: TryProject(world, out screen, out
+   depth), CreateRay(screen, out origin, out direction), FrameBounds, and
+   Ray-AABB intersection. Mirrors WPF PerspectiveCamera semantics.
+
+10. FlyCamera.cs
+    Pure camera state and movement math: Position, Yaw, Pitch, LookDirection,
+    Right, Up, Move(forward/strafe/vertical, speed, dt), Look(dx, dy), and
+    FrameSphere(center, radius, fov). WPF input handling stays outside.
+
+WPF-specific (under OPEN-LRD/Visualizer/):
+
+11. VisualizerWindow.xaml and .xaml.cs
+    Window layout, lifecycle, snapshot/layout orchestration, toolbar, status,
+    refresh, and cancellation.
+
+12. VisualizerScene.cs
+    Converts MeshData into frozen MeshGeometry3D/GeometryModel3D objects,
+    builds materials and lights, adds/removes models, and swaps colors.
+
+13. GraphLabelOverlay.cs
+    FrameworkElement that draws projected labels and hover/selection text with
+    DrawingContext.DrawText and cached FormattedText objects.
+
+14. FlyCameraController.cs
+    Polls Keyboard/Mouse, handles right-drag look, wheel speed, frame/reset,
+    and drives FlyCamera from CompositionTarget.Rendering.
+
+15. VisualizerColorViewModel.cs
+    Row view models for the two color lists (type name, selected palette
+    entry) implementing INotifyPropertyChanged; rebuilds on refresh.
+
+Tests and docs:
+
+16. OPEN-LRD.SmokeTests/VisualizerTests.cs
+    Pure tests for snapshot, layout, colors, projection, mesh, camera,
+    settings, and options. Registered in Program.Main.
+
+17. Visualizer_Plan.txt (this file).
+
+No csproj change is needed: SDK-style globbing picks up both new folders, and
+the smoke project's explicit glob picks up only Visualization/.
+
+================================================================================
+6. SNAPSHOT MODEL
+================================================================================
+
+GraphSnapshot.FromCore(LRD_Core core, VisualizerOptions options) runs on the
+UI thread and performs these steps:
+
+1. Enumerate core.GetDictionary() into a list and sort by node ID ascending.
+   Sorting gives a stable index that layout and tests can rely on.
+
+2. Build NodeRecord for each node:
+   - Id, TypeId, TypeName, Lifetime.
+   - Label and a copied aliases array.
+   - DisplayLabel = Label, else Aliases[0], else ID.ToString("N")[..8].
+   - Degree, filled after edges are deduplicated.
+
+3. Enumerate links by walking the sorted nodes and calling core.GetLinks(id).
+   For each Link, compute a canonical key by sorting the two endpoint IDs and
+   appending ForwardLink.Id and Classification.Id. Insert the first occurrence
+   into a dictionary; count later occurrences as duplicates.
+
+4. Skip links where either endpoint is absent from the snapshot and count them
+   as dangling. Skip links whose endpoints are equal and count them as
+   self-links. Keep distinct forward types between the same pair as distinct
+   edges; the renderer offsets them so both are visible.
+
+5. Resolve Distance with LinkDistanceDefinitions.GetDistance(link) exactly
+   once, while the link object is in hand. The layout only consumes the double.
+
+6. Compute Degree for both endpoints of every kept edge.
+
+7. Apply limits deterministically:
+   - If node count exceeds options.MaxNodes, keep the highest-degree nodes,
+     breaking ties by ID, then recompute the induced edge set.
+   - If edge count still exceeds options.MaxLinks, keep edges sorted by
+     (minimum endpoint index, maximum endpoint index, forward type id) until
+     the cap is reached.
+   - Record original counts, kept counts, and a truncation warning.
+
+8. Collect NodeTypeIds and ForwardTypeIds from the snapshot. The UI unions
+   these with NodeTypes.GetAll() and ForwardLinkTypes.GetAll() so dropdowns are
+   complete even when a registry is populated lazily.
+
+Snapshot objects are immutable. The background layout receives only arrays of
+value types and strings; it cannot observe later graph mutation.
+
+================================================================================
+7. DISTANCE-DRIVEN 3D LAYOUT
+================================================================================
+
+7.1 UNITS AND DEFAULTS
+
+- Spread: world units per link-distance unit. Default 6.0.
+- CubeSize: world units. Default 1.0.
+- MinSpacing: max(CubeSize * 1.75, 0.05). Collision separation.
+- LineWidth: world units. Default 0.15.
+- MaxIterations: 300 for normal graphs, 120 when nodes > 5,000.
+- ConvergenceTolerance: 1e-3 * meanRestLength.
+- Gravity: 0.002 per iteration toward the component centroid.
+
+Rest length for edge e is e.Distance * Spread. With the current class defaults,
+rest lengths range from 3 to 12 world units at Spread 6.
+
+7.2 INITIALIZATION
+
+1. Find connected components over the deduplicated edge set using BFS in
+   ascending node-index order. Isolated nodes are collected separately.
+
+2. Compute meanRestLength over all edges (fallback 1.0 if no edges).
+
+3. For each non-trivial component, sorted by node count descending then by
+   smallest node ID:
+   - Choose the highest-degree node as root, tie-break by smallest index.
+   - Place the root at the component origin.
+   - BFS from the highest-degree node. Each child is placed one meanRestLength
+     from its parent along a golden-angle direction biased toward the parent's
+     direction (0.6 parent + 0.8 new). Chain depth therefore produces radii
+     close to d * meanRestLength, and the result is a usable shape before
+     relaxation without any random starts.
+
+4. Isolated nodes are laid out later in a deterministic grid, not in a sphere.
+
+5. Components are laid out around their own origins. Because there are no
+   edges between components, they are packed after relaxation (7.4).
+
+7.3 RELAXATION
+
+For each iteration:
+
+  a. Edge constraints. For every edge in canonical sorted order:
+       delta = position[b] - position[a]
+       length = max(|delta|, 1e-6)
+       correction = (length - restLength) / length * 0.5 * stiffness
+       position[a] += delta * correction
+       position[b] -= delta * correction
+
+     Stiffness starts at 1.0 and decays linearly to 0.6 over the iteration
+     budget. This projects each edge toward its rest length. If two endpoints
+     are nearly coincident, apply a deterministic epsilon nudge based on their
+     indices instead of dividing by zero.
+
+  b. Collision separation. Build a uniform spatial hash with cell size
+     MinSpacing. For each node in index order, compare against nodes in the 27
+     neighboring cells with a larger index. If distance < MinSpacing, push both
+     apart by half the overlap along their delta. If the delta is zero, use a
+     deterministic axis based on index. Collisions deliberately override rest
+     length when a link is shorter than MinSpacing; this is documented.
+
+  c. Gravity. Move each node toward its component centroid by Gravity. This
+     keeps long chains from drifting and keeps components compact. Gravity
+     fades linearly to zero over the last quarter of the iteration budget so
+     pure edge projection and collision separation can settle.
+
+  d. Recenter. Every 10 iterations, subtract the component centroid from every
+     position to remove translation drift.
+
+  e. Convergence. Track the largest single-node displacement caused by edge
+     projection and collision separation (gravity and recentering are excluded
+     because they would keep injecting motion). If it stays below
+     ConvergenceTolerance for two consecutive iterations, stop early.
+
+  f. Progress and cancellation. Report (iteration / MaxIterations) through
+     IProgress<LayoutProgress>, throttled, and check the cancellation token
+     before each iteration.
+
+All loops use fixed ascending order. There is no randomness, no hash-order
+iteration, and no parallel reduction, so repeated runs with the same input
+produce the same positions.
+
+7.4 COMPONENT PACKING
+
+1. Compute each component's bounding sphere (centroid plus maximum radius).
+2. Sort components as in 7.2 and place them along a deterministic golden-angle
+   spiral. Each new sphere center is the first spiral candidate whose distance
+   from every already placed sphere exceeds the sum of radii plus a margin of
+   0.25 * Spread. Cap candidate attempts and fall back to placing the sphere
+   beyond the current bounding radius.
+3. Place isolated nodes in a cube grid near the main cloud:
+   side = ceil(cbrt(isolatedCount)), spacing = MinSpacing * 1.5, centered below
+   the packed components by the packed radius plus one row. This prevents
+   thousands of singletons from inflating the packing problem.
+
+7.5 FINALIZATION
+
+- Translate all positions so the overall centroid is at the origin.
+- Compute bounds, radius, and mean edge length.
+- If any coordinate is non-finite, reset that node to the origin and add a
+  warning. If the maximum extent exceeds 1e6, scale the scene uniformly.
+- Return LayoutResult with positions, bounds, radius, iterations, elapsed time,
+  convergence/cancellation flags, link count, and warnings. Skipped links are
+  reported by the snapshot, not the layout.
+
+7.6 COMPLEXITY
+
+Per iteration: O(E + N + collision pairs). With the spatial hash, collision
+work stays near linear for spread-out clouds. Memory is O(N + E). The algorithm
+does not use O(N^2) all-pairs repulsion.
+
+================================================================================
+8. SCENE CONSTRUCTION AND RENDERING
+================================================================================
+
+8.1 VIEWPORT
+
+- A Viewport3D fills the left side of the window over a dark gradient Grid
+  background. A transparent GraphLabelOverlay sits above it in the same Grid.
+- PerspectiveCamera: FieldOfView 55 (WPF treats this as horizontal), near plane
+  max(0.01, radius / 1000), far plane max(100, radius * 20).
+- Lighting: AmbientLight RGB(90,90,90) plus two DirectionalLights with
+  directions (1,-1,-1) and (-1,0.5,1) so cubes have visible faces from most
+  angles. No shadows.
+
+8.2 NODE CUBES
+
+- GraphMeshBuilder emits one merged MeshData per node type: 24 vertices and 36
+  indices per cube, with per-face normals for correct lighting.
+- VisualizerScene converts each MeshData to a MeshGeometry3D, freezes it, and
+  binds one GeometryModel3D with:
+    DiffuseMaterial(node type color) + SpecularMaterial(white, 40).
+- Cube color changes replace the material; geometry is untouched.
+- A separate highlight cube (1.15x scale, bright emissive color) marks the
+  selected node; a smaller marker or tint marks hover.
+
+8.3 LINK LINES
+
+- Each link is two perpendicular quads of width LineWidth around the segment,
+  yielding 8 vertices and 12 indices. Crossed quads remain visible from any
+  viewing angle and avoid the need for camera-facing billboards.
+- All links of one forward type are merged into a single MeshData/model. With
+  dozens of link types, this is dozens of draw calls rather than one per link.
+- Material: MaterialGroup with EmissiveMaterial(color * 0.45) plus
+  DiffuseMaterial(color), and BackMaterial set to the same group so both sides
+  render.
+- Parallel edges between the same node pair are offset along a deterministic
+  perpendicular by (index - (count-1)/2) * CubeSize * 0.4. Self-links are not
+  rendered and are reported in the status line.
+- No arrowheads in the first release. Links are visually undirected.
+
+8.4 LABELS
+
+- GraphLabelOverlay draws labels itself; it does not create one TextBlock per
+  node. On render it:
+    1. Projects every candidate node center with ProjectionMath.
+    2. Discards points behind the near plane or outside a small screen margin.
+    3. Sorts survivors far-to-near and keeps the nearest MaxLabels, plus the
+       selected and hovered nodes regardless of rank.
+    4. Draws a semi-transparent rounded background and the cached FormattedText
+       at the projected position, clamped to LabelCharacterLimit characters.
+- FormattedText objects are created once per snapshot and reused; the overlay
+  invalidates only when the camera, size, selection, or positions change.
+- Default MaxLabels = 1,000; small graphs therefore show every label. The full
+  label is shown in the status/HUD for the hovered or selected node.
+
+8.5 SCENE UPDATE FLOW
+
+- Open/Refresh: snapshot -> background layout -> build MeshData on the worker
+  -> freeze meshes -> attach models and labels on the UI thread.
+- Color change: replace materials only.
+- Recompute Layout: rerun layout with current options; keep colors and camera.
+- No mesh rebuild happens during fly navigation.
+
+================================================================================
+9. NAVIGATION AND FLY CAMERA
+================================================================================
+
+9.1 CAMERA MODEL
+
+- FlyCamera stores Position, Yaw, and Pitch in radians.
+- LookDirection = (cos(Pitch)*sin(Yaw), sin(Pitch), cos(Pitch)*cos(Yaw)).
+- Right = normalize(cross(LookDirection, worldUp)), Up =
+  normalize(cross(Right, LookDirection)).
+- Pitch is clamped to +/- 85 degrees to avoid a degenerate up vector.
+- FrameSphere(center, radius) places the camera on the current view axis at
+  distance radius / sin(fov/2) * 1.15, looking at the center.
+
+9.2 CONTROLS
+
+  Input              Action
+  -----------------  ---------------------------------------------------------
+  W / S              move forward / backward
+  A / D              strafe left / right
+  Q / E              move down / up
+  Shift              boost speed 4x
+  Right-drag mouse   yaw and pitch
+  Mouse wheel        base speed 0.5x to 4x (logarithmic, shown in HUD)
+  R                  reset to the initial framed view
+  F                  frame all nodes; frame the selection when one exists
+  Esc                close the Visualizer window
+  L                  toggle labels
+
+- Keyboard polling uses Keyboard.IsKeyDown inside the rendering loop. Movement
+  is suppressed while a TextBox or ComboBox in the side panel has focus.
+- The viewport host is focusable and takes focus on click. Window-level
+  PreviewKeyDown handles R/F/L so they work regardless of focus, except while
+  typing. Esc is handled at window level without a typing exception: it always
+  calls Close(), which runs the normal close path (cancel layout, unsubscribe
+  events, clear the owner's reference).
+- Left-clicking empty space clears the current selection; the View tab also has
+  a Clear Selection button.
+
+9.3 RENDERING LOOP
+
+- Subscribe to CompositionTarget.Rendering while the window is open and
+  unsubscribe on close.
+- A Stopwatch supplies delta seconds; clamp dt to 0.1 s to avoid teleporting
+  after a stall. Skip camera integration when the window is inactive.
+- Base speed = max(sceneRadius * 0.5, 1.0) world units per second, scaled by
+  the wheel and Shift modifiers.
+- Move the camera by normalized input vector * speed * dt, then invalidate the
+  label overlay. WPF redraws the 3D scene automatically.
+
+9.4 ORBIT MODE (DEFERRED)
+
+A left-drag orbit around the centroid and wheel zoom is a useful alternative
+for users who dislike flying. It is deliberately deferred until after the
+fly-camera acceptance criteria pass; the FlyCamera class leaves room for an
+OrbitCamera sibling.
+
+================================================================================
+10. COLOR CONFIGURATION
+================================================================================
+
+10.1 PALETTE
+
+- GraphColorPalette defines 24 named RgbColor entries with strong contrast on
+  a dark background: Red, Coral, Orange, Amber, Gold, Yellow, Lime, Green,
+  Teal, Turquoise, Cyan, Sky, Blue, Indigo, Violet, Purple, Magenta, Pink,
+  Rose, Brown, Tan, White, LightGray, DarkGray.
+- Default node color = palette[(nodeTypeId * 5 + 7) % 24]. Because 5 and 24 are
+  coprime, the first 20 NodeTypes IDs get distinct colors.
+- Default link color uses the same mapping on ForwardLinkTypes.Id.
+- Unknown IDs beyond the palette cycle deterministically.
+
+10.2 UI
+
+- Right side panel is a TabControl with "Node colors", "Link colors", and
+  "View".
+- Node colors tab: a scrollable ItemsControl, one row per node type present
+  in the registry or snapshot. Row shows the type name and a ComboBox bound to
+  the 24 palette entries, with a small color swatch.
+- Link colors tab: one row per ForwardLinkTypes entry. An "Advanced" expander
+  lists LinkClass fallback colors for forward types that have no explicit
+  choice.
+- Rows are rebuilt on Refresh so newly registered ontology/NLP types appear.
+  Existing selections are preserved by type ID.
+- "Reset Colors" restores deterministic defaults.
+- Selection changes raise GraphColorMap.Changed; VisualizerScene replaces the
+  affected material immediately. No layout or mesh rebuild occurs.
+
+10.3 PERSISTENCE
+
+- File: %LOCALAPPDATA%/OPEN-LRD/visualizer-settings.json.
+- Schema version 1:
+    {
+      "version": 1,
+      "nodeColors":  { "6": "Sky", "8": "Gold" },
+      "linkColors":  { "1": "Cyan" },
+      "classColors": { "8": "Violet" },
+      "view": {
+        "spread": 6.0,
+        "cubeSize": 1.0,
+        "lineWidth": 0.15,
+        "showLabels": true,
+        "maxLabels": 1000
+      }
+    }
+- Save atomically (write .tmp then File.Move with overwrite), debounced on
+  change and again on close. Load once at window construction; a missing or
+  corrupt file logs a warning and uses defaults.
+- Only colors and view options are persisted. Node positions and graph contents
+  never are.
+
+================================================================================
+11. WINDOW LAYOUT AND INTERACTION
+================================================================================
+
+11.1 MAIN WINDOW
+
+The Visualizer is a first-class top-level window, not a Tools tab or an
+embedded Tools pane. It gets its own button and its own gate.
+
+- Replace the three absolutely positioned buttons with a centered horizontal
+  StackPanel holding Launch Core, Tools, Visualizer, and NLP Workbench.
+- Add VisualizerButton with:
+    Content        = "Visualizer"
+    IsEnabled      = "False" by default, matching ToolsButton and
+                     NlpWorkbenchButton.
+    ToolTip        = "Launch Core before opening the Visualizer."
+    Click          = Visualizer_Button_Click
+- Enable it only on the successful Launch Core path. In
+  MainWindow.Launch_Button_Click, set VisualizerButton.IsEnabled = true in the
+  same place that enables ToolsButton and NlpWorkbenchButton. Opening Tools or
+  the NLP Workbench must never enable or open the Visualizer.
+- Visualizer_Button_Click repeats the Tools guard: if thunderCore is null or
+  not initialized, show "Launch Core before opening the Visualizer." and
+  return. This is defence in depth in case the button state is ever stale.
+- MainWindow holds a single private VisualizerWindow? field and uses the same
+  activate-or-create pattern as NlpWorkbenchWindow:
+    - if the window exists, restore it from Minimized, Activate it, and return;
+    - otherwise construct it with the current LRD_Core, subscribe
+      Closed += (_, _) => visualizerWindow = null, and Show() it.
+- The Visualizer window is independent: closing it does not affect Tools, the
+  NLP Workbench, or the core. Closing MainWindow closes the application as it
+  does today.
+- Tools window contents are unchanged by this feature; Import, Export, and
+  Visualizer stay listed there as separate planned tools, and Tools does not
+  host the 3D scene.
+
+11.2 VISUALIZER WINDOW
+
+- Opens fullscreen on the active monitor: WindowStyle=None, WindowState=
+  Maximized, ResizeMode=NoResize, ShowInTaskbar=True, no title bar or border.
+  This is true fullscreen, not merely maximized inside the working area.
+- The toolbar includes a "Close (Esc)" button so the borderless window can be
+  exited with the mouse. Esc always closes the window through the normal close
+  path.
+- Grid: viewport on the left (*), 300-DIP tool panel on the right. The panel
+  remains visible in fullscreen and can be collapsed if the user wants an
+  unobstructed view in a later phase.
+- Top toolbar: Refresh Graph, Recompute Layout, Frame All, Reset View, label
+  toggle, a layout progress indicator, and Close (Esc).
+- Bottom status strip: node count, link count, layout duration, truncation or
+  dangling-link warnings, and camera speed.
+- Empty state: when the graph has no nodes, show "No nodes to display. Launch
+  Core and add or load knowledge first." and disable layout actions.
+
+11.3 MOUSE AND SELECTION
+
+- Hover: ray-AABB test against cubes, using a uniform grid for large scenes.
+  Highlight the hovered node and show "display label - type - degree" in the
+  status strip.
+- Left click: select the nearest hit. The View tab shows ID, label, aliases,
+  type, lifetime, and degree. F frames the selection.
+- Right-drag: look. Left-drag is reserved for future orbit and does not move
+  the camera in the first release.
+- Picking is independent of WPF hit testing, so merged meshes remain fast and
+  testable.
+
+11.4 LIFECYCLE
+
+- Open: snapshot, load settings, start layout. Show a modal-free progress
+  overlay; controls that need positions are disabled until the layout lands.
+- Refresh: confirm if a layout is running, cancel it, resnapshot, relayout.
+- Close: Esc or the Close button cancels the layout, unsubscribes
+  CompositionTarget.Rendering and all input events, and nulls the owner's window
+  reference. The window is borderless, so there is no system title-bar close
+  affordance; Esc and the toolbar button are the supported exits.
+- Core mutations while the window is open are not observed live. Refresh is
+  explicit, which avoids snapshot races and keeps the core single-threaded.
+
+================================================================================
+12. PERFORMANCE, LIMITS, AND THREADING
+================================================================================
+
+12.1 TARGETS
+
+  Graph size              Expected behavior
+  ----------------------  ----------------------------------------------------
+  1,000 nodes / 2,500 E   Layout under 1 s; fly at >= 30 FPS on typical
+                          integrated graphics; every label visible.
+  10,000 nodes / 25,000 E Layout under 10 s; fly at >= 15 FPS; labels capped
+                          at 1,000 and drawn as one overlay.
+  50,000 nodes / 100,000 E Layout under 60 s; usable inspection with reduced
+                          iterations and a 200-label cap; explicit warning.
+  Above caps             Deterministic truncation by degree with a visible
+                          warning; user may raise caps in the View tab.
+
+These are goals, not hard guarantees. WPF falls back to software rendering on
+some remote sessions; the HUD reports measured layout time and counts.
+
+12.2 BATCHING AND ALLOCATION
+
+- One merged mesh per node type and one per forward link type. Never one
+  Visual3D or GeometryModel3D per node/link.
+- Freeze MeshGeometry3D, brushes, and materials after construction.
+- Reuse projection buffers and label FormattedText objects across frames.
+- Offset duplicate edges instead of creating overlapping geometry.
+- Build mesh arrays on the worker thread; freeze WPF geometry there; attach
+  materials/models on the UI thread.
+
+12.3 THREADING RULES
+
+- LRD_Core and WPF objects are UI-thread only.
+- Snapshot is immutable and created on the UI thread.
+- Layout and MeshData generation run in Task.Run with a CancellationToken.
+- Progress is marshalled through IProgress and throttled to avoid dispatcher
+  flooding (for example, at most 20 updates per second).
+- Any exception in the worker is captured and shown as a status error; the
+  window stays open with the previous scene if one exists.
+
+12.4 LIMITS AND GUARDS
+
+- VisualizerOptions defaults: MaxNodes 20,000; MaxLinks 50,000; MaxLabels
+  1,000; LabelCharacterLimit 48. View tab allows raising node/link caps to
+  50,000/150,000 with a warning.
+- Validate Spread > 0, CubeSize > 0, LineWidth > 0, MaxIterations > 0,
+  MaxLabels > 0, and all maxima > 0. Reject non-finite values in UI parsing.
+- Guard against non-finite positions, zero-length edges, and huge coordinates.
+- Layout is cancellable between iterations; cancellation leaves no partial
+  scene and keeps the previous scene.
+
+================================================================================
+13. TEST PLAN
+================================================================================
+
+Pure tests added to OPEN-LRD.SmokeTests/VisualizerTests.cs and registered in
+Program.Main. The test project has no WPF dependency.
+
+13.1 SNAPSHOT
+
+1. Node ordering is stable by GUID and DisplayLabel falls back through
+   Label -> first alias -> short ID.
+2. Reciprocal links are deduplicated to one LinkRecord with the correct
+   resolved distance and degree counts.
+3. Self-links and links with missing endpoints are skipped and counted.
+4. Two different forward types between the same pair remain two records.
+5. MaxNodes keeps the highest-degree nodes deterministically; induced edges are
+   kept only when both endpoints survive; truncation is reported.
+
+13.2 LAYOUT
+
+6. Two nodes with one 1.0-distance link and Spread 6 converge to a separation
+   of 6.0 (relative error < 1e-3); no collision override applies.
+7. A five-node chain with distances 0.5, 1.0, 1.5, 2.0 keeps every adjacent
+   distance within 10 percent after convergence.
+8. Repeated runs with the same snapshot/options produce identical positions.
+9. Isolated nodes and three disconnected components produce finite positions,
+   with component bounding spheres separated by at least the pack margin.
+10. Cancellation stops the layout promptly and reports cancelled.
+11. Zero-node and one-node graphs produce valid empty/single results.
+12. Near-coincident nodes do not produce NaN or infinity.
+13. Edge shorter than MinSpacing yields separation >= MinSpacing (documented
+    collision override).
+
+13.3 COLORS AND SETTINGS
+
+14. Defaults are deterministic and distinct for NodeTypes IDs 1-20.
+15. Explicit overrides win; link-class fallback works; unknown IDs fall back
+    deterministically.
+16. Settings JSON round-trips colors and view options; missing/corrupt files
+    fall back to defaults without throwing.
+
+13.4 PROJECTION AND CAMERA
+
+17. A point at the view center projects to the viewport center; points to the
+    right/up project in the expected quadrants.
+18. Points behind the near plane report failure; points outside the viewport
+    are rejected by the overlay.
+19. CreateRay and TryProject round-trip for several screen points.
+20. FrameSphere places the camera so the sphere fits and looks at its center.
+21. Pitch clamping keeps LookDirection and Right finite at +/- 90-degree input.
+22. Ray-AABB picks the expected cube among overlapping candidates.
+
+13.5 MESH
+
+23. Cube builder emits 24 vertices, 36 indices, and unit normals per face.
+24. Merged cube mesh vertex/index counts scale linearly with node count.
+25. Crossed-quad link mesh emits 8 vertices and 12 indices per link; parallel
+    edge offsets differ; self-links are absent.
+
+13.6 OPTIONS
+
+26. Invalid or non-finite options are rejected; valid boundary values pass.
+
+13.7 REGRESSION
+
+27. All existing tests continue to pass; the solution builds with zero warnings
+    and zero errors.
+
+Manual UI checks are listed in section 17 and will be appended to To-Do.txt
+when implementation starts.
+
+================================================================================
+14. IMPLEMENTATION PHASES
+================================================================================
+
+Phase 1: Pure model and math (complete)
+- Add GraphSnapshot, VisualizerOptions, GraphColorPalette, GraphColorMap,
+  VisualizerSettings, ProjectionMath, FlyCamera, MeshData, and
+  GraphMeshBuilder.
+- Add VisualizerTests for snapshot, colors, projection, camera, mesh, options.
+- Verify the smoke project builds and all tests pass.
+- Status: 21 visualizer tests added, both projects build with zero warnings and
+  zero errors.
+
+Phase 2: Distance layout (complete)
+- Add DistanceLayout3D and LayoutResult.
+- Implement components, BFS initialization, edge constraints, collision hash,
+  gravity fade-out, convergence, packing, cancellation, and progress.
+- Add layout tests plus a 400-node timing check.
+- Status: 9 layout tests added, 137 tests passing in total, deterministic
+  positions and distance fidelity verified, both projects build with zero
+  warnings and zero errors.
+
+Phase 3: Scene and window shell (complete)
+- Add VisualizerWindow, VisualizerScene, and the MainWindow Visualizer button.
+- The window opens fullscreen (WindowStyle=None, WindowState=Maximized) with a
+  Close (Esc) toolbar button and window-level Esc to close.
+- Render cubes, link meshes, lights, background, empty state, and a static
+  framed camera.
+- Build meshes on the worker thread and attach frozen geometry.
+- Status: SceneGeometry, VisualizerScene, VisualizerWindow, and MainWindow
+  Visualizer button implemented; 2 scene tests added; 139 smoke tests passing in
+  total; both projects build with zero warnings and zero errors.
+
+Phase 4: Navigation and inspection
+- Add FlyCameraController and the rendering loop.
+- Add keyboard movement, mouse look, wheel speed, R/F/L keys, frame all, hover,
+  selection (cleared by clicking empty space), and the GraphLabelOverlay.
+- Verify no leaks after close and no camera drift when inactive.
+
+Phase 5: Colors, settings, and polish
+- Add the three-tab side panel, color rows, swatches, reset, live material
+  updates, JSON persistence, and warnings/status.
+- Add optional LinkClass fallback colors.
+- Add truncation banners and the controls help overlay.
+
+Phase 6: Performance, documentation, acceptance
+- Tune batches, caps, label limits, and layout iteration budgets.
+- Add README, AdditionalTools, and To-Do manual checklist updates.
+- Verify the full solution builds cleanly and the manual checklist passes.
+
+================================================================================
+15. KNOWN LIMITATIONS
+================================================================================
+
+- Link distances are a spacing target, not a physical simulation. Collision
+  separation wins when a link distance is smaller than the cube spacing, and
+  dense clusters keep some edges longer than their rest length.
+- WPF has no line primitive. Links are thin meshes; very long links at grazing
+  angles can alias or shimmer under software rendering.
+- Labels are drawn in a screen-space overlay, so they are not occluded by
+  cubes. The nearest-label cap and distance fade keep this manageable.
+- Reciprocal link storage makes direction ambiguous; the first release renders
+  undirected lines with no arrowheads.
+- No transparency sorting, shadows, glow post-processing, or depth-of-field.
+  Materials are opaque by design.
+- The color UI offers a fixed named palette. Arbitrary hex colors and an eye
+  dropper are deferred.
+- Live graph changes are not pushed into an open window. Refresh is explicit.
+  Temporary nodes may expire between refresh operations.
+- Layout is heuristic and bounded by the iteration cap. Pathological graphs can
+  converge slowly; the result is still finite and deterministic.
+- Performance depends on the GPU and driver. Software rendering, remote
+  desktop, and virtual machines can be significantly slower.
+- The render caps mean very large graphs are shown as a deterministic subset,
+  with a visible warning rather than silent loss.
+- Orbit mode, node search/jump, link direction arrows, and per-node pinning are
+  deferred.
+
+================================================================================
+16. ACCEPTANCE CRITERIA
+================================================================================
+
+- The Visualizer opens in its own separate top-level window from a dedicated
+  MainWindow Visualizer button. That button is disabled before Launch Core and
+  enabled only by the successful Launch Core path. The window reuses one
+  instance (activate or restore when already open) and refuses to open before
+  the core is initialized, even if invoked directly.
+- Every node class and every ForwardLinkTypes entry has a color dropdown.
+  Changing a selection updates cubes/lines immediately, and choices persist
+  across window reopen and application restart.
+- A two-node link with distance 1.0 and Spread 6 renders with 6.0 units of
+  separation (no collision override); a mixed-distance chain stays within the
+  documented tolerance.
+- Layout is deterministic across repeated runs and reports progress and
+  cancellation.
+- Nodes render as lit cubes; labels show the node Label or first alias; links
+  render as colored lines; parallel edge types are distinguishable.
+- WASD/QE plus right-drag mouse look moves smoothly; Shift boosts; wheel
+  changes speed; R/F frame the scene and selection; L toggles labels; Esc closes
+  the window.
+- Hover and click identify the correct node through ray-AABB picking.
+- Refresh, Recompute Layout, empty state, truncation warnings, and close during
+  layout are all handled without an exception or a leaked rendering handler.
+- The solution builds with zero warnings and zero errors; all pre-existing tests
+  plus the new Visualizer tests pass.
+- No external packages are referenced; only the .NET BCL and WPF assemblies are
+  used.
+- The manual UI checklist in section 17 passes on a clean Core session and on a
+  graph with at least 1,000 nodes.
+
+================================================================================
+17. MANUAL UI CHECKLIST OUTLINE
+================================================================================
+
+This will be expanded into To-Do.txt when Phase 3 starts.
+
+1. Confirm the MainWindow has a dedicated Visualizer button that is disabled
+   before Launch Core. Launch Core, click Visualizer, and confirm the Visualizer
+   opens in its own separate top-level window (not inside Tools) and activates
+   or restores on a second click. Confirm Tools still opens independently and
+   does not host the 3D scene.
+2. Empty graph shows the empty-state text and no exceptions.
+3. After importing facts or loading ontology entries, Refresh shows the
+   expected node/link counts and a completed layout.
+4. Node colors tab lists every NodeTypes entry; Link colors lists every
+   ForwardLinkTypes entry; newly loaded ontology types appear after Refresh.
+5. Change one node color and one link color; confirm immediate updates and
+   persistence after closing and reopening the app.
+6. Confirm labels show aliases/labels over cubes and remain readable while
+   flying; long labels truncate and the full text appears on hover/selection.
+7. Confirm links are colored by type and that two types between the same pair
+   are visually offset.
+8. Confirm relative spacing matches link distances (short identity links look
+   closer than long source links in the same cloud).
+9. Fly with every key, mouse look, Shift boost, wheel speed, R, F, L; confirm
+   Esc closes the fullscreen window and the toolbar Close (Esc) button does the
+   same.
+10. Hover and click several nodes; verify the status/details panel and frame
+    selection.
+11. Test Recompute Layout with Spread/Cube/LineWidth changes.
+12. Resize the window and confirm labels and camera aspect remain correct.
+13. Start a layout on a large graph and close the window mid-layout; reopen and
+    confirm no crash or stale progress.
+14. Confirm the performance targets in section 12.1 or record measured values.
+
+================================================================================
+18. EXPECTED FILE CHANGES
+================================================================================
+
+Added (pure, tested by the smoke project):
+- OPEN-LRD/Visualization/GraphSnapshot.cs
+- OPEN-LRD/Visualization/VisualizerOptions.cs
+- OPEN-LRD/Visualization/DistanceLayout3D.cs
+- OPEN-LRD/Visualization/LayoutResult.cs
+- OPEN-LRD/Visualization/GraphColorPalette.cs
+- OPEN-LRD/Visualization/GraphColorMap.cs
+- OPEN-LRD/Visualization/VisualizerSettings.cs
+- OPEN-LRD/Visualization/MeshData.cs
+- OPEN-LRD/Visualization/GraphMeshBuilder.cs
+- OPEN-LRD/Visualization/ProjectionMath.cs
+- OPEN-LRD/Visualization/FlyCamera.cs
+- OPEN-LRD.SmokeTests/VisualizerTests.cs
+
+Added (WPF only):
+- OPEN-LRD/Visualizer/VisualizerWindow.xaml
+- OPEN-LRD/Visualizer/VisualizerWindow.xaml.cs
+- OPEN-LRD/Visualizer/VisualizerScene.cs
+- OPEN-LRD/Visualizer/GraphLabelOverlay.cs
+- OPEN-LRD/Visualizer/FlyCameraController.cs
+- OPEN-LRD/Visualizer/VisualizerColorViewModel.cs
+
+Modified:
+- OPEN-LRD/MainWindow.xaml
+- OPEN-LRD/MainWindow.xaml.cs
+- OPEN-LRD.SmokeTests/Program.cs
+- README.md
+- AdditionalTools.txt
+- To-Do.txt (manual checklist)
+
+No change is expected to OPEN-LRD.csproj, OPEN-LRD.SmokeTests.csproj, the
+CoreLog format, or any Module 1/2/3/4 data model.
