@@ -448,7 +448,7 @@ namespace OPEN_LRD.NLP
             }
 
             if (copula
-                && wh is WhKind.Where or WhKind.When
+                && wh == WhKind.Where
                 && qualifiers.Count == 0
                 && leadingPreposition is null
                 && strandedPreposition is null)

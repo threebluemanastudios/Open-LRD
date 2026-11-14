@@ -13,6 +13,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using OPEN_LRD;
+using OPEN_LRD.NLP;
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
 using OPEN_LRD.Persistence;
@@ -57,6 +58,7 @@ namespace OPEN_LRD.ManualUiTests
                 RunSection7_SafetyLimits();
                 RunSection8_CancellationAndBusyGating();
                 RunSection9_ConversationContinuityAndEncoding();
+                RunSection12_NlpWorkbenchCandidateSynthesis();
                 RunSection11_VisualizerWindow();
                 RunSection10_SignOff();
             }
@@ -808,6 +810,89 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 11. 3D VISUALIZER SHELL AND LIFECYCLE (Phase 3)
         // ================================================================================
+        private static void RunSection12_NlpWorkbenchCandidateSynthesis()
+        {
+            Console.WriteLine("\n--- SECTION 12: NLP WORKBENCH MULTI-ANSWER CANDIDATES ---");
+
+            LRD_Core core = LRD_Core.Instance;
+            core.InitializeCore();
+
+            Web_Node alice = new Web_Node(Guid.NewGuid(), NodeTypes.Entities, NodeLifetime.Permanent, 0);
+            alice.Set_Label("Alice");
+            Web_Node bob = new Web_Node(Guid.NewGuid(), NodeTypes.Entities, NodeLifetime.Permanent, 0);
+            bob.Set_Label("Bob");
+            Web_Node acme = new Web_Node(Guid.NewGuid(), NodeTypes.Entities, NodeLifetime.Permanent, 0);
+            acme.Set_Label("Acme");
+            Check(core.AddExistingNode(alice) && core.AddExistingNode(bob) && core.AddExistingNode(acme),
+                "Workbench synthesis fixture nodes were added.");
+
+            RelationLinkType workAt = RelationRegistry.GetOrRegister("work_at");
+            Check(core.AddDirectedConnection(alice.ID, acme.ID, LinkClass.actions, workAt.Forward.Id)
+                && core.AddDirectedConnection(bob.ID, acme.ID, LinkClass.actions, workAt.Forward.Id),
+                "Workbench synthesis fixture links were added.");
+
+            NlpWorkbenchWindow window = new NlpWorkbenchWindow();
+            window.AskInput.Text = "Who works at Acme?";
+            MethodInfo? askClick = typeof(NlpWorkbenchWindow).GetMethod(
+                "Ask_Button_Click",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            askClick?.Invoke(window, new object[] { window.AskButton, new RoutedEventArgs() });
+            DoEvents();
+
+            CandidateRow[] rows = window.CandidatesGrid.ItemsSource
+                ?.Cast<CandidateRow>()
+                .ToArray() ?? Array.Empty<CandidateRow>();
+            Check(rows.Length == 2,
+                $"Evidence / Candidates table retains both synthesized answers (rows: {rows.Length}).");
+            Check(rows.Select(row => row.Label).ToHashSet(StringComparer.Ordinal)
+                .SetEquals(new[] { "Alice", "Bob" }),
+                "Evidence / Candidates table shows each synthesized answer label.");
+            Check(rows.All(row => !string.IsNullOrWhiteSpace(row.PathNodeIDs)
+                && row.PathNodeIDs.Contains(acme.ID.ToString(), StringComparison.Ordinal)),
+                "candidate rows retain their graph evidence paths.");
+            Check(window.AnswerText.Text.Contains("Alice and Bob work at Acme.", StringComparison.Ordinal),
+                $"Workbench displays the synthesized conversational answer (actual: '{window.AnswerText.Text}').");
+
+            window.AskInput.Text = "Tell me about Acme";
+            askClick?.Invoke(window, new object[] { window.AskButton, new RoutedEventArgs() });
+            DoEvents();
+            CandidateRow[] incomingRows = window.CandidatesGrid.ItemsSource
+                ?.Cast<CandidateRow>()
+                .ToArray() ?? Array.Empty<CandidateRow>();
+            Check(incomingRows.Select(row => row.Label).ToHashSet(StringComparer.Ordinal)
+                .SetEquals(new[] { "Alice", "Bob" }),
+                "entity exploration shows incoming graph subjects in Evidence / Candidates.");
+            Check(window.AnswerText.Text.Contains("Alice works at Acme.", StringComparison.Ordinal)
+                && window.AnswerText.Text.Contains("Bob works at Acme.", StringComparison.Ordinal),
+                $"entity exploration renders incoming facts in their stored direction (actual: '{window.AnswerText.Text}').");
+
+            DateTimeOffset eventStart = DateTimeOffset.UtcNow.Date.AddDays(-2).AddHours(14);
+            Web_Node launch = core.CreateEvent(
+                "Project Launch",
+                eventStart,
+                eventStart.AddHours(1),
+                alice.ID,
+                "launch",
+                bob.ID,
+                acme.ID);
+            string eventDate = eventStart.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            string nextDate = eventStart.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            window.AskInput.Text = $"What happened between {eventDate} and {nextDate}?";
+            askClick?.Invoke(window, new object[] { window.AskButton, new RoutedEventArgs() });
+            DoEvents();
+            CandidateRow[] temporalRows = window.CandidatesGrid.ItemsSource
+                ?.Cast<CandidateRow>()
+                .ToArray() ?? Array.Empty<CandidateRow>();
+            Check(temporalRows.Any(row => row.Label == "Project Launch"),
+                "temporal range search seeds matching Event nodes in Evidence / Candidates.");
+            Check(window.AnswerText.Text.Contains("Project Launch", StringComparison.Ordinal)
+                && window.AnswerText.Text.Contains("Alice launched Bob", StringComparison.Ordinal),
+                $"Workbench renders ranged event details (actual: '{window.AnswerText.Text}').");
+
+            window.Close();
+            DoEvents();
+        }
+
         private static void RunSection11_VisualizerWindow()
         {
             Console.WriteLine("\n--- SECTION 11: 3D VISUALIZER SHELL AND LIFECYCLE (Phase 3) ---");

@@ -65,9 +65,11 @@ namespace OPEN_LRD.NLP
                     {
                         if (core.TryGetNode(resolution.NodeID.Value, out Web_Node? node) && node is not null)
                         {
-                            string resolvedLabel = string.IsNullOrWhiteSpace(node.Label)
-                                ? resolution.Label ?? label
-                                : node.Label!;
+                            string resolvedLabel = node.Get_NodeType() == NodeTypes.Events
+                                ? EventNodeHelper.GetDisplayName(node)
+                                : string.IsNullOrWhiteSpace(node.Label)
+                                    ? resolution.Label ?? label
+                                    : node.Label!;
                             List<string> mergedAliases = MergeAliases(resolvedLabel, node.Aliases);
 
                             foreach (string alias in aliases)
@@ -154,7 +156,9 @@ namespace OPEN_LRD.NLP
             if (distinct.Count == 1)
             {
                 Web_Node match = distinct[0];
-                string resolvedLabel = string.IsNullOrWhiteSpace(match.Label) ? label : match.Label!;
+                string resolvedLabel = match.Get_NodeType() == NodeTypes.Events
+                    ? EventNodeHelper.GetDisplayName(match)
+                    : string.IsNullOrWhiteSpace(match.Label) ? label : match.Label!;
                 List<string> mergedAliases = MergeAliases(resolvedLabel, match.Aliases);
 
                 foreach (string alias in aliases)

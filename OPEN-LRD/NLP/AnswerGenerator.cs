@@ -390,7 +390,7 @@ namespace OPEN_LRD.NLP
                 return new NlpAnswer(
                     AnswerStatus.NoMatch,
                     question.ExpectedAnswer,
-                    "I don't know. I couldn't find a matching fact in the graph.",
+                    BuildNoMatchText(question),
                     null,
                     null,
                     Array.Empty<AnswerCandidate>(),
@@ -429,6 +429,14 @@ namespace OPEN_LRD.NLP
                         ambiguousReasoning = true;
                         diagnostics.Add(
                             $"The query returned {evaluation.Result.Matches.Count} candidate match(es).");
+                        ExtractCandidates(
+                            question,
+                            evaluation,
+                            core,
+                            options,
+                            immediate,
+                            deeper,
+                            diagnostics);
                         break;
 
                     case ReasoningStatus.NoMatch:
@@ -452,6 +460,7 @@ namespace OPEN_LRD.NLP
                         evaluations,
                         Array.Empty<AnswerCandidate>(),
                         diagnostics,
+                        core,
                         options);
                 }
 
@@ -463,7 +472,7 @@ namespace OPEN_LRD.NLP
                 return new NlpAnswer(
                     AnswerStatus.NoMatch,
                     question.ExpectedAnswer,
-                    "I don't know. I couldn't find a matching fact in the graph.",
+                    BuildNoMatchText(question),
                     null,
                     null,
                     Array.Empty<AnswerCandidate>(),
@@ -499,7 +508,7 @@ namespace OPEN_LRD.NLP
                 return new NlpAnswer(
                     AnswerStatus.NoMatch,
                     question.ExpectedAnswer,
-                    "I don't know. I couldn't find a matching fact in the graph.",
+                    BuildNoMatchText(question),
                     null,
                     null,
                     Array.Empty<AnswerCandidate>(),
@@ -511,6 +520,57 @@ namespace OPEN_LRD.NLP
                     Deduplicate(diagnostics));
             }
 
+            if (options.EnableMultiAnswerSynthesis && candidates.Count > 1)
+            {
+                double bestScore = candidates[0].Score;
+                double synthesisFloor = bestScore - Math.Max(options.AnswerAmbiguityMargin, 0.05);
+                List<AnswerCandidate> strongestCandidates = candidates
+                    .Where(candidate => candidate.Score >= synthesisFloor)
+                    .ToList();
+                if (strongestCandidates.Count < candidates.Count)
+                {
+                    diagnostics.Add("Excluded weaker relation matches from the synthesized answer set.");
+                    candidates = strongestCandidates;
+                }
+            }
+
+            int preferredRelation = candidates[0].RelationLinkTypeId;
+            List<AnswerCandidate> relationMatchedCandidates = candidates
+                .Where(candidate => candidate.RelationLinkTypeId == preferredRelation)
+                .ToList();
+            if (relationMatchedCandidates.Count < candidates.Count)
+            {
+                diagnostics.Add("Kept answer candidates matching the strongest relation interpretation.");
+                candidates = relationMatchedCandidates;
+            }
+
+            if (options.EnableMultiAnswerSynthesis && candidates.Count > 1)
+            {
+                bool hasDuplicateLabels = candidates
+                    .GroupBy(candidate => candidate.Label, StringComparer.OrdinalIgnoreCase)
+                    .Any(group => group.Count() > 1);
+
+                if (hasDuplicateLabels)
+                {
+                    return CreateAmbiguousAnswer(
+                        question,
+                        evaluations,
+                        candidates,
+                        diagnostics,
+                        core,
+                        options);
+                }
+
+                return CreateSynthesizedAnswer(
+                    question,
+                    evaluations,
+                    candidates,
+                    core,
+                    options,
+                    conversation,
+                    diagnostics);
+            }
+
             if (candidates.Count >= 2
                 && candidates[0].Depth == candidates[1].Depth
                 && Math.Abs(candidates[0].Score - candidates[1].Score) <= options.AnswerAmbiguityMargin)
@@ -520,6 +580,7 @@ namespace OPEN_LRD.NLP
                     evaluations,
                     candidates,
                     diagnostics,
+                    core,
                     options);
             }
 
@@ -531,7 +592,7 @@ namespace OPEN_LRD.NLP
             if (usesTemporaryEvidence)
                 diagnostics.Add("All evidence for this answer is temporary.");
 
-            GraphPath? evidencePath = FindEvidencePath(selected, evaluations);
+            GraphPath? evidencePath = FindEvidencePath(selected, evaluations, core);
 
             string? evidence = options.IncludeEvidenceSentence
                 ? BuildEvidenceSentence(evidencePath, core, question.Tense)
@@ -565,13 +626,688 @@ namespace OPEN_LRD.NLP
                 selected.Label,
                 selected.NodeID,
                 candidates,
-                EvidencePathsFor(candidates, evaluations, options),
+                EvidencePathsFor(candidates, evaluations, options, core),
                 question,
                 evaluations.FirstOrDefault()?.Result,
                 usesTemporaryEvidence,
                 Math.Clamp(selected.Score, 0.0, 1.0),
                 Deduplicate(diagnostics),
                 usesSessionProvenance);
+        }
+
+        public static NlpAnswer GenerateExploration(
+            QuestionAnalysis question,
+            LRD_Core core,
+            NlpOptions options,
+            ConversationContext? conversation)
+        {
+            ArgumentNullException.ThrowIfNull(question);
+            ArgumentNullException.ThrowIfNull(core);
+            ArgumentNullException.ThrowIfNull(options);
+
+            if (!question.AnchorNodeID.HasValue
+                || !core.TryGetNode(question.AnchorNodeID.Value, out Web_Node? anchor)
+                || anchor is null)
+            {
+                string label = question.Subject?.SurfaceText
+                    ?? question.Object?.SurfaceText
+                    ?? "that entity";
+                return new NlpAnswer(
+                    AnswerStatus.NoMatch,
+                    AnswerKind.Description,
+                    $"I don't know anything about {label} yet.",
+                    null,
+                    null,
+                    Array.Empty<AnswerCandidate>(),
+                    Array.Empty<GraphPath>(),
+                    question,
+                    null,
+                    false,
+                    0.0,
+                    new[] { "The exploration entity is not present in the knowledge graph." });
+            }
+
+            Dictionary<string, (Link Link, Web_Node RelatedNode)> connectedFacts =
+                new Dictionary<string, (Link Link, Web_Node RelatedNode)>(StringComparer.Ordinal);
+            IEnumerable<Web_Node> connectedNodes = core.FindLinkedTo(anchor.ID).Append(anchor);
+
+            foreach (Web_Node owner in connectedNodes)
+            {
+                foreach (Link link in core.GetLinks(owner.ID))
+                {
+                    bool outgoing = link.SourceID == anchor.ID && link.DestinationID != anchor.ID;
+                    bool incoming = link.DestinationID == anchor.ID && link.SourceID != anchor.ID;
+                    if (!outgoing && !incoming)
+                        continue;
+
+                    Guid relatedID = outgoing ? link.DestinationID : link.SourceID;
+                    if (!core.TryGetNode(relatedID, out Web_Node? relatedNode)
+                        || relatedNode is null
+                        || string.IsNullOrWhiteSpace(ResolveLabel(relatedNode))
+                        || IsBlockedExplorationType(relatedNode.Get_NodeType()))
+                    {
+                        continue;
+                    }
+
+                    string key = string.Join(
+                        "|",
+                        link.SourceID,
+                        link.DestinationID,
+                        link.ForwardLink.Id,
+                        link.InverseLink.Id,
+                        link.Classification.Id);
+                    connectedFacts.TryAdd(key, (link, relatedNode));
+                }
+            }
+
+            List<AnswerCandidate> candidates = new List<AnswerCandidate>();
+            List<GraphPath> paths = new List<GraphPath>();
+            foreach ((Link link, Web_Node relatedNode) in connectedFacts.Values
+                .OrderByDescending(fact => fact.RelatedNode.IsPermanent)
+                .ThenByDescending(fact => fact.RelatedNode.Get_WeightUp())
+                .ThenBy(fact => fact.Link.ForwardLink.Name, StringComparer.Ordinal)
+                .ThenBy(fact => ResolveLabel(fact.RelatedNode), StringComparer.Ordinal)
+                .ThenBy(fact => fact.RelatedNode.ID)
+                .Take(Math.Max(1, options.MaxAnswerCandidates)))
+            {
+                double score = relatedNode.IsPermanent ? 0.80 : 0.65;
+                GraphPath path = new GraphPath(
+                    new[] { anchor.ID, relatedNode.ID },
+                    new[] { link },
+                    score,
+                    score,
+                    1);
+                paths.Add(path);
+                candidates.Add(new AnswerCandidate(
+                    relatedNode.ID,
+                    ResolveLabel(relatedNode),
+                    relatedNode.Get_NodeType(),
+                    score,
+                    1,
+                    link.ForwardLink.Id,
+                    link.Classification,
+                    path.NodeIDs,
+                    PathIsTemporary(path, core)));
+            }
+
+            if (candidates.Count == 0)
+            {
+                string label = ResolveLabel(anchor);
+                return new NlpAnswer(
+                    AnswerStatus.NoMatch,
+                    AnswerKind.Description,
+                    $"I don't have any recorded facts about {label} yet.",
+                    null,
+                    null,
+                    Array.Empty<AnswerCandidate>(),
+                    Array.Empty<GraphPath>(),
+                    question,
+                    null,
+                    false,
+                    0.0,
+                    new[] { "No active incoming or outgoing facts were found for the exploration entity." });
+            }
+
+            List<string> factSentences = paths
+                .Select(path => BuildEvidenceSentence(path, core, Tense.Present)!)
+                .Where(sentence => !string.IsNullOrWhiteSpace(sentence))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            bool usesTemporaryEvidence = candidates.Any(candidate => candidate.UsesTemporaryEvidence);
+            bool usesSessionProvenance = paths.Any(path => UsesSessionProvenance(path, conversation, options));
+            string text = factSentences.Count > 0
+                ? string.Join(" ", factSentences)
+                : FormatConjunction(candidates.Select(candidate => candidate.Label).ToList());
+
+            if (usesSessionProvenance)
+                text = AppendSessionCaveat(text, options, new List<string>());
+            else if (usesTemporaryEvidence)
+                text += temporaryCaveat;
+
+            return new NlpAnswer(
+                AnswerStatus.Answered,
+                AnswerKind.Description,
+                TrimText(text, options.MaxAnswerTextLength, new List<string>()),
+                FormatConjunction(candidates.Select(candidate => candidate.Label).ToList()),
+                candidates.Count == 1 ? candidates[0].NodeID : null,
+                candidates,
+                paths,
+                question,
+                null,
+                usesTemporaryEvidence,
+                candidates.Max(candidate => candidate.Score),
+                Array.Empty<string>(),
+                usesSessionProvenance);
+        }
+
+        public static NlpAnswer GenerateEventTimeAnswer(
+            QuestionAnalysis question,
+            Web_Node eventNode,
+            LRD_Core core,
+            NlpOptions options)
+        {
+            ArgumentNullException.ThrowIfNull(question);
+            ArgumentNullException.ThrowIfNull(eventNode);
+            ArgumentNullException.ThrowIfNull(core);
+            ArgumentNullException.ThrowIfNull(options);
+
+            string name = EventNodeHelper.GetDisplayName(eventNode);
+            if (!EventNodeHelper.TryGetWindow(eventNode, out DateTimeOffset? start, out DateTimeOffset? end))
+            {
+                return new NlpAnswer(
+                    AnswerStatus.NoMatch,
+                    AnswerKind.Time,
+                    $"I don't have a date or time recorded for {name} yet.",
+                    null,
+                    null,
+                    new[] { EventCandidate(eventNode, core) },
+                    EventEvidencePaths(eventNode, core),
+                    question,
+                    null,
+                    eventNode.IsTemporary,
+                    0.0,
+                    new[] { "The event has no encoded start or end time." });
+            }
+
+            EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode);
+            string window = FormatEventWindow(start, end);
+            string text = FormatEventTimeStatement(name, window, variance);
+            bool temporary = eventNode.IsTemporary;
+            if (temporary)
+                text += temporaryCaveat;
+
+            return new NlpAnswer(
+                AnswerStatus.Answered,
+                AnswerKind.Time,
+                TrimText(text, options.MaxAnswerTextLength, new List<string>()),
+                window,
+                eventNode.ID,
+                new[] { EventCandidate(eventNode, core) },
+                EventEvidencePaths(eventNode, core),
+                question,
+                null,
+                temporary,
+                0.95,
+                Array.Empty<string>());
+        }
+
+        public static NlpAnswer GenerateEventTimeAnswers(
+            QuestionAnalysis question,
+            IReadOnlyList<Web_Node> eventNodes,
+            LRD_Core core,
+            NlpOptions options)
+        {
+            ArgumentNullException.ThrowIfNull(question);
+            ArgumentNullException.ThrowIfNull(eventNodes);
+            ArgumentNullException.ThrowIfNull(core);
+            ArgumentNullException.ThrowIfNull(options);
+
+            if (eventNodes.Count == 0)
+                return Unsupported(question, new[] { "No matching timed Event nodes were found." });
+            if (eventNodes.Count == 1)
+                return GenerateEventTimeAnswer(question, eventNodes[0], core, options);
+
+            List<AnswerCandidate> candidates = eventNodes
+                .Select(eventNode => EventCandidate(eventNode, core))
+                .ToList();
+            List<GraphPath> paths = eventNodes.SelectMany(eventNode => EventEvidencePaths(eventNode, core)).ToList();
+            string text = string.Join(" ", eventNodes.Select(eventNode =>
+            {
+                EventNodeHelper.TryGetWindow(eventNode, out DateTimeOffset? start, out DateTimeOffset? end);
+                EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode);
+                return FormatEventTimeStatement(
+                    EventNodeHelper.GetDisplayName(eventNode),
+                    FormatEventWindow(start, end),
+                    variance);
+            }));
+            bool temporary = eventNodes.Any(eventNode => eventNode.IsTemporary);
+            if (temporary)
+                text += temporaryCaveat;
+
+            return new NlpAnswer(
+                AnswerStatus.Answered,
+                AnswerKind.Time,
+                TrimText(text, options.MaxAnswerTextLength, new List<string>()),
+                FormatConjunction(candidates.Select(candidate => candidate.Label).ToList()),
+                null,
+                candidates,
+                paths,
+                question,
+                null,
+                temporary,
+                0.95,
+                Array.Empty<string>());
+        }
+
+        public static NlpAnswer GenerateTemporalRangeAnswer(
+            TemporalRangeQuery query,
+            LRD_Core core,
+            NlpOptions options)
+        {
+            ArgumentNullException.ThrowIfNull(query);
+            ArgumentNullException.ThrowIfNull(core);
+            ArgumentNullException.ThrowIfNull(options);
+
+            IReadOnlyList<Web_Node> events = core.FindEventsInWindow(query.Start, query.End, includeOverlapping: true);
+            if (events.Count == 0)
+            {
+                string range = FormatRangeHeading(query);
+                return new NlpAnswer(
+                    AnswerStatus.NoMatch,
+                    AnswerKind.Description,
+                    $"No events were found {range}.",
+                    null,
+                    null,
+                    Array.Empty<AnswerCandidate>(),
+                    Array.Empty<GraphPath>(),
+                    null,
+                    null,
+                    false,
+                    0.0,
+                    new[] { "No Event nodes overlap the requested time window." });
+            }
+
+            List<AnswerCandidate> candidates = events
+                .Select(eventNode => EventCandidate(eventNode, core))
+                .ToList();
+            List<GraphPath> paths = events
+                .SelectMany(eventNode => EventEvidencePaths(eventNode, core))
+                .ToList();
+            string heading = FormatRangeHeading(query);
+            string descriptions = string.Join(" ", events.Select(eventNode =>
+                BuildEventDescription(eventNode, core) + " ("
+                + (EventNodeHelper.TryGetWindow(eventNode, out DateTimeOffset? eventStart, out DateTimeOffset? eventEnd)
+                    ? FormatEventWindow(eventStart, eventEnd)
+                    : "time unknown") + ")."));
+            bool usesTemporary = events.Any(eventNode => eventNode.IsTemporary);
+            string text = heading + ": " + descriptions;
+            if (usesTemporary)
+                text += temporaryCaveat;
+
+            return new NlpAnswer(
+                AnswerStatus.Answered,
+                AnswerKind.Description,
+                TrimText(text, options.MaxAnswerTextLength, new List<string>()),
+                FormatConjunction(candidates.Select(candidate => candidate.Label).ToList()),
+                events.Count == 1 ? events[0].ID : null,
+                candidates,
+                paths,
+                null,
+                null,
+                usesTemporary,
+                0.90,
+                Array.Empty<string>());
+        }
+
+        private static AnswerCandidate EventCandidate(Web_Node eventNode, LRD_Core core)
+        {
+            int temporalRelation = RelationRegistry.GetOrRegister("has_time").Forward.Id;
+            IReadOnlyList<Guid> pathIDs = EventEvidencePaths(eventNode, core)
+                .FirstOrDefault()?.NodeIDs ?? new[] { eventNode.ID };
+            return new AnswerCandidate(
+                eventNode.ID,
+                EventNodeHelper.GetDisplayName(eventNode),
+                NodeTypes.Events,
+                0.95,
+                pathIDs.Count > 1 ? 1 : 0,
+                temporalRelation,
+                LinkClass.temporal,
+                pathIDs,
+                eventNode.IsTemporary);
+        }
+
+        private static IReadOnlyList<GraphPath> EventEvidencePaths(Web_Node eventNode, LRD_Core core)
+        {
+            Link? timeLink = core.GetLinks(eventNode.ID)
+                .FirstOrDefault(link => link.SourceID == eventNode.ID
+                    && string.Equals(link.ForwardLink.Name, "has_time", StringComparison.OrdinalIgnoreCase));
+            if (timeLink is null)
+                return Array.Empty<GraphPath>();
+
+            return new[]
+            {
+                new GraphPath(
+                    new[] { eventNode.ID, timeLink.DestinationID },
+                    new[] { timeLink },
+                    0.95,
+                    0.95,
+                    1)
+            };
+        }
+
+        private static string BuildEventDescription(Web_Node eventNode, LRD_Core core)
+        {
+            string? subject = EventRoleLabel(eventNode, core, "has_subject");
+            string? action = EventRoleLabel(eventNode, core, "has_action");
+            string? objectLabel = EventRoleLabel(eventNode, core, "has_object");
+            string? location = EventRoleLabel(eventNode, core, "has_location");
+            string name = EventNodeHelper.GetDisplayName(eventNode);
+
+            if (subject is null || action is null)
+                return name;
+
+            string actionPhrase;
+            EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode);
+            if (variance.Status == EventTemporalStatus.Past)
+            {
+                actionPhrase = PastTense(action);
+            }
+            else if (variance.Status == EventTemporalStatus.Future)
+            {
+                actionPhrase = "will " + action;
+            }
+            else
+            {
+                actionPhrase = ThirdPerson(action);
+            }
+
+            string description = subject + " " + actionPhrase
+                + (objectLabel is null ? string.Empty : " " + objectLabel)
+                + (location is null ? string.Empty : " in " + location);
+
+            if (string.Equals(name, description, StringComparison.OrdinalIgnoreCase))
+                return name;
+            return string.IsNullOrWhiteSpace(name) ? description : name + ": " + description;
+        }
+
+        private static string? EventRoleLabel(Web_Node eventNode, LRD_Core core, string relationName)
+        {
+            Link? link = core.GetLinks(eventNode.ID).FirstOrDefault(candidate =>
+                candidate.SourceID == eventNode.ID
+                && string.Equals(candidate.ForwardLink.Name, relationName, StringComparison.OrdinalIgnoreCase));
+            if (link is null || !core.TryGetNode(link.DestinationID, out Web_Node? target) || target is null)
+                return null;
+
+            return ResolveLabel(target);
+        }
+
+        private static string FormatEventWindow(DateTimeOffset? start, DateTimeOffset? end)
+        {
+            if (start.HasValue && end.HasValue)
+            {
+                bool fullDay = start.Value.TimeOfDay == TimeSpan.Zero
+                    && end.Value.Date == start.Value.Date
+                    && end.Value.TimeOfDay >= TimeSpan.FromHours(23).Add(TimeSpan.FromMinutes(59));
+                if (fullDay)
+                    return "on " + start.Value.ToString("MMMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+                if (start.Value.Date == end.Value.Date)
+                {
+                    return "on " + start.Value.ToString("MMMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)
+                        + " from " + start.Value.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture)
+                        + " to " + end.Value.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+                }
+
+                return "from " + start.Value.ToString("MMMM d, yyyy h:mm tt", System.Globalization.CultureInfo.InvariantCulture)
+                    + " to " + end.Value.ToString("MMMM d, yyyy h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            if (start.HasValue)
+                return "starting " + start.Value.ToString("MMMM d, yyyy h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+            if (end.HasValue)
+                return "ending " + end.Value.ToString("MMMM d, yyyy h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+            return "at an unknown time";
+        }
+
+        private static string FormatEventTimeStatement(
+            string name,
+            string window,
+            EventTimeVariance variance)
+        {
+            return variance.Status switch
+            {
+                EventTemporalStatus.Future => $"{name} will be {window} ({variance.FriendlyVariance}).",
+                EventTemporalStatus.Active => $"{name} is currently ongoing ({window}; {StripOngoingPrefix(variance.FriendlyVariance)}).",
+                EventTemporalStatus.Past => $"{name} was {window} ({variance.FriendlyVariance}).",
+                _ => $"{name} was {window}."
+            };
+        }
+
+        private static string StripOngoingPrefix(string text)
+        {
+            const string prefix = "ongoing ";
+            return text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? text[prefix.Length..].Trim().Trim('(', ')')
+                : text;
+        }
+
+        private static string FormatRangeHeading(TemporalRangeQuery query)
+        {
+            foreach (string preposition in new[] { "on ", "in ", "at " })
+            {
+                if (query.OriginalExpression.StartsWith(preposition, StringComparison.OrdinalIgnoreCase))
+                {
+                    return char.ToUpperInvariant(preposition[0])
+                        + query.OriginalExpression[1..];
+                }
+            }
+
+            string relation = query.OriginalExpression.StartsWith("from ", StringComparison.OrdinalIgnoreCase)
+                ? "From "
+                : "Between ";
+            return relation
+                + query.Start.ToString("g", System.Globalization.CultureInfo.CurrentCulture)
+                + " and "
+                + query.End.ToString("g", System.Globalization.CultureInfo.CurrentCulture);
+        }
+
+        private static bool IsBlockedExplorationType(NodeTypes type)
+        {
+            return type == NodeTypes.Empties
+                || type == NodeTypes.Dictionaries
+                || type == NodeTypes.Sources;
+        }
+
+        private static string BuildNoMatchText(QuestionAnalysis question)
+        {
+            string subject = question.Subject?.SurfaceText
+                ?? question.Object?.SurfaceText
+                ?? question.Qualifier?.SurfaceText
+                ?? "that entity";
+
+            if (question.Wh == WhKind.Where)
+            {
+                string predicate = string.IsNullOrWhiteSpace(question.PredicateLemma)
+                    ? "is"
+                    : ThirdPerson(question.PredicateLemma);
+                return $"I don't know where {subject} {predicate} yet.";
+            }
+
+            if (question.Wh == WhKind.When)
+            {
+                string predicate = string.IsNullOrWhiteSpace(question.PredicateLemma)
+                    ? "happens"
+                    : ThirdPerson(question.PredicateLemma);
+                return $"I don't know when {subject} {predicate} yet.";
+            }
+
+            if (!question.AnchorNodeID.HasValue)
+                return $"I don't know anything about {subject} yet.";
+
+            return $"I don't have a matching fact about {subject} yet.";
+        }
+
+        private static NlpAnswer CreateSynthesizedAnswer(
+            QuestionAnalysis question,
+            IReadOnlyList<QuestionEvaluation> evaluations,
+            IReadOnlyList<AnswerCandidate> candidates,
+            LRD_Core core,
+            NlpOptions options,
+            ConversationContext? conversation,
+            List<string> diagnostics)
+        {
+            List<GraphPath> paths = EvidencePathsFor(candidates, evaluations, options, core).ToList();
+            List<string> labels = candidates.Select(candidate => candidate.Label).ToList();
+            string shortAnswer = FormatConjunction(labels);
+            List<string> evidenceSentences = candidates
+                .Select(candidate => FindEvidencePath(candidate, evaluations, core))
+                .Where(path => path is not null)
+                .Select(path => BuildEvidenceSentence(path!, core, question.Tense)!)
+                .Where(sentence => !string.IsNullOrWhiteSpace(sentence))
+                .ToList();
+
+            string? synthesizedEvidence = TrySynthesizeEvidence(candidates, evidenceSentences);
+            string text = options.IncludeEvidenceSentence
+                ? synthesizedEvidence ?? shortAnswer + "."
+                : shortAnswer;
+            bool usesTemporaryEvidence = candidates.Any(candidate => candidate.UsesTemporaryEvidence);
+            bool usesSessionProvenance = paths.Any(path => UsesSessionProvenance(path, conversation, options));
+
+            if (usesSessionProvenance)
+            {
+                text = AppendSessionCaveat(text, options, diagnostics);
+                diagnostics.Add("Answer evidence was provided in this session.");
+            }
+            else if (usesTemporaryEvidence)
+            {
+                text += temporaryCaveat;
+                diagnostics.Add("The synthesized answer includes temporary evidence.");
+            }
+
+            diagnostics.Add($"Synthesized {candidates.Count} distinct answer candidates.");
+
+            return new NlpAnswer(
+                AnswerStatus.Answered,
+                DetermineAnswerKind(question, candidates[0]),
+                TrimText(text, options.MaxAnswerTextLength, diagnostics),
+                shortAnswer,
+                null,
+                candidates,
+                paths,
+                question,
+                evaluations.FirstOrDefault()?.Result,
+                usesTemporaryEvidence,
+                candidates.Max(candidate => candidate.Score),
+                Deduplicate(diagnostics),
+                usesSessionProvenance);
+        }
+
+        private static string? TrySynthesizeEvidence(
+            IReadOnlyList<AnswerCandidate> candidates,
+            IReadOnlyList<string> sentences)
+        {
+            if (sentences.Count != candidates.Count || candidates.Count < 2)
+                return null;
+
+            List<string> prefixes = new List<string>();
+            List<string> suffixes = new List<string>();
+
+            for (int index = 0; index < candidates.Count; index++)
+            {
+                string sentence = sentences[index].Trim();
+                string label = candidates[index].Label;
+                int labelIndex = sentence.IndexOf(label, StringComparison.OrdinalIgnoreCase);
+                if (labelIndex < 0)
+                    return null;
+
+                prefixes.Add(sentence[..labelIndex]);
+                suffixes.Add(sentence[(labelIndex + label.Length)..]);
+            }
+
+            if (prefixes.Skip(1).Any(prefix => !string.Equals(prefix, prefixes[0], StringComparison.OrdinalIgnoreCase))
+                || suffixes.Skip(1).Any(suffix => !string.Equals(suffix, suffixes[0], StringComparison.OrdinalIgnoreCase)))
+            {
+                return null;
+            }
+
+            string suffix = suffixes[0];
+            if (string.IsNullOrEmpty(prefixes[0]))
+                suffix = PluralizePredicate(suffix);
+
+            return prefixes[0] + FormatConjunction(candidates.Select(candidate => candidate.Label).ToList())
+                + suffix;
+        }
+
+        private static string PluralizePredicate(string suffix)
+        {
+            foreach (string article in new[] { " is a ", " is an " })
+            {
+                if (suffix.StartsWith(article, StringComparison.OrdinalIgnoreCase))
+                {
+                    string nounPhrase = suffix[article.Length..];
+                    string trailing = nounPhrase.EndsWith(".", StringComparison.Ordinal) ? "." : string.Empty;
+                    string noun = trailing.Length > 0 ? nounPhrase[..^1] : nounPhrase;
+                    return " are " + PluralizeNoun(noun) + trailing;
+                }
+            }
+
+            (string Singular, string Plural)[] pairs =
+            {
+                (" is ", " are "),
+                (" has ", " have "),
+                (" does ", " do "),
+                (" works ", " work "),
+                (" lives ", " live "),
+                (" goes ", " go "),
+                (" was ", " were ")
+            };
+
+            foreach ((string singular, string plural) in pairs)
+            {
+                if (suffix.StartsWith(singular, StringComparison.OrdinalIgnoreCase))
+                    return plural + suffix[singular.Length..];
+            }
+
+            int verbStart = 0;
+            while (verbStart < suffix.Length && char.IsWhiteSpace(suffix[verbStart]))
+                verbStart++;
+
+            int verbEnd = verbStart;
+            while (verbEnd < suffix.Length && char.IsLetter(suffix[verbEnd]))
+                verbEnd++;
+
+            if (verbEnd > verbStart)
+            {
+                string verb = suffix[verbStart..verbEnd];
+                string lemma = Lemmatizer.Lemmatize(verb.ToLowerInvariant(), PartOfSpeech.Verb);
+                if (!string.Equals(lemma, verb, StringComparison.OrdinalIgnoreCase))
+                {
+                    return suffix[..verbStart]
+                        + lemma
+                        + suffix[verbEnd..];
+                }
+            }
+
+            return suffix;
+        }
+
+        private static string PluralizeNoun(string noun)
+        {
+            if (string.Equals(noun, "person", StringComparison.OrdinalIgnoreCase))
+                return "people";
+
+            if (noun.EndsWith("y", StringComparison.OrdinalIgnoreCase)
+                && noun.Length > 1
+                && !"aeiou".Contains(noun[^2], StringComparison.OrdinalIgnoreCase))
+            {
+                return noun[..^1] + "ies";
+            }
+
+            if (noun.EndsWith("s", StringComparison.OrdinalIgnoreCase)
+                || noun.EndsWith("x", StringComparison.OrdinalIgnoreCase)
+                || noun.EndsWith("ch", StringComparison.OrdinalIgnoreCase)
+                || noun.EndsWith("sh", StringComparison.OrdinalIgnoreCase))
+            {
+                return noun + "es";
+            }
+
+            return noun + "s";
+        }
+
+        private static string FormatConjunction(IReadOnlyList<string> values)
+        {
+            string[] distinct = values
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return distinct.Length switch
+            {
+                0 => string.Empty,
+                1 => distinct[0],
+                2 => distinct[0] + " and " + distinct[1],
+                _ => string.Join(", ", distinct.Take(distinct.Length - 1)) + ", and " + distinct[^1]
+            };
         }
 
         private static bool UsesSessionProvenance(
@@ -596,7 +1332,8 @@ namespace OPEN_LRD.NLP
 
         private static GraphPath? FindEvidencePath(
             AnswerCandidate selected,
-            IReadOnlyList<QuestionEvaluation> evaluations)
+            IReadOnlyList<QuestionEvaluation> evaluations,
+            LRD_Core core)
         {
             foreach (QuestionEvaluation evaluation in evaluations)
             {
@@ -611,13 +1348,37 @@ namespace OPEN_LRD.NLP
                 }
             }
 
-            return null;
+            if (selected.PathNodeIDs.Count < 2)
+                return null;
+
+            List<Link> links = new List<Link>();
+            for (int index = 1; index < selected.PathNodeIDs.Count; index++)
+            {
+                Guid firstID = selected.PathNodeIDs[index - 1];
+                Guid secondID = selected.PathNodeIDs[index];
+                Link? link = core.GetStoredLinks(firstID)
+                    .Concat(core.GetStoredLinks(secondID))
+                    .FirstOrDefault(candidate =>
+                        (candidate.SourceID == firstID && candidate.DestinationID == secondID)
+                        || (candidate.SourceID == secondID && candidate.DestinationID == firstID));
+                if (link is null)
+                    return null;
+                links.Add(link);
+            }
+
+            return new GraphPath(
+                selected.PathNodeIDs,
+                links,
+                selected.Score,
+                1.0,
+                selected.Depth);
         }
 
         private static IReadOnlyList<GraphPath> EvidencePathsFor(
             IReadOnlyList<AnswerCandidate> candidates,
             IReadOnlyList<QuestionEvaluation> evaluations,
-            NlpOptions options)
+            NlpOptions options,
+            LRD_Core core)
         {
             List<GraphPath> paths = new List<GraphPath>();
             HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
@@ -627,18 +1388,9 @@ namespace OPEN_LRD.NLP
                 if (paths.Count >= Math.Max(1, options.MaxAnswerCandidates))
                     break;
 
-                foreach (QuestionEvaluation evaluation in evaluations)
-                {
-                    GraphPath? match = evaluation.Result.ResponsePaths.FirstOrDefault(path =>
-                        path.NodeIDs.Count >= 2
-                        && path.NodeIDs.SequenceEqual(candidate.PathNodeIDs));
-
-                    if (match is not null && seen.Add(string.Join(">", match.NodeIDs)))
-                    {
-                        paths.Add(match);
-                        break;
-                    }
-                }
+                GraphPath? match = FindEvidencePath(candidate, evaluations, core);
+                if (match is not null && seen.Add(string.Join(">", match.NodeIDs)))
+                    paths.Add(match);
             }
 
             return paths;
@@ -691,6 +1443,57 @@ namespace OPEN_LRD.NLP
                         immediate.Add(candidate!);
                     else
                         deeper.Add(candidate!);
+                }
+            }
+
+            if (evaluation.Result.Status == ReasoningStatus.Ambiguous
+                && evaluation.Result.ResponsePaths.Count == 0)
+            {
+                Guid answerQueryID = variant.Chain.First!.Value.ID;
+                foreach (SubgraphMatch match in evaluation.Result.Matches)
+                {
+                    if (!match.NodeMap.TryGetValue(anchorID, out Guid matchedAnchorID)
+                        || !match.NodeMap.TryGetValue(answerQueryID, out Guid candidateID)
+                        || matchedAnchorID == candidateID)
+                    {
+                        continue;
+                    }
+
+                    Link? matchedLink = match.MatchedLinks.FirstOrDefault(link =>
+                        (link.SourceID == matchedAnchorID && link.DestinationID == candidateID)
+                        || (link.SourceID == candidateID && link.DestinationID == matchedAnchorID));
+                    if (matchedLink is null
+                        || !TryMatchRelation(
+                            question,
+                            variant,
+                            matchedLink,
+                            matchedAnchorID,
+                            out bool exact,
+                            out bool inverse,
+                            out bool classOnly))
+                    {
+                        continue;
+                    }
+
+                    GraphPath path = new GraphPath(
+                        new[] { matchedAnchorID, candidateID },
+                        new[] { matchedLink },
+                        match.OverallScore,
+                        1.0,
+                        1);
+                    if (TryCreateCandidate(
+                        question,
+                        variant,
+                        path,
+                        1,
+                        core,
+                        exact,
+                        inverse,
+                        classOnly,
+                        out AnswerCandidate? candidate))
+                    {
+                        immediate.Add(candidate!);
+                    }
                 }
             }
         }
@@ -849,6 +1652,9 @@ namespace OPEN_LRD.NLP
 
         private static string ResolveLabel(Web_Node node)
         {
+            if (node.Get_NodeType() == NodeTypes.Events)
+                return EventNodeHelper.GetDisplayName(node);
+
             if (!string.IsNullOrWhiteSpace(node.Label))
                 return node.Label!;
 
@@ -861,6 +1667,7 @@ namespace OPEN_LRD.NLP
             IReadOnlyList<QuestionEvaluation> evaluations,
             IReadOnlyList<AnswerCandidate> candidates,
             List<string> diagnostics,
+            LRD_Core core,
             NlpOptions options)
         {
             diagnostics.Add(
@@ -883,7 +1690,7 @@ namespace OPEN_LRD.NLP
                 null,
                 null,
                 candidates,
-                EvidencePathsFor(candidates, evaluations, options),
+                EvidencePathsFor(candidates, evaluations, options, core),
                 question,
                 evaluations.FirstOrDefault()?.Result,
                 false,
@@ -962,8 +1769,28 @@ namespace OPEN_LRD.NLP
             if (relation.StartsWith("inverse_", StringComparison.OrdinalIgnoreCase))
                 relation = relation["inverse_".Length..];
 
-            if (link.Classification == LinkClass.identities)
+            if (string.Equals(relation, "has_property", StringComparison.OrdinalIgnoreCase))
                 return $"{source} is {destination}.";
+
+            if (string.Equals(relation, "is_a", StringComparison.OrdinalIgnoreCase))
+                return $"{source} is {IndefiniteArticle(destination)} {destination}.";
+
+            if (string.Equals(relation, "part_of", StringComparison.OrdinalIgnoreCase))
+                return $"{source} is part of {destination}.";
+
+            if (string.Equals(relation, "has_location", StringComparison.OrdinalIgnoreCase))
+                return $"{source} is located in {destination}.";
+
+            if (string.Equals(relation, "participated_in", StringComparison.OrdinalIgnoreCase))
+                return $"{source} participated in {destination}.";
+
+            if (link.Classification == LinkClass.identities)
+            {
+                if (destinationNode.Get_NodeType() == NodeTypes.Concepts)
+                    return $"{source} is {IndefiniteArticle(destination)} {destination}.";
+
+                return $"{source} is {destination}.";
+            }
 
             if (prepositionRelations.Contains(relation))
                 return $"{source} is {relation} {destination}.";
@@ -996,6 +1823,36 @@ namespace OPEN_LRD.NLP
                 return PastTense(baseVerb) + particles;
 
             return ThirdPerson(baseVerb) + particles;
+        }
+
+        private static string IndefiniteArticle(string phrase)
+        {
+            string firstWord = phrase
+                .TrimStart()
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault() ?? string.Empty;
+            string lower = firstWord.ToLowerInvariant();
+
+            if (lower.StartsWith("honest", StringComparison.Ordinal)
+                || lower.StartsWith("honor", StringComparison.Ordinal)
+                || lower.StartsWith("hour", StringComparison.Ordinal)
+                || lower.StartsWith("heir", StringComparison.Ordinal))
+            {
+                return "an";
+            }
+
+            if (lower.StartsWith("uni", StringComparison.Ordinal)
+                || lower.StartsWith("use", StringComparison.Ordinal)
+                || lower.StartsWith("user", StringComparison.Ordinal)
+                || lower.StartsWith("euro", StringComparison.Ordinal)
+                || lower.StartsWith("one", StringComparison.Ordinal))
+            {
+                return "a";
+            }
+
+            return lower.Length > 0 && "aeiou".Contains(lower[0], StringComparison.Ordinal)
+                ? "an"
+                : "a";
         }
 
         private static string ThirdPerson(string verb)

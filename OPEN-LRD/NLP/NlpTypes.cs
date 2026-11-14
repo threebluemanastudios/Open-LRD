@@ -345,6 +345,8 @@ namespace OPEN_LRD.NLP
         IReadOnlyList<string> Diagnostics,
         ParsedText? Parsed = null)
     {
+        public string? OriginalInput { get; init; }
+
         public IReadOnlyList<RelationFrame> Frames { get; init; } =
             Array.Empty<RelationFrame>();
 

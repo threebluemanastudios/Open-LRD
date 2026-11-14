@@ -1891,7 +1891,8 @@ namespace OPEN_LRD.Persistence
                     log.LastQualifierNodeId,
                     log.LastAnswerNodeId,
                     mentions,
-                    provenance);
+                    provenance,
+                    log.LastQuestionTemplate);
             }
             catch (Exception ex)
             {

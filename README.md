@@ -28,6 +28,8 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 | 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | Complete (Phases 1–12) |
 | 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts, structural rules, and curated GCIDE lexical loading | Complete (Phases 1-7) |
 | 5 | Maintenance Reasoning Engine | Optional graph consolidation, relation induction, superseded-link handling, and metadata-driven graph formation | Complete (Phases 1-2) |
+| 6 | Conversational Ask and Natural-Language Responses | Social dialogue, contextual follow-ups, multi-answer synthesis, and natural evidence phrasing | Complete (Phases 1-4) |
+| 7 | Event Representation and Chronological Questions | Reified Event nodes, temporal windows, variance, and date/time Ask searches | Complete |
 | Tools | Additional Tools & 3D Visualizer | Log persistence, large text file import, and native 3D visualizer | Complete (Phases 1-7) |
 
 ## Module 1: The Graph Backend
@@ -314,11 +316,68 @@ relation inference during an explicitly enabled maintenance run.
   keeping stale facts inactive for audit while preserving other link origins.
   Generated DataPointer resource values do not carry the owner's pointer, so
   they cannot trigger identity-based node merging.
-- Module 5 and NLP ambiguity coverage bring the complete suite to 160 passing
-  smoke checks and 277
-  passing automated UI checks.
+- Modules 5-7 and NLP conversational coverage bring the complete suite to 167
+  passing smoke checks and 287 passing automated UI checks.
 
 See `Module_5_Plan.txt` for the detailed phased design and acceptance criteria.
+
+## Module 6: Conversational Ask and Natural-Language Responses
+
+**Purpose:** Make Ask more natural while retaining evidence-backed, read-only
+question answering.
+
+- Social dialogue handles greetings, well-being questions, thanks, farewells,
+  identity, and capability requests without changing graph or conversation state.
+- Conversational preambles such as "Can you tell me where Alice works?" and
+  "Do you know if Alice is a doctor?" unwrap by default; punctuation-free,
+  preposition-fronted wh, and inverted yes/no questions are also accepted.
+- "Tell me about Alice" summarizes incoming and outgoing active graph facts.
+  "What about Bob?" can reuse a prior subject-question pattern and that pattern
+  survives conversation-log round trips.
+- Distinct matching answers are synthesized into readable lists and evidence
+  sentences (for example, "Alice and Bob work at Acme."). Candidate node details
+  and evidence paths remain available in the Workbench's Evidence / Candidates
+  table. Duplicate-label and ambiguous-anchor cases remain explicit.
+- Evidence phrasing handles classifications, adjective properties, part/whole,
+  location, and participation relations; no-match responses name the missing
+  information when possible.
+- Conversational behaviors are configurable through NlpOptions and new options
+  round-trip through conversation persistence, with defaults preserved for old
+  logs.
+- Verification: 165 smoke tests and 285 automated UI checks pass.
+
+See `Module_6_Plan.txt` for design decisions, implementation details, and
+acceptance criteria.
+
+## Module 7: Event Representation and Chronological Questions
+
+**Purpose:** Represent events as graph nodes with explicit participant/action
+links and searchable time windows.
+
+- Event start/end DateTimeOffset values are encoded in the existing Event node
+  Label; optional event names are stored as Aliases. The base `Node` and
+  `Web_Node` classes remain unchanged, and existing log persistence round-trips
+  the data through Label/Aliases.
+- `LRD_Core.CreateEvent` creates a reified Event and links its subject, action,
+  object, optional location, participants, and time value. Normal NLP ingestion
+  automatically creates/reuses Events when successful statements include
+  parseable temporal markers, while retaining the existing binary facts.
+- `LRD_Core.CalculateEventTimeVariance` reports past/active/future status,
+  duration, endpoint variance, and friendly relative-time wording with correct
+  singular/plural units.
+- Ask answers `When was [event]?` and searches overlapping event windows with
+  questions such as `What happened between [start] and [end]?` or `What happened
+  on [date]?`. Matching Event nodes and their links populate Evidence / Candidates.
+- `When did [subject] [verb] [object]?` correlates participants and action to
+  matching reified events. Range parsing is restricted to event-occurrence
+  questions, and intransitive events with locations do not acquire fake objects.
+- `When did [subject] [verb] [object]?` correlates to matching Event nodes.
+  Temporal range parsing is limited to event-occurrence questions, and normal
+  temporal qualifiers remain with standard relation queries. Intransitive
+  location events are extracted without inventing an object.
+- Verification: 167 smoke tests and 287 automated UI checks pass.
+
+See `Module_7_Plan.txt` for the complete design and acceptance criteria.
 
 ## Additional Tools & 3D Visualizer
 

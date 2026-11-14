@@ -30,6 +30,10 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP ingestion idempotence", TestNlpIngestionIdempotence);
             Program.Run("NLP question analysis", TestNlpQuestionAnalysis);
             Program.Run("NLP answer generation", TestNlpAnswerGeneration);
+            Program.Run("NLP social dialogue is read-only", TestNlpSocialDialogue);
+            Program.Run("NLP conversational preambles and punctuation", TestNlpConversationalInput);
+            Program.Run("NLP multi-answer synthesis", TestNlpMultiAnswerSynthesis);
+            Program.Run("NLP temporal event representation and Ask", TestNlpTemporalEvents);
             Program.Run("NLP yes-no answers", TestNlpYesNoAnswers);
             Program.Run("NLP answer ambiguity and no-match", TestNlpAnswerAmbiguityAndNoMatch);
             Program.Run("NLP ambiguous anchor candidates", TestNlpAmbiguousAnchorCandidates);
@@ -514,9 +518,381 @@ namespace OPEN_LRD.SmokeTests
             Assert(whoIsOutlaw.Answer?.Status == AnswerStatus.Answered
                 && whoIsOutlaw.Answer.Candidates.Any(candidate => candidate.NodeID == whiskeyPete.ID),
                 "who-is-a-category questions should match the is_a link");
+            Assert(whoIsOutlaw.Answer?.Text.Contains("Whiskey Pete is an outlaw.", StringComparison.Ordinal) == true,
+                $"is_a evidence should use a natural indefinite article: {whoIsOutlaw.Answer?.Text}");
             NlpResult isDangerous = outlawPipeline.Ask("Is Whiskey Pete dangerous?");
             Assert(isDangerous.Answer?.Status == AnswerStatus.Yes,
                 $"yes/no copula questions should query the has_property relation: {isDangerous.Answer?.Status}; {string.Join("; ", isDangerous.Diagnostics)}");
+            Assert(isDangerous.Answer?.Text.Contains("Whiskey Pete is dangerous.", StringComparison.Ordinal) == true,
+                "has_property evidence should be phrased as a copula");
+        }
+
+        private static void TestNlpSocialDialogue()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+            int nodesBefore = CountNodes(core);
+            int linksBefore = CountLinks(core);
+            int turnBefore = pipeline.Conversation.TurnIndex;
+            int mentionsBefore = pipeline.Conversation.Mentions.Count;
+
+            foreach (string input in new[]
+            {
+                "Hello!", "How are you?", "Thank you.", "Goodbye!",
+                "How's it going?", "Who are you?", "What can you do?", "Help",
+                "Hi there!", "Thank you very much.", "Thank you so much.",
+                "Bye-bye!", "Good bye.", "What do you know?", "Can you help me?",
+                "What's your name?", "Good night."
+            })
+            {
+                NlpResult result = pipeline.Ask(input);
+                Assert(result.Status == NlpStatus.Answered,
+                    $"social utterance '{input}' should receive a conversational answer");
+                Assert(result.Answer?.Status == AnswerStatus.Answered
+                    && !string.IsNullOrWhiteSpace(result.Answer.Text),
+                    $"social utterance '{input}' should include answer text");
+                Assert(result.OriginalInput == input,
+                    "the raw social utterance should remain available in NlpResult");
+                Assert(result.Diagnostics.Any(message => message.Contains("social dialogue", StringComparison.OrdinalIgnoreCase)),
+                    "social answers should explain that no graph query was performed");
+            }
+
+            Assert(CountNodes(core) == nodesBefore && CountLinks(core) == linksBefore,
+                "social dialogue must not mutate graph data");
+            Assert(pipeline.Conversation.TurnIndex == turnBefore
+                && pipeline.Conversation.Mentions.Count == mentionsBefore,
+                "social dialogue must not update conversation turns or mentions");
+
+            NlpPipeline disabled = new NlpPipeline(core, new NlpOptions { EnableSocialDialogue = false });
+            Assert(disabled.Ask("Hello!").Status == NlpStatus.Unsupported,
+                "social dialogue should be configurable off");
+        }
+
+        private static void TestNlpConversationalInput()
+        {
+            LRD_Core core = NewCore();
+            NlpPipeline pipeline = new NlpPipeline(core);
+            Assert(pipeline.Ingest("Alice works at Acme. Alice is a doctor. Alice lives in Paris.").Status == NlpStatus.Ingested,
+                "conversational query fixture should ingest");
+
+            NlpResult politeWh = pipeline.Ask("Can you tell me where Alice works?");
+            Assert(politeWh.Answer?.Status == AnswerStatus.Answered
+                && politeWh.Answer.ShortAnswer == "Acme",
+                $"polite embedded wh-question should unwrap: {politeWh.Answer?.Text}");
+            Assert(politeWh.OriginalInput == "Can you tell me where Alice works?",
+                "preprocessing should retain the original user input");
+            Assert(politeWh.Diagnostics.Any(message => message.Contains("preamble", StringComparison.OrdinalIgnoreCase)),
+                "unwrapping should be visible in diagnostics");
+
+            NlpResult embeddedBoolean = pipeline.Ask("Do you know if Alice is a doctor?");
+            Assert(embeddedBoolean.Answer?.Status == AnswerStatus.Yes,
+                $"if-clause should become a yes/no question: {embeddedBoolean.Answer?.Text}");
+
+            ConversationalQuery regularVerbBoolean = ConversationalQueryPreprocessor.Process(
+                "Do you know if Alice works at Acme?",
+                enablePreambles: true);
+            Assert(regularVerbBoolean.QueryText == "Does Alice work at Acme?",
+                $"indirect regular-verb boolean should normalize to auxiliary inversion: {regularVerbBoolean.QueryText}");
+            NlpResult indirectWork = pipeline.Ask("Do you know if Alice works at Acme?");
+            Assert(indirectWork.Answer?.Status == AnswerStatus.Yes,
+                $"canonical indirect regular-verb question should be answerable: {indirectWork.Answer?.Text}");
+
+            ConversationalQuery pastBoolean = ConversationalQueryPreprocessor.Process(
+                "Do you know if Alice worked at Acme?",
+                enablePreambles: true);
+            Assert(pastBoolean.QueryText == "Did Alice work at Acme?",
+                $"indirect past-tense boolean should use did plus the verb lemma: {pastBoolean.QueryText}");
+
+            NlpResult showMe = pipeline.Ask("Show me where Alice works");
+            Assert(showMe.Answer?.Status == AnswerStatus.Answered
+                && showMe.Answer.ShortAnswer == "Acme",
+                $"show-me preamble should unwrap: {showMe.Answer?.Text}");
+
+            NlpResult prepositionFronted = pipeline.Ask("In what city does Alice live");
+            Assert(prepositionFronted.Answer?.Status == AnswerStatus.Answered
+                && prepositionFronted.Answer.ShortAnswer == "Paris",
+                $"preposition-fronted wh-question without punctuation should be accepted: {prepositionFronted.Answer?.Text}");
+
+            NlpResult unpunctuated = pipeline.Ask("Where does Alice work");
+            Assert(unpunctuated.Answer?.Status == AnswerStatus.Answered
+                && unpunctuated.Answer.ShortAnswer == "Acme",
+                $"wh-question without punctuation should be accepted: {unpunctuated.Answer?.Text}");
+
+            NlpResult unpunctuatedBoolean = pipeline.Ask("Is Alice a doctor");
+            Assert(unpunctuatedBoolean.Answer?.Status == AnswerStatus.Yes,
+                $"inverted yes/no question without punctuation should be accepted: {unpunctuatedBoolean.Answer?.Text}");
+
+            NlpResult greetingQuestion = pipeline.Ask("Hi, where does Alice work?");
+            Assert(greetingQuestion.Answer?.Status == AnswerStatus.Answered
+                && greetingQuestion.Answer.ShortAnswer == "Acme",
+                "a greeting prefix should not hide the actual question");
+
+            NlpResult punctuatedGreeting = pipeline.Ask("Hello! Where does Alice work?");
+            Assert(punctuatedGreeting.Answer?.Status == AnswerStatus.Answered
+                && punctuatedGreeting.Answer.ShortAnswer == "Acme",
+                "an exclamation-separated greeting should be removed before question parsing");
+
+            NlpResult missingFact = pipeline.Ask("Where does Bob work?");
+            Assert(missingFact.Answer?.Text.Contains("I don't know where Bob works yet.", StringComparison.Ordinal) == true,
+                "no-match output should identify the missing relation without denying the entity");
+
+            NlpResult exploration = pipeline.Ask("Tell me about Alice");
+            Assert(exploration.Answer?.Status == AnswerStatus.Answered,
+                $"entity exploration should answer from known facts: {exploration.Answer?.Text}");
+            Assert(exploration.Answer?.Candidates.Any(candidate => candidate.Label == "Acme") == true
+                && exploration.Answer.Candidates.Any(candidate => candidate.Label == "doctor"),
+                "entity exploration should preserve each fact's destination node as a candidate");
+            Assert(exploration.Answer?.EvidencePaths.Count == exploration.Answer?.Candidates.Count,
+                "entity exploration should preserve evidence paths for its candidate rows");
+
+            Guid aliceID = core.FindByLabel("Alice", NodeTypes.Entities).Single().ID;
+            NlpResult incomingExploration = pipeline.Ask("Tell me about Acme");
+            Assert(incomingExploration.Answer?.Status == AnswerStatus.Answered
+                && incomingExploration.Answer.Candidates.Any(candidate => candidate.NodeID == aliceID),
+                "entity exploration should include facts where the explored node is the link destination");
+
+            LRD_Core followUpCore = NewCore();
+            NlpPipeline followUp = new NlpPipeline(followUpCore);
+            Assert(followUp.Ingest("Alice works at Acme. Bob works at Globex.").Status == NlpStatus.Ingested,
+                "follow-up fixture should ingest both work facts");
+            Assert(followUp.Ask("Where does Alice work?").Answer?.ShortAnswer == "Acme",
+                "initial contextual question should be answered");
+            NlpResult aboutBob = followUp.Ask("What about Bob?");
+            Assert(aboutBob.Answer?.Status == AnswerStatus.Answered
+                && aboutBob.Answer.ShortAnswer == "Globex",
+                $"elliptical follow-up should reuse the preceding question pattern: {aboutBob.Answer?.Text}");
+
+            NlpPipeline disabled = new NlpPipeline(core, new NlpOptions { EnableConversationalPreambles = false });
+            Assert(disabled.Ask("Can you tell me where Alice works?").Answer?.Status != AnswerStatus.Answered,
+                "conversational preamble unwrapping should be configurable off");
+
+            NlpResult ordinary = pipeline.Analyze("Alice works at Acme");
+            Assert(ordinary.Parsed?.Sentences.Single().Type == SentenceType.Declarative,
+                "punctuation tolerance must not reinterpret ordinary statements as questions");
+            NlpResult imperative = pipeline.Analyze("Do not open the door");
+            Assert(imperative.Parsed?.Sentences.Single().Type == SentenceType.Imperative,
+                "punctuation-tolerant question detection must preserve unpunctuated imperatives");
+        }
+
+        private static void TestNlpMultiAnswerSynthesis()
+        {
+            LRD_Core core = NewCore();
+            Guid alice = AddNode(core, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid bob = AddNode(core, NodeTypes.Entities, "Bob", NodeLifetime.Permanent);
+            Guid acme = AddNode(core, NodeTypes.Entities, "Acme", NodeLifetime.Permanent);
+            RelationLinkType worksAt = RelationRegistry.GetOrRegister("work_at");
+            Assert(core.AddDirectedConnection(alice, acme, LinkClass.actions, worksAt.Forward.Id),
+                "Alice work relation should be added");
+            Assert(core.AddDirectedConnection(bob, acme, LinkClass.actions, worksAt.Forward.Id),
+                "Bob work relation should be added");
+
+            NlpPipeline pipeline = new NlpPipeline(core);
+            NlpResult result = pipeline.Ask("Who works at Acme?");
+            Assert(result.Answer?.Status == AnswerStatus.Answered,
+                $"distinct matching people should be synthesized: {result.Answer?.Text}; {string.Join("; ", result.Diagnostics)}");
+            Assert(result.Answer?.ShortAnswer == "Alice and Bob",
+                $"short answer should list all matching people: {result.Answer?.ShortAnswer}");
+            Assert(result.Answer?.Text.Contains("Alice and Bob work at Acme.", StringComparison.Ordinal) == true,
+                $"evidence should use plural agreement: {result.Answer?.Text}");
+            Assert(result.Answer?.Candidates.Select(candidate => candidate.NodeID).ToHashSet()
+                .SetEquals(new[] { alice, bob }) == true,
+                "synthesis should retain both candidate nodes for the Workbench table");
+            Assert(result.Answer?.EvidencePaths.Count == 2,
+                "synthesis should retain evidence paths for each candidate row");
+
+            LRD_Core categoryCore = NewCore();
+            OntologyTypes.EnsureRegistered();
+            OntologyRelations.EnsureRegistered();
+            Guid doctorAlice = AddNode(categoryCore, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid doctorBob = AddNode(categoryCore, NodeTypes.Entities, "Bob", NodeLifetime.Permanent);
+            Guid doctor = AddNode(categoryCore, NodeTypes.Concepts, "doctor", NodeLifetime.Permanent);
+            categoryCore.AddDirectedConnection(doctorAlice, doctor, OntologyTypes.ontology, OntologyRelations.IsA);
+            categoryCore.AddDirectedConnection(doctorBob, doctor, OntologyTypes.ontology, OntologyRelations.IsA);
+            NlpResult categoryAnswers = new NlpPipeline(categoryCore).Ask("Who is a doctor?");
+            Assert(categoryAnswers.Answer?.Status == AnswerStatus.Answered
+                && categoryAnswers.Answer.Text.Contains("Alice and Bob are doctors.", StringComparison.Ordinal),
+                $"classification answers should use plural agreement: {categoryAnswers.Answer?.Text}");
+
+            LRD_Core playCore = NewCore();
+            Guid playerAlice = AddNode(playCore, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid playerBob = AddNode(playCore, NodeTypes.Entities, "Bob", NodeLifetime.Permanent);
+            Guid chess = AddNode(playCore, NodeTypes.Objects, "chess", NodeLifetime.Permanent);
+            RelationLinkType play = RelationRegistry.GetOrRegister("play");
+            playCore.AddDirectedConnection(playerAlice, chess, LinkClass.actions, play.Forward.Id);
+            playCore.AddDirectedConnection(playerBob, chess, LinkClass.actions, play.Forward.Id);
+            NlpResult playAnswers = new NlpPipeline(playCore).Ask("Who plays chess?");
+            Assert(playAnswers.Answer?.Status == AnswerStatus.Answered
+                && playAnswers.Answer.Text.Contains("Alice and Bob play chess.", StringComparison.Ordinal),
+                $"unlisted action verbs should pluralize through lemmatization: {playAnswers.Answer?.Text}");
+
+            LRD_Core disabledCore = NewCore();
+            Guid first = AddNode(disabledCore, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid second = AddNode(disabledCore, NodeTypes.Entities, "Bob", NodeLifetime.Permanent);
+            Guid place = AddNode(disabledCore, NodeTypes.Entities, "Acme", NodeLifetime.Permanent);
+            disabledCore.AddDirectedConnection(first, place, LinkClass.actions, worksAt.Forward.Id);
+            disabledCore.AddDirectedConnection(second, place, LinkClass.actions, worksAt.Forward.Id);
+            NlpPipeline disabled = new NlpPipeline(
+                disabledCore,
+                new NlpOptions { EnableMultiAnswerSynthesis = false });
+            Assert(disabled.Ask("Who works at Acme?").Answer?.Status == AnswerStatus.Ambiguous,
+                "multi-answer synthesis should be configurable off");
+        }
+
+        private static void TestNlpTemporalEvents()
+        {
+            DateTimeOffset start = new DateTimeOffset(2026, 5, 12, 14, 0, 0, TimeSpan.Zero);
+            DateTimeOffset end = start.AddHours(1);
+            LRD_Core core = NewCore();
+            Guid alice = AddNode(core, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid bob = AddNode(core, NodeTypes.Entities, "Bob", NodeLifetime.Permanent);
+            Guid paris = AddNode(core, NodeTypes.Locations, "Paris", NodeLifetime.Permanent);
+
+            Web_Node projectLaunch = core.CreateEvent(
+                "Project Launch",
+                start,
+                end,
+                alice,
+                "meet",
+                bob,
+                paris);
+            Web_Node manualEvent = new Web_Node(Guid.NewGuid(), NodeTypes.Events, NodeLifetime.Permanent, 0);
+            manualEvent.Set_Label("Manually Labeled Event");
+            Assert(EventNodeHelper.GetDisplayName(manualEvent) == "Manually Labeled Event",
+                "a non-encoded legacy Event label should remain its display name when no alias exists");
+            Assert(projectLaunch.Get_NodeType() == NodeTypes.Events,
+                "programmatic event API should create an Event node");
+            Assert(projectLaunch.Aliases.Contains("Project Launch"),
+                "event name should be stored as an alias, separate from the encoded time-window label");
+            Assert(projectLaunch.Label?.StartsWith("OPEN-LRD:EVENT-WINDOW:v1|", StringComparison.Ordinal) == true,
+                "event start/end values should be encoded in the existing Label field");
+            Assert(EventNodeHelper.TryGetWindow(projectLaunch, out DateTimeOffset? parsedStart, out DateTimeOffset? parsedEnd)
+                && parsedStart == start && parsedEnd == end,
+                "event helper should recover the exact timestamps from Label");
+            Assert(core.GetLinks(projectLaunch.ID).Any(link => link.ForwardLink.Name == "has_subject"
+                && link.DestinationID == alice), "event should link its subject");
+            Assert(core.GetLinks(projectLaunch.ID).Any(link => link.ForwardLink.Name == "has_action"),
+                "event should link its action concept");
+            Assert(core.GetLinks(projectLaunch.ID).Any(link => link.ForwardLink.Name == "has_object"
+                && link.DestinationID == bob), "event should link its object");
+            Assert(core.GetLinks(projectLaunch.ID).Any(link => link.ForwardLink.Name == "has_location"
+                && link.DestinationID == paris), "event should link its optional location");
+
+            EventTimeVariance past = core.CalculateEventTimeVariance(projectLaunch, end.AddHours(2));
+            Assert(past.Status == EventTemporalStatus.Past && past.Duration == TimeSpan.FromHours(1),
+                "event variance should calculate past status and duration relative to an injected time");
+            EventTimeVariance oneHourPast = core.CalculateEventTimeVariance(projectLaunch, end.AddHours(1));
+            Assert(oneHourPast.FriendlyVariance.Contains("ended 1 hour ago", StringComparison.Ordinal),
+                $"relative time variance should use singular unit grammar: {oneHourPast.FriendlyVariance}");
+            EventTimeVariance active = core.CalculateEventTimeVariance(projectLaunch, start.AddMinutes(30));
+            Assert(active.Status == EventTemporalStatus.Active,
+                "event variance should identify an event active inside its time window");
+            EventTimeVariance future = core.CalculateEventTimeVariance(projectLaunch, start.AddHours(-2));
+            Assert(future.Status == EventTemporalStatus.Future,
+                "event variance should identify a future event");
+
+            IReadOnlyList<Web_Node> overlapping = core.FindEventsInWindow(start.AddMinutes(30), end.AddHours(1));
+            Assert(overlapping.Any(node => node.ID == projectLaunch.ID),
+                "default event window search should include overlapping intervals");
+            Assert(core.FindEventsInWindow(start.AddHours(2), end.AddHours(3)).Count == 0,
+                "event window search should not return disjoint events");
+
+            NlpPipeline pipeline = new NlpPipeline(core);
+            RelationLinkType see = RelationRegistry.GetOrRegister("see");
+            Assert(core.AddDirectedConnection(alice, bob, LinkClass.actions, see.Forward.Id),
+                "ordinary temporal-qualifier relation should be added");
+            NlpResult ordinaryTemporalQuestion = pipeline.Ask("Did Alice see Bob in 2026?");
+            Assert(ordinaryTemporalQuestion.Question?.Type == QuestionType.YesNo
+                && ordinaryTemporalQuestion.Answer?.Status is AnswerStatus.Yes or AnswerStatus.No,
+                $"temporal range detection must route ordinary temporal-qualifier questions through normal yes/no analysis: {ordinaryTemporalQuestion.Answer?.Text}");
+
+            NlpResult when = pipeline.Ask("When was Project Launch?");
+            Assert(when.Answer?.Status == AnswerStatus.Answered
+                && when.Answer.Kind == AnswerKind.Time
+                && when.Answer.Text.Contains("May 12, 2026", StringComparison.Ordinal),
+                $"When-question should return the event time window: {when.Answer?.Text}; {string.Join("; ", when.Diagnostics)}");
+            Assert(when.Answer?.Candidates.Any(candidate => candidate.NodeID == projectLaunch.ID) == true,
+                "When answer should seed the Event node into candidates");
+
+            Web_Node futureEvent = core.CreateEvent(
+                "Future Conference",
+                DateTimeOffset.UtcNow.AddDays(3),
+                DateTimeOffset.UtcNow.AddDays(3).AddHours(2),
+                alice,
+                "meet",
+                bob);
+            NlpResult whenFuture = pipeline.Ask("When is Future Conference?");
+            Assert(whenFuture.Answer?.Status == AnswerStatus.Answered
+                && whenFuture.Answer.Text.Contains("will be", StringComparison.Ordinal),
+                $"future events should use future copula wording: {whenFuture.Answer?.Text}");
+            Assert(whenFuture.Answer?.Candidates.Any(candidate => candidate.NodeID == futureEvent.ID) == true,
+                "future event answers should seed their Event node candidate");
+
+            Web_Node activeEvent = core.CreateEvent(
+                "Active Meeting",
+                DateTimeOffset.UtcNow.AddMinutes(-20),
+                DateTimeOffset.UtcNow.AddMinutes(20),
+                alice,
+                "meet",
+                bob);
+            NlpResult whenActive = pipeline.Ask("When is Active Meeting?");
+            Assert(whenActive.Answer?.Text.Contains("currently ongoing", StringComparison.Ordinal) == true,
+                $"active events should use present/ongoing wording: {whenActive.Answer?.Text}");
+            Assert(whenActive.Answer?.Candidates.Any(candidate => candidate.NodeID == activeEvent.ID) == true,
+                "active event answers should seed their Event node candidate");
+
+            NlpResult whenAction = pipeline.Ask("When did Alice meet Bob?");
+            Assert(whenAction.Answer?.Status == AnswerStatus.Answered
+                && whenAction.Answer.Candidates.Any(candidate => candidate.NodeID == projectLaunch.ID),
+                $"When question with subject/action/object should correlate to its Event node: {whenAction.Answer?.Text}; {string.Join("; ", whenAction.Diagnostics)}");
+
+            NlpResult ranged = pipeline.Ask("What happened between May 12, 2026 and May 13, 2026?");
+            Assert(ranged.Answer?.Status == AnswerStatus.Answered
+                && ranged.Answer.Candidates.Any(candidate => candidate.NodeID == projectLaunch.ID),
+                $"ranged Ask should return overlapping events and candidates: {ranged.Answer?.Text}");
+            NlpResult onDate = pipeline.Ask("What happened on May 12, 2026?");
+            Assert(onDate.Answer?.Status == AnswerStatus.Answered
+                && onDate.Answer.Candidates.Any(candidate => candidate.NodeID == projectLaunch.ID),
+                $"individual date search should find events during that day: {onDate.Answer?.Text}");
+
+            LRD_Core ingestionCore = NewCore();
+            NlpPipeline ingestion = new NlpPipeline(ingestionCore);
+            NlpResult ingested = ingestion.Ingest(
+                "Alice met Bob in Paris on May 12, 2026 from 14:00 to 15:00.");
+            Assert(ingested.Status == NlpStatus.Ingested,
+                $"temporal event statement should ingest: {string.Join("; ", ingested.Diagnostics)}");
+            Web_Node extractedEvent = ingestionCore.FindNodes(node =>
+                    node.Get_NodeType() == NodeTypes.Events
+                    && node.Aliases.Any(alias => alias.Contains("Alice", StringComparison.OrdinalIgnoreCase)))
+                .Single();
+            Assert(EventNodeHelper.TryGetWindow(extractedEvent, out DateTimeOffset? autoStart, out DateTimeOffset? autoEnd)
+                && autoStart.HasValue && autoEnd.HasValue
+                && autoStart.Value.Date == new DateTime(2026, 5, 12)
+                && autoStart.Value.Hour == 14
+                && autoEnd.Value.Hour == 15,
+                $"normal ingestion should extract the event date/time window: {extractedEvent.Label}");
+            Assert(ingestionCore.GetLinks(extractedEvent.ID).Any(link => link.ForwardLink.Name == "has_subject")
+                && ingestionCore.GetLinks(extractedEvent.ID).Any(link => link.ForwardLink.Name == "has_action")
+                && ingestionCore.GetLinks(extractedEvent.ID).Any(link => link.ForwardLink.Name == "has_object")
+                && ingestionCore.GetLinks(extractedEvent.ID).Any(link => link.ForwardLink.Name == "has_location"),
+                "automatically extracted Event should link subject, action, object, and location");
+            ingestion.Ingest("Alice met Bob in Paris on May 12, 2026 from 14:00 to 15:00.");
+            Assert(ingestionCore.FindByType(NodeTypes.Events).Count == 1,
+                "repeating a temporal statement should reuse its matching Event node");
+
+            LRD_Core intransitiveCore = NewCore();
+            NlpPipeline intransitive = new NlpPipeline(intransitiveCore);
+            NlpResult arrival = intransitive.Ingest("Alice arrived in Paris on May 12, 2026.");
+            Assert(arrival.Status == NlpStatus.Ingested,
+                $"intransitive dated event should ingest: {string.Join("; ", arrival.Diagnostics)}");
+            Web_Node arrivalEvent = intransitiveCore.FindByType(NodeTypes.Events).Single();
+            Assert(intransitiveCore.GetLinks(arrivalEvent.ID).Any(link => link.ForwardLink.Name == "has_location"),
+                "intransitive event should preserve its location as a location role rather than an object");
+            Assert(!intransitiveCore.GetLinks(arrivalEvent.ID).Any(link => link.ForwardLink.Name == "has_object"),
+                $"intransitive event should not invent an object role: {string.Join(", ", intransitiveCore.GetLinks(arrivalEvent.ID).Select(link => link.ForwardLink.Name))}; frames={string.Join(" | ", arrival.Frames.Select(frame => frame.RelationName + ":" + string.Join(",", frame.Arguments.Select(argument => argument.Role + "=" + argument.SurfaceText + "/" + argument.NodeType.Name + "/" + argument.Preposition))))}");
+            NlpResult whenArrival = intransitive.Ask("When did Alice arrive in Paris?");
+            Assert(whenArrival.Answer?.Status == AnswerStatus.Answered
+                && whenArrival.Answer.Candidates.Any(candidate => candidate.NodeID == arrivalEvent.ID),
+                $"When question should correlate with an intransitive located event: {whenArrival.Answer?.Text}; {string.Join("; ", whenArrival.Diagnostics)}");
         }
 
         private static void TestNlpRelationExtractionExclusions()

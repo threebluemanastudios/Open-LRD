@@ -142,6 +142,9 @@ namespace OPEN_LRD.NLP
             if (value == '.')
                 return char.IsDigit(previous) && char.IsDigit(next);
 
+            if (value == ':')
+                return char.IsDigit(previous) && char.IsDigit(next);
+
             return false;
         }
 
@@ -149,28 +152,31 @@ namespace OPEN_LRD.NLP
         {
             bool isQuestion = tokens.Any(token => token.Normalized.Contains('?'));
             bool isExclamation = tokens.Any(token => token.Normalized.Contains('!'));
+            List<Token> words = tokens
+                .Where(token => token.PartOfSpeech != PartOfSpeech.Punctuation)
+                .ToList();
 
             if (isQuestion)
             {
-                List<Token> words = tokens
-                    .Where(token => token.PartOfSpeech != PartOfSpeech.Punctuation)
-                    .ToList();
-
-                if (words.Count > 0 && Lexicon.IsWhWord(words[0].Normalized))
-                    return SentenceType.WhQuestion;
-
-                if (words.Count > 1
-                    && Lexicon.IsPreposition(words[0].Normalized)
-                    && Lexicon.IsWhWord(words[1].Normalized))
-                {
-                    return SentenceType.WhQuestion;
-                }
-
-                return SentenceType.YesNoQuestion;
+                SentenceType questionOpening = ClassifyQuestionOpening(words);
+                return questionOpening == SentenceType.Unknown
+                    ? SentenceType.YesNoQuestion
+                    : questionOpening;
             }
 
             if (isExclamation)
                 return SentenceType.Imperative;
+
+            if (words.Count > 1
+                && words[0].Normalized == "do"
+                && words[1].Normalized is "not" or "never")
+            {
+                return SentenceType.Imperative;
+            }
+
+            SentenceType openingType = ClassifyQuestionOpening(words);
+            if (openingType != SentenceType.Unknown)
+                return openingType;
 
             Token? first = tokens.FirstOrDefault(
                 token => token.PartOfSpeech != PartOfSpeech.Punctuation);
@@ -184,6 +190,31 @@ namespace OPEN_LRD.NLP
             }
 
             return SentenceType.Declarative;
+        }
+
+        private static SentenceType ClassifyQuestionOpening(IReadOnlyList<Token> words)
+        {
+            if (words.Count == 0)
+                return SentenceType.Unknown;
+
+            if (Lexicon.IsWhWord(words[0].Normalized))
+                return SentenceType.WhQuestion;
+
+            if (words.Count > 1
+                && Lexicon.IsPreposition(words[0].Normalized)
+                && Lexicon.IsWhWord(words[1].Normalized))
+            {
+                return SentenceType.WhQuestion;
+            }
+
+            if (words.Count > 1
+                && Lexicon.IsAuxiliary(words[0].Normalized)
+                && !Lexicon.IsDeterminer(words[1].Normalized))
+            {
+                return SentenceType.YesNoQuestion;
+            }
+
+            return SentenceType.Unknown;
         }
     }
 }

@@ -115,16 +115,119 @@ namespace OPEN_LRD.NLP
 
         public NlpResult Ask(string? text)
         {
-            NlpResult analysis = Analyze(text);
+            NlpResult initialAnalysis = Analyze(text);
+
+            if (initialAnalysis.Status == NlpStatus.InvalidInput || initialAnalysis.Parsed is null)
+                return CreateInvalidAskResult(initialAnalysis) with { OriginalInput = text };
+
+            if (options.EnableSocialDialogue
+                && SocialDialogueRecognizer.TryRecognize(text, out NlpAnswer socialAnswer))
+            {
+                return new NlpResult(
+                    NlpStatus.Answered,
+                    socialAnswer.Diagnostics,
+                    initialAnalysis.Parsed)
+                {
+                    Answer = socialAnswer,
+                    OriginalInput = text
+                };
+            }
+
+            if (TemporalExpressionParser.TryParseQuestionRange(
+                text,
+                DateTimeOffset.Now,
+                out TemporalRangeQuery temporalQuery))
+            {
+                conversation.BeginTurn();
+                NlpAnswer temporalAnswer = AnswerGenerator.GenerateTemporalRangeAnswer(
+                    temporalQuery,
+                    core,
+                    options);
+                return new NlpResult(
+                    MapAnswerStatus(temporalAnswer.Status),
+                    temporalAnswer.Diagnostics,
+                    initialAnalysis.Parsed)
+                {
+                    Answer = temporalAnswer,
+                    OriginalInput = text
+                };
+            }
+
+            ConversationalQuery conversationalQuery = ConversationalQueryPreprocessor.Process(
+                text!,
+                options.EnableConversationalPreambles,
+                conversation.LastQuestionTemplate);
+
+            if (conversationalQuery.IsExploration)
+            {
+                NlpResult exploration = AnswerEntityExploration(
+                    conversationalQuery.ExplorationEntity!,
+                    conversationalQuery.Diagnostics,
+                    text!);
+                return exploration;
+            }
+
+            NlpResult analysis = string.Equals(
+                    conversationalQuery.QueryText,
+                    initialAnalysis.Parsed.NormalizedText,
+                    StringComparison.Ordinal)
+                ? initialAnalysis
+                : Analyze(conversationalQuery.QueryText);
 
             if (analysis.Status == NlpStatus.InvalidInput || analysis.Parsed is null)
-                return CreateInvalidAskResult(analysis);
+                return CreateInvalidAskResult(analysis) with { OriginalInput = text };
+
+            analysis = analysis with
+            {
+                Diagnostics = Deduplicate(conversationalQuery.Diagnostics.Concat(analysis.Diagnostics).ToList()),
+                OriginalInput = text
+            };
 
             if (CommandRecognizer.TryRecognize(analysis.Parsed, out NlpCommand command))
-                return ExecuteCommand(command, analysis);
+                return ExecuteCommand(command, analysis) with { OriginalInput = text };
 
             conversation.BeginTurn();
-            return AnswerAnalyzed(analysis, updateConversation: true);
+            return AnswerAnalyzed(analysis, updateConversation: true) with { OriginalInput = text };
+        }
+
+        private NlpResult AnswerEntityExploration(
+            string entityText,
+            IReadOnlyList<string> preprocessingDiagnostics,
+            string originalInput)
+        {
+            string questionText = "Who is " + entityText.Trim() + "?";
+            NlpResult analysis = Analyze(questionText);
+            if (analysis.Status == NlpStatus.InvalidInput || analysis.Parsed is null)
+                return CreateInvalidAskResult(analysis) with { OriginalInput = originalInput };
+
+            EntityResolver resolver = new EntityResolver(core, conversation, options);
+            QuestionAnalysis question = QuestionAnalyzer.Analyze(analysis.Parsed, resolver, options);
+            conversation.BeginTurn();
+
+            List<string> diagnostics = preprocessingDiagnostics
+                .Concat(question.Diagnostics)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            NlpAnswer answer = question.AnchorIsAmbiguous
+                ? AnswerGenerator.Generate(
+                    question,
+                    Array.Empty<QuestionEvaluation>(),
+                    core,
+                    options,
+                    conversation)
+                : AnswerGenerator.GenerateExploration(question, core, options, conversation);
+            diagnostics.AddRange(answer.Diagnostics);
+            diagnostics = Deduplicate(diagnostics).ToList();
+
+            if (answer.Status == AnswerStatus.Answered)
+                UpdateAskConversation(question, answer);
+
+            return new NlpResult(MapAnswerStatus(answer.Status), diagnostics, analysis.Parsed)
+            {
+                Question = question,
+                Answer = answer,
+                OriginalInput = originalInput
+            };
         }
 
         private NlpResult ExecuteCommand(NlpCommand command, NlpResult analysis)
@@ -194,6 +297,43 @@ namespace OPEN_LRD.NLP
             diagnostics.AddRange(analysis.Diagnostics);
             diagnostics.AddRange(question.Diagnostics);
 
+            if (question.Supported && question.Wh == WhKind.When)
+            {
+                IReadOnlyList<Web_Node> matchingEvents = FindTemporalQuestionEvents(
+                    analysis.Parsed!,
+                    question,
+                    resolver);
+                if (matchingEvents.Count > 0)
+                {
+                    NlpAnswer eventAnswer = AnswerGenerator.GenerateEventTimeAnswers(
+                        question,
+                        matchingEvents,
+                        core,
+                        options);
+                    diagnostics.AddRange(eventAnswer.Diagnostics);
+                    if (updateConversation
+                        && eventAnswer.Status is AnswerStatus.Answered or AnswerStatus.Yes or AnswerStatus.No)
+                    {
+                        UpdateAskConversation(question, eventAnswer);
+                        conversation.SetLastQuestionTemplate(
+                            analysis.Parsed!.NormalizedText,
+                            question.Subject is { IsPronoun: false } eventSubject
+                                ? eventSubject.SurfaceText
+                                : null);
+                    }
+
+                    return new NlpResult(
+                        MapAnswerStatus(eventAnswer.Status),
+                        Deduplicate(diagnostics),
+                        analysis.Parsed)
+                    {
+                        Question = question,
+                        Answer = eventAnswer,
+                        OriginalInput = analysis.OriginalInput
+                    };
+                }
+            }
+
             List<QuestionEvaluation> evaluations = new List<QuestionEvaluation>();
 
             if (!question.AnchorIsAmbiguous && question.Supported)
@@ -221,6 +361,11 @@ namespace OPEN_LRD.NLP
                 && answer.Status is AnswerStatus.Answered or AnswerStatus.Yes or AnswerStatus.No)
             {
                 UpdateAskConversation(question, answer);
+                conversation.SetLastQuestionTemplate(
+                    analysis.Parsed!.NormalizedText,
+                    question.Subject is { IsPronoun: false } subject
+                        ? subject.SurfaceText
+                        : null);
             }
 
             NlpStatus status = MapAnswerStatus(answer.Status);
@@ -230,7 +375,8 @@ namespace OPEN_LRD.NLP
                 Frames = analysis.Frames,
                 Question = question,
                 Answer = answer,
-                ReasoningResults = evaluations.Select(evaluation => evaluation.Result).ToArray()
+                ReasoningResults = evaluations.Select(evaluation => evaluation.Result).ToArray(),
+                OriginalInput = analysis.OriginalInput
             };
         }
 
@@ -377,6 +523,16 @@ namespace OPEN_LRD.NLP
                     UpdateIngestionConversation(chains[index], chainFrames[index], results[index]);
             }
 
+            int eventsCreated = ExtractTemporalEvents(
+                analysis.Parsed,
+                chains,
+                chainFrames,
+                results,
+                resolver,
+                diagnostics);
+            if (eventsCreated > 0)
+                diagnostics.Add($"Created {eventsCreated} Event node(s) from temporal statements.");
+
             NlpStatus status = AggregateStatus(results);
 
             return new NlpResult(status, diagnostics, analysis.Parsed)
@@ -386,6 +542,283 @@ namespace OPEN_LRD.NLP
                 ReasoningResults = results,
                 Provenance = provenance
             };
+        }
+
+        private IReadOnlyList<Web_Node> FindTemporalQuestionEvents(
+            ParsedText parsed,
+            QuestionAnalysis question,
+            EntityResolver resolver)
+        {
+            if (question.AnchorNodeID.HasValue
+                && core.TryGetNode(question.AnchorNodeID.Value, out Web_Node? anchor)
+                && anchor is not null
+                && anchor.Get_NodeType() == NodeTypes.Events)
+            {
+                return EventNodeHelper.TryGetWindow(anchor, out _, out _)
+                    ? new[] { anchor }
+                    : Array.Empty<Web_Node>();
+            }
+
+            if (question.Subject is null || string.IsNullOrWhiteSpace(question.PredicateLemma))
+                return Array.Empty<Web_Node>();
+
+            EntityResolution subject = resolver.Resolve(question.Subject);
+            if (!subject.ResolvedNodeID.HasValue || subject.IsAmbiguous)
+                return Array.Empty<Web_Node>();
+
+            FrameArgument? objectArgument = FindTemporalQuestionObject(parsed, question);
+            Guid? objectID = ResolveEventArgument(objectArgument, resolver);
+            FrameArgument? locationArgument = FindTemporalQuestionLocation(parsed, question);
+            Guid? locationID = ResolveEventArgument(locationArgument, resolver);
+
+            return core.FindEventsFor(
+                subject.ResolvedNodeID.Value,
+                question.PredicateLemma,
+                objectID,
+                locationID);
+        }
+
+        private static FrameArgument? FindTemporalQuestionObject(
+            ParsedText parsed,
+            QuestionAnalysis question)
+        {
+            if (question.SentenceIndex < 0 || question.SentenceIndex >= parsed.Sentences.Count)
+                return null;
+
+            Sentence sentence = parsed.Sentences[question.SentenceIndex];
+            int predicateIndex = sentence.Tokens
+                .FirstOrDefault(token => string.Equals(
+                    token.Lemma,
+                    question.PredicateLemma,
+                    StringComparison.OrdinalIgnoreCase))?.TokenIndex ?? -1;
+            int subjectEnd = question.Subject?.EndToken ?? -1;
+            List<Chunk> prepositions = sentence.Clauses
+                .SelectMany(clause => clause.Chunks)
+                .Where(chunk => chunk.Kind == ChunkKind.PrepositionalPhrase)
+                .ToList();
+
+            Mention? mention = parsed.Mentions
+                .Where(candidate => candidate.SentenceIndex == sentence.Index
+                    && candidate.StartToken > Math.Max(predicateIndex, subjectEnd)
+                    && candidate.Kind is not (MentionKind.Date or MentionKind.Time))
+                .Where(candidate => !prepositions.Any(phrase =>
+                    phrase.StartToken <= candidate.StartToken
+                    && candidate.EndToken <= phrase.EndToken))
+                .OrderBy(candidate => candidate.StartToken)
+                .FirstOrDefault();
+
+            if (mention is null)
+                return null;
+
+            return ToFrameArgument(mention, FrameRole.Object, null);
+        }
+
+        private static FrameArgument? FindTemporalQuestionLocation(
+            ParsedText parsed,
+            QuestionAnalysis question)
+        {
+            if (question.Qualifier is { } qualifier
+                && (qualifier.NodeType == NodeTypes.Locations
+                    || RelationExtractor.IsSpatialPreposition(qualifier.Preposition ?? string.Empty)))
+            {
+                return qualifier with { Role = FrameRole.Location };
+            }
+
+            if (question.SentenceIndex < 0 || question.SentenceIndex >= parsed.Sentences.Count)
+                return null;
+
+            Sentence sentence = parsed.Sentences[question.SentenceIndex];
+            HashSet<(int Start, int End)> prepositionalRanges = sentence.Clauses
+                .SelectMany(clause => clause.Chunks)
+                .Where(chunk => chunk.Kind == ChunkKind.PrepositionalPhrase)
+                .Select(chunk => (chunk.StartToken, chunk.EndToken))
+                .ToHashSet();
+
+            Mention? location = parsed.Mentions
+                .Where(mention => mention.SentenceIndex == sentence.Index
+                    && mention.NodeType == NodeTypes.Locations)
+                .Where(mention => prepositionalRanges.Any(range =>
+                    range.Start <= mention.StartToken && mention.EndToken <= range.End))
+                .OrderBy(mention => mention.StartToken)
+                .FirstOrDefault();
+
+            return location is null
+                ? null
+                : ToFrameArgument(location, FrameRole.Location, null);
+        }
+
+        private static Guid? ResolveEventArgument(FrameArgument? argument, EntityResolver resolver)
+        {
+            if (argument is null)
+                return null;
+
+            EntityResolution resolution = resolver.Resolve(argument);
+            return resolution.IsAmbiguous ? null : resolution.ResolvedNodeID;
+        }
+
+        private static FrameArgument ToFrameArgument(
+            Mention mention,
+            FrameRole role,
+            string? preposition)
+        {
+            return new FrameArgument(
+                role,
+                mention.SurfaceText,
+                mention.Lemma,
+                mention.NodeType,
+                mention.Kind,
+                mention.SentenceIndex,
+                mention.StartToken,
+                mention.EndToken,
+                Lexicon.IsPronoun(mention.SurfaceText),
+                preposition,
+                mention.Confidence);
+        }
+
+        private int ExtractTemporalEvents(
+            ParsedText parsed,
+            IReadOnlyList<LinkedList<Chain_Node>> chains,
+            IReadOnlyList<RelationFrame> chainFrames,
+            IReadOnlyList<ReasoningResult> results,
+            EntityResolver resolver,
+            List<string> diagnostics)
+        {
+            HashSet<(int Sentence, int Clause, int Start, int End, string Predicate)> seenFrames =
+                new HashSet<(int Sentence, int Clause, int Start, int End, string Predicate)>();
+            int created = 0;
+
+            for (int index = 0; index < chains.Count; index++)
+            {
+                RelationFrame frame = chainFrames[index];
+                var frameKey = (
+                    frame.SentenceIndex,
+                    frame.ClauseIndex,
+                    frame.StartToken,
+                    frame.EndToken,
+                    frame.PredicateLemma);
+                if (!seenFrames.Add(frameKey) || !IsSuccessfulIngestion(results[index].Status))
+                    continue;
+
+                if (frame.SentenceIndex < 0 || frame.SentenceIndex >= parsed.Sentences.Count)
+                    continue;
+
+                Sentence sentence = parsed.Sentences[frame.SentenceIndex];
+                if (!TemporalExpressionParser.TryParseEventWindow(
+                    sentence.Text,
+                    DateTimeOffset.Now,
+                    out DateTimeOffset? startTime,
+                    out DateTimeOffset? endTime))
+                {
+                    continue;
+                }
+
+                FrameArgument? subject = frame.Arguments.FirstOrDefault(argument => argument.Role == FrameRole.Subject);
+                FrameArgument? target = frame.Arguments.FirstOrDefault(argument => argument.Role == FrameRole.Object);
+                if (subject is null || chains[index].First is null)
+                    continue;
+
+                Guid subjectID = MapGraphNodeID(chains[index].First!.Value.ID, results[index]);
+                if (!core.TryGetNode(subjectID, out _))
+                    continue;
+
+                Guid? locationID = null;
+                FrameArgument? location = frame.Arguments.FirstOrDefault(argument => argument.Role == FrameRole.Location);
+                bool targetIsLocation = target is not null && IsLocationTarget(frame, target);
+                bool targetIsTime = target is not null
+                    && (target.Role == FrameRole.Time
+                        || (target.NodeType == NodeTypes.RawData
+                            && (target.Kind is MentionKind.Date or MentionKind.Time
+                                || Lexicon.IsNumberOrDate(target.SurfaceText))));
+                Guid? objectID = null;
+
+                if (target is not null && chains[index].Last is not null)
+                {
+                    Guid targetID = MapGraphNodeID(chains[index].Last!.Value.ID, results[index]);
+                    if (targetIsLocation)
+                        locationID = targetID;
+                    else if (!targetIsTime)
+                        objectID = targetID;
+                }
+
+                if (location is not null)
+                {
+                    EntityResolution resolution = resolver.Resolve(location);
+                    if (resolution.ResolvedNodeID.HasValue
+                        && core.TryGetNode(resolution.ResolvedNodeID.Value, out _))
+                    {
+                        locationID = resolution.ResolvedNodeID;
+                    }
+                }
+
+                FrameArgument? eventObject = target is not null && !targetIsLocation && !targetIsTime
+                    ? target
+                    : null;
+                FrameArgument? eventLocation = location ?? (targetIsLocation ? target : null);
+                string eventName = BuildEventName(sentence, frame, subject, eventObject, eventLocation);
+                Web_Node? existing = core.FindMatchingEvent(
+                    eventName,
+                    startTime,
+                    endTime,
+                    subjectID,
+                    frame.PredicateLemma,
+                    objectID,
+                    locationID);
+                if (existing is not null)
+                    continue;
+
+                try
+                {
+                    core.CreateEvent(
+                        eventName,
+                        startTime,
+                        endTime,
+                        subjectID,
+                        frame.PredicateLemma,
+                        objectID,
+                        locationID);
+                    created++;
+                }
+                catch (Exception ex)
+                {
+                    diagnostics.Add($"Temporal Event extraction was skipped: {ex.Message}");
+                }
+            }
+
+            return created;
+        }
+
+        private static string BuildEventName(
+            Sentence sentence,
+            RelationFrame frame,
+            FrameArgument subject,
+            FrameArgument? target,
+            FrameArgument? location)
+        {
+            Token? verb = sentence.Tokens.FirstOrDefault(token =>
+                token.TokenIndex >= frame.StartToken
+                && token.TokenIndex <= frame.EndToken
+                && token.Lemma.Equals(frame.PredicateLemma, StringComparison.OrdinalIgnoreCase)
+                && token.PartOfSpeech is PartOfSpeech.Verb or PartOfSpeech.Auxiliary);
+            string action = verb?.Text ?? frame.PredicateLemma;
+            string name = subject.SurfaceText + " " + action;
+            if (target is not null)
+                name += " " + target.SurfaceText;
+            if (location is not null)
+                name += " in " + location.SurfaceText;
+            return name.Trim();
+        }
+
+        private static bool IsLocationTarget(RelationFrame frame, FrameArgument target)
+        {
+            if (target.Role is FrameRole.Location or FrameRole.Qualifier)
+                return target.NodeType == NodeTypes.Locations;
+
+            if (target.NodeType != NodeTypes.Locations)
+                return false;
+
+            string finalRelationPart = frame.RelationName.Split('_', StringSplitOptions.RemoveEmptyEntries)
+                .LastOrDefault() ?? string.Empty;
+            return RelationExtractor.IsSpatialPreposition(finalRelationPart);
         }
 
         private ReasoningResult IngestChain(
@@ -702,6 +1135,9 @@ namespace OPEN_LRD.NLP
         {
             if (!core.TryGetNode(nodeID, out Web_Node? node) || node is null)
                 return fallback;
+
+            if (node.Get_NodeType() == NodeTypes.Events)
+                return EventNodeHelper.GetDisplayName(node);
 
             if (!string.IsNullOrWhiteSpace(node.Label))
                 return node.Label!;

@@ -235,6 +235,8 @@ namespace OPEN_LRD.Persistence
 
         public Guid? LastAnswerNodeId { get; set; }
 
+        public string? LastQuestionTemplate { get; set; }
+
         public List<MentionLog> Mentions { get; set; } = new List<MentionLog>();
 
         public List<ProvenanceLog> Provenance { get; set; } = new List<ProvenanceLog>();
@@ -336,6 +338,9 @@ namespace OPEN_LRD.Persistence
                 FirstPersonSpeakerLabel = options.FirstPersonSpeakerLabel,
                 EnableSessionProvenance = options.EnableSessionProvenance,
                 UseSessionProvenanceInAnswers = options.UseSessionProvenanceInAnswers,
+                EnableSocialDialogue = options.EnableSocialDialogue,
+                EnableConversationalPreambles = options.EnableConversationalPreambles,
+                EnableMultiAnswerSynthesis = options.EnableMultiAnswerSynthesis,
                 MaxConversationMentions = options.MaxConversationMentions,
                 MaxSessionProvenanceEntries = options.MaxSessionProvenanceEntries,
                 MaxPronounCandidates = options.MaxPronounCandidates,
@@ -368,6 +373,9 @@ namespace OPEN_LRD.Persistence
                 FirstPersonSpeakerLabel = options.FirstPersonSpeakerLabel,
                 EnableSessionProvenance = options.EnableSessionProvenance,
                 UseSessionProvenanceInAnswers = options.UseSessionProvenanceInAnswers,
+                EnableSocialDialogue = options.EnableSocialDialogue,
+                EnableConversationalPreambles = options.EnableConversationalPreambles,
+                EnableMultiAnswerSynthesis = options.EnableMultiAnswerSynthesis,
                 MaxConversationMentions = options.MaxConversationMentions,
                 MaxSessionProvenanceEntries = options.MaxSessionProvenanceEntries,
                 MaxPronounCandidates = options.MaxPronounCandidates,
@@ -414,6 +422,12 @@ namespace OPEN_LRD.Persistence
         public bool EnableSessionProvenance { get; set; } = true;
 
         public bool UseSessionProvenanceInAnswers { get; set; } = true;
+
+        public bool EnableSocialDialogue { get; set; } = true;
+
+        public bool EnableConversationalPreambles { get; set; } = true;
+
+        public bool EnableMultiAnswerSynthesis { get; set; } = true;
 
         public int MaxConversationMentions { get; set; } = 32;
 

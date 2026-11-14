@@ -113,6 +113,8 @@ namespace OPEN_LRD.NLP
 
         public Guid? LastAnswerNodeID { get; private set; }
 
+        public string? LastQuestionTemplate { get; private set; }
+
         public Guid? LastObjectOrQualifierNodeID => LastObjectNodeID ?? LastQualifierNodeID;
 
         public IReadOnlyList<ConversationMention> Mentions => mentions.AsReadOnly();
@@ -197,6 +199,26 @@ namespace OPEN_LRD.NLP
 
             if (fromAnswer)
                 LastAnswerNodeID = nodeID.Value;
+        }
+
+        public void SetLastQuestionTemplate(string? questionText, string? subjectText)
+        {
+            LastQuestionTemplate = null;
+
+            if (!options.EnableConversationContext
+                || string.IsNullOrWhiteSpace(questionText)
+                || string.IsNullOrWhiteSpace(subjectText))
+            {
+                return;
+            }
+
+            int subjectIndex = questionText.IndexOf(subjectText, StringComparison.OrdinalIgnoreCase);
+            if (subjectIndex < 0)
+                return;
+
+            LastQuestionTemplate = questionText[..subjectIndex]
+                + "{entity}"
+                + questionText[(subjectIndex + subjectText.Length)..];
         }
 
         public PronounResolution ResolvePronoun(
@@ -421,7 +443,8 @@ namespace OPEN_LRD.NLP
             Guid? lastQualifierNodeID,
             Guid? lastAnswerNodeID,
             IEnumerable<ConversationMention> restoredMentions,
-            IEnumerable<SessionProvenanceEntry> restoredProvenance)
+            IEnumerable<SessionProvenanceEntry> restoredProvenance,
+            string? lastQuestionTemplate = null)
         {
             ArgumentNullException.ThrowIfNull(restoredMentions);
             ArgumentNullException.ThrowIfNull(restoredProvenance);
@@ -463,6 +486,13 @@ namespace OPEN_LRD.NLP
                 throw new InvalidOperationException(
                     "Conversation sequence must be at least as large as every restored entry sequence.");
 
+            if (lastQuestionTemplate is not null
+                && (lastQuestionTemplate.Length > options.MaxCharacters
+                    || !lastQuestionTemplate.Contains("{entity}", StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException("The restored follow-up question template is invalid.");
+            }
+
             TurnIndex = turnIndex;
             Sequence = sequence;
             FocusNodeID = focusNodeID;
@@ -470,6 +500,7 @@ namespace OPEN_LRD.NLP
             LastObjectNodeID = lastObjectNodeID;
             LastQualifierNodeID = lastQualifierNodeID;
             LastAnswerNodeID = lastAnswerNodeID;
+            LastQuestionTemplate = lastQuestionTemplate;
             mentions.Clear();
             mentions.AddRange(mentionList);
             provenance.Clear();
@@ -485,6 +516,7 @@ namespace OPEN_LRD.NLP
             LastObjectNodeID = null;
             LastQualifierNodeID = null;
             LastAnswerNodeID = null;
+            LastQuestionTemplate = null;
             mentions.Clear();
             provenance.Clear();
         }
@@ -524,6 +556,9 @@ namespace OPEN_LRD.NLP
 
         private static string ResolveLabel(Web_Node node, string fallback)
         {
+            if (node.Get_NodeType() == NodeTypes.Events)
+                return EventNodeHelper.GetDisplayName(node);
+
             if (!string.IsNullOrWhiteSpace(node.Label))
                 return node.Label!;
 

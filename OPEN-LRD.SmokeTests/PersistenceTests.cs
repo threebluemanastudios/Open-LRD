@@ -28,6 +28,8 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Persistence transient round trip", TestTransientRoundTrip);
             Program.Run("Persistence transient merge and replace", TestTransientMergeAndReplace);
             Program.Run("Persistence malformed transient rejection", TestMalformedTransient);
+            Program.Run("Persistence conversational options defaults and round trip", TestConversationalOptionsRoundTrip);
+            Program.Run("Persistence event window label and alias round trip", TestEventWindowRoundTrip);
             Program.Run("Visualization link distance defaults", TestLinkDistanceDefaults);
             Program.Run("Visualization link distance overrides", TestLinkDistanceOverrides);
             Program.Run("Visualization link distance fallback", TestLinkDistanceFallback);
@@ -1078,6 +1080,111 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(
                     !target.GetQuery()!.Any(node => node.ID == existingID),
                     "replace should remove existing chain nodes");
+            }
+            finally
+            {
+                DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestConversationalOptionsRoundTrip()
+        {
+            NlpOptions configured = new NlpOptions
+            {
+                EnableSocialDialogue = false,
+                EnableConversationalPreambles = false,
+                EnableMultiAnswerSynthesis = true
+            };
+            NlpOptionsLog log = NlpOptionsLogMapper.ToLog(configured);
+            string json = JsonSerializer.Serialize(log, LogJson.Options);
+            NlpOptions restored = NlpOptionsLogMapper.FromLog(
+                JsonSerializer.Deserialize<NlpOptionsLog>(json, LogJson.Options)!);
+
+            Program.Assert(!restored.EnableSocialDialogue
+                && !restored.EnableConversationalPreambles
+                && restored.EnableMultiAnswerSynthesis,
+                "new conversational options should round-trip through conversation persistence");
+
+            NlpOptionsLog legacy = JsonSerializer.Deserialize<NlpOptionsLog>("{}", LogJson.Options)!;
+            NlpOptions legacyDefaults = NlpOptionsLogMapper.FromLog(legacy);
+            Program.Assert(legacyDefaults.EnableSocialDialogue
+                && legacyDefaults.EnableConversationalPreambles
+                && legacyDefaults.EnableMultiAnswerSynthesis,
+                "older conversation logs that omit conversational options should receive default-on behavior");
+
+            string directory = NewTempDirectory();
+            try
+            {
+                LRD_Core core = NewCore();
+                Guid conversationID = core.CreateConversation(new NlpOptions());
+                ConversationContext conversation = core.GetConversation(conversationID);
+                conversation.SetLastQuestionTemplate("Where does Alice work?", "Alice");
+                string path = Path.Combine(directory, "follow-up-context.lrdlog");
+                CoreLogExporter.Export(core, path, includeTransient: false);
+
+                NewCore();
+                PersistenceImportResult import = CoreLogImporter.ImportCore(
+                    LRD_Core.Instance,
+                    path,
+                    ImportMode.Replace);
+                Program.Assert(import.Success, "conversation follow-up template log should import successfully");
+                Program.Assert(LRD_Core.Instance.GetConversation(conversationID).LastQuestionTemplate
+                    == "Where does {entity} work?",
+                    "the prior-question schema should survive conversation export and import");
+            }
+            finally
+            {
+                DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestEventWindowRoundTrip()
+        {
+            string directory = NewTempDirectory();
+            try
+            {
+                LRD_Core core = NewCore();
+                Web_Node subject = AddNode(
+                    core,
+                    Guid.NewGuid(),
+                    NodeTypes.Entities,
+                    NodeLifetime.Permanent,
+                    0,
+                    "Calendar subject");
+                Web_Node target = AddNode(
+                    core,
+                    Guid.NewGuid(),
+                    NodeTypes.Entities,
+                    NodeLifetime.Permanent,
+                    0,
+                    "Calendar target");
+                DateTimeOffset start = new DateTimeOffset(2026, 5, 12, 14, 0, 0, TimeSpan.Zero);
+                DateTimeOffset end = start.AddHours(1);
+                Web_Node created = core.CreateEvent(
+                    "Calendar event",
+                    start,
+                    end,
+                    subject.ID,
+                    "meet",
+                    target.ID);
+                string encodedLabel = created.Label!;
+                string path = Path.Combine(directory, "event-window.lrdlog");
+                CoreLogExporter.Export(core, path, includeTransient: false);
+
+                NewCore();
+                PersistenceImportResult import = CoreLogImporter.ImportCore(
+                    LRD_Core.Instance,
+                    path,
+                    ImportMode.Replace);
+                Program.Assert(import.Success, "event-window log should import successfully");
+                Web_Node restored = LRD_Core.Instance.FindByLabel("Calendar event", NodeTypes.Events).Single();
+                Program.Assert(restored.Label == encodedLabel,
+                    "event time metadata should round-trip in the existing Label field");
+                Program.Assert(restored.Aliases.Contains("Calendar event"),
+                    "event names should round-trip in the existing Aliases field");
+                Program.Assert(EventNodeHelper.TryGetWindow(restored, out DateTimeOffset? restoredStart, out DateTimeOffset? restoredEnd)
+                    && restoredStart == start && restoredEnd == end,
+                    "restored event should expose the same start and end timestamps");
             }
             finally
             {

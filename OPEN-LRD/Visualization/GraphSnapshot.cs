@@ -308,6 +308,9 @@ namespace OPEN_LRD.Visualization
 
         private static string BuildDisplayLabel(Web_Node node, IReadOnlyList<string> aliases)
         {
+            if (node.Get_NodeType() == NodeTypes.Events)
+                return EventNodeHelper.GetDisplayName(node);
+
             if (!string.IsNullOrWhiteSpace(node.Label))
                 return node.Label;
 

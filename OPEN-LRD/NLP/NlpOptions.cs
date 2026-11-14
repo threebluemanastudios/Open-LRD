@@ -22,6 +22,9 @@ namespace OPEN_LRD.NLP
         public string FirstPersonSpeakerLabel { get; init; } = "User";
         public bool EnableSessionProvenance { get; init; } = true;
         public bool UseSessionProvenanceInAnswers { get; init; } = true;
+        public bool EnableSocialDialogue { get; init; } = true;
+        public bool EnableConversationalPreambles { get; init; } = true;
+        public bool EnableMultiAnswerSynthesis { get; init; } = true;
         public int MaxConversationMentions { get; init; } = 32;
         public int MaxSessionProvenanceEntries { get; init; } = 256;
         public int MaxPronounCandidates { get; init; } = 8;

@@ -2,6 +2,7 @@
 using OPEN_LRD.Maintenance;
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
+using OPEN_LRD.Ontology;
 using System.Collections.ObjectModel;
 
 namespace OPEN_LRD
@@ -214,6 +215,282 @@ namespace OPEN_LRD
                 return false;
 
             return nodes.TryAdd(tempNode.Get_ID(), tempNode);
+        }
+
+        public Web_Node CreateEvent(
+            string? eventName,
+            DateTimeOffset? startTime,
+            DateTimeOffset? endTime,
+            Guid? subjectID = null,
+            string? verb = null,
+            Guid? objectID = null,
+            Guid? locationID = null)
+        {
+            return CreateEvent(
+                Guid.NewGuid(),
+                eventName,
+                startTime,
+                endTime,
+                subjectID,
+                verb,
+                objectID,
+                locationID);
+        }
+
+        public Web_Node CreateEvent(
+            Guid eventID,
+            string? eventName,
+            DateTimeOffset? startTime,
+            DateTimeOffset? endTime,
+            Guid? subjectID = null,
+            string? verb = null,
+            Guid? objectID = null,
+            Guid? locationID = null)
+        {
+            EventNodeHelper.ValidateWindow(startTime, endTime);
+            if (!initialized || nodes is null)
+                throw new InvalidOperationException("The core must be initialized before creating an event.");
+            if (eventID == Guid.Empty || nodes.ContainsKey(eventID))
+                throw new ArgumentException("Event ID must be non-empty and unique in the graph.", nameof(eventID));
+
+            ValidateEventEndpoint(subjectID, nameof(subjectID));
+            ValidateEventEndpoint(objectID, nameof(objectID));
+            ValidateEventEndpoint(locationID, nameof(locationID));
+
+            Web_Node? actionNode = null;
+            if (!string.IsNullOrWhiteSpace(verb))
+            {
+                actionNode = FindByLabel(verb.Trim(), NodeTypes.Concepts).FirstOrDefault();
+                if (actionNode is null)
+                {
+                    actionNode = new Web_Node(
+                        Guid.NewGuid(),
+                        NodeTypes.Concepts,
+                        NodeLifetime.Permanent,
+                        0);
+                    actionNode.Set_Label(verb.Trim());
+                    if (!AddExistingNode(actionNode))
+                        throw new InvalidOperationException("The event action concept could not be added.");
+                }
+            }
+
+            Web_Node eventNode = new Web_Node(eventID, NodeTypes.Events, NodeLifetime.Permanent, 0);
+            EventNodeHelper.SetWindow(eventNode, startTime, endTime);
+            EventNodeHelper.AddName(eventNode, eventName);
+            if (!AddExistingNode(eventNode))
+                throw new InvalidOperationException("The Event node could not be added.");
+
+            OntologyTypes.EnsureRegistered();
+            OntologyRelations.EnsureRegistered();
+            if (subjectID.HasValue)
+            {
+                AddEventLink(eventNode.ID, subjectID.Value, "has_subject", LinkClass.actions);
+                AddEventLink(subjectID.Value, eventNode.ID, "participated_in", OntologyTypes.ontology);
+            }
+            if (actionNode is not null)
+                AddEventLink(eventNode.ID, actionNode.ID, "has_action", LinkClass.actions);
+            if (objectID.HasValue)
+            {
+                AddEventLink(eventNode.ID, objectID.Value, "has_object", LinkClass.actions);
+                AddEventLink(objectID.Value, eventNode.ID, "participated_in", OntologyTypes.ontology);
+            }
+            if (locationID.HasValue)
+            {
+                AddEventLink(eventNode.ID, locationID.Value, "has_location", OntologyTypes.ontology);
+                AddEventLink(locationID.Value, eventNode.ID, "location_of", OntologyTypes.ontology);
+            }
+
+            if (startTime.HasValue || endTime.HasValue)
+            {
+                Web_Node timeNode = new Web_Node(
+                    Guid.NewGuid(),
+                    OntologyTypes.Times,
+                    NodeLifetime.Permanent,
+                    0);
+                timeNode.Set_Label(FormatEventWindow(startTime, endTime));
+                if (AddExistingNode(timeNode))
+                    AddEventLink(eventNode.ID, timeNode.ID, "has_time", OntologyTypes.ontology);
+            }
+
+            return eventNode;
+        }
+
+        public IReadOnlyList<Web_Node> FindEventsInWindow(
+            DateTimeOffset start,
+            DateTimeOffset end,
+            bool includeOverlapping = true)
+        {
+            if (start > end)
+                throw new ArgumentException("Search window start cannot be after its end.");
+            if (!initialized || nodes is null)
+                return Array.Empty<Web_Node>();
+
+            return nodes.Values
+                .Where(node => node.Get_NodeType() == NodeTypes.Events)
+                .Where(node => EventNodeHelper.TryGetWindow(
+                    node,
+                    out DateTimeOffset? eventStart,
+                    out DateTimeOffset? eventEnd)
+                    && EventOverlaps(eventStart, eventEnd, start, end, includeOverlapping))
+                .OrderBy(node => EventNodeHelper.TryGetWindow(
+                    node,
+                    out DateTimeOffset? eventStart,
+                    out _) ? eventStart : null)
+                .ThenBy(node => node.ID)
+                .ToList();
+        }
+
+        public IReadOnlyList<Web_Node> FindEventsFor(
+            Guid subjectID,
+            string verb,
+            Guid? objectID = null,
+            Guid? locationID = null)
+        {
+            if (subjectID == Guid.Empty || string.IsNullOrWhiteSpace(verb))
+                return Array.Empty<Web_Node>();
+            if (!initialized || nodes is null)
+                return Array.Empty<Web_Node>();
+
+            return nodes.Values
+                .Where(node => node.Get_NodeType() == NodeTypes.Events)
+                .Where(node => EventNodeHelper.TryGetWindow(node, out _, out _))
+                .Where(node => EventLinksMatch(node.ID, subjectID, verb, objectID, locationID))
+                .OrderBy(node => EventNodeHelper.TryGetWindow(
+                    node,
+                    out DateTimeOffset? start,
+                    out _) ? start : null)
+                .ThenBy(node => node.ID)
+                .ToList();
+        }
+
+        public EventTimeVariance CalculateEventTimeVariance(
+            Guid eventNodeID,
+            DateTimeOffset? referenceTime = null)
+        {
+            if (!TryGetNode(eventNodeID, out Web_Node? eventNode)
+                || eventNode is null
+                || eventNode.Get_NodeType() != NodeTypes.Events)
+            {
+                throw new ArgumentException("The requested node is not an Event node in this graph.", nameof(eventNodeID));
+            }
+
+            return EventTimeVarianceCalculator.Calculate(eventNode, referenceTime);
+        }
+
+        public EventTimeVariance CalculateEventTimeVariance(
+            Web_Node eventNode,
+            DateTimeOffset? referenceTime = null)
+        {
+            ArgumentNullException.ThrowIfNull(eventNode);
+            if (eventNode.Get_NodeType() != NodeTypes.Events)
+                throw new ArgumentException("The requested node is not an Event node.", nameof(eventNode));
+
+            return EventTimeVarianceCalculator.Calculate(eventNode, referenceTime);
+        }
+
+        internal Web_Node? FindMatchingEvent(
+            string? eventName,
+            DateTimeOffset? startTime,
+            DateTimeOffset? endTime,
+            Guid? subjectID,
+            string? verb,
+            Guid? objectID,
+            Guid? locationID)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+                return null;
+
+            return FindByLabel(eventName, NodeTypes.Events)
+                .Where(node => EventNodeHelper.TryGetWindow(
+                    node,
+                    out DateTimeOffset? existingStart,
+                    out DateTimeOffset? existingEnd)
+                    && existingStart == startTime
+                    && existingEnd == endTime)
+                .FirstOrDefault(node => EventLinksMatch(
+                    node.ID,
+                    subjectID,
+                    verb,
+                    objectID,
+                    locationID));
+        }
+
+        private bool EventLinksMatch(
+            Guid eventID,
+            Guid? subjectID,
+            string? verb,
+            Guid? objectID,
+            Guid? locationID)
+        {
+            IReadOnlyList<Link> links = GetLinks(eventID);
+            bool subjectMatches = !subjectID.HasValue
+                || links.Any(link => link.DestinationID == subjectID.Value && link.ForwardLink.Name == "has_subject");
+            bool objectMatches = !objectID.HasValue
+                || links.Any(link => link.DestinationID == objectID.Value && link.ForwardLink.Name == "has_object");
+            bool locationMatches = !locationID.HasValue
+                || links.Any(link => link.DestinationID == locationID.Value && link.ForwardLink.Name == "has_location");
+            bool actionMatches = string.IsNullOrWhiteSpace(verb)
+                || links.Any(link => nodes is not null
+                    && nodes.TryGetValue(link.DestinationID, out Web_Node? action)
+                    && action is not null
+                    && link.ForwardLink.Name == "has_action"
+                    && action.Has_Label(verb));
+            return subjectMatches && objectMatches && locationMatches && actionMatches;
+        }
+
+        private void ValidateEventEndpoint(Guid? endpointID, string parameterName)
+        {
+            if (endpointID.HasValue
+                && (nodes is null || !nodes.ContainsKey(endpointID.Value)))
+            {
+                throw new ArgumentException($"Event endpoint '{endpointID}' was not found in the graph.", parameterName);
+            }
+        }
+
+        private void AddEventLink(Guid sourceID, Guid destinationID, string relationName, LinkClass classification)
+        {
+            if (nodes is null
+                || !nodes.TryGetValue(sourceID, out Web_Node? source)
+                || !nodes.ContainsKey(destinationID))
+            {
+                throw new InvalidOperationException("Both endpoints must exist before an event link is added.");
+            }
+
+            RelationLinkType relation = RelationRegistry.GetOrRegister(relationName);
+            source.Add_Link(new Link(
+                sourceID,
+                destinationID,
+                relation.Forward,
+                relation.Inverse,
+                classification));
+        }
+
+        private static string FormatEventWindow(DateTimeOffset? start, DateTimeOffset? end)
+        {
+            if (start.HasValue && end.HasValue)
+                return start.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
+                    + " – " + end.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+            return (start ?? end)?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
+        private static bool EventOverlaps(
+            DateTimeOffset? eventStart,
+            DateTimeOffset? eventEnd,
+            DateTimeOffset searchStart,
+            DateTimeOffset searchEnd,
+            bool includeOverlapping)
+        {
+            if (!eventStart.HasValue && !eventEnd.HasValue)
+                return false;
+
+            if (!includeOverlapping && (!eventStart.HasValue || !eventEnd.HasValue))
+                return false;
+
+            DateTimeOffset actualStart = eventStart ?? DateTimeOffset.MinValue;
+            DateTimeOffset actualEnd = eventEnd ?? DateTimeOffset.MaxValue;
+            return includeOverlapping
+                ? actualStart <= searchEnd && actualEnd >= searchStart
+                : actualStart >= searchStart && actualEnd <= searchEnd;
         }
 
         public MaintenanceReport IngestNodeMetadata(Guid nodeID)

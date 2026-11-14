@@ -236,12 +236,20 @@ namespace OPEN_LRD
 
             textImport = new CancellationTokenSource();
             options = options with { CancellationToken = textImport.Token };
+            CancellationToken progressToken = options.CancellationToken;
             options = options with
             {
                 Progress = progress =>
                 {
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
+                        if (textImport is null
+                            || textImport.Token != progressToken
+                            || progressToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
                         TextImportProgressBar.Value = progress.TotalChunks == 0
                             ? 0
                             : (double)progress.ProcessedChunks / progress.TotalChunks * 100.0;

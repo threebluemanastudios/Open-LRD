@@ -987,6 +987,7 @@ namespace OPEN_LRD.Persistence
                 LastObjectNodeId = conversation.LastObjectNodeID,
                 LastQualifierNodeId = conversation.LastQualifierNodeID,
                 LastAnswerNodeId = conversation.LastAnswerNodeID,
+                LastQuestionTemplate = conversation.LastQuestionTemplate,
                 Mentions = conversation.Mentions
                     .OrderBy(mention => mention.Sequence)
                     .Select(ToMentionLog)
