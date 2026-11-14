@@ -2,12 +2,13 @@ OPEN-LRD
 ADDITIONAL TOOLS PLAN
 MODULE 3 PHASE 9: LOG PERSISTENCE AND VISUALIZER DISTANCE PREP
 
-Status: Sections 1-17 complete. Current solution builds with zero warnings and
-        zero errors; 160 smoke tests and 277 automated UI
-        checks pass.
+Status: Sections 1-17 complete. Current integrated solution builds with zero
+        warnings and zero errors; 167 smoke tests and 287 automated UI checks pass.
 Scope: Tools window import/export, versioned log persistence, transient chain
-       companion logs, and link distance definitions for the future visualizer.
+       companion logs, and link distance definitions used by the 3D Visualizer.
 Constraint: Native C# and WPF with no external libraries. Use System.Text.Json.
+Historical milestone counts within sections below refer to the test totals at
+the time each section was delivered; the current aggregate totals are above.
 
 ================================================================================
 1. CONFIRMED DECISIONS
@@ -398,8 +399,8 @@ Non-goals:
 15. MODULE 4 ADDENDUM: ONTOLOGY TOOLS
 ================================================================================
 
-Status: Implemented alongside Module 4 Phases 1-7. Both projects build clean
-        and 94 smoke tests pass.
+Status: Implemented alongside Module 4 Phases 1-7. Historical milestone: both
+        projects built cleanly and 94 smoke tests passed.
 
 Additional Tools window actions:
 - Seed Upper Ontology: calls OntologyLoader.BuildFoundation, which creates the
@@ -634,7 +635,8 @@ Phase 3: Tools UI (complete)
 Phase 4: Documentation and acceptance (complete)
 - Update this addendum status, README Module 3 status, and Module_3_Plan.txt
   with the text-import tool.
-- Full solution build and smoke run (140 smoke tests and 245 UI tests pass).
+- Historical Phase 16 acceptance run: full solution build and smoke run (140
+  smoke tests and 245 UI checks passed at that milestone).
 
 16.10 EXPECTED FILES
 
@@ -702,8 +704,8 @@ Modified:
 - The large-file check builds a normalized fixture above 20,000 characters,
   asserts every chunk stays within both the chunk and per-call character and
   sentence budgets, then imports the file and verifies all chunks are processed.
-- Verification: both projects build with zero warnings and zero errors; all
-  107 smoke tests pass, including the thirteen text-import checks.
+- Historical Phase 16 verification: both projects built with zero warnings and
+  zero errors; 107 smoke tests passed, including the thirteen text-import checks.
 
 ================================================================================
 17. SEGMENTED CORE-LOG EXPORT AND IMPORT: OVERVIEW

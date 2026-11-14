@@ -5,11 +5,13 @@ PHASE 6 IMPLEMENTATION PLAN
 Phase: 6 of 7
 Title: Conversation context, pronoun resolution, focus tracking, and session
        provenance
-Status: Planned. Phases 1-5 complete and passing.
+Status: Complete (historical Phase 6 delivery).
 Scope owner: Module 3 (README numbering).
 Reference design: README.md, Module_3_Plan.txt,
 Module_3_Phase_4_Plan.txt, and Module_3_Phase_5_Plan.txt.
 Implementation constraint: native C# only, no external libraries.
+This is the historical Phase 6 design/acceptance document; later phases add
+commands, persistence, conversational Ask features, and event/time support.
 
 ================================================================================
 1. PHASE 6 GOAL AND DELIVERABLES

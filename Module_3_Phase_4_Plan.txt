@@ -2,10 +2,12 @@ OPEN-LRD
 MODULE 3 - PHASE 4: RELATION EXTRACTION, CHAIN BUILDING, AND INGESTION
 IMPLEMENTATION PLAN
 
-Status: Ready for implementation.
+Status: Complete (historical Phase 4 delivery).
 Parent plan: Module_3_Plan.txt (Phases 1-3 complete).
 Scope owner: Module 3 (README numbering).
 Implementation constraint: Native C# with no external library dependencies.
+This is the historical Phase 4 design/acceptance document; Module_3_Plan.txt
+records the completed Module 3 scope and later post-completion enhancements.
 Prerequisite goal: Full solution builds with zero warnings and all existing
 Module 1, Module 2, and Module 3 tests still pass before Phase 4 begins.
 

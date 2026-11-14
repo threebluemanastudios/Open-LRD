@@ -1,15 +1,15 @@
 OPEN-LRD
 MANUAL UI CHECKLIST
-LARGE TEXT FILE IMPORT (AdditionalTools.txt section 16)
+TOOLS, NLP WORKBENCH, TEMPORAL EVENTS, AND 3D VISUALIZER
 
-Date: 2026-11-13               Tester: Automated UI Runner (WPF STA)
+Date: 2026-11-14               Tester: Automated UI Runner (WPF STA)
 Build: net10.0-windows         Commit: uncommitted working tree
 Platform: Windows (WPF, .NET 10)
 
-Purpose: verify the Text File Import controls in the Tools window, including
-dry run, provenance, safety limits, failure handling, cancellation, and the
-automatic Source node. Automated coverage is in TextImportTests.cs; this list
-covers only behavior that needs a human at the UI.
+Purpose: verify the Tools text import UI, NLP Workbench candidate/evidence
+display, and 3D Visualizer workflows. Automated coverage is in TextImportTests.cs,
+NlpTests.cs, and VisualizerTests.cs; this checklist exercises WPF controls and
+workflows through the STA UI runner.
 
 Status key: [ ] not run   [x] pass   [!] fail (describe below)
 
@@ -18,10 +18,11 @@ Status key: [ ] not run   [x] pass   [!] fail (describe below)
 0. PREPARATION
 ================================================================================
 
-[x] Build both projects with zero warnings and zero errors:
+[x] Build the application and test projects with zero warnings and zero errors:
        dotnet build OPEN-LRD\OPEN-LRD.csproj --nologo
        dotnet build OPEN-LRD.SmokeTests\OPEN-LRD.SmokeTests.csproj --nologo
-[x] Run the automation once: 139 passed, 0 failed.
+       dotnet build OPEN-LRD.ManualUiTests\OPEN-LRD.ManualUiTests.csproj --nologo
+[x] Current automation: 167 smoke checks and 287 WPF UI checks pass.
 [x] Create the test fixtures below in %TEMP%\open-lrd-manual\.
 [x] Launch OPEN-LRD.exe from
     OPEN-LRD\bin\Debug\net10.0-windows\, click "Launch Core", then "Tools".
@@ -365,12 +366,22 @@ Recommended fixture script (PowerShell):
 
 
 ================================================================================
+12. NLP WORKBENCH TEMPORAL EVENT SEARCH
+================================================================================
+
+[x] Event range Ask returns the matching Event node in Evidence / Candidates.
+[x] Event answer text includes the event name and linked subject/action/object/
+    location details.
+[x] Incoming and outgoing exploration facts remain visible in the candidate table.
+
+
+================================================================================
 11. SIGN-OFF
 ================================================================================
 
-Automated verification: 140 passed, 0 failed (smoke suite); 253 passed, 0 failed (WPF STA UI test suite).
-Sections run: Sections 0 through 10 (Text Import + 3D Visualizer Phases 3, 4 & 5)
-Passed: All (253/253)  Failed: 0
+Automated verification: 167 passed, 0 failed (smoke suite); 287 passed, 0 failed (WPF STA UI test suite).
+Sections run: Sections 0 through 12 (Tools import, NLP Workbench, temporal events, and 3D Visualizer).
+Passed: All (287/287)  Failed: 0
 
 Issues found (step, expected, actual, screenshot/log path):
 
@@ -382,4 +393,4 @@ Notes:
   All checklist verification executed through WPF STA UI test runner (OPEN-LRD.ManualUiTests)
   exercising the actual Tools and Visualizer window controls, 3D viewport, handlers, and background workers.
 
-Tester signature: ThreeBlueManaStudios - Automated UI Runner (WPF STA)   Date: 2026-11-13
+Tester signature: ThreeBlueManaStudios - Automated UI Runner (WPF STA)   Date: 2026-11-14

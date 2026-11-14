@@ -4,11 +4,13 @@ PHASE 5 IMPLEMENTATION PLAN
 
 Phase: 5 of 7
 Title: Question answering and natural-language generation
-Status: Planned. Phases 1-4 complete and passing.
+Status: Complete (historical Phase 5 delivery).
 Scope owner: Module 3 (README numbering).
 Reference design: README.md, Module_3_Plan.txt, Module_2_Plan.txt,
 and Module_3_Phase_4_Plan.txt.
 Implementation constraint: native C# only, no external libraries.
+This is the historical Phase 5 design/acceptance document; subsequent Module 3
+phases and Modules 6-7 extend its original Ask and answer-generation scope.
 
 ================================================================================
 1. PHASE 5 GOAL AND DELIVERABLES

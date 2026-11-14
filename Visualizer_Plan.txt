@@ -5,12 +5,15 @@ IMPLEMENTATION PLAN
 Status: Complete (Phases 1-6). Pure model, math, 3D distance layout, WPF 3D
         scene, fly navigation, ray picking, label overlay, 3-tab color panel,
         live material updates, and JSON persistence are implemented and verified.
-        All 140 smoke tests and 245 UI tests pass with zero warnings and zero errors.
+        Current integrated verification is 167 smoke tests and 287 UI checks;
+        builds complete with zero warnings and zero errors.
 Scope owner: Additional Tools (follows AdditionalTools.txt section 16).
 Reference design: README.md, Module_2_Plan.txt, Module_3_Plan.txt,
                   AdditionalTools.txt, and LinkDistanceDefinitions.cs.
 Implementation constraint: Native C# with no external library dependencies.
 Target: .NET 10 WPF (net10.0-windows), existing LRD_Core singleton graph.
+Historical per-phase check counts below describe the suite at that delivery
+milestone; the current aggregate counts are listed above.
 
 ================================================================================
 1. FEASIBILITY ANSWER
@@ -630,9 +633,9 @@ embedded Tools pane. It gets its own button and its own gate.
 - The Visualizer window is independent: closing it does not affect Tools, the
   NLP Workbench, or the core. Closing MainWindow closes the application as it
   does today.
-- Tools window contents are unchanged by this feature; Import, Export, and
-  Visualizer stay listed there as separate planned tools, and Tools does not
-  host the 3D scene.
+- At this phase's delivery, the Tools window remained separate from the Visualizer
+  scene. The current application has a dedicated Visualizer window entry point;
+  Tools still does not host the 3D scene.
 
 11.2 VISUALIZER WINDOW
 
@@ -853,17 +856,18 @@ Phase 5: Colors, settings, and polish (complete)
   updates, JSON persistence, and warnings/status.
 - Add optional LinkClass fallback colors.
 - Add truncation banners and the controls help overlay.
-- Status: Three-tab side panel (Node Colors, Link Colors, View), color swatches
+- Historical Phase 5 milestone: Three-tab side panel (Node Colors, Link Colors, View), color swatches
   with 24-color dropdowns, live material updates via scene.UpdateMaterials(),
   LinkClass fallbacks, JSON settings persistence, truncation banner, and Help
-  overlay implemented; 139 smoke tests passing, 245 UI tests passing with zero
-  warnings and zero errors.
+  overlay implemented; the then-current 139 smoke tests and 245 UI checks passed
+  with zero warnings and zero errors.
 
 Phase 6: Performance, documentation, acceptance (complete)
 - Tune batches, caps, label limits, layout iteration budgets, and spherical volume cloud distribution.
 - Resolved camera near-plane clipping on close-up node inspection.
 - Add README, AdditionalTools, and To-Do manual checklist updates.
-- Verify the full solution builds cleanly and all 140 smoke tests and 245 UI tests pass.
+- Historical Phase 6 acceptance: verify the solution build and the then-current
+  140 smoke tests and 245 UI checks.
 - Status: Complete. All acceptance criteria met with zero warnings and zero errors.
 
 ================================================================================

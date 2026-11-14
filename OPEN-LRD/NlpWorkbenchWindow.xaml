@@ -283,7 +283,7 @@
             <TabItem Header="Module Limits">
                 <TextBlock Margin="12"
                            TextWrapping="Wrap"
-                           Text="Core and conversation logs can be exported and imported from the Tools window. Pipeline attachments are process-local and are not persisted. Replacing core state invalidates open workbench sessions. Visualizer support remains planned." />
+                           Text="Core and conversation logs can be exported and imported from the Tools window. Pipeline attachments are process-local and are not persisted. Replacing core state invalidates open workbench sessions. The 3D Visualizer opens in a separate fullscreen window." />
             </TabItem>
         </TabControl>
 

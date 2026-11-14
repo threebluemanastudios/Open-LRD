@@ -145,81 +145,34 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 
 ### Current Status
 
-In progress. Phases 1–7 of the Module 3 implementation plan are implemented:
-normalization, tokenization, POS tagging, lemmatization, shallow parsing,
-named-entity recognition, relation extraction, predicate link-type registration,
-entity resolution, chain construction, Reasoning Engine ingestion, question
-analysis, answer generation, yes/no answers, evidence text, ambiguity and
-no-match diagnostics, conversation context, third-person pronoun resolution,
-focus tracking, shared conversation IDs, session provenance, and the NLP
-Workbench integration, with smoke tests for the workbench facade. Phase 8 adds
-configurable first-person speaker identity, read-only Ask commands, and Tools
-button gating until core initialization; its manual WPF verification is
-complete. Phase 9 adds versioned .lrdlog export and import in Tools, separate
-transient-chain companion logs, Merge/Replace conflict policies, and link
-distance definitions for the future visualizer. Manual Phase 9 log checks are
-complete for export and core import; transient import is verified as a valid
-no-op when the companion contains no chains.
-
-Relation extraction also handles coordination and negation (a post-completion
-enhancement). "and" produces one frame per conjunct, with subject, verb, and
-object coordination composing as a cross product; "or" ingests each alternative
-as a separate positive fact that shares a disjunction group. Negated complements
-become ingestible "not X" concept nodes and are marked with
-`NegationKind.Complement`, while negated action verbs are parsed and reported but
-not ingested. Coordination and negation markers are recorded per frame in session
-provenance, and the `antonym` relation is reserved for Module 4.
-
-Two later post-completion fixes harden question answering and ingestion. Copula
-questions whose wh-word asks for the entity — "Who is a douche?" — are
-classified as subject questions anchored on the complement, so the query runs
-`?who --is--> douche` and matches "Jeff --is--> douche", while copula
-"What is Alice?" stays object-anchored on Alice. Ingestion now builds and merges
-each frame's chains before moving to the next frame, so repeated mentions of one
-entity in a multi-sentence text reuse a single temporary node instead of
-creating duplicates that make later frames ambiguous. Smoke tests cover
-"Who is a douche?", "Who is married to Cody?", and a multi-sentence ingest that
-asserts one node per entity.
+Complete. Module 3 Phases 1–12 implement normalization, tokenization, POS
+tagging, lemmatization, shallow parsing, named-entity recognition, relation
+extraction, entity resolution, chain construction, trusted ingestion, question
+analysis, answer generation, conversation context, pronoun resolution, session
+provenance, and the NLP Workbench. Later Module 6 and 7 phases extend Ask with
+social dialogue, conversational preambles, multi-answer synthesis, event
+representation, temporal variance, and chronological queries.
 
 `NlpPipeline.Analyze(...)` parses text into tokens, chunks, clauses, typed
 mentions, and relation frames. `NlpPipeline.Ingest(...)` resolves entities,
-builds temporary chains, provisions the required anchor, applies the trust
-precheck, records per-chain session provenance, updates conversation focus, and
-merges through the Reasoning Engine. First-person forms resolve to one
-conversation speaker node whose label is configured by
-`NlpOptions.FirstPersonSpeakerLabel` and defaults to `User`; second-person
-pronouns remain unsupported. `NlpPipeline.Ask(...)` analyzes a question,
-resolves contextual pronouns, builds bounded query variants, evaluates them
-with the Reasoning Engine, and generates read-only wh or yes/no answers with
-session-provenance caveats when applicable. Ask also recognizes subjectless
-commands beginning with output, print, respond, or reply. Commands accept a
-question or the fixed targets facts, graph, conversation, summary, or
-node <id>; incomplete targets return a clarification question. Commands are
-read-only and do not begin a turn or update mentions, focus, or provenance.
-Conversation state is owned by `LRD_Core` and shared only by pipelines
-constructed with the same conversation ID; it is bounded, resettable, and never
-stored in graph nodes.
+builds temporary chains, applies the trust precheck, records per-chain session
+provenance, updates conversation focus, and merges through the Reasoning Engine.
+First-person forms resolve to the configured speaker node; ordinary graph
+questions that require unsupported second-person coreference are still reported
+as unsupported. `NlpPipeline.Ask(...)` resolves supported contextual pronouns,
+builds bounded query variants, uses read-only graph reasoning, and returns
+evidence-backed wh/yes-no answers. It also supports conversational and temporal
+event queries as described in Modules 6 and 7. Subjectless Output/Print/Respond/
+Reply commands remain read-only.
 
 `NlpWorkbench` provides a UI-independent facade for conversation creation,
 attachment by ID, reset, removal, clear-all, Ingest, Ask, and read-only state
-snapshots. `NlpWorkbenchWindow` uses it for the end-to-end desktop workflow and
-shows diagnostics, candidates, evidence, frames, chains, mentions, focus, and
-session provenance. The existing Tools window handles log export and import,
-large text-file ingestion, and ontology loading; it is not converted into the
-workbench, and Visualizer rendering remains planned. The visualizer's pure
-snapshot, distance-layout, color, projection, camera, mesh, and settings layer is
-implemented and tested ahead of the WPF window.
-Conversation state is held in memory for the active core session and can be
-exported to or restored from .lrdlog files. Merging keeps existing data on ID
-conflicts, while replacing core state invalidates open workbench sessions.
-Transient companion logs are snapshots of the chains currently held by
-`LRD_Core`, not accumulated workbench history. Ingest-only sessions normally
-produce empty `queryChains` and `responseChains`; importing such a file succeeds
-with zero chains added. To exercise transient persistence manually, run an Ask
-that produces a response path before exporting. The current workbench path
-records a response chain for a successful answer but does not populate the core
-query chain, so `queryChains` may remain empty even after Ask. See
-`Module_3_Plan.txt` and `AdditionalTools.txt` for the full phased plans.
+snapshots. `NlpWorkbenchWindow` shows diagnostics, candidates, evidence, frames,
+chains, mentions, focus, and session provenance. The Tools window handles log
+import/export, large text-file ingestion, ontology loading, and maintenance; the
+3D Visualizer is a separate fullscreen WPF window. Conversation state is held in
+memory and can be persisted in `.lrdlog` files. See `Module_3_Plan.txt`,
+`Module_6_Plan.txt`, `Module_7_Plan.txt`, and `AdditionalTools.txt` for details.
 
 Large text-file import in Tools closes the per-call NLP limits gap. A file is
 split paragraph-first, then by sentence, and finally by a safe hard split into
@@ -280,15 +233,13 @@ lexical word nodes and semantic sense nodes with synonym, antonym, hypernym,
 part-of-speech, and definition links. Loading is on demand and persists through
 the versioned `.lrdlog` export and import path. The Tools window exposes Seed
 Upper Ontology, Load GCIDE Lexicon (subset, letter, and entry cap with progress
-and cancel), and Export Ontology Log actions. Nineteen structural relations
-occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
-(2,000,000). The smoke suite adds eleven Module 4 checks, thirteen
-text-import checks, and thirty-three visualizer model/math/layout checks, for
-140 passing tests in total. The distance layout is deterministic and reports
-progress and cancellation. In addition, 253 automated WPF UI checklist tests
-verify the Tools window, text import pipeline, and 3D Visualizer window. See
-`Module_4_Plan.txt` for the full ontology plan, `AdditionalTools.txt` for log
-persistence and text file import, and `Visualizer_Plan.txt` for the 3D visualizer.
+and cancel), and Export Ontology Log actions. Nineteen foundational structural
+relations occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
+(2,000,000). The original Module 4 delivery added eleven ontology checks. The
+current integrated suite has 167 smoke tests and 287 automated UI checks. The
+Visualizer layout is deterministic and reports progress and cancellation. See
+`Module_4_Plan.txt` for the ontology plan, `AdditionalTools.txt` for persistence
+and text import, and `Visualizer_Plan.txt` for the visualizer implementation.
 
 ## Module 5: Maintenance Reasoning Engine
 
@@ -344,7 +295,8 @@ question answering.
 - Conversational behaviors are configurable through NlpOptions and new options
   round-trip through conversation persistence, with defaults preserved for old
   logs.
-- Verification: 165 smoke tests and 285 automated UI checks pass.
+- At Module 6 completion, 165 smoke tests and 285 automated UI checks passed;
+  current integrated verification is 167 smoke tests and 287 UI checks.
 
 See `Module_6_Plan.txt` for design decisions, implementation details, and
 acceptance criteria.

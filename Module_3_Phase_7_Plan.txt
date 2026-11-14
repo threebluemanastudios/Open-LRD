@@ -4,13 +4,20 @@ PHASE 7 IMPLEMENTATION PLAN
 
 Phase: 7 of 7
 Title: Integration, NLP Workbench, and final documentation
-Status: Planned. Phases 1-6 are complete and passing.
+Status: Complete (historical Phase 7 delivery).
 Scope owner: Module 3 (README numbering).
 Reference design: README.md, Module_3_Plan.txt, and
                    Module_3_Phase_4_Plan.txt through Module_3_Phase_6_Plan.txt.
 Implementation constraint: native C#, WPF, no external libraries or packages.
-Current baseline: full solution builds with zero warnings and zero errors;
-                  61 smoke tests pass.
+Planning baseline at Phase 7 start: full solution built with zero warnings and
+                                 zero errors; 61 smoke tests passed.
+Current integrated baseline: 167 smoke tests and 287 automated UI checks pass.
+Historical scope note: Phase 7 describes the original placeholder Tools window.
+  Later phases replaced that placeholder with persistence/import/maintenance
+  controls and added the separate Visualizer window.
+This file records the original Phase 7 design checkpoint; detailed placeholder
+requirements below are historical and superseded by later phase plans and the
+current README.
 
 ================================================================================
 1. PHASE 7 GOAL AND DELIVERABLES
@@ -23,9 +30,10 @@ and completes the Module 3 documentation and verification pass.
 
 Required outcomes:
 
-1. Keep the existing placeholder Tools window unchanged.
-   The Tools window must continue to list Import, Export, and Visualizer as
-   planned work. It must not be converted into the NLP Workbench.
+1. Original Phase 7 scope: keep the placeholder Tools window unchanged and keep
+   the NLP Workbench separate. This historical constraint was superseded by
+   later phases that implemented Tools import/export/maintenance and the
+   separate Visualizer window; Tools still does not host the NLP Workbench.
 
 2. Add a separate NlpWorkbenchWindow for the NLP Workbench.
    The workbench window must let the user:
@@ -649,11 +657,10 @@ E. Result tabs
       - Text block or small grid showing FocusNodeID, LastSubjectNodeID,
         LastObjectNodeID, LastQualifierNodeID, LastAnswerNodeID.
    7. Module limits note
-      - A small non-interactive section stating that durable persistence,
-        Import, Export, and Visualizer remain outside Module 3.
-      - The existing Tools window remains the placeholder that lists Import,
-        Export, and Visualizer as planned work.
-      - Do not add fake buttons or placeholder event handlers.
+       - At Phase 7 delivery, a small non-interactive section stated that durable
+         persistence and Tools import/export remained outside Module 3.
+       - Later phases implemented those Tools features; see AdditionalTools.txt.
+       - Keep the Tools window separate from the NLP Workbench.
 
 6.3 Control names
 
@@ -1464,11 +1471,12 @@ Expected final result:
 
 Before implementation starts, review and confirm:
 
-1. NlpWorkbench belongs under OPEN-LRD/NLP and is the only planned new
-   non-WPF source file besides its state records.
+1. At Phase 7 planning time, NlpWorkbench belonged under OPEN-LRD/NLP and was the
+   only planned new non-WPF source file besides its state records.
 2. NlpWorkbenchWindow.xaml and NlpWorkbenchWindow.xaml.cs are new files
    created by copying the Tools files before workbench changes are applied.
-3. The existing Tools window and Tools button remain unchanged placeholders.
+3. The existing Tools window and Tools button were unchanged placeholders at
+   the Phase 7 baseline; later Modules 5 and Tools phases extended the window.
 4. The NLP Workbench is a single non-modal window per MainWindow.
 5. The NLP Workbench button is disabled until Launch Core succeeds.
 6. New Conversation keeps old sessions available for later attach.
@@ -1476,8 +1484,8 @@ Before implementation starts, review and confirm:
 8. Closing the NLP Workbench window leaves conversations in the core.
 9. Optional source and topic inputs are GUID text fields.
 10. Analyze preview is optional and, if included, must be read-only.
-11. Import, Export, and Visualizer remain explicitly deferred, and the Tools
-    window continues to describe them as planned work.
+11. Import, Export, and Visualizer were deferred at the Phase 7 baseline; later
+    Tools and Visualizer phases delivered those features separately.
 12. WPF UI verification is manual on Windows; workbench logic is covered by the
     net10.0 smoke suite.
 13. No Module 1 or Module 2 changes are planned.

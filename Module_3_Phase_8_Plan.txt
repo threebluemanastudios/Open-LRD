@@ -11,8 +11,9 @@ Scope owner: Module 3 (README numbering).
 Reference design: README.md, Module_3_Plan.txt, and
                    Module_3_Phase_7_Plan.txt.
 Implementation constraint: native C#, WPF, no external libraries or packages.
-Current baseline: full solution builds with zero warnings and zero errors;
-                  67 smoke tests pass.
+Phase 8 starting baseline (historical): full solution built with zero warnings
+and zero errors; 67 smoke tests passed. Current integrated baseline: 167 smoke
+tests and 287 automated UI checks pass.
 
 ================================================================================
 1. PHASE 8 GOAL AND DELIVERABLES

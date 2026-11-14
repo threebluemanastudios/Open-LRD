@@ -554,7 +554,7 @@ Phase 9: Additional Tools (post-completion)
 - Export query and response chains to separate _trans companion logs.
 - Import core and transient logs with Merge or Replace modes.
 - Keep existing data on Merge ID conflicts and report skipped items.
-- Add link distance definitions for the future visualizer.
+- Add link distance definitions used by the Visualizer.
 - Add persistence and link-distance smoke tests.
 
 Phase 10: Coordination and negation (post-completion)

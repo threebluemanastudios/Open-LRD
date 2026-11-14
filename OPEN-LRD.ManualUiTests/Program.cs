@@ -33,7 +33,7 @@ namespace OPEN_LRD.ManualUiTests
         {
             Console.WriteLine("================================================================================");
             Console.WriteLine("OPEN-LRD MANUAL UI VERIFICATION RUNNER");
-            Console.WriteLine("LARGE TEXT FILE IMPORT (To-Do.txt / AdditionalTools.txt §16)");
+            Console.WriteLine("TOOLS, NLP WORKBENCH, TEMPORAL EVENTS, AND 3D VISUALIZER");
             Console.WriteLine("================================================================================");
 
             // Initialize WPF Application and SynchronizationContext on the STA thread

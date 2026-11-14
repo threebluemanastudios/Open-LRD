@@ -347,7 +347,8 @@ Completion summary:
   the default-on values.
 - Candidate node data and evidence paths remain available to the NLP Workbench's
   Evidence / Candidates table for synthesized and ambiguous answers.
-- Verification completed with 165 smoke tests and 285 automated UI checks; the
+- At Module 6 completion, 165 smoke tests and 285 automated UI checks passed.
+  Current integrated verification is 167 smoke tests and 287 UI checks; the
   application build completes with zero warnings and zero errors.
 
 ================================================================================
