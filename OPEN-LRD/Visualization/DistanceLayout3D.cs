@@ -392,6 +392,7 @@ namespace OPEN_LRD.Visualization
             float gravity = (float)options.Gravity;
             int reportInterval = Math.Max(1, options.MaxIterations / 20);
             int stableIterations = 0;
+            SpatialGrid collisionGrid = new SpatialGrid(nodeCount, Math.Max((float)options.MinSpacing, MinimumCollisionDistance));
 
             iterations = 0;
             converged = false;
@@ -434,7 +435,7 @@ namespace OPEN_LRD.Visualization
                     displacement[b] += moved;
                 }
 
-                SeparateCollisions(positions, (float)options.MinSpacing, displacement);
+                SeparateCollisions(positions, (float)options.MinSpacing, displacement, collisionGrid);
 
                 float maximumMove = 0f;
 
@@ -511,27 +512,16 @@ namespace OPEN_LRD.Visualization
         private static void SeparateCollisions(
             Vector3[] positions,
             float minimumSpacing,
-            float[] displacement)
+            float[] displacement,
+            SpatialGrid grid)
         {
-            float cellSize = Math.Max(minimumSpacing, MinimumCollisionDistance);
-            Dictionary<CellKey, List<int>> cells = new Dictionary<CellKey, List<int>>();
-
-            for (int index = 0; index < positions.Length; index++)
-            {
-                CellKey key = CellKey.From(positions[index], cellSize);
-
-                if (!cells.TryGetValue(key, out List<int>? members))
-                {
-                    members = new List<int>();
-                    cells.Add(key, members);
-                }
-
-                members.Add(index);
-            }
+            grid.Rebuild(positions);
 
             for (int a = 0; a < positions.Length; a++)
             {
-                CellKey origin = CellKey.From(positions[a], cellSize);
+                int cellX = grid.CellX[a];
+                int cellY = grid.CellY[a];
+                int cellZ = grid.CellZ[a];
 
                 for (int deltaX = -1; deltaX <= 1; deltaX++)
                 {
@@ -539,17 +529,18 @@ namespace OPEN_LRD.Visualization
                     {
                         for (int deltaZ = -1; deltaZ <= 1; deltaZ++)
                         {
-                            CellKey key = new CellKey(
-                                origin.X + deltaX,
-                                origin.Y + deltaY,
-                                origin.Z + deltaZ);
+                            int neighborX = cellX + deltaX;
+                            int neighborY = cellY + deltaY;
+                            int neighborZ = cellZ + deltaZ;
+                            int bucket = grid.GetBucket(neighborX, neighborY, neighborZ);
 
-                            if (!cells.TryGetValue(key, out List<int>? members))
-                                continue;
-
-                            foreach (int b in members)
+                            for (int b = grid.Head[bucket]; b >= 0; b = grid.Next[b])
                             {
                                 if (b <= a)
+                                    continue;
+
+                                // Hash buckets may contain multiple cells. Only visit the exact neighbor.
+                                if (grid.CellX[b] != neighborX || grid.CellY[b] != neighborY || grid.CellZ[b] != neighborZ)
                                     continue;
 
                                 Vector3 delta = positions[b] - positions[a];
@@ -634,10 +625,13 @@ namespace OPEN_LRD.Visualization
 
             // Ensure all isolated nodes respect minimum collision spacing
             float[] tempDisplacement = new float[positions.Length];
+            SpatialGrid collisionGrid = new SpatialGrid(
+                positions.Length,
+                Math.Max((float)options.MinSpacing, MinimumCollisionDistance));
             for (int pass = 0; pass < 8; pass++)
             {
                 Array.Clear(tempDisplacement);
-                SeparateCollisions(positions, (float)options.MinSpacing, tempDisplacement);
+                SeparateCollisions(positions, (float)options.MinSpacing, tempDisplacement, collisionGrid);
 
                 float maxDisp = 0f;
                 foreach (float d in tempDisplacement)
@@ -849,14 +843,61 @@ namespace OPEN_LRD.Visualization
 
         private readonly record struct PlacedSphere(Vector3 Center, float Radius);
 
-        private readonly record struct CellKey(int X, int Y, int Z)
+        private sealed class SpatialGrid
         {
-            public static CellKey From(Vector3 position, float cellSize)
+            private readonly float cellSize;
+            private readonly int bucketMask;
+
+            public SpatialGrid(int nodeCount, float cellSize)
             {
-                return new CellKey(
-                    (int)MathF.Floor(position.X / cellSize),
-                    (int)MathF.Floor(position.Y / cellSize),
-                    (int)MathF.Floor(position.Z / cellSize));
+                this.cellSize = cellSize;
+                int bucketCount = 1;
+                while (bucketCount < Math.Max(16, nodeCount * 2))
+                    bucketCount <<= 1;
+                Head = new int[bucketCount];
+                Next = new int[nodeCount];
+                CellX = new int[nodeCount];
+                CellY = new int[nodeCount];
+                CellZ = new int[nodeCount];
+                bucketMask = bucketCount - 1;
+            }
+
+            public int[] Head { get; }
+            public int[] Next { get; }
+            public int[] CellX { get; }
+            public int[] CellY { get; }
+            public int[] CellZ { get; }
+
+            public void Rebuild(Vector3[] positions)
+            {
+                Array.Fill(Head, -1);
+
+                // Insert backwards so bucket traversal preserves the old ascending node order.
+                for (int index = positions.Length - 1; index >= 0; index--)
+                {
+                    Vector3 position = positions[index];
+                    int x = (int)MathF.Floor(position.X / cellSize);
+                    int y = (int)MathF.Floor(position.Y / cellSize);
+                    int z = (int)MathF.Floor(position.Z / cellSize);
+                    CellX[index] = x;
+                    CellY[index] = y;
+                    CellZ[index] = z;
+
+                    int bucket = GetBucket(x, y, z);
+                    Next[index] = Head[bucket];
+                    Head[bucket] = index;
+                }
+            }
+
+            public int GetBucket(int x, int y, int z)
+            {
+                unchecked
+                {
+                    uint hash = (uint)x * 73856093u
+                        ^ (uint)y * 19349663u
+                        ^ (uint)z * 83492791u;
+                    return (int)(hash & (uint)bucketMask);
+                }
             }
         }
     }

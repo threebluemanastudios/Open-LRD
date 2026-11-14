@@ -369,12 +369,12 @@ namespace OPEN_LRD.Visualizer
                 return Rect.Empty;
 
             CachedLabel label = cachedLabels[nodeIndex];
-            FormattedText text = isSelected ? label.SelectedText : label.NormalText;
 
             const double paddingX = 6.0;
             const double paddingY = 3.0;
-            double badgeWidth = text.Width + paddingX * 2.0;
-            double badgeHeight = text.Height + paddingY * 2.0;
+            // Conservative estimates avoid formatting text for candidates that are later culled.
+            double badgeWidth = label.Text.Length * 8.0 + paddingX * 2.0;
+            double badgeHeight = 21.0 + paddingY * 2.0;
 
             double left = screenPos.X - badgeWidth * 0.5;
             double top = screenPos.Y - badgeHeight - 10.0;
@@ -393,7 +393,7 @@ namespace OPEN_LRD.Visualizer
                 return;
 
             CachedLabel label = cachedLabels[nodeIndex];
-            FormattedText text = isSelected ? label.SelectedText : label.NormalText;
+            FormattedText text = label.GetFormattedText(isSelected, VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
             const double paddingX = 6.0;
             const double paddingY = 3.0;
@@ -418,33 +418,13 @@ namespace OPEN_LRD.Visualizer
             if (snapshot is null)
                 return;
 
-            double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-
             foreach (NodeRecord node in snapshot.Nodes)
             {
                 string labelText = node.DisplayLabel;
                 if (labelText.Length > characterLimit)
                     labelText = labelText[..characterLimit] + "…";
 
-                FormattedText normal = new FormattedText(
-                    labelText,
-                    CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight,
-                    LabelTypeface,
-                    11.0,
-                    TextBrush,
-                    pixelsPerDip);
-
-                FormattedText selected = new FormattedText(
-                    labelText,
-                    CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight,
-                    SelectedTypeface,
-                    11.0,
-                    SelectedTextBrush,
-                    pixelsPerDip);
-
-                cachedLabels.Add(new CachedLabel(normal, selected));
+                cachedLabels.Add(new CachedLabel(labelText));
             }
         }
 
@@ -462,9 +442,38 @@ namespace OPEN_LRD.Visualizer
             return pen;
         }
 
-        private readonly record struct CachedLabel(
-            FormattedText NormalText,
-            FormattedText SelectedText);
+        private sealed class CachedLabel
+        {
+            public CachedLabel(string text) => Text = text;
+
+            public string Text { get; }
+            private FormattedText? normalText;
+            private FormattedText? selectedText;
+
+            public FormattedText GetFormattedText(bool isSelected, double pixelsPerDip)
+            {
+                if (isSelected)
+                {
+                    return selectedText ??= new FormattedText(
+                        Text,
+                        CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight,
+                        SelectedTypeface,
+                        11.0,
+                        SelectedTextBrush,
+                        pixelsPerDip);
+                }
+
+                return normalText ??= new FormattedText(
+                    Text,
+                    CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight,
+                    LabelTypeface,
+                    11.0,
+                    TextBrush,
+                    pixelsPerDip);
+            }
+        }
 
         private readonly record struct ProjectedLabel(
             int Index,

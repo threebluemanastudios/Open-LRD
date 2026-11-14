@@ -94,13 +94,46 @@ namespace OPEN_LRD.Visualization
             return BuildNodeCubesCore(snapshot, positions, cubeSize, nodeTypeId);
         }
 
+        public static Dictionary<int, MeshData> BuildNodeCubesByType(
+            GraphSnapshot snapshot,
+            IReadOnlyList<Vector3> positions,
+            double cubeSize)
+        {
+            ArgumentNullException.ThrowIfNull(snapshot);
+            ArgumentNullException.ThrowIfNull(positions);
+            ValidatePositiveFinite(cubeSize, nameof(cubeSize));
+
+            if (positions.Count < snapshot.Nodes.Count)
+                throw new ArgumentException("Every snapshot node must have a position.", nameof(positions));
+
+            Dictionary<int, List<int>> nodeIndicesByType = new Dictionary<int, List<int>>();
+            for (int index = 0; index < snapshot.Nodes.Count; index++)
+            {
+                int typeId = snapshot.Nodes[index].TypeId;
+                if (!nodeIndicesByType.TryGetValue(typeId, out List<int>? indices))
+                {
+                    indices = new List<int>();
+                    nodeIndicesByType.Add(typeId, indices);
+                }
+                indices.Add(index);
+            }
+
+            Dictionary<int, MeshData> meshes = new Dictionary<int, MeshData>(nodeIndicesByType.Count);
+            foreach ((int typeId, List<int> indices) in nodeIndicesByType)
+                meshes.Add(typeId, BuildNodeCubesForIndices(indices, positions, cubeSize));
+
+            return meshes;
+        }
+
         public static MeshData BuildLinkLines(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
             double lineWidth,
             double cubeSize)
         {
-            return BuildLinkLinesCore(snapshot, positions, lineWidth, cubeSize, forwardTypeId: null);
+            ValidateLinkArguments(snapshot, positions, lineWidth, cubeSize);
+            Dictionary<LinkPair, int> pairCounts = BuildPairCounts(snapshot);
+            return BuildLinkLinesCore(snapshot.Links, positions, lineWidth, cubeSize, pairCounts);
         }
 
         public static MeshData BuildLinkLinesForType(
@@ -110,7 +143,42 @@ namespace OPEN_LRD.Visualization
             double cubeSize,
             int forwardTypeId)
         {
-            return BuildLinkLinesCore(snapshot, positions, lineWidth, cubeSize, forwardTypeId);
+            ValidateLinkArguments(snapshot, positions, lineWidth, cubeSize);
+            List<LinkRecord> matching = new List<LinkRecord>();
+            foreach (LinkRecord link in snapshot.Links)
+            {
+                if (link.ForwardTypeId == forwardTypeId)
+                    matching.Add(link);
+            }
+
+            return BuildLinkLinesCore(matching, positions, lineWidth, cubeSize, BuildPairCounts(snapshot));
+        }
+
+        public static Dictionary<int, MeshData> BuildLinkLinesByType(
+            GraphSnapshot snapshot,
+            IReadOnlyList<Vector3> positions,
+            double lineWidth,
+            double cubeSize)
+        {
+            ValidateLinkArguments(snapshot, positions, lineWidth, cubeSize);
+
+            Dictionary<int, List<LinkRecord>> linksByType = new Dictionary<int, List<LinkRecord>>();
+            foreach (LinkRecord link in snapshot.Links)
+            {
+                if (!linksByType.TryGetValue(link.ForwardTypeId, out List<LinkRecord>? links))
+                {
+                    links = new List<LinkRecord>();
+                    linksByType.Add(link.ForwardTypeId, links);
+                }
+                links.Add(link);
+            }
+
+            Dictionary<LinkPair, int> pairCounts = BuildPairCounts(snapshot);
+            Dictionary<int, MeshData> meshes = new Dictionary<int, MeshData>(linksByType.Count);
+            foreach ((int forwardTypeId, List<LinkRecord> links) in linksByType)
+                meshes.Add(forwardTypeId, BuildLinkLinesCore(links, positions, lineWidth, cubeSize, pairCounts));
+
+            return meshes;
         }
 
         private static MeshData BuildNodeCubesCore(
@@ -164,47 +232,58 @@ namespace OPEN_LRD.Visualization
             return new MeshData(cubePositions, cubeNormals, cubeIndices);
         }
 
+        private static MeshData BuildNodeCubesForIndices(
+            IReadOnlyList<int> nodeIndices,
+            IReadOnlyList<Vector3> positions,
+            double cubeSize)
+        {
+            if (nodeIndices.Count == 0)
+                return MeshData.Empty;
+
+            float[] cubePositions = new float[nodeIndices.Count * CubeVerticesPerNode * 3];
+            float[] cubeNormals = new float[nodeIndices.Count * CubeVerticesPerNode * 3];
+            int[] cubeIndices = new int[nodeIndices.Count * CubeIndicesPerNode];
+            int vertexStart = 0;
+            int indexStart = 0;
+
+            foreach (int nodeIndex in nodeIndices)
+            {
+                WriteCube(
+                    cubePositions,
+                    cubeNormals,
+                    cubeIndices,
+                    vertexStart,
+                    indexStart,
+                    positions[nodeIndex],
+                    (float)cubeSize);
+                vertexStart += CubeVerticesPerNode;
+                indexStart += CubeIndicesPerNode;
+            }
+
+            return new MeshData(cubePositions, cubeNormals, cubeIndices);
+        }
+
         private static MeshData BuildLinkLinesCore(
-            GraphSnapshot snapshot,
+            IReadOnlyList<LinkRecord> links,
             IReadOnlyList<Vector3> positions,
             double lineWidth,
             double cubeSize,
-            int? forwardTypeId)
+            IReadOnlyDictionary<LinkPair, int> pairCounts)
         {
-            ArgumentNullException.ThrowIfNull(snapshot);
-            ArgumentNullException.ThrowIfNull(positions);
-            ValidatePositiveFinite(lineWidth, nameof(lineWidth));
-            ValidatePositiveFinite(cubeSize, nameof(cubeSize));
-
-            if (positions.Count < snapshot.Nodes.Count)
-                throw new ArgumentException("Every snapshot node must have a position.", nameof(positions));
-
-            int selectedCount = 0;
-
-            foreach (LinkRecord link in snapshot.Links)
-            {
-                if (forwardTypeId is null || link.ForwardTypeId == forwardTypeId.Value)
-                    selectedCount++;
-            }
-
-            if (selectedCount == 0)
+            if (links.Count == 0)
                 return MeshData.Empty;
 
-            Dictionary<LinkPair, int> pairCounts = BuildPairCounts(snapshot);
             Dictionary<LinkPair, int> pairOrdinals = new Dictionary<LinkPair, int>();
 
-            float[] linkPositions = new float[selectedCount * LinkVerticesPerEdge * 3];
-            float[] linkNormals = new float[selectedCount * LinkVerticesPerEdge * 3];
-            int[] linkIndices = new int[selectedCount * LinkIndicesPerEdge];
+            float[] linkPositions = new float[links.Count * LinkVerticesPerEdge * 3];
+            float[] linkNormals = new float[links.Count * LinkVerticesPerEdge * 3];
+            int[] linkIndices = new int[links.Count * LinkIndicesPerEdge];
             int vertexStart = 0;
             int indexStart = 0;
             float halfWidth = (float)(lineWidth * 0.5);
 
-            foreach (LinkRecord link in snapshot.Links)
+            foreach (LinkRecord link in links)
             {
-                if (forwardTypeId is not null && link.ForwardTypeId != forwardTypeId.Value)
-                    continue;
-
                 Vector3 start = positions[link.AIndex];
                 Vector3 end = positions[link.BIndex];
                 Vector3 delta = end - start;
@@ -262,6 +341,21 @@ namespace OPEN_LRD.Visualization
             }
 
             return new MeshData(linkPositions, linkNormals, linkIndices);
+        }
+
+        private static void ValidateLinkArguments(
+            GraphSnapshot snapshot,
+            IReadOnlyList<Vector3> positions,
+            double lineWidth,
+            double cubeSize)
+        {
+            ArgumentNullException.ThrowIfNull(snapshot);
+            ArgumentNullException.ThrowIfNull(positions);
+            ValidatePositiveFinite(lineWidth, nameof(lineWidth));
+            ValidatePositiveFinite(cubeSize, nameof(cubeSize));
+
+            if (positions.Count < snapshot.Nodes.Count)
+                throw new ArgumentException("Every snapshot node must have a position.", nameof(positions));
         }
 
         private static Dictionary<LinkPair, int> BuildPairCounts(GraphSnapshot snapshot)

@@ -26,6 +26,8 @@ namespace OPEN_LRD.Visualizer
         private CancellationTokenSource? layoutCancellation;
         private GraphSnapshot? snapshot;
         private SceneGeometry? geometry;
+        private int snapshotMaxNodes = VisualizerOptions.DefaultMaxNodes;
+        private int snapshotMaxLinks = VisualizerOptions.DefaultMaxLinks;
         private int? selectedNodeIndex;
         private int? hoveredNodeIndex;
         private bool isLoading;
@@ -519,27 +521,33 @@ namespace OPEN_LRD.Visualizer
 
             try
             {
-                SceneGeometry? built = await Task.Run<SceneGeometry?>(() =>
+                (SceneGeometry Geometry, PreparedSceneGeometry Prepared)? result = await Task.Run<(SceneGeometry, PreparedSceneGeometry)?>(() =>
                 {
                     LayoutResult layout = DistanceLayout3D.Compute(fresh, options, token, progress);
                     token.ThrowIfCancellationRequested();
 
-                    return layout.Cancelled
-                        ? null
-                        : VisualizerSceneBuilder.Build(fresh, layout, options);
+                    if (layout.Cancelled)
+                        return null;
+
+                    SceneGeometry builtGeometry = VisualizerSceneBuilder.Build(fresh, layout, options);
+                    PreparedSceneGeometry prepared = VisualizerScene.PrepareGeometry(builtGeometry);
+                    return (builtGeometry, prepared);
                 }, token);
 
                 if (isClosed || token.IsCancellationRequested)
                     return;
 
-                if (built is null)
+                if (result is null)
                 {
                     SetStatus("Layout cancelled.");
                     return;
                 }
 
+                SceneGeometry built = result.Value.Geometry;
                 geometry = built;
-                scene.Apply(built, colors);
+                snapshotMaxNodes = options.MaxNodes;
+                snapshotMaxLinks = options.MaxLinks;
+                scene.Apply(result.Value.Prepared, colors);
                 controller?.SetSceneRadius(built.Radius);
 
                 LabelOverlay.SetGraph(fresh, built.Layout.Positions, options.LabelCharacterLimit);
@@ -781,6 +789,12 @@ namespace OPEN_LRD.Visualizer
 
                 MaxLabelsSlider.Value = options.MaxLabels;
                 MaxLabelsValText.Text = options.MaxLabels.ToString(CultureInfo.InvariantCulture);
+
+                MaxNodesSlider.Value = options.MaxNodes;
+                MaxNodesInputBox.Text = options.MaxNodes.ToString("N0", CultureInfo.InvariantCulture);
+
+                MaxLinksSlider.Value = options.MaxLinks;
+                MaxLinksInputBox.Text = options.MaxLinks.ToString("N0", CultureInfo.InvariantCulture);
 
                 NearPlaneSlider.Value = options.NearPlaneDistance;
                 NearPlaneValText.Text = options.NearPlaneDistance.ToString("F2", CultureInfo.InvariantCulture);
@@ -1087,13 +1101,15 @@ namespace OPEN_LRD.Visualizer
             SetStatus("Reset link colors and visibility to defaults.");
         }
 
-        private void ResetViewSettings_Click(object sender, RoutedEventArgs e)
+        private async void ResetViewSettings_Click(object sender, RoutedEventArgs e)
         {
             VisualizerOptions defaults = new VisualizerOptions();
             options.Spread = defaults.Spread;
             options.CubeSize = defaults.CubeSize;
             options.LineWidth = defaults.LineWidth;
             options.MaxLabels = defaults.MaxLabels;
+            options.MaxNodes = defaults.MaxNodes;
+            options.MaxLinks = defaults.MaxLinks;
             options.ShowLabels = defaults.ShowLabels;
             options.InvertMouseX = defaults.InvertMouseX;
             options.InvertMouseY = defaults.InvertMouseY;
@@ -1104,7 +1120,12 @@ namespace OPEN_LRD.Visualizer
             SaveSettings();
 
             if (snapshot is not null)
-                Recompute_Button_Click(this, new RoutedEventArgs());
+            {
+                if (options.MaxNodes != snapshotMaxNodes || options.MaxLinks != snapshotMaxLinks)
+                    await RefreshGraphAsync();
+                else
+                    await RunLayoutAsync(snapshot, updateSnapshotSummary: false);
+            }
         }
 
         private void InvertMouseX_Click(object sender, RoutedEventArgs e)
@@ -1125,11 +1146,22 @@ namespace OPEN_LRD.Visualizer
             SetStatus(options.InvertMouseY ? "Vertical mouse axis inverted." : "Vertical mouse axis normal.");
         }
 
-        private void ApplySettings_Click(object sender, RoutedEventArgs e)
+        private async void ApplySettings_Click(object sender, RoutedEventArgs e)
         {
+            if (!TryApplyLimitInput(MaxNodesInputBox, isNodeLimit: true) ||
+                !TryApplyLimitInput(MaxLinksInputBox, isNodeLimit: false))
+            {
+                return;
+            }
+
             SaveSettings();
             if (snapshot is not null)
-                Recompute_Button_Click(this, new RoutedEventArgs());
+            {
+                if (options.MaxNodes != snapshotMaxNodes || options.MaxLinks != snapshotMaxLinks)
+                    await RefreshGraphAsync();
+                else
+                    await RunLayoutAsync(snapshot, updateSnapshotSummary: false);
+            }
         }
 
         private void SpreadSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1174,6 +1206,74 @@ namespace OPEN_LRD.Visualizer
                 MaxLabelsValText.Text = options.MaxLabels.ToString(CultureInfo.InvariantCulture);
 
             LabelOverlay.MaxLabels = options.MaxLabels;
+        }
+
+        private void MaxNodesSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (isInitializingControls || MaxNodesInputBox is null)
+                return;
+
+            options.MaxNodes = Math.Clamp((int)Math.Round(MaxNodesSlider.Value), 1000, VisualizerOptions.MaximumMaxNodes);
+            MaxNodesInputBox.Text = options.MaxNodes.ToString("N0", CultureInfo.InvariantCulture);
+        }
+
+        private void MaxLinksSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (isInitializingControls || MaxLinksInputBox is null)
+                return;
+
+            options.MaxLinks = Math.Clamp((int)Math.Round(MaxLinksSlider.Value), 1000, VisualizerOptions.MaximumMaxLinks);
+            MaxLinksInputBox.Text = options.MaxLinks.ToString("N0", CultureInfo.InvariantCulture);
+        }
+
+        private void MaxNodesInputBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            TryApplyLimitInput(MaxNodesInputBox, isNodeLimit: true);
+        }
+
+        private void MaxLinksInputBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            TryApplyLimitInput(MaxLinksInputBox, isNodeLimit: false);
+        }
+
+        private bool TryApplyLimitInput(TextBox input, bool isNodeLimit)
+        {
+            int maximum = isNodeLimit ? VisualizerOptions.MaximumMaxNodes : VisualizerOptions.MaximumMaxLinks;
+            int minimum = 1000;
+            bool parsed = int.TryParse(input.Text, NumberStyles.Integer | NumberStyles.AllowThousands,
+                CultureInfo.CurrentCulture, out int value)
+                || int.TryParse(input.Text, NumberStyles.Integer | NumberStyles.AllowThousands,
+                    CultureInfo.InvariantCulture, out value);
+
+            if (!parsed || value < minimum || value > maximum)
+            {
+                SetStatus($"{(isNodeLimit ? "Max Nodes" : "Max Links")} must be between {minimum:N0} and {maximum:N0}.");
+                SyncViewControls();
+                return false;
+            }
+
+            isInitializingControls = true;
+            try
+            {
+                if (isNodeLimit)
+                {
+                    options.MaxNodes = value;
+                    MaxNodesSlider.Value = value;
+                    MaxNodesInputBox.Text = value.ToString("N0", CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    options.MaxLinks = value;
+                    MaxLinksSlider.Value = value;
+                    MaxLinksInputBox.Text = value.ToString("N0", CultureInfo.InvariantCulture);
+                }
+            }
+            finally
+            {
+                isInitializingControls = false;
+            }
+
+            return true;
         }
 
         private void NearPlaneSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

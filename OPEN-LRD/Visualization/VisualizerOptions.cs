@@ -13,6 +13,8 @@ namespace OPEN_LRD.Visualization
         public const double DefaultGravity = 0.002;
         public const int DefaultMaxNodes = 20000;
         public const int DefaultMaxLinks = 50000;
+        public const int MaximumMaxNodes = 100000;
+        public const int MaximumMaxLinks = 250000;
         public const int DefaultMaxLabels = 1000;
         public const int DefaultLabelCharacterLimit = 48;
         public const double DefaultNearPlaneDistance = 0.05;
@@ -67,6 +69,11 @@ namespace OPEN_LRD.Visualization
             ValidatePositiveInteger(MaxLinks, nameof(MaxLinks));
             ValidatePositiveInteger(MaxLabels, nameof(MaxLabels));
             ValidatePositiveInteger(LabelCharacterLimit, nameof(LabelCharacterLimit));
+
+            if (MaxNodes > MaximumMaxNodes)
+                throw new ArgumentOutOfRangeException(nameof(MaxNodes), MaxNodes, $"MaxNodes cannot exceed {MaximumMaxNodes}.");
+            if (MaxLinks > MaximumMaxLinks)
+                throw new ArgumentOutOfRangeException(nameof(MaxLinks), MaxLinks, $"MaxLinks cannot exceed {MaximumMaxLinks}.");
 
             if (!double.IsFinite(NearPlaneDistance) || NearPlaneDistance < 0.01 || NearPlaneDistance > 100.0)
             {

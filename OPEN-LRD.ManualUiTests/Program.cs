@@ -1093,16 +1093,33 @@ namespace OPEN_LRD.ManualUiTests
             visualizerWin.CubeSizeSlider.Value = 1.2;
             visualizerWin.LineWidthSlider.Value = 0.2;
             visualizerWin.MaxLabelsSlider.Value = 500;
+            visualizerWin.MaxNodesSlider.Value = 30000;
+            visualizerWin.MaxLinksSlider.Value = 75000;
             visualizerWin.NearPlaneSlider.Value = 0.25;
+            DoEvents();
+
+            visualizerWin.MaxNodesInputBox.Text = "31,000";
+            MethodInfo? maxNodesInput = typeof(VisualizerWindow).GetMethod("MaxNodesInputBox_LostFocus", BindingFlags.NonPublic | BindingFlags.Instance);
+            maxNodesInput?.Invoke(visualizerWin, new object[] { visualizerWin.MaxNodesInputBox, new RoutedEventArgs() });
+            visualizerWin.MaxLinksInputBox.Text = "76,000";
+            MethodInfo? maxLinksInput = typeof(VisualizerWindow).GetMethod("MaxLinksInputBox_LostFocus", BindingFlags.NonPublic | BindingFlags.Instance);
+            maxLinksInput?.Invoke(visualizerWin, new object[] { visualizerWin.MaxLinksInputBox, new RoutedEventArgs() });
             DoEvents();
 
             Check(visualizerWin.Options.Spread == 7.5, "SpreadSlider updates options.Spread.");
             Check(visualizerWin.Options.CubeSize == 1.2, "CubeSizeSlider updates options.CubeSize.");
             Check(visualizerWin.Options.LineWidth == 0.2, "LineWidthSlider updates options.LineWidth.");
             Check(visualizerWin.Options.MaxLabels == 500, "MaxLabelsSlider updates options.MaxLabels.");
+            Check(visualizerWin.Options.MaxNodes == 31000, "MaxNodes numeric input updates options.MaxNodes.");
+            Check(visualizerWin.Options.MaxLinks == 76000, "MaxLinks numeric input updates options.MaxLinks.");
             Check(visualizerWin.Options.NearPlaneDistance == 0.25, "NearPlaneSlider updates options.NearPlaneDistance.");
             Check(visualizerWin.Scene.NearPlaneDistance == 0.25, "NearPlaneSlider updates scene.NearPlaneDistance.");
             Check(visualizerWin.Labels.MaxLabels == 500, "MaxLabels updates LabelOverlay.MaxLabels.");
+
+            MethodInfo? applySettings = typeof(VisualizerWindow).GetMethod("ApplySettings_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            applySettings?.Invoke(visualizerWin, new object[] { visualizerWin.ApplySettingsButton, new RoutedEventArgs() });
+            WaitForCondition(() => !visualizerWin.IsLoading, 10000, "Apply layout with raised graph caps");
+            Check(visualizerWin.Snapshot?.Nodes.Count == 3, "Apply Layout refreshes graph snapshot after changing caps.");
 
             visualizerWin.SaveSettingsForTesting();
             string settingsPath = VisualizerSettings.GetDefaultPath();
@@ -1111,6 +1128,8 @@ namespace OPEN_LRD.ManualUiTests
             string settingsJson = File.ReadAllText(settingsPath);
             Check(settingsJson.Contains("\"spread\": 7.5"), "Saved settings JSON contains updated spread (7.5).");
             Check(settingsJson.Contains("\"cubeSize\": 1.2"), "Saved settings JSON contains updated cubeSize (1.2).");
+            Check(settingsJson.Contains("\"maxNodes\": 31000"), "Saved settings JSON contains updated maxNodes (31000).");
+            Check(settingsJson.Contains("\"maxLinks\": 76000"), "Saved settings JSON contains updated maxLinks (76000).");
 
             // Mouse Axis Inversion controls
             Check(visualizerWin.InvertMouseXCheckBox.IsChecked == true, "InvertMouseXCheckBox is checked by default (horizontal inverted).");
@@ -1138,6 +1157,9 @@ namespace OPEN_LRD.ManualUiTests
             DoEvents();
             Check(visualizerWin.Options.Spread == 6.0, "ResetViewSettings restores default Spread (6.0).");
             Check(visualizerWin.Options.CubeSize == 1.0, "ResetViewSettings restores default CubeSize (1.0).");
+            Check(visualizerWin.Options.MaxNodes == VisualizerOptions.DefaultMaxNodes, "ResetViewSettings restores default node cap.");
+            Check(visualizerWin.Options.MaxLinks == VisualizerOptions.DefaultMaxLinks, "ResetViewSettings restores default link cap.");
+            Check(visualizerWin.Options.MaxIterations == 300, "ResetViewSettings keeps max layout iterations at 300.");
 
             // 12. Phase 5: Help Overlay
             Check(visualizerWin.HelpOverlay.Visibility == Visibility.Collapsed, "HelpOverlay is collapsed by default.");

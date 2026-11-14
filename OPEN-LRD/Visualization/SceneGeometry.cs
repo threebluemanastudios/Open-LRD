@@ -95,28 +95,39 @@ namespace OPEN_LRD.Visualization
             }
 
             List<NodeMeshBatch> nodeBatches = new List<NodeMeshBatch>(snapshot.NodeTypeIds.Count);
+            Dictionary<int, MeshData> nodeMeshes = GraphMeshBuilder.BuildNodeCubesByType(
+                snapshot,
+                layout.Positions,
+                options.CubeSize);
+            Dictionary<int, string> nodeNames = new Dictionary<int, string>();
+            foreach (NodeRecord node in snapshot.Nodes)
+            {
+                if (!nodeNames.ContainsKey(node.TypeId))
+                    nodeNames.Add(node.TypeId, node.TypeName);
+            }
 
             foreach (int nodeTypeId in snapshot.NodeTypeIds)
             {
-                MeshData mesh = GraphMeshBuilder.BuildNodeCubesForType(
-                    snapshot,
-                    layout.Positions,
-                    options.CubeSize,
-                    nodeTypeId);
+                if (!nodeMeshes.TryGetValue(nodeTypeId, out MeshData? mesh))
+                    continue;
 
                 if (mesh.IsEmpty)
                     continue;
 
                 nodeBatches.Add(new NodeMeshBatch(
                     nodeTypeId,
-                    ResolveNodeTypeName(snapshot, nodeTypeId),
+                    nodeNames.TryGetValue(nodeTypeId, out string? nodeName) ? nodeName : nodeTypeId.ToString(),
                     mesh));
             }
 
             Dictionary<int, int> representativeClass = new Dictionary<int, int>();
+            Dictionary<int, string> forwardNames = new Dictionary<int, string>();
 
             foreach (LinkRecord link in snapshot.Links)
             {
+                if (!forwardNames.ContainsKey(link.ForwardTypeId))
+                    forwardNames.Add(link.ForwardTypeId, link.ForwardTypeName);
+
                 if (!representativeClass.TryGetValue(link.ForwardTypeId, out int classId)
                     || link.ClassId < classId)
                 {
@@ -125,22 +136,23 @@ namespace OPEN_LRD.Visualization
             }
 
             List<LinkMeshBatch> linkBatches = new List<LinkMeshBatch>(snapshot.ForwardTypeIds.Count);
+            Dictionary<int, MeshData> linkMeshes = GraphMeshBuilder.BuildLinkLinesByType(
+                snapshot,
+                layout.Positions,
+                options.LineWidth,
+                options.CubeSize);
 
             foreach (int forwardTypeId in snapshot.ForwardTypeIds)
             {
-                MeshData mesh = GraphMeshBuilder.BuildLinkLinesForType(
-                    snapshot,
-                    layout.Positions,
-                    options.LineWidth,
-                    options.CubeSize,
-                    forwardTypeId);
+                if (!linkMeshes.TryGetValue(forwardTypeId, out MeshData? mesh))
+                    continue;
 
                 if (mesh.IsEmpty)
                     continue;
 
                 linkBatches.Add(new LinkMeshBatch(
                     forwardTypeId,
-                    ResolveForwardTypeName(snapshot, forwardTypeId),
+                    forwardNames.TryGetValue(forwardTypeId, out string? forwardName) ? forwardName : forwardTypeId.ToString(),
                     representativeClass[forwardTypeId],
                     mesh));
             }
@@ -150,26 +162,5 @@ namespace OPEN_LRD.Visualization
             return new SceneGeometry(snapshot, layout, nodeBatches, linkBatches, radius);
         }
 
-        private static string ResolveNodeTypeName(GraphSnapshot snapshot, int nodeTypeId)
-        {
-            foreach (NodeRecord node in snapshot.Nodes)
-            {
-                if (node.TypeId == nodeTypeId)
-                    return node.TypeName;
-            }
-
-            return nodeTypeId.ToString();
-        }
-
-        private static string ResolveForwardTypeName(GraphSnapshot snapshot, int forwardTypeId)
-        {
-            foreach (LinkRecord link in snapshot.Links)
-            {
-                if (link.ForwardTypeId == forwardTypeId)
-                    return link.ForwardTypeName;
-            }
-
-            return forwardTypeId.ToString();
-        }
     }
 }

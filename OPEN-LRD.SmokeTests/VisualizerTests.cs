@@ -355,6 +355,8 @@ namespace OPEN_LRD.SmokeTests
                     LineWidth = 0.2,
                     ShowLabels = false,
                     MaxLabels = 250,
+                    MaxNodes = 75000,
+                    MaxLinks = 125000,
                     NearPlaneDistance = 0.75
                 };
 
@@ -387,6 +389,8 @@ namespace OPEN_LRD.SmokeTests
                 Assert(loadedOptions.LineWidth == 0.2, "line width should round trip");
                 Assert(!loadedOptions.ShowLabels, "label visibility should round trip");
                 Assert(loadedOptions.MaxLabels == 250, "label cap should round trip");
+                Assert(loadedOptions.MaxNodes == 75000, "node cap should round trip");
+                Assert(loadedOptions.MaxLinks == 125000, "link cap should round trip");
                 Assert(loadedOptions.NearPlaneDistance == 0.75, "near plane distance should round trip");
             }
             finally
@@ -469,8 +473,14 @@ namespace OPEN_LRD.SmokeTests
                 () => new VisualizerOptions { MaxNodes = 0 }.Validate(),
                 "zero node cap should be rejected");
             AssertThrows<ArgumentOutOfRangeException>(
+                () => new VisualizerOptions { MaxNodes = VisualizerOptions.MaximumMaxNodes + 1 }.Validate(),
+                "node cap above the UI-supported maximum should be rejected");
+            AssertThrows<ArgumentOutOfRangeException>(
                 () => new VisualizerOptions { MaxLinks = 0 }.Validate(),
                 "zero link cap should be rejected");
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => new VisualizerOptions { MaxLinks = VisualizerOptions.MaximumMaxLinks + 1 }.Validate(),
+                "link cap above the UI-supported maximum should be rejected");
             AssertThrows<ArgumentOutOfRangeException>(
                 () => new VisualizerOptions { MaxLabels = 0 }.Validate(),
                 "zero label cap should be rejected");

@@ -440,8 +440,8 @@ does not use O(N^2) all-pairs repulsion.
 
 - GraphMeshBuilder emits one merged MeshData per node type: 24 vertices and 36
   indices per cube, with per-face normals for correct lighting.
-- VisualizerScene converts each MeshData to a MeshGeometry3D, freezes it, and
-  binds one GeometryModel3D with:
+- The worker converts each MeshData to a frozen MeshGeometry3D before handing
+  prepared geometry to the UI thread. The UI thread binds one GeometryModel3D with:
     DiffuseMaterial(node type color) + SpecularMaterial(white, 40).
 - Cube color changes replace the material; geometry is untouched.
 - A separate highlight cube (1.15x scale, bright emissive color) marks the
@@ -700,11 +700,17 @@ some remote sessions; the HUD reports measured layout time and counts.
 
 - One merged mesh per node type and one per forward link type. Never one
   Visual3D or GeometryModel3D per node/link.
+- Collision separation reuses a flat spatial hash grid (integer bucket/link
+  arrays) across relaxation passes, avoiding per-pass Dictionary/List churn.
+- Node mesh batches are grouped by node type in one pass over snapshot nodes.
+- Link meshes are grouped by forward type in one snapshot pass and share a
+  single precomputed endpoint-pair count map.
 - Freeze MeshGeometry3D, brushes, and materials after construction.
-- Reuse projection buffers and label FormattedText objects across frames.
+- Reuse projection buffers and lazily cache label FormattedText only for labels
+  selected for rendering.
 - Offset duplicate edges instead of creating overlapping geometry.
-- Build mesh arrays on the worker thread; freeze WPF geometry there; attach
-  materials/models on the UI thread.
+- Build mesh arrays and frozen WPF MeshGeometry3D objects on the worker thread;
+  attach prepared geometry and materials on the UI thread.
 
 12.3 THREADING RULES
 
@@ -719,8 +725,10 @@ some remote sessions; the HUD reports measured layout time and counts.
 12.4 LIMITS AND GUARDS
 
 - VisualizerOptions defaults: MaxNodes 20,000; MaxLinks 50,000; MaxLabels
-  1,000; LabelCharacterLimit 48. View tab allows raising node/link caps to
-  50,000/150,000 with a warning.
+  1,000; LabelCharacterLimit 48; MaxIterations remains 300. The View tab has
+  sliders and numeric inputs for raising MaxNodes to 100,000 and MaxLinks to
+  250,000. Changed caps are applied by rebuilding the snapshot on Apply Layout.
+  Increasing caps increases memory and layout/rendering costs.
 - Validate Spread > 0, CubeSize > 0, LineWidth > 0, MaxIterations > 0,
   MaxLabels > 0, and all maxima > 0. Reject non-finite values in UI parsing.
 - Guard against non-finite positions, zero-length edges, and huge coordinates.

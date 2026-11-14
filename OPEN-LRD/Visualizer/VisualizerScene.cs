@@ -8,6 +8,30 @@ using OPEN_LRD.Visualization;
 
 namespace OPEN_LRD.Visualizer
 {
+    internal sealed record PreparedNodeMeshBatch(int NodeTypeId, MeshGeometry3D Mesh);
+
+    internal sealed record PreparedLinkMeshBatch(int ForwardTypeId, int ClassId, MeshGeometry3D Mesh);
+
+    internal sealed class PreparedSceneGeometry
+    {
+        public PreparedSceneGeometry(
+            IReadOnlyList<PreparedNodeMeshBatch> nodeBatches,
+            IReadOnlyList<PreparedLinkMeshBatch> linkBatches,
+            Vector3 center,
+            float radius)
+        {
+            NodeBatches = nodeBatches;
+            LinkBatches = linkBatches;
+            Center = center;
+            Radius = radius;
+        }
+
+        public IReadOnlyList<PreparedNodeMeshBatch> NodeBatches { get; }
+        public IReadOnlyList<PreparedLinkMeshBatch> LinkBatches { get; }
+        public Vector3 Center { get; }
+        public float Radius { get; }
+    }
+
     internal sealed class VisualizerScene
     {
         private static readonly Vector3D InitialLookDirection =
@@ -115,14 +139,34 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        public static PreparedSceneGeometry PrepareGeometry(SceneGeometry geometry)
+        {
+            ArgumentNullException.ThrowIfNull(geometry);
+
+            List<PreparedNodeMeshBatch> nodeBatches = new List<PreparedNodeMeshBatch>(geometry.NodeBatches.Count);
+            foreach (NodeMeshBatch batch in geometry.NodeBatches)
+                nodeBatches.Add(new PreparedNodeMeshBatch(batch.NodeTypeId, CreateMesh(batch.Mesh)));
+
+            List<PreparedLinkMeshBatch> linkBatches = new List<PreparedLinkMeshBatch>(geometry.LinkBatches.Count);
+            foreach (LinkMeshBatch batch in geometry.LinkBatches)
+                linkBatches.Add(new PreparedLinkMeshBatch(batch.ForwardTypeId, batch.ClassId, CreateMesh(batch.Mesh)));
+
+            return new PreparedSceneGeometry(nodeBatches, linkBatches, geometry.Center, geometry.Radius);
+        }
+
         public void Apply(SceneGeometry geometry, GraphColorMap colors)
+        {
+            Apply(PrepareGeometry(geometry), colors);
+        }
+
+        public void Apply(PreparedSceneGeometry geometry, GraphColorMap colors)
         {
             ArgumentNullException.ThrowIfNull(geometry);
             ArgumentNullException.ThrowIfNull(colors);
 
             ClearGeometry();
 
-            foreach (NodeMeshBatch batch in geometry.NodeBatches)
+            foreach (PreparedNodeMeshBatch batch in geometry.NodeBatches)
             {
                 Material material = CreateNodeMaterial(colors.GetNodeColor(batch.NodeTypeId));
                 GeometryModel3D? model = AddModel(batch.Mesh, material, backMaterial: null);
@@ -134,7 +178,7 @@ namespace OPEN_LRD.Visualizer
                 }
             }
 
-            foreach (LinkMeshBatch batch in geometry.LinkBatches)
+            foreach (PreparedLinkMeshBatch batch in geometry.LinkBatches)
             {
                 Material material = CreateLinkMaterial(
                     colors.GetLinkColor(batch.ForwardTypeId, batch.ClassId));
@@ -318,12 +362,12 @@ namespace OPEN_LRD.Visualizer
             camera.FarPlaneDistance = framed.FarPlaneDistance;
         }
 
-        private GeometryModel3D? AddModel(MeshData data, Material material, Material? backMaterial)
+        private GeometryModel3D? AddModel(MeshGeometry3D mesh, Material material, Material? backMaterial)
         {
-            if (data.IsEmpty)
+            if (mesh.TriangleIndices.Count == 0)
                 return null;
 
-            GeometryModel3D model = new GeometryModel3D(CreateMesh(data), material)
+            GeometryModel3D model = new GeometryModel3D(mesh, material)
             {
                 BackMaterial = backMaterial
             };

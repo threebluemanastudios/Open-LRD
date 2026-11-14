@@ -339,10 +339,17 @@ Recommended fixture script (PowerShell):
       - Invert Vertical Axis (Pitch) checkbox in View tab (default false).
       - Setting persists across restarts to %LOCALAPPDATA%/OPEN-LRD/visualizer-settings.json.
 [x] View settings sliders & persistence:
-      - Spread, Cube Size, Line Width, Max Labels, and Near Clip Plane (0.01 to 100.0) sliders update view options.
+      - Spread, Cube Size, Line Width, Max Labels, Near Clip Plane (0.01 to 100.0), Max Nodes, and Max Links controls update view options.
+      - Max Nodes and Max Links default to 20,000 / 50,000 and can be raised to 100,000 / 250,000 with sliders or numeric inputs.
+      - Applying changed node/link caps refreshes the snapshot before recomputing the layout; maximum layout iterations remains 300.
       - "Apply Layout" recomputes distance layout with current settings.
       - "Reset View" restores default view settings.
       - Settings serialize atomically to %LOCALAPPDATA%/OPEN-LRD/visualizer-settings.json.
+[x] Large graph build efficiency:
+      - Collision separation reuses an allocation-light spatial hash grid across relaxation iterations.
+      - Node and forward-link meshes are grouped by type in a single snapshot pass; link batches share pair-count data.
+      - Frozen WPF mesh geometry is prepared on the worker thread before attaching to the scene.
+      - Label FormattedText is generated lazily for labels that make it through visibility and decluttering checks.
 [x] Truncation banner & controls help:
       - Warning banner displays when node/link caps are exceeded.
       - Help overlay toggled via Help (?) button or F1/? and dismissed via Esc/close.

@@ -388,6 +388,46 @@
                                         Margin="0,0,0,8" />
 
                                 <DockPanel Margin="0,0,0,4">
+                                    <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Max Nodes:" />
+                                    <TextBox x:Name="MaxNodesInputBox"
+                                             DockPanel.Dock="Right"
+                                             Width="76"
+                                             Padding="3,1"
+                                             Text="20000"
+                                             LostFocus="MaxNodesInputBox_LostFocus"
+                                             ToolTip="Maximum nodes included when the graph snapshot is rebuilt." />
+                                </DockPanel>
+                                <Slider x:Name="MaxNodesSlider"
+                                        Minimum="1000"
+                                        Maximum="100000"
+                                        Value="20000"
+                                        TickFrequency="1000"
+                                        IsSnapToTickEnabled="False"
+                                        ValueChanged="MaxNodesSlider_ValueChanged"
+                                        Margin="0,0,0,8"
+                                        ToolTip="Raise the node cap; Apply Layout refreshes the snapshot with the new limit." />
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Max Links:" />
+                                    <TextBox x:Name="MaxLinksInputBox"
+                                             DockPanel.Dock="Right"
+                                             Width="76"
+                                             Padding="3,1"
+                                             Text="50000"
+                                             LostFocus="MaxLinksInputBox_LostFocus"
+                                             ToolTip="Maximum links included when the graph snapshot is rebuilt." />
+                                </DockPanel>
+                                <Slider x:Name="MaxLinksSlider"
+                                        Minimum="1000"
+                                        Maximum="250000"
+                                        Value="50000"
+                                        TickFrequency="2500"
+                                        IsSnapToTickEnabled="False"
+                                        ValueChanged="MaxLinksSlider_ValueChanged"
+                                        Margin="0,0,0,8"
+                                        ToolTip="Raise the link cap; Apply Layout refreshes the snapshot with the new limit." />
+
+                                <DockPanel Margin="0,0,0,4">
                                     <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Near Clip Plane:" />
                                     <TextBlock x:Name="NearPlaneValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="0.05" />
                                 </DockPanel>
