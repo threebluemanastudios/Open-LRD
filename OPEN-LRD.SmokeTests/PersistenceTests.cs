@@ -20,7 +20,11 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Persistence idempotent merge", TestIdempotentMerge);
             Program.Run("Persistence invalid input safety", TestInvalidInputSafety);
             Program.Run("Persistence oversized input", TestOversizedInput);
+            Program.Run("Persistence import above legacy size cap", TestImportAboveLegacySizeCap);
             Program.Run("Persistence deterministic export", TestDeterministicExport);
+            Program.Run("Persistence segmented export and manifest import", TestSegmentedExportRoundTrip);
+            Program.Run("Persistence oversized split record preserves prior export", TestOversizedSegmentRecord);
+            Program.Run("Persistence large graph streaming export", TestLargeGraphStreamingExport);
             Program.Run("Persistence transient round trip", TestTransientRoundTrip);
             Program.Run("Persistence transient merge and replace", TestTransientMergeAndReplace);
             Program.Run("Persistence malformed transient rejection", TestMalformedTransient);
@@ -593,7 +597,7 @@ namespace OPEN_LRD.SmokeTests
                 string path = Path.Combine(directory, "oversized.lrdlog");
 
                 using (FileStream stream = File.Create(path))
-                    stream.SetLength(64L * 1024L * 1024L + 1L);
+                    stream.SetLength(CoreLogImporter.MaxLogBytes + 1L);
 
                 LRD_Core core = NewCore();
                 PersistenceImportResult result = CoreLogImporter.ImportCore(
@@ -768,6 +772,251 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(
                     ReferenceEquals(restoredSecond.Get_LinkPrevious(), restoredLink),
                     "chain previous links should share the restored link instance");
+            }
+            finally
+            {
+                DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestImportAboveLegacySizeCap()
+        {
+            string directory = NewTempDirectory();
+
+            try
+            {
+                string path = Path.Combine(directory, "over-64mb.lrdlog");
+                byte[] prefix = JsonSerializer.SerializeToUtf8Bytes(new CoreLogDocument(), LogJson.Options);
+                byte[] padding = Enumerable.Repeat((byte)' ', 64 * 1024).ToArray();
+                long targetLength = 64L * 1024L * 1024L + 1L;
+
+                using (FileStream stream = File.Create(path))
+                {
+                    stream.Write(prefix);
+                    while (stream.Length < targetLength)
+                    {
+                        int bytesToWrite = (int)Math.Min(padding.Length, targetLength - stream.Length);
+                        stream.Write(padding, 0, bytesToWrite);
+                    }
+                }
+
+                LRD_Core core = NewCore();
+                PersistenceImportResult result = CoreLogImporter.ImportCore(core, path, ImportMode.Merge);
+                Program.Assert(result.Success,
+                    $"valid logs above the legacy 64 MB limit should import through the stream path: {string.Join("; ", result.Errors)}");
+                Program.Assert(new FileInfo(path).Length > 64L * 1024L * 1024L,
+                    "streaming import fixture should exceed the legacy limit");
+            }
+            finally
+            {
+                DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestSegmentedExportRoundTrip()
+        {
+            string directory = NewTempDirectory();
+
+            try
+            {
+                LRD_Core source = NewCore();
+                const int graphNodeCount = 20;
+                Guid[] graphNodeIDs = new Guid[graphNodeCount];
+                for (int index = 0; index < graphNodeCount; index++)
+                {
+                    graphNodeIDs[index] = Guid.NewGuid();
+                    AddNode(source, graphNodeIDs[index], NodeTypes.Concepts, NodeLifetime.Permanent, 0,
+                        $"Segmented graph node {index:D2} with extra label text");
+                }
+                for (int index = 1; index < graphNodeIDs.Length; index++)
+                {
+                    Program.Assert(source.AddDirectedConnection(graphNodeIDs[index - 1], graphNodeIDs[index],
+                        LinkClass.basic), "cross-node-part link should be added");
+                }
+
+                LinkedList<Chain_Node> query = BuildTestChain("query", 18, LinkClass.actions);
+                LinkedList<Chain_Node> response = BuildTestChain("response", 16, LinkClass.events);
+                source.BuildQuery(query);
+                source.BuildResponse(response);
+
+                string corePath = Path.Combine(directory, "segmented.lrdlog");
+                CoreLogExportResult export = CoreLogExporter.ExportWithPartLimit(
+                    source,
+                    corePath,
+                    partLimitBytes: 1024,
+                    includeTransient: true,
+                    exportedAtUtc: new DateTimeOffset(2026, 5, 6, 7, 8, 9, TimeSpan.Zero));
+
+                Program.Assert(export.IsSplit, "test-sized limit should select the manifest/parts format");
+                Program.Assert(export.CorePartCount > 1, "core data should be divided across numbered parts");
+                Program.Assert(export.TransientPartCount > 1, "transient chains should be divided across numbered parts");
+                Program.Assert(export.TotalBytes > 0, "split export should report bytes written");
+                Program.Assert(export.NodeCount == graphNodeCount && export.LinkCount == graphNodeCount - 1,
+                    "segmented export should report aggregate graph counts");
+
+                Program.Assert(new FileInfo(corePath).Length < CoreLogExporter.MaxPartBytes + 1,
+                    "core manifest should remain below the hard file-size ceiling");
+                CoreLogManifest coreManifest = JsonSerializer.Deserialize<CoreLogManifest>(
+                    File.ReadAllText(corePath), LogJson.Options)!;
+                Program.Assert(coreManifest.Parts.Count == export.CorePartCount,
+                    "core manifest should list every core data part");
+                foreach (LogPartDefinition part in coreManifest.Parts)
+                {
+                    string partPath = Path.Combine(directory, part.File);
+                    Program.Assert(new FileInfo(partPath).Length < 1024,
+                        "every test core part should honor the configured strict byte cap");
+                    Program.Assert(Path.GetFileName(part.File) == $"segmented_{part.Index:D4}.lrdpart",
+                        "core parts should use base-name plus incrementing zero-padded indices");
+                }
+
+                LRD_Core restored = NewCore();
+                PersistenceImportResult coreImport = CoreLogImporter.ImportCore(restored, corePath, ImportMode.Replace);
+                Program.Assert(coreImport.Success,
+                    $"manifest core import should succeed: {string.Join("; ", coreImport.Errors)}");
+                Program.Assert(coreImport.NodesAdded == graphNodeCount && coreImport.LinksAdded == graphNodeCount - 1,
+                    "manifest import should restore all nodes and cross-part links");
+
+                string transientPath = CoreLogExporter.BuildTransientPath(corePath);
+                Program.Assert(new FileInfo(transientPath).Length < CoreLogExporter.MaxPartBytes + 1,
+                    "transient manifest should remain below the hard file-size ceiling");
+                TransientLogManifest transientManifest = JsonSerializer.Deserialize<TransientLogManifest>(
+                    File.ReadAllText(transientPath), LogJson.Options)!;
+                Program.Assert(transientManifest.Parts.Count == export.TransientPartCount,
+                    "transient manifest should list every chain part");
+                foreach (LogPartDefinition part in transientManifest.Parts)
+                {
+                    string partPath = Path.Combine(directory, part.File);
+                    Program.Assert(new FileInfo(partPath).Length < 1024,
+                        "every test transient part should honor the configured strict byte cap");
+                    Program.Assert(Path.GetFileName(part.File) == $"segmented_trans_{part.Index:D4}.lrdpart",
+                        "transient parts should use the companion base-name plus incrementing indices");
+                }
+
+                PersistenceImportResult transientImport = CoreLogImporter.ImportTransient(
+                    restored,
+                    transientPath,
+                    ImportMode.Replace);
+                Program.Assert(transientImport.Success,
+                    $"manifest transient import should succeed: {string.Join("; ", transientImport.Errors)}");
+                Program.Assert(restored.GetQuery()!.Count == query.Count
+                    && restored.GetResponse()!.Count == response.Count,
+                    "split transient chains should reconstruct in original order");
+
+                LRD_Core partOnlyCore = NewCore();
+                PersistenceImportResult partOnly = CoreLogImporter.ImportCore(
+                    partOnlyCore,
+                    Path.Combine(directory, coreManifest.Parts[0].File),
+                    ImportMode.Replace);
+                Program.Assert(!partOnly.Success && partOnlyCore.GetDictionary()!.Count == 0,
+                    "selecting an individual part should fail without mutating the graph");
+
+                string firstPartPath = Path.Combine(directory, coreManifest.Parts[0].File);
+                byte[] originalPart = File.ReadAllBytes(firstPartPath);
+                using (FileStream stream = new FileStream(firstPartPath, FileMode.Open, FileAccess.ReadWrite))
+                {
+                    int firstByte = stream.ReadByte();
+                    stream.Position = 0;
+                    stream.WriteByte((byte)(firstByte ^ 0x01));
+                }
+                LRD_Core corruptCore = NewCore();
+                PersistenceImportResult corrupt = CoreLogImporter.ImportCore(corruptCore, corePath, ImportMode.Replace);
+                Program.Assert(!corrupt.Success && corruptCore.GetDictionary()!.Count == 0,
+                    "corrupt part checksum should reject the whole import before graph mutation");
+
+                File.WriteAllBytes(firstPartPath, originalPart);
+                string missingPartPath = Path.Combine(directory, coreManifest.Parts[^1].File);
+                File.Delete(missingPartPath);
+                LRD_Core missingPartCore = NewCore();
+                PersistenceImportResult missingPart = CoreLogImporter.ImportCore(
+                    missingPartCore,
+                    corePath,
+                    ImportMode.Replace);
+                Program.Assert(!missingPart.Success && missingPartCore.GetDictionary()!.Count == 0,
+                    "missing manifest parts should be rejected before mutating the graph");
+            }
+            finally
+            {
+                DeleteDirectory(directory);
+            }
+        }
+
+        private static LinkedList<Chain_Node> BuildTestChain(string prefix, int count, LinkClass linkClass)
+        {
+            LinkedList<Chain_Node> chain = new LinkedList<Chain_Node>();
+            Chain_Node? previous = null;
+            for (int index = 0; index < count; index++)
+            {
+                Chain_Node current = new Chain_Node(Guid.NewGuid(), NodeTypes.Concepts,
+                    NodeLifetime.Temporary, 50);
+                current.Set_Label($"{prefix} chain node {index:D2}");
+                if (previous is not null)
+                {
+                    Link link = new Link(previous.ID, current.ID, linkClass);
+                    previous.Set_LinkNext(link);
+                    current.Set_LinkPrevious(link);
+                }
+                chain.AddLast(current);
+                previous = current;
+            }
+            return chain;
+        }
+
+        private static void TestOversizedSegmentRecord()
+        {
+            string directory = NewTempDirectory();
+            try
+            {
+                LRD_Core core = NewCore();
+                AddNode(core, Guid.NewGuid(), NodeTypes.Concepts, NodeLifetime.Permanent, 0,
+                    new string('X', 2048));
+                string path = Path.Combine(directory, "last-good.lrdlog");
+                File.WriteAllText(path, "last known-good export");
+
+                bool rejected = false;
+                try
+                {
+                    CoreLogExporter.ExportWithPartLimit(core, path, partLimitBytes: 1024,
+                        includeTransient: false);
+                }
+                catch (IOException)
+                {
+                    rejected = true;
+                }
+
+                Program.Assert(rejected, "a single record larger than an empty part should be rejected");
+                Program.Assert(File.ReadAllText(path) == "last known-good export",
+                    "failed segmented export should leave the previous target file unchanged");
+            }
+            finally
+            {
+                DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestLargeGraphStreamingExport()
+        {
+            string directory = NewTempDirectory();
+
+            try
+            {
+                LRD_Core core = NewCore();
+                const int nodeCount = 5000;
+                Guid[] nodeIDs = new Guid[nodeCount];
+                for (int index = 0; index < nodeCount; index++)
+                {
+                    nodeIDs[index] = Guid.NewGuid();
+                    AddNode(core, nodeIDs[index], NodeTypes.Concepts, NodeLifetime.Permanent, 0,
+                        "Streaming export node " + index);
+                }
+
+                for (int index = 1; index < nodeIDs.Length; index++)
+                    core.AddDirectedConnection(nodeIDs[index - 1], nodeIDs[index], LinkClass.basic);
+
+                string path = Path.Combine(directory, "large-streamed-export.lrdlog");
+                CoreLogExportResult result = CoreLogExporter.Export(core, path, includeTransient: false);
+                Program.Assert(result.NodeCount == nodeCount, "streamed export should count all graph nodes");
+                Program.Assert(result.LinkCount == nodeCount - 1, "streamed export should count all graph links");
+                Program.Assert(new FileInfo(path).Length > 0, "streamed export should write a non-empty core log");
             }
             finally
             {

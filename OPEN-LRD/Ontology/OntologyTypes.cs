@@ -3,8 +3,8 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Ontology
 {
-    // Additive node-type and link-class registrations used by Module 4. IDs
-    // continue after the Module 1-3 ranges so existing values are untouched.
+    // Additive node-type and link-class registrations used by the ontology and
+    // maintenance modules. IDs continue after the existing Module 1-3 ranges.
     internal static class OntologyTypes
     {
         public static readonly NodeTypes Categories = NodeTypes.Register(12, "Category");
@@ -16,6 +16,7 @@ namespace OPEN_LRD.Ontology
         public static readonly NodeTypes Taxa = NodeTypes.Register(18, "Taxon");
         public static readonly NodeTypes Realities = NodeTypes.Register(19, "Reality");
         public static readonly NodeTypes Relations = NodeTypes.Register(20, "Relation");
+        public static readonly NodeTypes MetadataValues = NodeTypes.Register(21, "MetadataValue");
 
         public static readonly LinkClass ontology = LinkClass.Register(9, nameof(ontology));
         public static readonly LinkClass lexicon = LinkClass.Register(10, nameof(lexicon));
@@ -27,6 +28,7 @@ namespace OPEN_LRD.Ontology
         public static void EnsureRegistered()
         {
             _ = Categories;
+            _ = MetadataValues;
         }
     }
 }

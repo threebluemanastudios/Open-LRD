@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -234,7 +235,51 @@
             </Grid>
         </GroupBox>
 
-        <GroupBox Grid.Row="3" Header="Status" Padding="8" Margin="0,8,0,0">
+        <GroupBox Grid.Row="3" Header="Graph Maintenance" Padding="8" Margin="0,8,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <WrapPanel Grid.Row="0">
+                    <CheckBox x:Name="MaintenanceMergeNodesCheckBox"
+                              Margin="0,0,12,0"
+                              IsChecked="True"
+                              Content="Merge overlapping nodes" />
+                    <CheckBox x:Name="MaintenanceMetadataCheckBox"
+                              Margin="0,0,12,0"
+                              IsChecked="True"
+                              Content="Materialize node metadata" />
+                    <CheckBox x:Name="MaintenanceCompositionCheckBox"
+                              Margin="0,0,12,0"
+                              IsChecked="True"
+                              Content="Compose relations" />
+                    <CheckBox x:Name="MaintenancePatternCheckBox"
+                              Margin="0,0,12,0"
+                              IsChecked="True"
+                              Content="Abstract frequent patterns" />
+                    <CheckBox x:Name="MaintenanceElevationCheckBox"
+                              Margin="0,0,12,0"
+                              IsChecked="True"
+                              Content="Create relation concepts" />
+                    <CheckBox x:Name="MaintenancePruningCheckBox"
+                              Margin="0,0,12,0"
+                              IsChecked="True"
+                              Content="Prune superseded links" />
+                    <Button x:Name="RunMaintenanceButton"
+                            Padding="12,4"
+                            Click="RunMaintenance_Button_Click"
+                            Content="Run Maintenance" />
+                </WrapPanel>
+                <TextBlock x:Name="MaintenanceStatusText"
+                           Grid.Row="1"
+                           Margin="0,6,0,0"
+                           TextWrapping="Wrap"
+                           Text="Reasoning passes are opt-in; run maintenance to apply selected passes." />
+            </Grid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="4" Header="Status" Padding="8" Margin="0,8,0,0">
             <TextBox x:Name="StatusBox"
                      IsReadOnly="True"
                      AcceptsReturn="True"

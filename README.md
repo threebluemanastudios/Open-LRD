@@ -27,7 +27,8 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 | 2 | The Reasoning Engine | Subgraph matching, trust, contradiction resolution, response extraction | Complete |
 | 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | Complete (Phases 1–12) |
 | 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts, structural rules, and curated GCIDE lexical loading | Complete (Phases 1-7) |
-| Tools | Additional Tools & 3D Visualizer | Log persistence, large text file import, and native 3D visualizer | Complete (Phases 1-6) |
+| 5 | Maintenance Reasoning Engine | Optional graph consolidation, relation induction, superseded-link handling, and metadata-driven graph formation | Complete (Phases 1-2) |
+| Tools | Additional Tools & 3D Visualizer | Log persistence, large text file import, and native 3D visualizer | Complete (Phases 1-7) |
 
 ## Module 1: The Graph Backend
 
@@ -57,7 +58,7 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 ### Current Implementation
 
 - Node, web-node, and chain-node models.
-- Immutable value-correct links.
+- Value-correct typed links with persisted active/inactive state.
 - Graph dictionary, search APIs, connection management, maintenance, and TTL handling.
 - Verified-reference promotion and invalid-reference disposal.
 - Query and response chains.
@@ -286,6 +287,38 @@ progress and cancellation. In addition, 253 automated WPF UI checklist tests
 verify the Tools window, text import pipeline, and 3D Visualizer window. See
 `Module_4_Plan.txt` for the full ontology plan, `AdditionalTools.txt` for log
 persistence and text file import, and `Visualizer_Plan.txt` for the 3D visualizer.
+
+## Module 5: Maintenance Reasoning Engine
+
+**Purpose:** Consolidate duplicate graph entities and apply bounded, explainable
+relation inference during an explicitly enabled maintenance run.
+
+- The no-options `LRD_Core.RunMaintenanceCycle()` preserves TTL/disposal-only
+  behavior. `RunMaintenanceCycle(MaintenanceOptions)` enables selected reasoning
+  stages after the regular lifecycle pass.
+- Node consolidation uses normalized labels/aliases and explicit synonym,
+  identity, and shared-name evidence. Equal non-null DataPointers force a merge
+  even across node types; different non-null DataPointers prevent a merge.
+- Relation induction uses a fixed composition rule set and repeated two-hop
+  patterns above a configurable frequency threshold. New pattern relations are
+  registered and represented by Relation nodes when enabled.
+- Superseded generic links are marked inactive rather than deleted. Inactive
+  edges are preserved in `.lrdlog` files but hidden from active reasoning and
+  the 3D Visualizer.
+- Per-cycle node, link, path, merge, relation-type, and pruning budgets prevent
+  unbounded graph scans or growth. The Tools window provides explicit controls
+  for each maintenance pass and displays a cycle report.
+- The Node Metadata mode materializes label, aliases, NodeType, and DataPointer
+  fields as reusable typed value nodes and keyed links. `IngestNodeMetadata`
+  runs immediately; the optional maintenance rescan reconciles changed fields,
+  keeping stale facts inactive for audit while preserving other link origins.
+  Generated DataPointer resource values do not carry the owner's pointer, so
+  they cannot trigger identity-based node merging.
+- Module 5 and NLP ambiguity coverage bring the complete suite to 160 passing
+  smoke checks and 277
+  passing automated UI checks.
+
+See `Module_5_Plan.txt` for the detailed phased design and acceptance criteria.
 
 ## Additional Tools & 3D Visualizer
 

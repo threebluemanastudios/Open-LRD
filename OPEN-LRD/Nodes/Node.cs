@@ -253,5 +253,37 @@
         {
             lifetime = NodeLifetime.Permanent;
         }
+
+        internal bool MergeMetadataFrom(Node other)
+        {
+            ArgumentNullException.ThrowIfNull(other);
+
+            if (dataPointer is not null
+                && other.dataPointer is not null
+                && !Equals(dataPointer, other.dataPointer))
+            {
+                return false;
+            }
+
+            if (dataPointer is null)
+                dataPointer = other.dataPointer;
+
+            if (Label is null && other.Label is not null)
+                Set_Label(other.Label);
+            else if (other.Label is not null && !Has_Label(other.Label))
+                Add_Alias(other.Label);
+
+            foreach (string alias in other.aliases)
+                Add_Alias(alias);
+
+            weightUp += other.weightUp;
+            weightDown += other.weightDown;
+            timeToLive = Math.Max(timeToLive, other.timeToLive);
+
+            if (lifetime == NodeLifetime.Permanent || other.lifetime == NodeLifetime.Permanent)
+                lifetime = NodeLifetime.Permanent;
+
+            return true;
+        }
     }
 }

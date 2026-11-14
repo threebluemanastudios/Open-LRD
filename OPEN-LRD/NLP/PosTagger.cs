@@ -85,7 +85,10 @@ namespace OPEN_LRD.NLP
             if (Lexicon.IsConjunction(value))
                 return PartOfSpeech.Conjunction;
 
-            if (IsCapitalized(token.Text))
+            bool indefiniteCommonNoun = previous?.PartOfSpeech == PartOfSpeech.Determiner
+                && previous.Normalized is "a" or "an";
+
+            if (IsCapitalized(token.Text) && !indefiniteCommonNoun)
                 return PartOfSpeech.ProperNoun;
 
             if (Lexicon.IsKnownAdjective(value))
@@ -291,6 +294,10 @@ namespace OPEN_LRD.NLP
         private static bool HasAdjectiveSuffix(string value)
         {
             return value.EndsWith("ous", StringComparison.Ordinal)
+                || value.EndsWith("ical", StringComparison.Ordinal)
+                || value.EndsWith("ic", StringComparison.Ordinal)
+                || value.EndsWith("al", StringComparison.Ordinal)
+                || value.EndsWith("ar", StringComparison.Ordinal)
                 || value.EndsWith("ful", StringComparison.Ordinal)
                 || value.EndsWith("ive", StringComparison.Ordinal)
                 || value.EndsWith("able", StringComparison.Ordinal)

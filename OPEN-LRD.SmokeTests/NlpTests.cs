@@ -2,6 +2,7 @@ using OPEN_LRD;
 using OPEN_LRD.NLP;
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
+using OPEN_LRD.Ontology;
 using OPEN_LRD.Reasoning;
 using static OPEN_LRD.SmokeTests.Program;
 
@@ -20,6 +21,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP input limits", TestNlpInputLimits);
             Program.Run("NLP relation registry", TestNlpRelationRegistry);
             Program.Run("NLP relation extraction patterns", TestNlpRelationExtractionPatterns);
+            Program.Run("NLP predicate nominal classification and properties", TestPredicateNominalClassificationAndProperties);
             Program.Run("NLP relation extraction exclusions", TestNlpRelationExtractionExclusions);
             Program.Run("NLP coordination and negation", TestNlpCoordinationAndNegation);
             Program.Run("NLP chain building", TestNlpChainBuilding);
@@ -30,6 +32,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP answer generation", TestNlpAnswerGeneration);
             Program.Run("NLP yes-no answers", TestNlpYesNoAnswers);
             Program.Run("NLP answer ambiguity and no-match", TestNlpAnswerAmbiguityAndNoMatch);
+            Program.Run("NLP ambiguous anchor candidates", TestNlpAmbiguousAnchorCandidates);
             Program.Run("NLP answer diagnostics", TestNlpAnswerDiagnostics);
             Program.Run("NLP question read-only", TestNlpQuestionReadOnly);
             Program.Run("NLP question determinism", TestNlpQuestionDeterminism);
@@ -404,11 +407,15 @@ namespace OPEN_LRD.SmokeTests
             AssertArgument(workAtFrame, FrameRole.Location, "Acme");
 
             NlpResult copula = pipeline.Analyze("Alice is a doctor.");
-            Assert(copula.Frames.Count == 1, "copula input should produce one frame");
-            RelationFrame copulaFrame = copula.Frames[0];
+            Assert(copula.Frames.Count == 2, "indefinite copula input should produce identity and is_a frames");
+            RelationFrame copulaFrame = copula.Frames.Single(frame => frame.RelationName == "is");
             Assert(copulaFrame.RelationName == "is", $"expected relation 'is' but got '{copulaFrame.RelationName}'");
             Assert(copulaFrame.LinkClass == LinkClass.identities, "copula relations should use the identities class");
-            AssertArgument(copulaFrame, FrameRole.Object, "a doctor");
+            AssertArgument(copulaFrame, FrameRole.Object, "doctor");
+            RelationFrame classificationFrame = copula.Frames.Single(frame => frame.RelationName == "is_a");
+            Assert(classificationFrame.LinkClass.Id == OntologyTypes.ontology.Id,
+                "indefinite copula classification should use the ontology link class");
+            AssertArgument(classificationFrame, FrameRole.Object, "doctor");
 
             NlpResult possession = pipeline.Analyze("Alice has a dog.");
             Assert(possession.Frames.Count == 1, "possession input should produce one frame");
@@ -439,6 +446,77 @@ namespace OPEN_LRD.SmokeTests
                     argument.Role == FrameRole.Location
                     && argument.SurfaceText == "Alice"),
                 "the passive agent should not also be a location qualifier");
+        }
+
+        private static void TestPredicateNominalClassificationAndProperties()
+        {
+            OntologyTypes.EnsureRegistered();
+            OntologyRelations.EnsureRegistered();
+            RelationLinkType isRelation = RelationRegistry.GetOrRegister("is");
+
+            LRD_Core unitedStatesCore = NewCore();
+            NlpPipeline unitedStatesPipeline = new NlpPipeline(unitedStatesCore);
+            NlpResult unitedStates = unitedStatesPipeline.Ingest(
+                "The Unites States of America is a Country.");
+            Assert(unitedStates.Status == NlpStatus.Ingested,
+                $"indefinite country classification should ingest: {string.Join("; ", unitedStates.Diagnostics)}");
+            Web_Node countryEntity = unitedStatesCore.FindByLabel(
+                "Unites States of America", NodeTypes.Locations).Single();
+            Web_Node countryConcept = unitedStatesCore.FindByLabel("Country", NodeTypes.Concepts).Single();
+            Assert(unitedStatesCore.GetLinks(countryEntity.ID).Any(link =>
+                link.DestinationID == countryConcept.ID
+                && link.ForwardLink.Id == isRelation.Id
+                && link.Classification.Id == LinkClass.identities.Id),
+                "indefinite copula should retain its compatibility 'is' link");
+            Assert(unitedStatesCore.GetLinks(countryEntity.ID).Any(link =>
+                link.DestinationID == countryConcept.ID
+                && link.ForwardLink.Id == OntologyRelations.IsA
+                && link.Classification.Id == OntologyTypes.ontology.Id),
+                "indefinite copula should add an ontology is_a classification");
+            Assert(unitedStatesCore.FindByLabel("America", NodeTypes.Locations).Count == 1,
+                "a compound proper name should be kept as one location, not a separate America node");
+
+            LRD_Core stateCore = NewCore();
+            NlpPipeline statePipeline = new NlpPipeline(stateCore);
+            NlpResult stateIngest = statePipeline.Ingest("A State is a geographic region.");
+            Assert(stateIngest.Status == NlpStatus.Ingested,
+                $"category and adjective statement should ingest: {string.Join("; ", stateIngest.Diagnostics)}");
+            Web_Node state = stateCore.FindByLabel("State", NodeTypes.Concepts).Single();
+            Web_Node region = stateCore.FindByLabel("region", NodeTypes.Concepts).Single();
+            Web_Node geographic = stateCore.FindByLabel("geographic", NodeTypes.Concepts).Single();
+            Assert(stateCore.GetLinks(state.ID).Any(link => link.DestinationID == region.ID
+                && link.ForwardLink.Id == OntologyRelations.IsA),
+                "State should be classified as a region");
+            Assert(stateCore.GetLinks(state.ID).Any(link => link.DestinationID == region.ID
+                && link.ForwardLink.Id == isRelation.Id),
+                "the compatibility is link should be retained for State");
+            Assert(stateCore.GetLinks(state.ID).Any(link => link.DestinationID == geographic.ID
+                && link.ForwardLink.Id == OntologyRelations.HasProperty
+                && link.Classification.Id == OntologyTypes.properties.Id),
+                "the adjective modifier should become a has_property link");
+
+            LRD_Core outlawCore = NewCore();
+            NlpPipeline outlawPipeline = new NlpPipeline(outlawCore);
+            NlpResult outlawIngest = outlawPipeline.Ingest("Whiskey Pete is a dangerous outlaw.");
+            Assert(outlawIngest.Status == NlpStatus.Ingested,
+                $"modified category statement should ingest: {string.Join("; ", outlawIngest.Diagnostics)}");
+            Web_Node whiskeyPete = outlawCore.FindByLabel("Whiskey Pete", NodeTypes.Entities).Single();
+            Web_Node outlaw = outlawCore.FindByLabel("outlaw", NodeTypes.Concepts).Single();
+            Web_Node dangerous = outlawCore.FindByLabel("dangerous", NodeTypes.Concepts).Single();
+            Assert(outlawCore.GetLinks(whiskeyPete.ID).Any(link => link.DestinationID == outlaw.ID
+                && link.ForwardLink.Id == OntologyRelations.IsA),
+                "Whiskey Pete should be classified as an outlaw");
+            Assert(outlawCore.GetLinks(whiskeyPete.ID).Any(link => link.DestinationID == dangerous.ID
+                && link.ForwardLink.Id == OntologyRelations.HasProperty),
+                "dangerous should be stored as an adjective property");
+
+            NlpResult whoIsOutlaw = outlawPipeline.Ask("Who is an outlaw?");
+            Assert(whoIsOutlaw.Answer?.Status == AnswerStatus.Answered
+                && whoIsOutlaw.Answer.Candidates.Any(candidate => candidate.NodeID == whiskeyPete.ID),
+                "who-is-a-category questions should match the is_a link");
+            NlpResult isDangerous = outlawPipeline.Ask("Is Whiskey Pete dangerous?");
+            Assert(isDangerous.Answer?.Status == AnswerStatus.Yes,
+                $"yes/no copula questions should query the has_property relation: {isDangerous.Answer?.Status}; {string.Join("; ", isDangerous.Diagnostics)}");
         }
 
         private static void TestNlpRelationExtractionExclusions()
@@ -968,6 +1046,38 @@ namespace OPEN_LRD.SmokeTests
             Assert(
                 unknownAnchor.Answer?.Status == AnswerStatus.NoMatch,
                 $"expected NoMatch but got {unknownAnchor.Answer?.Status}: {string.Join("; ", unknownAnchor.Diagnostics)}");
+        }
+
+        private static void TestNlpAmbiguousAnchorCandidates()
+        {
+            LRD_Core core = NewCore();
+            Guid firstAlice = AddNode(core, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid secondAlice = AddNode(core, NodeTypes.Entities, "Alice", NodeLifetime.Temporary);
+
+            NlpPipeline pipeline = new NlpPipeline(core);
+            NlpResult result = pipeline.Ask("What did Alice see?");
+            QuestionAnalysis question = result.Question
+                ?? throw new InvalidOperationException("ambiguous ask should include question analysis");
+            NlpAnswer answer = result.Answer
+                ?? throw new InvalidOperationException("ambiguous ask should include an answer");
+
+            Assert(question.AnchorIsAmbiguous,
+                "duplicate anchor labels should be recorded as an ambiguous anchor");
+            Assert(question.AnchorCandidateNodeIDs.Count == 2,
+                "question analysis should preserve both anchor candidate IDs");
+            Assert(answer.Status == AnswerStatus.Ambiguous,
+                $"expected ambiguous answer, got {answer.Status}");
+            Assert(answer.Candidates.Count == 2,
+                "ambiguous anchor answer should seed both rows for the Candidates grid");
+            Assert(answer.Candidates.Select(candidate => candidate.NodeID).ToHashSet()
+                .SetEquals(new[] { firstAlice, secondAlice }),
+                "candidate rows should identify the matching graph nodes");
+            Assert(answer.Candidates.All(candidate => candidate.Label == "Alice"
+                && candidate.Depth == 0
+                && candidate.PathNodeIDs.SequenceEqual(new[] { candidate.NodeID })),
+                "anchor candidate rows should include label and anchor path data");
+            Assert(answer.UsesTemporaryEvidence,
+                "ambiguous answer should flag temporary evidence when a candidate is temporary");
         }
 
         private static void TestNlpAnswerDiagnostics()

@@ -306,6 +306,7 @@ namespace OPEN_LRD.NLP
         bool Supported,
         bool AnchorIsAmbiguous,
         Guid? AnchorNodeID,
+        IReadOnlyList<Guid> AnchorCandidateNodeIDs,
         FrameRole AnchorRole,
         IReadOnlyList<QuestionVariant> Variants,
         IReadOnlyList<string> Diagnostics,

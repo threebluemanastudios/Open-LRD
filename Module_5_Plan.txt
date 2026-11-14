@@ -1,0 +1,339 @@
+OPEN-LRD
+MODULE 5: MAINTENANCE REASONING ENGINE
+IMPLEMENTATION PLAN
+
+Status: Phase 1 and Phase 2 complete
+Scope: Configurable graph consolidation and metadata-driven graph formation.
+Implementation constraints: Native C#, no external dependencies. Existing
+  TTL maintenance remains the default behavior unless reasoning passes are
+  explicitly enabled.
+
+================================================================================
+1. PURPOSE
+================================================================================
+
+Module 5 adds optional, staged reasoning passes to LRD_Core.RunMaintenanceCycle.
+It consolidates overlapping nodes, derives bounded and explainable relation
+links, represents generated relation types as graph concepts, and marks generic
+links inactive when a more informative direct or transitive relation exists.
+Inactive links remain in the graph log as history but are excluded from active
+reasoning and Visualizer geometry.
+
+The module must be deterministic within a graph snapshot, bounded by explicit
+work budgets, idempotent across repeated runs, and conservative about merging
+or deriving knowledge. A cycle report records each pass and its effects.
+
+================================================================================
+2. ACCEPTED DESIGN DECISIONS
+================================================================================
+
+1. RunMaintenanceCycle() without options remains TTL/disposal-only. Reasoning
+   is enabled only by passing MaintenanceOptions with EnableReasoningMaintenance
+   set to true.
+2. Stages run in order: baseline TTL cleanup, node consolidation, relation
+   inference/elevation, then superseded-link invalidation.
+3. Equal non-null DataPointers force node consolidation even when labels or
+   NodeTypes differ. Distinct non-null DataPointers are a hard merge veto.
+   One pointer and one null pointer may merge when another overlap criterion
+   matches; the pointer is retained on the survivor.
+4. Without equal DataPointers, label/alias matching requires equal NodeTypes.
+   Semantic equivalence uses explicit synonym/identity relations and shared
+   naming links, subject to the same DataPointer veto.
+5. Node merging preserves permanent status and metadata, unions aliases, and
+   rewires links. Rewired self-links are discarded and duplicate links are
+   coalesced.
+6. Generated relations are rule-gated. Composition uses a fixed rule table;
+   pattern abstraction only accepts repeated two-edge relation sequences above
+   a configurable evidence threshold. It does not infer arbitrary prose-based
+   semantics.
+7. Generated link types are dynamically registered and elevated to permanent
+   Relation nodes linked to a permanent Relation category root.
+8. Superseded links are marked inactive, not physically erased and not removed
+   from the global type registry. Inactive state is persisted and excluded from
+   reasoning, active graph APIs, and Visualizer snapshots.
+9. Generic links are invalidated when a specific active link connects the same
+   directed endpoints, or when a bounded path of specific links connects those
+   endpoints. This does not infer that arbitrary functional paths are
+   equivalent; only the generic direct edge is invalidated.
+10. All stages have independent enable flags and per-cycle budgets. Exceeding a
+    budget stops that stage and is reported; it does not undo completed stages.
+
+================================================================================
+3. MODULE COMPONENTS
+================================================================================
+
+OPEN-LRD/Maintenance/
+  MaintenanceOptions.cs             Feature toggles, thresholds, work budgets
+  MaintenanceReport.cs              Counts, diagnostics, duration, stage outcomes
+  MaintenanceReasoningEngine.cs     Staged orchestration
+  OverlappingNodeConsolidator.cs     Candidate detection and safe node rewiring
+  LinkTypeGenerator.cs              Explicit composition and pattern abstraction
+  SupersededLinkPruner.cs            Same-endpoint and bounded-path invalidation
+
+Core integration:
+  LRD_Core.RunMaintenanceCycle() retains current TTL-only behavior.
+  LRD_Core.RunMaintenanceCycle(MaintenanceOptions) runs requested bounded stages
+  and returns a MaintenanceReport.
+
+================================================================================
+4. STAGE SPECIFICATIONS
+================================================================================
+
+Stage 1 — Baseline lifecycle
+  Keep the existing PerformMaintenance, TTL decrement, disposal, and stale
+  endpoint cleanup behavior. Record removed nodes in the report.
+
+Stage 2 — Overlapping node consolidation
+  Candidate signals:
+    - Equal non-null DataPointer record values; this signal overrides type and
+      label compatibility.
+    - Equal normalized label/alias values when NodeTypes match.
+    - Explicit synonym or identities links, and shared is_named targets, when
+      NodeTypes match.
+  Safety:
+    - Distinct non-null DataPointers always veto a merge.
+    - A node cannot merge with itself; no disposed/missing nodes are considered.
+    - Node, link, and merge work budgets are enforced.
+  Survivor order:
+    1. Permanent lifetime, 2. larger verified weight, 3. higher active degree,
+    4. non-null DataPointer, 5. stable GUID ordering.
+  Merge:
+    - Union labels/aliases and preserve the DataPointer.
+    - Aggregate evidence weights and retain the larger TTL for temporary nodes.
+    - Keep Permanent if either node is Permanent.
+    - Rewire all incoming/outgoing link instances to the survivor, preserve
+      link type/class/activity, discard self-links, deduplicate exact edges,
+      then remove the duplicate node and its stale references.
+
+Stage 3 — Link type generation (separate processes)
+  A. Compositional induction applies only registered, fixed relation rules.
+     Initial rules include part_of + part_of => part_of, is_a + has_property
+     => has_property, has_location + part_of => has_location, and
+     participated_in + has_location => has_location. Inferred edges are
+     counted and subject to path, link, and per-cycle generation budgets.
+  B. Frequent pattern abstraction counts distinct endpoint instances of a
+     repeated ordered two-relation path. At MinPatternFrequency it registers a
+     normalized synthetic relation name with an inverse type and adds the
+     corresponding direct edges, subject to per-cycle budgets.
+  C. Concept-backed elevation creates/reuses one permanent Relation node for
+      each generated relation and links it by is_a to the Relation category.
+      If missing, it creates only that permanent category root rather than
+      bootstrapping the full ontology.
+
+  D. Node metadata materialization is a fourth, independent process
+     in Module 5 Phase 2. It reads the existing Node fields (label, aliases,
+     NodeType, and DataPointer) and creates/reuses typed value nodes and
+     key-specific links. It does not introduce an arbitrary metadata bag or
+     infer relations from unrestricted text.
+
+Stage 4 — Superseded link handling
+  - Candidate generic links are ForwardLinkTypes.basic and the ontology
+    related_to relation. LinkClass.basic alone does not make a specific
+    predicate generic.
+  - Same endpoint: deactivate a generic edge only when a more specific active
+    edge with the same direction/endpoints exists.
+  - Transitive redundancy: deactivate a generic edge only when a bounded path
+    of at least two specific active edges connects the same directed endpoints.
+  - Persist inactive state. Inactive links are excluded by reasoning snapshots,
+    active-link queries, and visualization; export retains them for history.
+
+================================================================================
+5. OPTIONS AND REPORTING
+================================================================================
+
+MaintenanceOptions exposes EnableReasoningMaintenance, per-stage feature flags,
+  MinPatternFrequency, MaxNodesToExaminePerCycle, MaxLinksToExaminePerCycle,
+  MaxPathsToExaminePerCycle, MaxMergesPerCycle,
+  MaxRelationTypesGeneratedPerCycle, MaxLinksGeneratedPerCycle,
+  MaxLinksPrunedPerCycle, and MaxTransitivePruneDepth. Options are validated
+  before any graph mutation.
+
+MaintenanceReport records nodes visited/removed/merged, candidate rejections
+(including distinct DataPointers), relation patterns examined/registered,
+links generated/inactivated, budget exhaustion, elapsed time, and diagnostics.
+
+================================================================================
+6. IMPLEMENTATION PHASES
+================================================================================
+
+1. Add options, validation, report types, and TTL-compatible overload.
+2. Add active/inactive link state, persistence compatibility, and filtering in
+   reasoning and Visualizer snapshots.
+3. Add DataPointer-aware node candidate detection, metadata transfer, link
+   rewiring, and deterministic survivor selection.
+4. Add fixed-rule composition, bounded frequency abstraction, and Relation-node
+   elevation.
+5. Add same-endpoint and bounded-transitive generic-link invalidation.
+6. Add a Tools control panel with explicit Run Maintenance action and individual
+   switches for merge, composition, pattern abstraction, concept elevation, and
+   pruning. The panel reports work counts and diagnostics. TTL-only remains the
+   no-options API default.
+7. Add focused smoke/UI tests for all decisions, budgets, persistence, and visual
+   filtering; run existing SmokeTests and ManualUiTests.
+
+================================================================================
+7. ACCEPTANCE TESTS
+================================================================================
+
+- A default RunMaintenanceCycle only performs existing TTL/disposal work.
+- Equal DataPointers merge despite different NodeTypes; distinct pointers
+  prevent merging even with matching labels; pointer transfers when other side
+  is null.
+- Label/alias and synonym/identity matches consolidate only compatible types.
+- Merge preserves links and activity, removes duplicates/self-links, and keeps
+  permanent status and pointer metadata.
+- Explicit composition and thresholded pattern abstraction register types and
+  produce idempotent links; unsupported patterns do not produce links.
+- Generated relation concepts are permanent, unique, and linked to a permanent
+  Relation category root, creating that root if it is absent.
+- Same-endpoint and bounded-path pruning mark only generic links inactive.
+- Inactive links survive export/import but do not appear in reasoning or 3D
+  visualizer geometry.
+- Invalid options are rejected before mutation; budgets cap each pass.
+- Existing SmokeTests and ManualUiTests pass without regression.
+
+================================================================================
+8. MODULE 5 PHASE 2: NODE METADATA REASONING
+================================================================================
+
+Status: Complete
+
+Purpose
+  Add NodeMetadataReasoner next to composition, frequent-pattern abstraction,
+  and relation elevation. The component turns selected fields already stored
+  on a node into explicit graph facts: value nodes and typed links rooted at
+  the metadata-owning node.
+
+Accepted design decisions
+  1. Input is the existing Node model only: Label, Aliases, NodeType, and
+     DataPointer. Weights, weight-down, lifetime, and TTL are internal memory
+     management state, not semantic facts.
+  2. Facts are keyed relations. For example, a named label is connected with
+     is_named and each alias with has_alias; values are represented by
+     deterministic, reusable nodes rather than untyped strings embedded in
+     links.
+  3. Processing happens both immediately through a dedicated core metadata
+     ingestion method and as a bounded maintenance rescan. Existing setters
+     remain simple; callers use the explicit ingest method after applying
+     metadata, while maintenance catches edits or imports that bypass it.
+  4. Metadata changes are reconciled. Obsolete generated facts become inactive
+     and remain available for audit; current facts are added/reused. Explicitly
+     asserted links are never deactivated merely because they resemble a
+     materialized metadata fact.
+  5. Processing is idempotent, type-scoped, deterministic, and bounded. Blank
+     fields are skipped. No unrestricted text/LLM extraction is part of this
+     phase.
+
+Proposed component and integration
+  OPEN-LRD/Maintenance/NodeMetadataReasoner.cs
+    - Build a metadata snapshot from one node or from a bounded graph scan.
+    - Normalize keys and values consistently and build/reuse target nodes.
+    - Materialize or reconcile only links owned by metadata processing.
+  Core API proposal:
+    LRD_Core.IngestNodeMetadata(Guid nodeID)
+     Validates the node and immediately materializes its current supported
+     fields. Returns a per-node metadata processing report.
+     The immediate path also elevates newly registered metadata predicates to
+     Relation concepts, matching the maintenance-stage behavior.
+  Maintenance API addition:
+    MaintenanceOptions.EnableNodeMetadataReasoning
+    When enabled under EnableReasoningMaintenance, scan up to the existing node
+    and link budgets after node consolidation and before relation inference and
+    superseded-link pruning. RunMaintenanceCycle() without options remains
+    TTL-only.
+
+Field-to-graph mapping
+  - Label: create/reuse a MetadataValues value node and connect subject to it
+    with the registered is_named relation. The value is represented in the
+    metadata value namespace (for example, "Label: Alice").
+  - Aliases: create/reuse metadata value nodes and connect with a registered
+    has_alias relation. Normalize for identity lookup while keeping the
+    original casing in the value-node label.
+  - NodeType: create/reuse a type-value node keyed by both NodeType ID and name
+    (for example, "NodeType: 6: Entity") and connect with has_node_type. This
+    preserves the difference between a runtime NodeTypes registry entry and a
+    graph concept that happens to share its display name.
+  - DataPointer: create/reuse a metadata value node in the resource namespace,
+    keyed by the pointer's canonical URI and its optional media type, byte
+    length, and checksum; connect the subject with references_data. Materialize
+     present MediaType, ByteLength, and Checksum as additional keyed facts on the
+     resource node. Keep the DataPointer on the owning node and do not copy it
+     onto the generated resource node, because equal DataPointers force node
+     merging in Stage 2. If an owner changes its pointer, its references_data
+     edge is reconciled; the old resource node's own attributes remain a valid
+     historical description of that pointer value.
+  - Register a dedicated MetadataValues NodeType at reserved ID 21 and use it
+    for all generated value nodes, with field-qualified stable labels/keys.
+    This prevents a value node from accidentally merging with a real entity
+    that shares its text.
+  - Register metadata predicates through RelationRegistry so their IDs/names
+    are included in the existing persistence type-definition snapshot. Use
+    LinkClass.lexicon for name facts and LinkClass.ontology for type/resource
+    facts unless validation shows a better existing classification.
+
+Ownership, updates, and safety
+  - Add link-origin/provenance state sufficient to distinguish metadata-derived
+    support from explicit or other inferred support (for example, origin flags
+    for Explicit, NodeMetadata, and Reasoning). Persist all support origins in
+    LinkLog; older logs default to Explicit/Unknown.
+    Adding another origin to an existing link unions its origin flags without
+    changing link identity. Removing the Metadata origin must not remove other
+    sources' support; node consolidation must preserve/union origins on rewired
+    duplicate links.
+  - When reconciling a field, remove only the metadata-derived support for stale
+    facts. If a link has another active origin, keep the link active. Otherwise
+    mark it inactive using existing non-destructive link handling.
+  - Reuse matching value nodes by field-qualified normalized key. The reserved
+    MetadataValues node type and field prefix prevent Stage 2's label matching
+    from merging value nodes into ordinary user nodes.
+  - Generated value-node lifetime follows its owner: permanent owner produces
+    permanent reusable values; temporary owner produces temporary values using
+    a configurable metadata-node TTL. Orphaned temporary values expire through
+    the existing lifecycle; permanent values remain reusable.
+   - Validate the owner is present and not disposed. Enforce per-cycle budgets
+     for nodes scanned, facts examined, value nodes created, and links generated.
+     Hitting a budget leaves completed facts intact and reports remaining work.
+     Configuration uses MaxMetadataFactsPerNode,
+     MaxMetadataFactsExaminedPerCycle, MaxMetadataValuesCreatedPerCycle, and
+     MetadataValueNodeTimeToLive in addition to the shared maintenance budgets.
+  - Avoid creating self-links. Deduplicate by subject, predicate, value-node ID,
+    and link class. Preserve inactive audit history across export/import and
+    keep inactive edges out of reasoning and Visualizer snapshots.
+
+Execution order
+  1. TTL/disposal lifecycle.
+  2. Node consolidation.
+  3. Node metadata materialization/rescan (when enabled).
+  4. Compositional induction.
+  5. Frequent-pattern abstraction.
+  6. Concept-backed relation elevation for relations generated in this cycle.
+  7. Superseded-link invalidation.
+
+Phase 2 implementation steps
+  1. Register the reserved MetadataValues node type and define a per-node
+     metadata snapshot/report and normalized identity keys.
+  2. Add the NodeMetadataReasoner and field-to-relation mapping.
+  3. Add metadata-owned link provenance with backwards-compatible persistence.
+  4. Add LRD_Core.IngestNodeMetadata and MaintenanceOptions maintenance toggle;
+     wire bounded processing at the agreed stage in the cycle.
+  5. Reconcile changed labels, aliases, NodeTypes, and DataPointers while
+     preserving other link origins and inactive history.
+  6. Add focused smoke tests and Tools controls/status reporting; retain
+     TTL-only behavior for no-options maintenance.
+  7. Verify repeated ingestion is idempotent, metadata changes deactivate only
+     stale generated facts, equal strings of incompatible value types do not
+     collide, and DataPointer resource nodes do not trigger owner-node merges.
+
+Phase 2 acceptance criteria
+  - Current Node fields materialize into the expected typed value nodes/links.
+  - Repeated immediate ingestion and maintenance rescans create no duplicates.
+  - Changed/removed field values deactivate only metadata-owned links; explicit
+    support for a shared edge remains active.
+  - DataPointer properties use deterministic resource identity without copying
+    the pointer to generated nodes or invoking Stage 2's pointer-merge rule.
+  - Nodes with blank labels, no aliases, and no DataPointer still materialize
+    their required NodeType fact; no optional-field facts are generated. Budgets
+    and invalid IDs are reported without corrupting completed graph state.
+  - Metadata origin and active/inactive state survive .lrdlog round trips.
+  - Inactive metadata facts are excluded from reasoning and 3D visualization.
+  - Existing SmokeTests and ManualUiTests continue to pass.

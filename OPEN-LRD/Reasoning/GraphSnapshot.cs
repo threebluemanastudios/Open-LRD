@@ -63,6 +63,9 @@ namespace OPEN_LRD.Reasoning
 
                 foreach (Link link in node.Get_ReferenceLinks())
                 {
+                    if (!link.IsActive)
+                        continue;
+
                     if (!dictionary.ContainsKey(link.SourceID) || !dictionary.ContainsKey(link.DestinationID))
                         continue;
 

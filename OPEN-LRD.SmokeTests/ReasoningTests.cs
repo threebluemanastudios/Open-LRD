@@ -438,9 +438,9 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetLinks(source).Any(link =>
                 link.DestinationID == newTarget && link.Classification == LinkClass.identities),
                 "new trusted link should be added");
-            Assert(core.GetLinks(source).Any(link =>
-                link.DestinationID == oldTarget && link.Classification == LinkClass.identities),
-                "old link should remain in the graph for audit");
+            Assert(core.GetStoredLinks(source).Any(link =>
+                link.DestinationID == oldTarget && link.Classification == LinkClass.identities && !link.IsActive),
+                "old link should remain inactive in the graph for audit");
 
             Assert(result.ResponsePaths.Count > 0, "a response path should be extracted");
             Assert(!result.ResponsePaths.Any(path => path.Links.Any(link =>

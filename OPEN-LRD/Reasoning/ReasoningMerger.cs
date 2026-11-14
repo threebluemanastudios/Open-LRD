@@ -282,11 +282,15 @@ namespace OPEN_LRD.Reasoning
                                 action.DestinationGraphNodeID,
                                 action.ForwardLinkType,
                                 action.InverseLinkType,
-                                action.Classification);
+                                action.Classification,
+                                LinkOrigin.Reasoning);
 
-                            if (!sourceNode.Get_ReferenceLinks().Contains(link))
+                            bool hasReasoningSupport = sourceNode.Get_ReferenceLinks().Any(existing =>
+                                existing.HasSameIdentity(link)
+                                && (existing.Origins & LinkOrigin.Reasoning) != 0);
+                            sourceNode.Add_Link(link);
+                            if (!hasReasoningSupport)
                             {
-                                sourceNode.Add_Link(link);
                                 addedLinks.Add(link);
                             }
                         }
@@ -303,7 +307,8 @@ namespace OPEN_LRD.Reasoning
                     case EdgeActionKind.MarkExistingLinkInvalid:
                         if (action.ExistingLink is not null && !invalidatedLinks.Contains(action.ExistingLink))
                         {
-                            invalidatedLinks.Add(action.ExistingLink);
+                            if (core.InvalidateLink(action.ExistingLink))
+                                invalidatedLinks.Add(action.ExistingLink);
 
                             if (proposalCanInvalidateTarget(proposedTrust)
                                 && core.TryGetNode(action.DestinationGraphNodeID, out Web_Node? losingTarget)

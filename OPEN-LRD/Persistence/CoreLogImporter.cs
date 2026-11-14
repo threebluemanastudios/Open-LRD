@@ -9,11 +9,19 @@ namespace OPEN_LRD.Persistence
 {
     internal static class CoreLogImporter
     {
-        private const long MaxLogBytes = 64L * 1024L * 1024L;
-        private const int MaxNodes = 100000;
-        private const int MaxLinks = 500000;
+        internal const long MaxLogBytes = 512L * 1024L * 1024L;
+        internal const int MaxNodes = 1000000;
+        internal const int MaxLinks = 5000000;
         private const int MaxConversations = 10000;
         private const int MaxChains = 10000;
+        private const int MaxPartsPerExport = 10000;
+
+        private readonly record struct LinkIdentity(
+            Guid SourceID,
+            Guid DestinationID,
+            int ForwardTypeID,
+            int InverseTypeID,
+            int LinkClassID);
 
         public static PersistenceImportResult ImportCore(
             LRD_Core core,
@@ -32,6 +40,19 @@ namespace OPEN_LRD.Persistence
             // Ontology relations occupy the reserved 1-999 range, so they must
             // be registered before imported IDs can be validated or restored.
             OPEN_LRD.Ontology.OntologyRelations.EnsureRegistered();
+
+            if (!string.IsNullOrWhiteSpace(path)
+                && string.Equals(Path.GetExtension(path), ".lrdpart", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Errors.Add("Select the .lrdlog manifest, not an individual part file.");
+                return result;
+            }
+
+            string? format = ReadFormatHeader(path, result);
+            if (format is null)
+                return result;
+            if (string.Equals(format, CoreLogFormat.CoreManifest, StringComparison.Ordinal))
+                return ImportCoreManifest(core, path, mode, result);
 
             CoreLogDocument? document = ReadDocument<CoreLogDocument>(
                 path,
@@ -70,6 +91,26 @@ namespace OPEN_LRD.Persistence
                 mode,
                 result);
 
+            // Drop the deserialized DTO graph before committing the replacement
+            // graph. The node/link plans now own the validated state needed by
+            // the commit, so retaining both copies only raises peak memory.
+            document.Nodes = new List<NodeLog>();
+            document.Links = new List<LinkLog>();
+            document.Conversations = new List<ConversationLog>();
+            document.TypeDefinitions = new TypeDefinitionLog();
+            document = null;
+
+            return CommitCorePlan(core, mode, result, nodePlan, acceptedLinks, conversations);
+        }
+
+        private static PersistenceImportResult CommitCorePlan(
+            LRD_Core core,
+            ImportMode mode,
+            PersistenceImportResult result,
+            NodePlan nodePlan,
+            IReadOnlyList<Link> acceptedLinks,
+            IReadOnlyDictionary<Guid, ConversationContext> conversations)
+        {
             if (result.Errors.Count > 0)
                 return result;
 
@@ -132,6 +173,573 @@ namespace OPEN_LRD.Persistence
             return result;
         }
 
+        private static PersistenceImportResult CommitTransientPlan(
+            LRD_Core core,
+            ImportMode mode,
+            PersistenceImportResult result,
+            List<(ChainLog Log, LinkedList<Chain_Node> Chain)> queryChains,
+            List<(ChainLog Log, LinkedList<Chain_Node> Chain)> responseChains)
+        {
+            if (result.Errors.Count > 0)
+                return result;
+
+            if (mode == ImportMode.Replace)
+            {
+                LinkedList<Chain_Node> combinedQuery = CombineChains(queryChains);
+                LinkedList<Chain_Node> combinedResponse = CombineChains(responseChains);
+                core.ReplaceTransientChains(combinedQuery, combinedResponse);
+                result.QueryChainsAdded = queryChains.Count;
+                result.ResponseChainsAdded = responseChains.Count;
+            }
+            else
+            {
+                List<LinkedList<Chain_Node>> existingChains = EnumerateChains(core.GetQuery())
+                    .Concat(EnumerateChains(core.GetResponse()))
+                    .ToList();
+                List<LinkedList<Chain_Node>> addedChains = new List<LinkedList<Chain_Node>>();
+
+                foreach ((ChainLog _, LinkedList<Chain_Node> chain) in queryChains)
+                {
+                    if (IsDuplicateChain(chain, existingChains, addedChains))
+                    {
+                        result.ChainsSkipped++;
+                        continue;
+                    }
+
+                    core.BuildQuery(chain);
+                    addedChains.Add(chain);
+                    result.QueryChainsAdded++;
+                }
+
+                foreach ((ChainLog _, LinkedList<Chain_Node> chain) in responseChains)
+                {
+                    if (IsDuplicateChain(chain, existingChains, addedChains))
+                    {
+                        result.ChainsSkipped++;
+                        continue;
+                    }
+
+                    core.BuildResponse(chain);
+                    addedChains.Add(chain);
+                    result.ResponseChainsAdded++;
+                }
+            }
+
+            result.Success = result.Errors.Count == 0;
+            return result;
+        }
+
+        private static PersistenceImportResult ImportCoreManifest(
+            LRD_Core core,
+            string path,
+            ImportMode mode,
+            PersistenceImportResult result)
+        {
+            CoreLogManifest? manifest = ReadDocument<CoreLogManifest>(
+                path,
+                CoreLogFormat.CoreManifest,
+                result);
+            if (manifest is null)
+                return result;
+
+            Normalize(manifest);
+
+            if (!ValidateTypeDefinitions(manifest.TypeDefinitions, result)
+                || !ValidateCoreManifest(path, manifest, result))
+            {
+                return result;
+            }
+
+            ApplyTypeDefinitions(manifest.TypeDefinitions, result);
+            NodePlanningContext nodeContext = CreateNodePlanningContext(core, mode);
+
+            foreach (LogPartDefinition part in manifest.Parts.Where(part => part.Kind == "nodes"))
+            {
+                if (!ReadCorePart(
+                    ResolvePartPath(path, part.File),
+                    manifest.ExportId,
+                    part,
+                    record =>
+                    {
+                        if (record.Kind != "node" || record.Node is null
+                            || record.Link is not null || record.Conversation is not null)
+                        {
+                            result.Errors.Add($"Part {part.Index} contains a record with the wrong kind.");
+                            return;
+                        }
+
+                        Normalize(record.Node);
+                        PlanNodeRecord(record.Node, nodeContext, mode, result);
+                    },
+                    result))
+                {
+                    return result;
+                }
+            }
+
+            if (result.Errors.Count > 0)
+                return result;
+
+            LinkPlanningContext linkContext = new LinkPlanningContext(core, nodeContext.Plan, mode);
+            foreach (LogPartDefinition part in manifest.Parts.Where(part => part.Kind == "links"))
+            {
+                if (!ReadCorePart(
+                    ResolvePartPath(path, part.File),
+                    manifest.ExportId,
+                    part,
+                    record =>
+                    {
+                        if (record.Kind != "link" || record.Link is null
+                            || record.Node is not null || record.Conversation is not null)
+                        {
+                            result.Errors.Add($"Part {part.Index} contains a record with the wrong kind.");
+                            return;
+                        }
+
+                        Normalize(record.Link);
+                        PlanLinkRecord(record.Link, linkContext, result);
+                    },
+                    result))
+                {
+                    return result;
+                }
+            }
+
+            ConversationPlanningContext conversationContext = new ConversationPlanningContext(core, mode);
+            foreach (LogPartDefinition part in manifest.Parts.Where(part => part.Kind == "conversations"))
+            {
+                if (!ReadCorePart(
+                    ResolvePartPath(path, part.File),
+                    manifest.ExportId,
+                    part,
+                    record =>
+                    {
+                        if (record.Kind != "conversation" || record.Conversation is null
+                            || record.Node is not null || record.Link is not null)
+                        {
+                            result.Errors.Add($"Part {part.Index} contains a record with the wrong kind.");
+                            return;
+                        }
+
+                        Normalize(record.Conversation);
+                        PlanConversationRecord(record.Conversation, conversationContext,
+                            nodeContext.Plan, result);
+                    },
+                    result))
+                {
+                    return result;
+                }
+            }
+
+            return CommitCorePlan(core, mode, result, nodeContext.Plan,
+                linkContext.Accepted, conversationContext.Accepted);
+        }
+
+        private static bool ValidateCoreManifest(
+            string manifestPath,
+            CoreLogManifest manifest,
+            PersistenceImportResult result)
+        {
+            if (new FileInfo(manifestPath).Length >= CoreLogExporter.MaxPartBytes + 1)
+                result.Errors.Add("The core manifest must be smaller than 500 MiB.");
+            if (manifest.ExportId == Guid.Empty)
+                result.Errors.Add("The core log manifest has an empty export ID.");
+            if (manifest.TransientFile is not null && !IsSimpleFileName(manifest.TransientFile))
+                result.Errors.Add("The core manifest contains an unsafe transient-log filename.");
+            if (manifest.NodeCount < 0 || manifest.NodeCount > MaxNodes
+                || manifest.LinkCount < 0 || manifest.LinkCount > MaxLinks
+                || manifest.ConversationCount < 0 || manifest.ConversationCount > MaxConversations)
+            {
+                result.Errors.Add("The core log manifest exceeds supported item-count limits.");
+            }
+            if (manifest.Parts.Count > MaxPartsPerExport)
+                result.Errors.Add($"The core log manifest exceeds the {MaxPartsPerExport}-part limit.");
+
+            long nodeRecords = 0;
+            long linkRecords = 0;
+            long conversationRecords = 0;
+            HashSet<string> paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string[] validKinds = { "nodes", "links", "conversations" };
+
+            for (int index = 0; index < manifest.Parts.Count; index++)
+            {
+                LogPartDefinition part = manifest.Parts[index];
+                if (part.Index != index + 1)
+                    result.Errors.Add($"Core part indices must be consecutive; expected {index + 1}.");
+                if (!validKinds.Contains(part.Kind, StringComparer.Ordinal))
+                    result.Errors.Add($"Core part {part.Index} has unknown kind '{part.Kind}'.");
+                if (part.RecordCount <= 0 || part.ByteLength <= 0 || part.ByteLength >= CoreLogExporter.MaxPartBytes + 1)
+                    result.Errors.Add($"Core part {part.Index} has invalid count or byte-length metadata.");
+                if (part.Sha256.Length != 64 || !part.Sha256.All(Uri.IsHexDigit))
+                    result.Errors.Add($"Core part {part.Index} has an invalid SHA-256 checksum.");
+                if (!paths.Add(part.File))
+                    result.Errors.Add($"Core part path '{part.File}' is duplicated.");
+
+                if (part.Kind == "nodes") nodeRecords += part.RecordCount;
+                else if (part.Kind == "links") linkRecords += part.RecordCount;
+                else if (part.Kind == "conversations") conversationRecords += part.RecordCount;
+
+                if (!TryValidatePartFile(manifestPath, part, result))
+                    continue;
+            }
+
+            if (nodeRecords != manifest.NodeCount || linkRecords != manifest.LinkCount
+                || conversationRecords != manifest.ConversationCount)
+            {
+                result.Errors.Add("Core manifest aggregate counts do not match its part records.");
+            }
+
+            return result.Errors.Count == 0;
+        }
+
+        private static bool TryValidatePartFile(
+            string manifestPath,
+            LogPartDefinition part,
+            PersistenceImportResult result)
+        {
+            try
+            {
+                string fullPath = ResolvePartPath(manifestPath, part.File);
+                if (!File.Exists(fullPath))
+                {
+                    result.Errors.Add($"Part {part.Index} was not found: '{part.File}'.");
+                    return false;
+                }
+
+                FileInfo info = new FileInfo(fullPath);
+                if (info.Length != part.ByteLength || info.Length >= CoreLogExporter.MaxPartBytes + 1)
+                {
+                    result.Errors.Add($"Part {part.Index} has a size different from the manifest or exceeds 500 MiB.");
+                    return false;
+                }
+
+                string checksum = ComputeSha256(fullPath);
+                if (!string.Equals(checksum, part.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Errors.Add($"Part {part.Index} failed SHA-256 verification.");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                result.Errors.Add($"Part {part.Index} could not be validated: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static string ResolvePartPath(string manifestPath, string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
+                throw new ArgumentException("Part paths must be non-empty relative paths.", nameof(relativePath));
+
+            string directory = Path.GetFullPath(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!);
+            string fullPath = Path.GetFullPath(Path.Combine(directory, relativePath));
+            string relative = Path.GetRelativePath(directory, fullPath);
+            if (relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || Path.IsPathRooted(relative))
+            {
+                throw new ArgumentException("Part path escapes the manifest directory.", nameof(relativePath));
+            }
+            return fullPath;
+        }
+
+        private static bool ReadCorePart(
+            string path,
+            Guid exportId,
+            LogPartDefinition part,
+            Action<CoreLogPartRecord> consume,
+            PersistenceImportResult result)
+        {
+            int index = 0;
+            int recordCount = 0;
+            bool valid = ReadJsonArray<CoreLogPartRecord>(path, record =>
+            {
+                if (index == 0)
+                {
+                    if (record.Kind != "header" || record.Format != CoreLogFormat.CorePart
+                        || record.Version != CoreLogFormat.Version || record.ExportId != exportId
+                        || record.PartIndex != part.Index || record.PartKind != part.Kind)
+                    {
+                        result.Errors.Add($"Core part {part.Index} has a mismatched header.");
+                    }
+                }
+                else
+                {
+                    recordCount++;
+                    consume(record);
+                }
+                index++;
+            }, result);
+
+            if (!valid)
+                return false;
+            if (index == 0 || recordCount != part.RecordCount)
+            {
+                result.Errors.Add($"Core part {part.Index} record count does not match the manifest.");
+                return false;
+            }
+            return result.Errors.Count == 0;
+        }
+
+        private static bool ReadJsonArray<T>(string path, Action<T> consume, PersistenceImportResult result)
+            where T : class
+        {
+            try
+            {
+                using FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                    bufferSize: 64 * 1024, FileOptions.SequentialScan);
+                IAsyncEnumerator<T?> enumerator = JsonSerializer
+                    .DeserializeAsyncEnumerable<T>(stream, LogJson.CompactOptions)
+                    .GetAsyncEnumerator();
+                try
+                {
+                    while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
+                    {
+                        T? record = enumerator.Current;
+                        if (record is null)
+                            throw new JsonException("A part contains a null record.");
+                        consume(record);
+                    }
+                }
+                finally
+                {
+                    enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                }
+                return result.Errors.Count == 0;
+            }
+            catch (JsonException ex)
+            {
+                result.Errors.Add($"Part '{Path.GetFileName(path)}' is not valid JSON: {ex.Message}");
+                return false;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                result.Errors.Add($"Part '{Path.GetFileName(path)}' could not be read: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static string ComputeSha256(string path)
+        {
+            using FileStream stream = File.OpenRead(path);
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
+        }
+
+        private static PersistenceImportResult ImportTransientManifest(
+            LRD_Core core,
+            string path,
+            ImportMode mode,
+            PersistenceImportResult result)
+        {
+            TransientLogManifest? manifest = ReadDocument<TransientLogManifest>(
+                path,
+                CoreLogFormat.TransientManifest,
+                result);
+            if (manifest is null)
+                return result;
+
+            Normalize(manifest);
+            if (!ValidateTypeDefinitions(manifest.TypeDefinitions, result)
+                || !ValidateTransientManifest(path, manifest, result))
+            {
+                return result;
+            }
+
+            ApplyTypeDefinitions(manifest.TypeDefinitions, result);
+            Dictionary<int, TransientChainBuilder> queryBuilders = new Dictionary<int, TransientChainBuilder>();
+            Dictionary<int, TransientChainBuilder> responseBuilders = new Dictionary<int, TransientChainBuilder>();
+
+            foreach (LogPartDefinition part in manifest.Parts)
+            {
+                Dictionary<int, TransientChainBuilder> builders = part.Kind == "queryChains"
+                    ? queryBuilders
+                    : responseBuilders;
+                int expectedChainCount = part.Kind == "queryChains"
+                    ? manifest.QueryChainCount
+                    : manifest.ResponseChainCount;
+
+                if (!ReadTransientPart(
+                    ResolvePartPath(path, part.File),
+                    manifest.ExportId,
+                    part,
+                    expectedChainCount,
+                    builders,
+                    result))
+                {
+                    return result;
+                }
+            }
+
+            if (!CompleteTransientChains(queryBuilders, manifest.QueryChainCount,
+                    manifest.QueryNodeCount, "query", result)
+                || !CompleteTransientChains(responseBuilders, manifest.ResponseChainCount,
+                    manifest.ResponseNodeCount, "response", result))
+            {
+                return result;
+            }
+
+            List<(ChainLog Log, LinkedList<Chain_Node> Chain)> queryChains = queryBuilders
+                .OrderBy(pair => pair.Key)
+                .Select(pair => (new ChainLog(), pair.Value.Chain))
+                .ToList();
+            List<(ChainLog Log, LinkedList<Chain_Node> Chain)> responseChains = responseBuilders
+                .OrderBy(pair => pair.Key)
+                .Select(pair => (new ChainLog(), pair.Value.Chain))
+                .ToList();
+
+            return CommitTransientPlan(core, mode, result, queryChains, responseChains);
+        }
+
+        private static bool ValidateTransientManifest(
+            string manifestPath,
+            TransientLogManifest manifest,
+            PersistenceImportResult result)
+        {
+            if (new FileInfo(manifestPath).Length >= CoreLogExporter.MaxPartBytes + 1)
+                result.Errors.Add("The transient manifest must be smaller than 500 MiB.");
+            if (manifest.ExportId == Guid.Empty)
+                result.Errors.Add("The transient manifest has an empty export ID.");
+            if (manifest.CoreFile is not null && !IsSimpleFileName(manifest.CoreFile))
+                result.Errors.Add("The transient manifest contains an unsafe core-log filename.");
+            if (manifest.QueryChainCount < 0 || manifest.QueryChainCount > MaxChains
+                || manifest.ResponseChainCount < 0 || manifest.ResponseChainCount > MaxChains
+                || manifest.QueryNodeCount < 0 || manifest.QueryNodeCount > MaxNodes
+                || manifest.ResponseNodeCount < 0 || manifest.ResponseNodeCount > MaxNodes)
+            {
+                result.Errors.Add("The transient manifest exceeds supported item-count limits.");
+            }
+            if (manifest.Parts.Count > MaxPartsPerExport)
+                result.Errors.Add($"The transient manifest exceeds the {MaxPartsPerExport}-part limit.");
+
+            long queryRecords = 0;
+            long responseRecords = 0;
+            HashSet<string> paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int index = 0; index < manifest.Parts.Count; index++)
+            {
+                LogPartDefinition part = manifest.Parts[index];
+                if (part.Index != index + 1)
+                    result.Errors.Add($"Transient part indices must be consecutive; expected {index + 1}.");
+                if (part.Kind is not ("queryChains" or "responseChains"))
+                    result.Errors.Add($"Transient part {part.Index} has unknown kind '{part.Kind}'.");
+                if (part.RecordCount <= 0 || part.ByteLength <= 0
+                    || part.ByteLength >= CoreLogExporter.MaxPartBytes + 1)
+                {
+                    result.Errors.Add($"Transient part {part.Index} has invalid count or byte-length metadata.");
+                }
+                if (part.Sha256.Length != 64 || !part.Sha256.All(Uri.IsHexDigit))
+                    result.Errors.Add($"Transient part {part.Index} has an invalid SHA-256 checksum.");
+                if (!paths.Add(part.File))
+                    result.Errors.Add($"Transient part path '{part.File}' is duplicated.");
+
+                if (part.Kind == "queryChains") queryRecords += part.RecordCount;
+                else if (part.Kind == "responseChains") responseRecords += part.RecordCount;
+                TryValidatePartFile(manifestPath, part, result);
+            }
+
+            if (queryRecords != manifest.QueryNodeCount || responseRecords != manifest.ResponseNodeCount)
+                result.Errors.Add("Transient manifest aggregate counts do not match its part records.");
+            if ((manifest.QueryChainCount == 0 && manifest.QueryNodeCount != 0)
+                || (manifest.ResponseChainCount == 0 && manifest.ResponseNodeCount != 0))
+            {
+                result.Errors.Add("Transient manifest has chain nodes without a chain.");
+            }
+
+            return result.Errors.Count == 0;
+        }
+
+        private static bool IsSimpleFileName(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value)
+                && !Path.IsPathRooted(value)
+                && string.Equals(Path.GetFileName(value), value, StringComparison.Ordinal)
+                && !value.Contains(Path.AltDirectorySeparatorChar)
+                && !value.Contains(Path.DirectorySeparatorChar);
+        }
+
+        private static bool ReadTransientPart(
+            string path,
+            Guid exportId,
+            LogPartDefinition part,
+            int chainCount,
+            IDictionary<int, TransientChainBuilder> builders,
+            PersistenceImportResult result)
+        {
+            int index = 0;
+            int recordCount = 0;
+            bool valid = ReadJsonArray<TransientLogPartRecord>(path, record =>
+            {
+                if (index == 0)
+                {
+                    if (record.Kind != "header" || record.Format != CoreLogFormat.TransientPart
+                        || record.Version != CoreLogFormat.Version || record.ExportId != exportId
+                        || record.PartIndex != part.Index || record.PartKind != part.Kind)
+                    {
+                        result.Errors.Add($"Transient part {part.Index} has a mismatched header.");
+                    }
+                }
+                else
+                {
+                    recordCount++;
+                    if (record.Kind != "chainNode" || record.Node is null || record.ChainIndex < 0
+                        || record.ChainIndex >= chainCount)
+                    {
+                        result.Errors.Add($"Transient part {part.Index} contains an invalid chain record.");
+                    }
+                    else
+                    {
+                        Normalize(record.Node);
+                        if (!builders.TryGetValue(record.ChainIndex, out TransientChainBuilder? builder))
+                        {
+                            builder = new TransientChainBuilder(record.ChainIndex);
+                            builders.Add(record.ChainIndex, builder);
+                        }
+                        builder.Add(record, result);
+                    }
+                }
+                index++;
+            }, result);
+
+            if (!valid)
+                return false;
+            if (index == 0 || recordCount != part.RecordCount)
+            {
+                result.Errors.Add($"Transient part {part.Index} record count does not match the manifest.");
+                return false;
+            }
+            return result.Errors.Count == 0;
+        }
+
+        private static bool CompleteTransientChains(
+            IReadOnlyDictionary<int, TransientChainBuilder> builders,
+            int expectedChainCount,
+            int expectedNodeCount,
+            string label,
+            PersistenceImportResult result)
+        {
+            if (builders.Count != expectedChainCount)
+            {
+                result.Errors.Add($"Transient {label} chain count does not match the manifest.");
+                return false;
+            }
+
+            int nodeCount = 0;
+            foreach ((int index, TransientChainBuilder builder) in builders)
+            {
+                if (index < 0 || index >= expectedChainCount || !builder.Complete(result, label))
+                    return false;
+                nodeCount += builder.Chain.Count;
+            }
+
+            if (nodeCount != expectedNodeCount)
+            {
+                result.Errors.Add($"Transient {label} node count does not match the manifest.");
+                return false;
+            }
+            return true;
+        }
+
         public static PersistenceImportResult ImportTransient(
             LRD_Core core,
             string path,
@@ -149,6 +757,19 @@ namespace OPEN_LRD.Persistence
             // Ontology relations occupy the reserved 1-999 range, so they must
             // be registered before imported IDs can be validated or restored.
             OPEN_LRD.Ontology.OntologyRelations.EnsureRegistered();
+
+            if (!string.IsNullOrWhiteSpace(path)
+                && string.Equals(Path.GetExtension(path), ".lrdpart", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Errors.Add("Select the transient .lrdlog manifest, not an individual part file.");
+                return result;
+            }
+
+            string? format = ReadFormatHeader(path, result);
+            if (format is null)
+                return result;
+            if (string.Equals(format, CoreLogFormat.TransientManifest, StringComparison.Ordinal))
+                return ImportTransientManifest(core, path, mode, result);
 
             TransientLogDocument? document = ReadDocument<TransientLogDocument>(
                 path,
@@ -225,6 +846,86 @@ namespace OPEN_LRD.Persistence
             return result;
         }
 
+        private static string? ReadFormatHeader(string path, PersistenceImportResult result)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                result.Errors.Add("A log path is required.");
+                return null;
+            }
+
+            string fullPath = Path.GetFullPath(path);
+            if (!File.Exists(fullPath))
+            {
+                result.Errors.Add($"Log file '{fullPath}' was not found.");
+                return null;
+            }
+
+            try
+            {
+                using FileStream stream = new FileStream(
+                    fullPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize: 4096,
+                    FileOptions.SequentialScan);
+
+                if (stream.Length > MaxLogBytes)
+                {
+                    result.Errors.Add($"Log file exceeds the maximum size of {MaxLogBytes} bytes.");
+                    return null;
+                }
+
+                byte[] header = new byte[4096];
+                int bytesRead = 0;
+                while (bytesRead < header.Length)
+                {
+                    int current = stream.Read(header, bytesRead, header.Length - bytesRead);
+                    if (current == 0)
+                        break;
+                    bytesRead += current;
+                }
+
+                ReadOnlySpan<byte> json = header.AsSpan(0, bytesRead);
+                if (json.StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }))
+                    json = json[3..];
+
+                Utf8JsonReader reader = new Utf8JsonReader(json, stream.Length <= bytesRead,
+                    new JsonReaderState(new JsonReaderOptions
+                    {
+                        AllowTrailingCommas = true,
+                        CommentHandling = JsonCommentHandling.Skip
+                    }));
+
+                if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject
+                    || !reader.Read() || reader.TokenType != JsonTokenType.PropertyName
+                    || !reader.ValueTextEquals("format"))
+                {
+                    result.Errors.Add("The log file is missing its format header.");
+                    return null;
+                }
+
+                if (!reader.Read() || reader.TokenType != JsonTokenType.String)
+                {
+                    result.Errors.Add("The log file format header is invalid.");
+                    return null;
+                }
+
+                return reader.GetString();
+            }
+            catch (JsonException ex)
+            {
+                result.Errors.Add($"The log file is not valid JSON: {ex.Message}");
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                result.Errors.Add($"The log file could not be read: {ex.Message}");
+                return null;
+            }
+        }
+
         private static T? ReadDocument<T>(
             string path,
             string expectedFormat,
@@ -245,69 +946,73 @@ namespace OPEN_LRD.Persistence
                 return null;
             }
 
-            FileInfo info = new FileInfo(fullPath);
-
-            if (info.Length > MaxLogBytes)
-            {
-                result.Errors.Add($"Log file exceeds the maximum size of {MaxLogBytes} bytes.");
-                return null;
-            }
-
-            string json;
-
+            T? document;
             try
             {
-                json = File.ReadAllText(fullPath);
-            }
-            catch (Exception ex)
-            {
-                result.Errors.Add($"The log file could not be read: {ex.Message}");
-                return null;
-            }
+                using FileStream stream = new FileStream(
+                    fullPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize: 64 * 1024,
+                    FileOptions.SequentialScan);
 
-            try
-            {
-                T? document = JsonSerializer.Deserialize<T>(json, LogJson.Options);
-
-                if (document is null)
+                if (stream.Length > MaxLogBytes)
                 {
-                    result.Errors.Add("The log file did not contain a document.");
+                    result.Errors.Add($"Log file exceeds the maximum size of {MaxLogBytes} bytes.");
                     return null;
                 }
 
-                string? format = document switch
-                {
-                    CoreLogDocument coreLog => coreLog.Format,
-                    TransientLogDocument transientLog => transientLog.Format,
-                    _ => null
-                };
-                int version = document switch
-                {
-                    CoreLogDocument coreLog => coreLog.Version,
-                    TransientLogDocument transientLog => transientLog.Version,
-                    _ => 0
-                };
-
-                if (!string.Equals(format, expectedFormat, StringComparison.Ordinal))
-                {
-                    result.Errors.Add($"Expected log format '{expectedFormat}' but found '{format}'.");
-                    return null;
-                }
-
-                if (version != CoreLogFormat.Version)
-                {
-                    result.Errors.Add(
-                        $"Unsupported log version {version}; expected {CoreLogFormat.Version}.");
-                    return null;
-                }
-
-                return document;
+                document = JsonSerializer.Deserialize<T>(stream, LogJson.Options);
             }
             catch (JsonException ex)
             {
                 result.Errors.Add($"The log file is not valid JSON: {ex.Message}");
                 return null;
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                result.Errors.Add($"The log file could not be read: {ex.Message}");
+                return null;
+            }
+
+            if (document is null)
+            {
+                result.Errors.Add("The log file did not contain a document.");
+                return null;
+            }
+
+            string? format = document switch
+            {
+                CoreLogDocument coreLog => coreLog.Format,
+                TransientLogDocument transientLog => transientLog.Format,
+                CoreLogManifest coreManifest => coreManifest.Format,
+                TransientLogManifest transientManifest => transientManifest.Format,
+                _ => null
+            };
+            int version = document switch
+            {
+                CoreLogDocument coreLog => coreLog.Version,
+                TransientLogDocument transientLog => transientLog.Version,
+                CoreLogManifest coreManifest => coreManifest.Version,
+                TransientLogManifest transientManifest => transientManifest.Version,
+                _ => 0
+            };
+
+            if (!string.Equals(format, expectedFormat, StringComparison.Ordinal))
+            {
+                result.Errors.Add($"Expected log format '{expectedFormat}' but found '{format}'.");
+                return null;
+            }
+
+            if (version != CoreLogFormat.Version)
+            {
+                result.Errors.Add(
+                    $"Unsupported log version {version}; expected {CoreLogFormat.Version}.");
+                return null;
+            }
+
+            return document;
         }
 
         private static void Normalize(CoreLogDocument document)
@@ -353,6 +1058,67 @@ namespace OPEN_LRD.Persistence
                     entry.TemporaryNodeIds ??= new List<Guid>();
                     entry.Diagnostics ??= new List<string>();
                 }
+            }
+        }
+
+        private static void Normalize(CoreLogManifest manifest)
+        {
+            manifest.TypeDefinitions ??= new TypeDefinitionLog();
+            manifest.Parts ??= new List<LogPartDefinition>();
+            Normalize(manifest.TypeDefinitions);
+            foreach (LogPartDefinition part in manifest.Parts)
+            {
+                part.Kind ??= string.Empty;
+                part.File ??= string.Empty;
+                part.Sha256 ??= string.Empty;
+            }
+        }
+
+        private static void Normalize(TransientLogManifest manifest)
+        {
+            manifest.TypeDefinitions ??= new TypeDefinitionLog();
+            manifest.Parts ??= new List<LogPartDefinition>();
+            Normalize(manifest.TypeDefinitions);
+            foreach (LogPartDefinition part in manifest.Parts)
+            {
+                part.Kind ??= string.Empty;
+                part.File ??= string.Empty;
+                part.Sha256 ??= string.Empty;
+            }
+        }
+
+        private static void Normalize(NodeLog node)
+        {
+            node.NodeTypeName ??= string.Empty;
+            node.Aliases ??= new List<string>();
+        }
+
+        private static void Normalize(LinkLog link)
+        {
+            link.ForwardTypeName ??= string.Empty;
+            link.InverseTypeName ??= string.Empty;
+            link.LinkClassName ??= string.Empty;
+        }
+
+        private static void Normalize(ConversationLog conversation)
+        {
+            conversation.Options ??= new NlpOptionsLog();
+            conversation.Mentions ??= new List<MentionLog>();
+            conversation.Provenance ??= new List<ProvenanceLog>();
+            foreach (MentionLog mention in conversation.Mentions)
+            {
+                mention.Label ??= string.Empty;
+                mention.SurfaceText ??= string.Empty;
+                mention.NodeTypeName ??= string.Empty;
+            }
+            foreach (ProvenanceLog entry in conversation.Provenance)
+            {
+                entry.SourceText ??= string.Empty;
+                entry.Status ??= string.Empty;
+                entry.LinkClassName ??= string.Empty;
+                entry.NodeIds ??= new List<Guid>();
+                entry.TemporaryNodeIds ??= new List<Guid>();
+                entry.Diagnostics ??= new List<string>();
             }
         }
 
@@ -567,76 +1333,90 @@ namespace OPEN_LRD.Persistence
 
         private static NodePlan PlanNodes(
             LRD_Core core,
-            IReadOnlyList<NodeLog> nodes,
+            List<NodeLog> nodes,
             ImportMode mode,
             PersistenceImportResult result)
         {
-            NodePlan plan = new NodePlan();
-            IReadOnlyDictionary<Guid, Web_Node>? existingGraph = core.GetDictionary();
+            NodePlanningContext context = CreateNodePlanningContext(core, mode);
 
-            if (mode == ImportMode.Merge && existingGraph is not null)
+            for (int index = 0; index < nodes.Count; index++)
             {
-                foreach (Guid nodeID in existingGraph.Keys)
-                    plan.LinkableNodeIds.Add(nodeID);
+                NodeLog log = nodes[index];
+                nodes[index] = null!;
+                PlanNodeRecord(log, context, mode, result);
             }
 
-            HashSet<Guid> fileIds = new HashSet<Guid>();
+            return context.Plan;
+        }
 
-            foreach (NodeLog log in nodes)
+        private static NodePlanningContext CreateNodePlanningContext(LRD_Core core, ImportMode mode)
+        {
+            NodePlanningContext context = new NodePlanningContext(core.GetDictionary());
+            if (mode == ImportMode.Merge && context.ExistingGraph is not null)
             {
-                if (log.Id == Guid.Empty)
-                {
-                    result.Errors.Add("A node has an empty ID.");
-                    continue;
-                }
+                foreach (Guid nodeID in context.ExistingGraph.Keys)
+                    context.Plan.LinkableNodeIds.Add(nodeID);
+            }
+            return context;
+        }
 
-                if (!fileIds.Add(log.Id))
-                {
-                    result.Errors.Add($"Duplicate node ID '{log.Id}' in the log.");
-                    continue;
-                }
-
-                NodeTypes? nodeType = ResolveNodeType(log.NodeTypeId, log.NodeTypeName);
-
-                if (nodeType is null)
-                {
-                    plan.BlockedNodeIds.Add(log.Id);
-                    plan.LinkableNodeIds.Remove(log.Id);
-                    result.NodesSkipped++;
-                    result.Warnings.Add(
-                        $"Node '{log.Id}' was skipped because its node type could not be resolved.");
-                    continue;
-                }
-
-                if (!TryCreateNode(log, nodeType, out Web_Node? importedNode, out string? error))
-                {
-                    result.Errors.Add($"Node '{log.Id}' is invalid: {error}");
-                    continue;
-                }
-
-                if (mode == ImportMode.Merge
-                    && existingGraph is not null
-                    && existingGraph.TryGetValue(log.Id, out Web_Node? existingNode))
-                {
-                    if (NodeMatches(existingNode, importedNode!))
-                    {
-                        result.NodesSkipped++;
-                        continue;
-                    }
-
-                    plan.BlockedNodeIds.Add(log.Id);
-                    plan.LinkableNodeIds.Remove(log.Id);
-                    result.NodesSkipped++;
-                    result.Warnings.Add(
-                        $"Node '{log.Id}' was kept from existing state because its data differs.");
-                    continue;
-                }
-
-                plan.NewNodes[log.Id] = importedNode!;
-                plan.LinkableNodeIds.Add(log.Id);
+        private static void PlanNodeRecord(
+            NodeLog log,
+            NodePlanningContext context,
+            ImportMode mode,
+            PersistenceImportResult result)
+        {
+            NodePlan plan = context.Plan;
+            if (log.Id == Guid.Empty)
+            {
+                result.Errors.Add("A node has an empty ID.");
+                return;
             }
 
-            return plan;
+            if (!context.FileIds.Add(log.Id))
+            {
+                result.Errors.Add($"Duplicate node ID '{log.Id}' in the log.");
+                return;
+            }
+
+            NodeTypes? nodeType = ResolveNodeType(log.NodeTypeId, log.NodeTypeName);
+
+            if (nodeType is null)
+            {
+                plan.BlockedNodeIds.Add(log.Id);
+                plan.LinkableNodeIds.Remove(log.Id);
+                result.NodesSkipped++;
+                result.Warnings.Add(
+                    $"Node '{log.Id}' was skipped because its node type could not be resolved.");
+                return;
+            }
+
+            if (!TryCreateNode(log, nodeType, out Web_Node? importedNode, out string? error))
+            {
+                result.Errors.Add($"Node '{log.Id}' is invalid: {error}");
+                return;
+            }
+
+            if (mode == ImportMode.Merge
+                && context.ExistingGraph is not null
+                && context.ExistingGraph.TryGetValue(log.Id, out Web_Node? existingNode))
+            {
+                if (NodeMatches(existingNode, importedNode!))
+                {
+                    result.NodesSkipped++;
+                    return;
+                }
+
+                plan.BlockedNodeIds.Add(log.Id);
+                plan.LinkableNodeIds.Remove(log.Id);
+                result.NodesSkipped++;
+                result.Warnings.Add(
+                    $"Node '{log.Id}' was kept from existing state because its data differs.");
+                return;
+            }
+
+            plan.NewNodes[log.Id] = importedNode!;
+            plan.LinkableNodeIds.Add(log.Id);
         }
 
         private static bool TryCreateNode(
@@ -762,81 +1542,88 @@ namespace OPEN_LRD.Persistence
 
         private static List<Link> PlanLinks(
             LRD_Core core,
-            IReadOnlyList<LinkLog> links,
+            List<LinkLog> links,
             NodePlan nodePlan,
             ImportMode mode,
             PersistenceImportResult result)
         {
-            List<Link> accepted = new List<Link>();
-            HashSet<string> fileKeys = new HashSet<string>(StringComparer.Ordinal);
-            IReadOnlyDictionary<Guid, Web_Node>? existingGraph = core.GetDictionary();
+            LinkPlanningContext context = new LinkPlanningContext(core, nodePlan, mode);
 
-            foreach (LinkLog log in links)
+            for (int index = 0; index < links.Count; index++)
             {
-                if (log.SourceId == Guid.Empty || log.DestinationId == Guid.Empty)
-                {
-                    result.Errors.Add("A link has an empty endpoint.");
-                    continue;
-                }
-
-                if (nodePlan.BlockedNodeIds.Contains(log.SourceId)
-                    || nodePlan.BlockedNodeIds.Contains(log.DestinationId))
-                {
-                    result.LinksSkipped++;
-                    result.Warnings.Add(
-                        $"Link '{log.SourceId}' -> '{log.DestinationId}' was skipped because an endpoint was kept from existing state.");
-                    continue;
-                }
-
-                bool sourceAvailable = nodePlan.LinkableNodeIds.Contains(log.SourceId);
-                bool destinationAvailable = nodePlan.LinkableNodeIds.Contains(log.DestinationId);
-
-                if (!sourceAvailable || !destinationAvailable)
-                {
-                    result.Errors.Add(
-                        $"Link '{log.SourceId}' -> '{log.DestinationId}' references a missing node.");
-                    continue;
-                }
-
-                string key = BuildLinkKey(log);
-
-                if (!fileKeys.Add(key))
-                {
-                    result.LinksSkipped++;
-                    result.Warnings.Add(
-                        $"Duplicate link '{log.SourceId}' -> '{log.DestinationId}' was skipped.");
-                    continue;
-                }
-
-                if (mode == ImportMode.Merge
-                    && existingGraph is not null
-                    && existingGraph.TryGetValue(log.SourceId, out Web_Node? existingSource)
-                    && existingSource.Get_ReferenceLinks().Any(link => BuildLinkKey(link) == key))
-                {
-                    result.LinksSkipped++;
-                    continue;
-                }
-
-                if (mode == ImportMode.Merge
-                    && nodePlan.NewNodes.TryGetValue(log.SourceId, out Web_Node? importedSource)
-                    && importedSource.Get_ReferenceLinks().Any(link => BuildLinkKey(link) == key))
-                {
-                    result.LinksSkipped++;
-                    continue;
-                }
-
-                if (!TryCreateLink(log, out Link? link, out string? error))
-                {
-                    result.LinksSkipped++;
-                    result.Warnings.Add(
-                        $"Link '{log.SourceId}' -> '{log.DestinationId}' was skipped: {error}");
-                    continue;
-                }
-
-                accepted.Add(link!);
+                LinkLog log = links[index];
+                links[index] = null!;
+                PlanLinkRecord(log, context, result);
             }
 
-            return accepted;
+            return context.Accepted;
+        }
+
+        private static void PlanLinkRecord(LinkLog log, LinkPlanningContext context, PersistenceImportResult result)
+        {
+            NodePlan nodePlan = context.NodePlan;
+            ImportMode mode = context.Mode;
+            if (log.SourceId == Guid.Empty || log.DestinationId == Guid.Empty)
+            {
+                result.Errors.Add("A link has an empty endpoint.");
+                return;
+            }
+
+            if (nodePlan.BlockedNodeIds.Contains(log.SourceId)
+                || nodePlan.BlockedNodeIds.Contains(log.DestinationId))
+            {
+                result.LinksSkipped++;
+                result.Warnings.Add(
+                    $"Link '{log.SourceId}' -> '{log.DestinationId}' was skipped because an endpoint was kept from existing state.");
+                return;
+            }
+
+            bool sourceAvailable = nodePlan.LinkableNodeIds.Contains(log.SourceId);
+            bool destinationAvailable = nodePlan.LinkableNodeIds.Contains(log.DestinationId);
+
+            if (!sourceAvailable || !destinationAvailable)
+            {
+                result.Errors.Add(
+                    $"Link '{log.SourceId}' -> '{log.DestinationId}' references a missing node.");
+                return;
+            }
+
+            LinkIdentity key = BuildLinkKey(log);
+
+            if (!context.FileKeys.Add(key))
+            {
+                result.LinksSkipped++;
+                result.Warnings.Add(
+                    $"Duplicate link '{log.SourceId}' -> '{log.DestinationId}' was skipped.");
+                return;
+            }
+
+            if (mode == ImportMode.Merge
+                && context.ExistingGraph is not null
+                && context.ExistingGraph.TryGetValue(log.SourceId, out Web_Node? existingSource)
+                && existingSource.Get_ReferenceLinks().Any(link => BuildLinkKey(link) == key))
+            {
+                result.LinksSkipped++;
+                return;
+            }
+
+            if (mode == ImportMode.Merge
+                && nodePlan.NewNodes.TryGetValue(log.SourceId, out Web_Node? importedSource)
+                && importedSource.Get_ReferenceLinks().Any(link => BuildLinkKey(link) == key))
+            {
+                result.LinksSkipped++;
+                return;
+            }
+
+            if (!TryCreateLink(log, out Link? link, out string? error))
+            {
+                result.LinksSkipped++;
+                result.Warnings.Add(
+                    $"Link '{log.SourceId}' -> '{log.DestinationId}' was skipped: {error}");
+                return;
+            }
+
+            context.Accepted.Add(link!);
         }
 
         private static bool TryCreateLink(
@@ -871,56 +1658,65 @@ namespace OPEN_LRD.Persistence
                 return false;
             }
 
-            link = new Link(log.SourceId, log.DestinationId, forward, inverse, classification);
+            link = new Link(log.SourceId, log.DestinationId, forward, inverse, classification, log.Origins);
+            if (!log.IsActive)
+                link.Invalidate();
             return true;
         }
 
         private static Dictionary<Guid, ConversationContext> PlanConversations(
             LRD_Core core,
-            IReadOnlyList<ConversationLog> conversations,
+            List<ConversationLog> conversations,
             NodePlan nodePlan,
             ImportMode mode,
             PersistenceImportResult result)
         {
-            Dictionary<Guid, ConversationContext> accepted =
-                new Dictionary<Guid, ConversationContext>();
-            HashSet<Guid> fileIds = new HashSet<Guid>();
-            IReadOnlyDictionary<Guid, ConversationContext>? existing = core.GetConversations();
+            ConversationPlanningContext context = new ConversationPlanningContext(core, mode);
 
-            foreach (ConversationLog log in conversations)
+            for (int index = 0; index < conversations.Count; index++)
             {
-                if (log.Id == Guid.Empty)
-                {
-                    result.Errors.Add("A conversation has an empty ID.");
-                    continue;
-                }
-
-                if (!fileIds.Add(log.Id))
-                {
-                    result.Errors.Add($"Duplicate conversation ID '{log.Id}' in the log.");
-                    continue;
-                }
-
-                ConversationContext? conversation = BuildConversation(log, result);
-
-                if (conversation is null)
-                    continue;
-
-                if (mode == ImportMode.Merge
-                    && existing is not null
-                    && existing.ContainsKey(log.Id))
-                {
-                    result.ConversationsSkipped++;
-                    result.Warnings.Add(
-                        $"Conversation '{log.Id}' was kept from existing state.");
-                    continue;
-                }
-
-                WarnMissingConversationNodes(conversation, nodePlan.LinkableNodeIds, result);
-                accepted[log.Id] = conversation;
+                ConversationLog log = conversations[index];
+                conversations[index] = null!;
+                PlanConversationRecord(log, context, nodePlan, result);
             }
 
-            return accepted;
+            return context.Accepted;
+        }
+
+        private static void PlanConversationRecord(
+            ConversationLog log,
+            ConversationPlanningContext context,
+            NodePlan nodePlan,
+            PersistenceImportResult result)
+        {
+            if (log.Id == Guid.Empty)
+            {
+                result.Errors.Add("A conversation has an empty ID.");
+                return;
+            }
+
+            if (!context.FileIds.Add(log.Id))
+            {
+                result.Errors.Add($"Duplicate conversation ID '{log.Id}' in the log.");
+                return;
+            }
+
+            ConversationContext? conversation = BuildConversation(log, result);
+
+            if (conversation is null)
+                return;
+
+            if (context.Mode == ImportMode.Merge
+                && context.Existing is not null
+                && context.Existing.ContainsKey(log.Id))
+            {
+                result.ConversationsSkipped++;
+                result.Warnings.Add($"Conversation '{log.Id}' was kept from existing state.");
+                return;
+            }
+
+            WarnMissingConversationNodes(conversation, nodePlan.LinkableNodeIds, result);
+            context.Accepted[log.Id] = conversation;
         }
 
         private static void WarnMissingConversationNodes(
@@ -1192,7 +1988,7 @@ namespace OPEN_LRD.Persistence
                 chain.AddLast(node!);
             }
 
-            HashSet<string> linkKeys = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<LinkIdentity> linkKeys = new HashSet<LinkIdentity>();
             HashSet<Guid> sourcesWithNext = new HashSet<Guid>();
             HashSet<Guid> destinationsWithPrevious = new HashSet<Guid>();
 
@@ -1340,23 +2136,21 @@ namespace OPEN_LRD.Persistence
             return BuildLinkKey(existing) == BuildLinkKey(candidate);
         }
 
-        private static string BuildLinkKey(LinkLog link)
+        private static LinkIdentity BuildLinkKey(LinkLog link)
         {
-            return string.Join(
-                "|",
-                link.SourceId.ToString("D"),
-                link.DestinationId.ToString("D"),
+            return new LinkIdentity(
+                link.SourceId,
+                link.DestinationId,
                 link.ForwardTypeId,
                 link.InverseTypeId,
                 link.LinkClassId);
         }
 
-        private static string BuildLinkKey(Link link)
+        private static LinkIdentity BuildLinkKey(Link link)
         {
-            return string.Join(
-                "|",
-                link.SourceID.ToString("D"),
-                link.DestinationID.ToString("D"),
+            return new LinkIdentity(
+                link.SourceID,
+                link.DestinationID,
                 link.ForwardLink.Id,
                 link.InverseLink.Id,
                 link.Classification.Id);
@@ -1425,6 +2219,157 @@ namespace OPEN_LRD.Persistence
             public HashSet<Guid> LinkableNodeIds { get; } = new HashSet<Guid>();
 
             public HashSet<Guid> BlockedNodeIds { get; } = new HashSet<Guid>();
+        }
+
+        private sealed class NodePlanningContext
+        {
+            public NodePlanningContext(IReadOnlyDictionary<Guid, Web_Node>? existingGraph)
+            {
+                ExistingGraph = existingGraph;
+            }
+
+            public NodePlan Plan { get; } = new NodePlan();
+            public HashSet<Guid> FileIds { get; } = new HashSet<Guid>();
+            public IReadOnlyDictionary<Guid, Web_Node>? ExistingGraph { get; }
+        }
+
+        private sealed class LinkPlanningContext
+        {
+            public LinkPlanningContext(LRD_Core core, NodePlan nodePlan, ImportMode mode)
+            {
+                NodePlan = nodePlan;
+                Mode = mode;
+                ExistingGraph = core.GetDictionary();
+            }
+
+            public NodePlan NodePlan { get; }
+            public ImportMode Mode { get; }
+            public IReadOnlyDictionary<Guid, Web_Node>? ExistingGraph { get; }
+            public HashSet<LinkIdentity> FileKeys { get; } = new HashSet<LinkIdentity>();
+            public List<Link> Accepted { get; } = new List<Link>();
+        }
+
+        private sealed class ConversationPlanningContext
+        {
+            public ConversationPlanningContext(LRD_Core core, ImportMode mode)
+            {
+                Mode = mode;
+                Existing = core.GetConversations();
+            }
+
+            public ImportMode Mode { get; }
+            public IReadOnlyDictionary<Guid, ConversationContext>? Existing { get; }
+            public HashSet<Guid> FileIds { get; } = new HashSet<Guid>();
+            public Dictionary<Guid, ConversationContext> Accepted { get; } =
+                new Dictionary<Guid, ConversationContext>();
+        }
+
+        private sealed class TransientChainBuilder
+        {
+            private readonly HashSet<Guid> nodeIDs = new HashSet<Guid>();
+            private readonly HashSet<LinkIdentity> linkIDs = new HashSet<LinkIdentity>();
+            private Chain_Node? previousNode;
+            private Link? previousNextLink;
+
+            public TransientChainBuilder(int chainIndex)
+            {
+                ChainIndex = chainIndex;
+            }
+
+            public int ChainIndex { get; }
+            public LinkedList<Chain_Node> Chain { get; } = new LinkedList<Chain_Node>();
+
+            public void Add(TransientLogPartRecord record, PersistenceImportResult result)
+            {
+                NodeLog? nodeLog = record.Node;
+                if (nodeLog is null)
+                {
+                    result.Errors.Add($"Transient chain {ChainIndex} contains a null node record.");
+                    return;
+                }
+
+                if (record.Position != Chain.Count)
+                {
+                    result.Errors.Add(
+                        $"Transient chain {ChainIndex} expected position {Chain.Count} but found {record.Position}.");
+                    return;
+                }
+
+                if (nodeLog.Id == Guid.Empty || !nodeIDs.Add(nodeLog.Id))
+                {
+                    result.Errors.Add($"Transient chain {ChainIndex} has an empty or duplicate node ID.");
+                    return;
+                }
+
+                NodeTypes? nodeType = ResolveNodeType(nodeLog.NodeTypeId, nodeLog.NodeTypeName);
+                if (nodeType is null)
+                {
+                    result.Errors.Add(
+                        $"Transient chain node '{nodeLog.Id}' has an unresolved node type.");
+                    return;
+                }
+
+                if (!TryCreateChainNode(nodeLog, nodeType, out Chain_Node? currentNode, out string? error)
+                    || currentNode is null)
+                {
+                    result.Errors.Add($"Transient chain node '{nodeLog.Id}' is invalid: {error}");
+                    return;
+                }
+
+                if (previousNode is not null && previousNextLink is not null)
+                {
+                    if (previousNextLink.SourceID != previousNode.ID
+                        || previousNextLink.DestinationID != currentNode.ID)
+                    {
+                        result.Errors.Add(
+                            $"Transient chain {ChainIndex} has a next-link that does not connect adjacent nodes.");
+                        return;
+                    }
+                    previousNode.Set_LinkNext(previousNextLink);
+                    currentNode.Set_LinkPrevious(previousNextLink);
+                }
+
+                Link? nextLink = null;
+                if (record.NextLink is not null)
+                {
+                    Normalize(record.NextLink);
+                    if (record.NextLink.SourceId != currentNode.ID
+                        || !TryCreateLink(record.NextLink, out nextLink, out error)
+                        || nextLink is null)
+                    {
+                        result.Errors.Add(
+                            $"Transient chain node '{currentNode.ID}' has an invalid next-link: {error}");
+                        return;
+                    }
+
+                    if (!linkIDs.Add(BuildLinkKey(record.NextLink)))
+                    {
+                        result.Errors.Add($"Transient chain {ChainIndex} contains a duplicate link.");
+                        return;
+                    }
+                }
+
+                Chain.AddLast(currentNode);
+                previousNode = currentNode;
+                previousNextLink = nextLink;
+            }
+
+            public bool Complete(PersistenceImportResult result, string kind)
+            {
+                if (Chain.Count == 0)
+                {
+                    result.Errors.Add($"Transient {kind} chain {ChainIndex} is empty.");
+                    return false;
+                }
+
+                if (previousNextLink is not null)
+                {
+                    result.Errors.Add($"Transient {kind} chain {ChainIndex} ends with a dangling next-link.");
+                    return false;
+                }
+
+                return true;
+            }
         }
     }
 }

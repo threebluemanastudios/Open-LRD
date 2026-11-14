@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using OPEN_LRD.NLP;
 using OPEN_LRD.Nodes;
+using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Persistence
 {
@@ -9,6 +10,10 @@ namespace OPEN_LRD.Persistence
     {
         public const string Core = "open-lrd-core-log";
         public const string Transient = "open-lrd-transient-log";
+        public const string CoreManifest = "open-lrd-core-log-manifest";
+        public const string TransientManifest = "open-lrd-transient-log-manifest";
+        public const string CorePart = "open-lrd-core-log-part";
+        public const string TransientPart = "open-lrd-transient-log-part";
         public const int Version = 1;
     }
 
@@ -23,6 +28,11 @@ namespace OPEN_LRD.Persistence
             ReadCommentHandling = JsonCommentHandling.Skip,
             AllowTrailingCommas = true,
             Converters = { new JsonStringEnumConverter() }
+        };
+
+        public static JsonSerializerOptions CompactOptions { get; } = new JsonSerializerOptions(Options)
+        {
+            WriteIndented = false
         };
     }
 
@@ -43,6 +53,80 @@ namespace OPEN_LRD.Persistence
         public List<LinkLog> Links { get; set; } = new List<LinkLog>();
 
         public List<ConversationLog> Conversations { get; set; } = new List<ConversationLog>();
+    }
+
+    internal sealed class CoreLogManifest
+    {
+        public string Format { get; set; } = CoreLogFormat.CoreManifest;
+        public int Version { get; set; } = CoreLogFormat.Version;
+        public Guid ExportId { get; set; }
+        public DateTimeOffset ExportedAtUtc { get; set; }
+        public string? TransientFile { get; set; }
+        public TypeDefinitionLog TypeDefinitions { get; set; } = new TypeDefinitionLog();
+        public int NodeCount { get; set; }
+        public int LinkCount { get; set; }
+        public int ConversationCount { get; set; }
+        public List<LogPartDefinition> Parts { get; set; } = new List<LogPartDefinition>();
+    }
+
+    internal sealed class TransientLogManifest
+    {
+        public string Format { get; set; } = CoreLogFormat.TransientManifest;
+        public int Version { get; set; } = CoreLogFormat.Version;
+        public Guid ExportId { get; set; }
+        public DateTimeOffset ExportedAtUtc { get; set; }
+        public string? CoreFile { get; set; }
+        public TypeDefinitionLog TypeDefinitions { get; set; } = new TypeDefinitionLog();
+        public int QueryChainCount { get; set; }
+        public int ResponseChainCount { get; set; }
+        public int QueryNodeCount { get; set; }
+        public int ResponseNodeCount { get; set; }
+        public List<LogPartDefinition> Parts { get; set; } = new List<LogPartDefinition>();
+    }
+
+    internal sealed class LogPartDefinition
+    {
+        public int Index { get; set; }
+        public string Kind { get; set; } = string.Empty;
+        public string File { get; set; } = string.Empty;
+        public long ByteLength { get; set; }
+        public string Sha256 { get; set; } = string.Empty;
+        public int RecordCount { get; set; }
+    }
+
+    internal sealed class CoreLogPartRecord
+    {
+        public string? Format { get; set; }
+        public int? Version { get; set; }
+        public string Kind { get; set; } = string.Empty;
+
+        public Guid ExportId { get; set; }
+
+        public int PartIndex { get; set; }
+
+        public string? PartKind { get; set; }
+
+        public NodeLog? Node { get; set; }
+        public LinkLog? Link { get; set; }
+        public ConversationLog? Conversation { get; set; }
+    }
+
+    internal sealed class TransientLogPartRecord
+    {
+        public string? Format { get; set; }
+        public int? Version { get; set; }
+        public string Kind { get; set; } = string.Empty;
+
+        public Guid ExportId { get; set; }
+
+        public int PartIndex { get; set; }
+
+        public string? PartKind { get; set; }
+
+        public int ChainIndex { get; set; }
+        public int Position { get; set; }
+        public NodeLog? Node { get; set; }
+        public LinkLog? NextLink { get; set; }
     }
 
     internal sealed class TypeDefinitionLog
@@ -125,6 +209,10 @@ namespace OPEN_LRD.Persistence
         public int LinkClassId { get; set; }
 
         public string LinkClassName { get; set; } = string.Empty;
+
+        public bool IsActive { get; set; } = true;
+
+        public LinkOrigin Origins { get; set; } = LinkOrigin.Explicit;
     }
 
     internal sealed class ConversationLog

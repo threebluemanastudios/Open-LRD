@@ -1,5 +1,6 @@
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
+using OPEN_LRD.Ontology;
 
 namespace OPEN_LRD.NLP
 {
@@ -259,6 +260,8 @@ namespace OPEN_LRD.NLP
             double patternConfidence;
             NegationKind negation = negated ? NegationKind.Predicate : NegationKind.None;
             QualifierPhrase? negatedQualifier = null;
+            bool indefiniteCopulaNominal = false;
+            List<FrameArgument> copulaProperties = new List<FrameArgument>();
 
             if (passive)
             {
@@ -321,7 +324,21 @@ namespace OPEN_LRD.NLP
                 if (negation == NegationKind.Complement)
                     complement = complement with { Lemma = complement.SurfaceText };
 
-                primaryObject = complement;
+                if (negation == NegationKind.None
+                    && TrySplitIndefinitePredicateNominal(
+                        sentence,
+                        parsed,
+                        complementSpan,
+                        out FrameArgument? category,
+                        out copulaProperties))
+                {
+                    primaryObject = category!;
+                    indefiniteCopulaNominal = true;
+                }
+                else
+                {
+                    primaryObject = complement;
+                }
                 predicateLemma = "be";
                 relationName = RelationRegistry.Normalize("be");
                 linkClass = LinkClass.identities;
@@ -530,6 +547,124 @@ namespace OPEN_LRD.NLP
                 coordinationGroup,
                 frames,
                 diagnostics);
+
+            if (indefiniteCopulaNominal)
+            {
+                OntologyTypes.EnsureRegistered();
+                OntologyRelations.EnsureRegistered();
+                AddFrame(
+                    sentence,
+                    clause,
+                    subject,
+                    primaryObject,
+                    new List<FrameArgument>(),
+                    "be",
+                    "is_a",
+                    OntologyTypes.ontology,
+                    negated,
+                    negation,
+                    modal,
+                    tense,
+                    voice,
+                    patternConfidence,
+                    coordination,
+                    coordinationGroup,
+                    frames,
+                    diagnostics);
+
+                foreach (FrameArgument property in copulaProperties)
+                {
+                    AddFrame(
+                        sentence,
+                        clause,
+                        subject,
+                        property,
+                        new List<FrameArgument>(),
+                        "have",
+                        "has_property",
+                        OntologyTypes.properties,
+                        negated,
+                        negation,
+                        modal,
+                        tense,
+                        voice,
+                        patternConfidence,
+                        coordination,
+                        coordinationGroup,
+                        frames,
+                        diagnostics);
+                }
+            }
+        }
+
+        private static bool TrySplitIndefinitePredicateNominal(
+            Sentence sentence,
+            ParsedText parsed,
+            ClauseArgument complementSpan,
+            out FrameArgument? category,
+            out List<FrameArgument> properties)
+        {
+            category = null;
+            properties = new List<FrameArgument>();
+            int start = complementSpan.StartToken;
+            int end = complementSpan.EndToken;
+
+            while (start <= end && sentence.Tokens[start].PartOfSpeech == PartOfSpeech.Punctuation)
+                start++;
+
+            if (start > end
+                || sentence.Tokens[start].PartOfSpeech != PartOfSpeech.Determiner
+                || sentence.Tokens[start].Normalized is not ("a" or "an"))
+            {
+                return false;
+            }
+
+            int categoryIndex = -1;
+            for (int index = end; index > start; index--)
+            {
+                if (sentence.Tokens[index].PartOfSpeech is PartOfSpeech.Noun or PartOfSpeech.ProperNoun)
+                {
+                    categoryIndex = index;
+                    break;
+                }
+            }
+
+            if (categoryIndex <= start)
+                return false;
+
+            List<FrameArgument> modifiers = new List<FrameArgument>();
+            for (int index = start + 1; index < categoryIndex; index++)
+            {
+                PartOfSpeech partOfSpeech = sentence.Tokens[index].PartOfSpeech;
+                if (partOfSpeech is PartOfSpeech.Adverb or PartOfSpeech.Punctuation)
+                    continue;
+
+                if (partOfSpeech != PartOfSpeech.Adjective)
+                    return false;
+
+                FrameArgument? property = CreateArgument(
+                    sentence,
+                    parsed,
+                    index,
+                    index,
+                    FrameRole.Object,
+                    null);
+                if (property is not null)
+                    modifiers.Add(property);
+            }
+
+            category = CreateArgument(
+                sentence,
+                parsed,
+                categoryIndex,
+                categoryIndex,
+                FrameRole.Object,
+                null);
+            if (category is null)
+                return false;
+
+            properties = modifiers;
+            return true;
         }
 
         private static void AddFrame(

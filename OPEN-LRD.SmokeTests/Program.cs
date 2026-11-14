@@ -30,6 +30,7 @@ namespace OPEN_LRD.SmokeTests
             ReasoningTests.RunAll();
             NlpTests.RunAll();
             PersistenceTests.RunAll();
+            MaintenanceTests.RunAll();
             OntologyTests.RunAll();
             TextImportTests.RunAll();
             VisualizerTests.RunAll();

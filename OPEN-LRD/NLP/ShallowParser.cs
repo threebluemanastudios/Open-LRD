@@ -169,6 +169,12 @@ namespace OPEN_LRD.NLP
                     continue;
                 }
 
+                if (IsProperNameOfConnector(tokens, start, index, end))
+                {
+                    index++;
+                    continue;
+                }
+
                 if (tokens[index].PartOfSpeech == PartOfSpeech.Conjunction
                     && index + 1 <= end
                     && StartsNounPhrase(tokens, index + 1, end))
@@ -182,6 +188,20 @@ namespace OPEN_LRD.NLP
 
             next = index;
             return index - 1;
+        }
+
+        private static bool IsProperNameOfConnector(
+            IReadOnlyList<Token> tokens,
+            int phraseStart,
+            int connectorIndex,
+            int phraseEnd)
+        {
+            return connectorIndex > phraseStart
+                && connectorIndex < phraseEnd
+                && tokens[connectorIndex].PartOfSpeech == PartOfSpeech.Preposition
+                && string.Equals(tokens[connectorIndex].Normalized, "of", StringComparison.OrdinalIgnoreCase)
+                && tokens[connectorIndex - 1].PartOfSpeech == PartOfSpeech.ProperNoun
+                && tokens[connectorIndex + 1].PartOfSpeech == PartOfSpeech.ProperNoun;
         }
 
         private static int ConsumeAdjectivePhrase(

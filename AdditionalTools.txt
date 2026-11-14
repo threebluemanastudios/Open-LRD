@@ -2,10 +2,9 @@ OPEN-LRD
 ADDITIONAL TOOLS PLAN
 MODULE 3 PHASE 9: LOG PERSISTENCE AND VISUALIZER DISTANCE PREP
 
-Status: Complete. Full solution builds with zero warnings and zero errors;
-        140 smoke tests pass and 245 automated UI tests pass. Log persistence
-        (Sections 1-15) and text file import (Section 16) are fully implemented
-        and verified.
+Status: Sections 1-17 complete. Current solution builds with zero warnings and
+        zero errors; 160 smoke tests and 277 automated UI
+        checks pass.
 Scope: Tools window import/export, versioned log persistence, transient chain
        companion logs, and link distance definitions for the future visualizer.
 Constraint: Native C# and WPF with no external libraries. Use System.Text.Json.
@@ -120,7 +119,7 @@ Pipeline attachments are excluded because pipeline IDs are process-local.
 Add OPEN-LRD/Persistence/:
 - CoreLogDocument.cs: versioned core-log DTOs and JSON settings
 - TransientLogDocument.cs: versioned transient-log DTOs
-- CoreLogExporter.cs: deterministic export and atomic file replacement
+- CoreLogExporter.cs: deterministic streaming export and atomic file replacement
 - CoreLogImporter.cs: parse, validate, merge, replace, and conversion
 - PersistenceResult.cs: export/import summaries, counts, warnings, and errors
 
@@ -133,10 +132,15 @@ Export rules:
 - Sort mentions and provenance by sequence.
 - Preserve temporary nodes, weights, TTLs, labels, aliases, and DataPointers.
 - Include all registered runtime type definitions.
-- Write to temporary files and move them into place only after serialization.
+- Stream each DTO to a temporary file and move files into place only after
+  serialization completes; do not build full-log DTO lists or JSON strings in
+  memory.
 - Export both logs in one action when Include Transient Chains is checked.
 - Write the transient companion even when both chain lists are empty; empty
   lists are valid and importing them is a successful no-op.
+- Import from a stream with a 512 MiB core/transient file ceiling, up to
+  1,000,000 nodes and 5,000,000 links in a core log. DTO entries are released as
+  node/link plans are built to avoid retaining a second full object graph.
 
 Transient filename rule:
 - <base without extension>_trans<original extension>
@@ -700,3 +704,250 @@ Modified:
   sentence budgets, then imports the file and verifies all chunks are processed.
 - Verification: both projects build with zero warnings and zero errors; all
   107 smoke tests pass, including the thirteen text-import checks.
+
+================================================================================
+17. SEGMENTED CORE-LOG EXPORT AND IMPORT: OVERVIEW
+================================================================================
+
+Status: Implemented
+
+Purpose
+- Support full core and transient exports that exceed the existing single-file
+  import ceiling while guaranteeing every emitted file is strictly smaller than
+  500 MiB (500 * 1024 * 1024 bytes).
+- Keep the existing single-file `.lrdlog` output and import behavior for logs
+  that fit below the limit.
+- Let the importer select one manifest and restore all numbered parts as one
+  validated snapshot. Cross-part links must work without duplicating endpoint
+  nodes or applying partial graph changes.
+
+Accepted decisions
+1. For a split core export, the requested `session.lrdlog` path becomes a small
+   manifest. Data parts use incrementing, zero-padded indices:
+   `session_0001.lrdpart`, `session_0002.lrdpart`, and so on.
+2. The optional transient companion gets the same size guarantee. Its split
+   manifest is `session_trans.lrdlog`, with parts named
+   `session_trans_0001.lrdpart`, etc.
+3. Importing a manifest automatically discovers, validates, and imports the
+   complete part set. Selecting a `.lrdpart` directly is rejected with a message
+   directing the user to the manifest. Legacy single-file logs remain importable.
+4. Parts are held in a unique sibling generation directory; their manifest
+   references relative paths. This prevents a new export from overwriting the
+   parts used by the currently committed manifest.
+5. The byte limit is checked against actual serialized UTF-8 bytes. Set
+   `MaxPartBytes` to `500 MiB - 1`; counting characters or estimated object
+   sizes is not sufficient. Cap the manifest too, and enforce a bounded part
+   count (`MaxPartsPerExport = 10000`).
+6. If an indivisible record cannot fit in an empty part, abort with the record
+   kind and ID. Do not publish a partial manifest or write any file at/above the
+   limit.
+
+Manifest and part format
+- Keep legacy `open-lrd-core-log` and `open-lrd-transient-log` documents
+  unchanged.
+- Add separate versioned format identifiers for core manifest, core part,
+  transient manifest, and transient part documents; do not overload version 1
+  legacy documents with partial arrays.
+- Core manifest fields: format/version, export ID, exported timestamp,
+  optional transient manifest filename, type definitions, aggregate node/link/
+  conversation counts, and an ordered part list. Each part entry records its
+  relative path, index, record kind, byte length, SHA-256, and item count.
+- Each part is a compact JSON array. Its first record is a typed header carrying
+  part format/version, export ID, index, and record kind. Remaining records are
+  typed node, link, conversation, or chain-node records. A link may target a node
+  in any part.
+- Transient manifest stores type definitions and ordered part entries. Transient
+  parts record query/response chain ID, chain position, node data, and optional
+  following link so chains can be reconstructed across part boundaries.
+- Type definitions live in the manifests, not duplicated in each part.
+
+Exporter design
+1. Stream the ordinary legacy document to a size-limited temporary file. If it
+   completes below the cap, publish it as the existing `.lrdlog` file.
+2. If the capped write reaches the limit, delete its partial temporary file and
+   re-run serialization in segmented mode. This keeps the normal export path
+   streaming and avoids buffering the whole log merely to estimate its size.
+3. Segment only between complete records. Before writing a record, measure its
+   compact JSON UTF-8 byte length with a bounded counting writer. Include the
+   part header, array separator, record wrapper, and reserved closing bytes in
+   the fit calculation. Also count actual bytes on the destination stream as a
+   final guard.
+4. Preserve deterministic order: nodes by GUID string; links by source,
+   destination, forward type, inverse type, and class; conversations by ID;
+   transient nodes by chain and sequence.
+5. Write parts into a temporary generation directory. After all parts and
+   checksums pass validation, move the directory into place, then publish the
+   transient manifest (if any) and the core manifest last. Keep the previous
+   generation available until its replacement manifest is committed; clean up
+   unreferenced prior generation directories only after success.
+6. Extend `CoreLogExportResult` with split status, manifest path, part count, and
+   total bytes while retaining current path and item-count fields.
+
+Importer design
+- `CoreLogImporter` detects legacy full documents versus manifests and dispatches
+  to the existing or multipart path respectively.
+- Validate the manifest, export ID, consecutive unique indices, relative paths,
+  checksums, file sizes, aggregate counts, and part-count limit before mutating
+  the core. Reject path traversal and missing, corrupt, reordered, or
+  mismatched-generation parts.
+- Stream each part; do not use `File.ReadAllText` or deserialize all part files
+  into a second complete document graph. Stage all nodes across the set before
+  validating links so cross-part endpoints resolve.
+- Preserve Merge/Replace semantics and no-partial-mutation guarantees. Apply
+  links and conversations only after all referenced parts and records validate.
+- For transient manifests, reconstruct each ordered query/response chain across
+  its fragments and preserve link metadata/origins.
+- Continue accepting existing single-file core and transient logs without
+  requiring migration.
+
+Tools and tests
+- Keep the normal file picker on `.lrdlog` manifests; display split status, part
+  count, total bytes, and the manifest path in export results.
+- Tests cover single-file output, multi-part output, strict
+  per-file byte bounds, deterministic part ordering/checksums, cross-part links,
+  transient chain reconstruction, missing/corrupt parts, individual-part
+  rejection, manifest path safety, and legacy import/export compatibility. The
+  segmented round-trip test injects a small part limit to exercise rollover and
+  verifies each emitted part's actual size. A full 500-MiB hardware stress run
+  remains release-scale verification.
+
+Acceptance criteria
+- Every newly emitted `.lrdlog`/`.lrdpart` file is strictly smaller than 500 MiB.
+- Small exports remain valid legacy single-file logs; split exports have a
+  manifest and correctly ordered, indexed parts.
+- Manifest import restores all nodes, links, conversations, runtime types, and
+  transient chains with cross-part references intact.
+- Invalid/missing parts leave the current core unchanged.
+- A failed re-export leaves the previously committed manifest and its parts
+  usable; unreferenced temporary files/directories are cleaned up.
+
+================================================================================
+17.1 IMPLEMENTATION DETAILS
+================================================================================
+
+Status: Implemented
+
+Purpose
+- Allow a complete core snapshot to be exported and imported when its JSON size
+  exceeds the importer’s per-file limit.
+- Guarantee every emitted data part is strictly smaller than 500 MiB, measured
+  as actual UTF-8 bytes on disk, not estimated from character counts.
+- Preserve the current single-file `.lrdlog` format for exports that fit below
+  the limit. Split only oversized core or transient logs.
+- Keep the numbered files importable as one validated snapshot so links may
+  reference nodes in different parts without breaking Replace/Merge semantics.
+
+Accepted decisions
+1. The selected core path remains the entry point. For a split set it contains
+   a small manifest; the importer follows that manifest to load all parts.
+2. Use zero-padded incrementing names based on the requested log name, for
+   example `session_0001.lrdpart`, `session_0002.lrdpart`. Keep each export
+   generation in a unique sibling parts directory and store relative paths in
+   the manifest. The index remains the final part of each data-part basename.
+3. The optional transient companion receives the same size guarantee and uses
+   `session_trans.lrdlog` as its manifest with `session_trans_0001.lrdpart`, etc.
+4. Existing single-file core/transient logs remain supported unchanged. A single
+   data record that cannot fit in an otherwise empty part is rejected with an
+   explicit error; it is never written past the limit.
+5. Part publication is generation-based. Write all part files into a temporary
+   generation directory, validate their sizes/checksums, move that directory to
+   its final unique name, then publish manifests atomically. Keep the old
+   generation until the new core manifest is committed; remove stale generation
+   directories only after successful publication.
+
+File layout and records
+- Single file (under limit): retain current `open-lrd-core-log` or
+  `open-lrd-transient-log` JSON format.
+- Split core set:
+    `session.lrdlog`                     manifest (`open-lrd-core-log-manifest`)
+    `session_parts_<exportId>/session_0001.lrdpart`
+    `session_parts_<exportId>/session_0002.lrdpart` ...
+- Split transient set:
+    `session_trans.lrdlog`                manifest (`open-lrd-transient-manifest`)
+    `session_parts_<exportId>/session_trans_0001.lrdpart` ...
+- Manifest includes format/version, export ID, exported timestamp, runtime type
+  definitions, aggregate node/link/conversation or chain counts, and each part’s
+  relative filename, index, byte length, record counts, and SHA-256 checksum.
+- Each part is a compact JSON array. Its first record is a header containing the
+  part format/version, export ID, index, and record kind. Remaining records are
+  typed node, link, conversation, or chain-node records. A chain-node record
+  carries chain ID/index, position, node data, and following link when present.
+- Store node records before links where practical, but the manifest and importer
+  must not rely on a link destination being in the same part as its source.
+  Import all nodes across the set before validating/committing links.
+- Type definitions live once in the manifest. Parts refer to the manifest’s
+  export ID and version; they do not repeat the full type registry.
+
+Size enforcement and deterministic partitioning
+- Define `MaxPartBytes = 500 * 1024 * 1024 - 1`, so `FileInfo.Length` is always
+  strictly below 500 MiB.
+- Enforce a bounded `MaxPartsPerExport` (10,000) so manifests
+  also remain well below the same 500 MiB ceiling; fail before publication if
+  either the part-count or manifest-size guard is exceeded.
+- Keep the streaming writer. Before writing a complete record, determine its
+  exact compact UTF-8 serialized length with a bounded counting writer. Include
+  the current part length, separator, record envelope, and reserved JSON closing
+  bytes in the fit check. If it does not fit, close the part and retry that
+  record in a new part.
+- Count bytes through the actual output stream as a final guard. If even an
+  empty part plus its envelope cannot hold one record, abort export before
+  publishing manifests and report the record kind/ID that exceeded the limit.
+- Keep record order stable: nodes by ID, links by source/destination/type/class,
+  conversations by ID, and chain nodes by chain and position. Exporting the same
+  unchanged graph must produce the same record ordering and checksums.
+- If the initial streaming write of a legacy-format temporary log crosses the
+  hard limit, discard that temp file and restart using the segmented format.
+  This keeps small-log exports backward-compatible without buffering the file.
+
+Importer behavior
+- `CoreLogImporter` first distinguishes legacy full logs from core manifests.
+  Selecting a manifest imports the entire set; selecting a `.lrdpart` directly
+  reports that the manifest must be selected.
+- Validate manifest version, export ID, unique/consecutive part indices,
+  safe relative paths (no absolute paths or `..` traversal), per-part byte
+  limits, existence, SHA-256, and aggregate item limits before graph mutation.
+- Stream parts rather than loading each part as a string. Build the staging node
+  plan across all node records first, then process links and conversations.
+  Apply Merge/Replace only after every part passes validation, preserving the
+  current no-partial-mutation guarantee.
+- Reject missing, duplicated, reordered, mismatched-export, or corrupted parts
+  with a diagnostic naming the offending path/index. Do not silently import a
+  subset of a manifest’s parts.
+- Preserve existing importer limits at the set level; per-part limits do not
+  reset the aggregate node/link/conversation limits.
+
+Tools and API changes
+- Export result reports whether output was split, the manifest path, part count,
+  and total bytes. The Tools status displays these counts and the manifest path.
+- Import continues to select the base `.lrdlog` manifest. The file picker need
+  not expose part files as normal import choices.
+- `CoreLogExportResult` gains part/manifest metadata without removing existing
+  path/count fields. Existing callers that ignore new properties keep working.
+
+Implementation phases
+1. Define manifest/part DTOs, format identifiers, export-generation naming, and
+   checksums. Keep legacy DTO formats unchanged.
+2. Add a byte-counted record writer with rollover and single-record oversize
+   handling; publish immutable generation directories and manifests safely.
+3. Add manifest discovery and validation, then staged import across all parts
+   while preserving Merge/Replace atomicity and legacy single-file import.
+4. Split transient chain records as well as core graph records, preserving chain
+   order and links that cross part boundaries.
+5. Update Tools result reporting and documentation. Tests cover split naming,
+   byte ceilings, deterministic ordering/checksums, missing/corrupt parts,
+   individual-part rejection, cross-part node links, transient-chain
+   reconstruction, and legacy round trips.
+6. The automated rollover test injects a small part-size limit and checks every
+   emitted part's actual byte size. A full 500-MiB stress run remains a
+   release-scale verification for representative production hardware.
+
+Acceptance criteria
+- No emitted core, transient, manifest, or data-part file is 500 MiB or larger.
+- Small exports retain the current single-file format; oversized exports produce
+  a manifest plus indexed parts.
+- Importing the manifest restores the same node/link/conversation counts and
+  metadata as the original graph in both Merge and Replace modes.
+- Cross-part links and chains reconstruct correctly.
+- Missing/corrupt parts fail without modifying graph state.
+- Export remains deterministic, uses bounded memory, and preserves the last
+  committed export if a new segmented export fails before manifest publication.

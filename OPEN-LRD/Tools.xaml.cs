@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Win32;
 using OPEN_LRD.NLP;
+using OPEN_LRD.Maintenance;
 using OPEN_LRD.Ontology;
 using OPEN_LRD.Ontology.Gcide;
 using OPEN_LRD.Persistence;
@@ -28,6 +29,46 @@ namespace OPEN_LRD
         public Tools()
         {
             InitializeComponent();
+        }
+
+        private void RunMaintenance_Button_Click(object sender, RoutedEventArgs e)
+        {
+            if (!EnsureCoreInitialized())
+                return;
+
+            try
+            {
+                MaintenanceReport report = Core.RunMaintenanceCycle(new MaintenanceOptions
+                {
+                    EnableReasoningMaintenance = true,
+                    EnableNodeMerging = MaintenanceMergeNodesCheckBox.IsChecked == true,
+                    EnableNodeMetadataReasoning = MaintenanceMetadataCheckBox.IsChecked == true,
+                    EnableCompositionalInduction = MaintenanceCompositionCheckBox.IsChecked == true,
+                    EnableFrequentPatternAbstraction = MaintenancePatternCheckBox.IsChecked == true,
+                    EnableConceptRelationElevation = MaintenanceElevationCheckBox.IsChecked == true,
+                    EnableSupersededLinkPruning = MaintenancePruningCheckBox.IsChecked == true
+                });
+
+                MaintenanceStatusText.Text =
+                    $"Examined {report.NodesExamined} nodes; created {report.NodesCreated}; " +
+                    $"removed {report.NodesRemoved} expired/merged nodes; " +
+                    $"merged {report.NodesMerged}; examined {report.RelationPatternsExamined} relation pattern(s); " +
+                    $"metadata scanned {report.MetadataNodesExamined} node(s), created {report.MetadataValuesCreated} value node(s), " +
+                    $"added {report.MetadataFactsAdded} fact(s), inactivated {report.MetadataFactsInvalidated}; " +
+                    $"registered {report.RelationTypesRegistered} relation type(s); " +
+                    $"created {report.RelationNodesCreated} relation concept(s); generated {report.LinksGenerated} link(s); " +
+                    $"invalidated {report.LinksInvalidated} link(s) in {report.Elapsed.TotalSeconds:F2}s." +
+                    (report.WorkBudgetExhausted ? " A work budget was reached." : string.Empty);
+
+                StatusBox.Text = report.Diagnostics.Count == 0
+                    ? MaintenanceStatusText.Text
+                    : MaintenanceStatusText.Text + Environment.NewLine + string.Join(Environment.NewLine, report.Diagnostics);
+            }
+            catch (Exception ex)
+            {
+                MaintenanceStatusText.Text = "Maintenance failed: " + ex.Message;
+                SetStatus(MaintenanceStatusText.Text);
+            }
         }
 
         private void ExportLogs_Button_Click(object sender, RoutedEventArgs e)
@@ -645,6 +686,15 @@ namespace OPEN_LRD
             StringBuilder report = new StringBuilder();
             report.AppendLine("Export complete.");
             report.AppendLine("Core log: " + result.CorePath);
+
+            if (result.IsSplit)
+            {
+                report.AppendLine(
+                    $"Segmented export: {result.CorePartCount} core part(s), " +
+                    $"{result.TransientPartCount} transient part(s).");
+            }
+
+            report.AppendLine($"Total bytes written: {result.TotalBytes}");
 
             if (result.TransientPath is not null)
                 report.AppendLine("Transient log: " + result.TransientPath);

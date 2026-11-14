@@ -1,5 +1,6 @@
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
+using OPEN_LRD.Ontology;
 
 namespace OPEN_LRD.NLP
 {
@@ -413,6 +414,13 @@ namespace OPEN_LRD.NLP
                 leadingPreposition,
                 explicitPrepositions);
 
+            if (copula
+                && questionType == QuestionType.YesNo
+                && IsAdjectiveComplement(tokens, objectArgument))
+            {
+                relationCandidates.RemoveAll(candidate => candidate.Name != "has_property");
+            }
+
             bool supported = true;
 
             if (modal is not null)
@@ -691,6 +699,7 @@ namespace OPEN_LRD.NLP
                 supported,
                 anchor.IsAmbiguous,
                 anchor.ResolvedNodeID,
+                anchor.CandidateNodeIDs,
                 anchorRole,
                 variants,
                 diagnostics,
@@ -1077,6 +1086,9 @@ namespace OPEN_LRD.NLP
 
                 if (partOfSpeech == PartOfSpeech.Adjective)
                 {
+                    if (hasNominal)
+                        break;
+
                     spanEnd = index;
                     continue;
                 }
@@ -1436,6 +1448,11 @@ namespace OPEN_LRD.NLP
             if (copula)
             {
                 AddRelation(candidates, "is", LinkClass.identities);
+                OntologyTypes.EnsureRegistered();
+                OntologyRelations.EnsureRegistered();
+                AddRelation(candidates, "is_a", OntologyTypes.ontology);
+                if (questionType == QuestionType.YesNo)
+                    AddRelation(candidates, "has_property", OntologyTypes.properties);
                 return candidates;
             }
 
@@ -1515,6 +1532,29 @@ namespace OPEN_LRD.NLP
             candidates.Add(new RelationCandidate(name, linkClass));
         }
 
+        private static bool IsAdjectiveComplement(
+            IReadOnlyList<Token> tokens,
+            FrameArgument? argument)
+        {
+            if (argument is null)
+                return false;
+
+            for (int index = argument.StartToken; index <= argument.EndToken; index++)
+            {
+                if (tokens[index].PartOfSpeech is PartOfSpeech.Noun
+                    or PartOfSpeech.ProperNoun
+                    or PartOfSpeech.Number)
+                {
+                    return false;
+                }
+
+                if (tokens[index].PartOfSpeech == PartOfSpeech.Adjective)
+                    return true;
+            }
+
+            return false;
+        }
+
         private static LinkClass ClassifyPrepositionLinkClass(
             string preposition,
             QuestionType questionType)
@@ -1588,6 +1628,7 @@ namespace OPEN_LRD.NLP
                 false,
                 false,
                 null,
+                Array.Empty<Guid>(),
                 FrameRole.Subject,
                 Array.Empty<QuestionVariant>(),
                 diagnostics,

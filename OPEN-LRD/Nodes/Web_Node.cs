@@ -46,8 +46,17 @@ namespace OPEN_LRD.Nodes
         {
             ArgumentNullException.ThrowIfNull(link);
 
-            if (!referenceLinks.Contains(link))
+            Link? existing = referenceLinks.FirstOrDefault(candidate => candidate.HasSameIdentity(link));
+            if (existing is null)
+            {
                 referenceLinks.Add(link);
+            }
+            else
+            {
+                existing.AddOrigin(link.Origins);
+                if (link.IsActive)
+                    existing.Reactivate();
+            }
         }
 
         public void AddLink(Link link)

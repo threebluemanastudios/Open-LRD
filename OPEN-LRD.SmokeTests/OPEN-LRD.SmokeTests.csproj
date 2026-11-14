@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="../OPEN-LRD/Nodes/**/*.cs" />
     <Compile Include="../OPEN-LRD/Reasoning/**/*.cs" />
+    <Compile Include="../OPEN-LRD/Maintenance/**/*.cs" />
     <Compile Include="../OPEN-LRD/NLP/**/*.cs" />
     <Compile Include="../OPEN-LRD/Ontology/**/*.cs" />
     <Compile Include="../OPEN-LRD/Persistence/**/*.cs" />

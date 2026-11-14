@@ -109,7 +109,7 @@ namespace OPEN_LRD.NLP
                 return Unsupported(null, new[] { "The question could not be analyzed." });
 
             if (question.AnchorIsAmbiguous)
-                return CreateAmbiguousAnchorAnswer(question, options);
+                return CreateAmbiguousAnchorAnswer(question, core, options);
 
             if (!question.Supported)
                 return Unsupported(question, question.Diagnostics);
@@ -150,9 +150,11 @@ namespace OPEN_LRD.NLP
 
         private static NlpAnswer CreateAmbiguousAnchorAnswer(
             QuestionAnalysis question,
+            LRD_Core core,
             NlpOptions options)
         {
             string text = "The question anchor matches multiple nodes.";
+            IReadOnlyList<AnswerCandidate> candidates = SeedAmbiguousAnchorCandidates(question, core, options);
 
             return new NlpAnswer(
                 AnswerStatus.Ambiguous,
@@ -160,13 +162,85 @@ namespace OPEN_LRD.NLP
                 text,
                 null,
                 null,
-                Array.Empty<AnswerCandidate>(),
+                candidates,
                 Array.Empty<GraphPath>(),
                 question,
                 null,
-                false,
+                candidates.Any(candidate => candidate.UsesTemporaryEvidence),
                 0.50,
                 new[] { "The question anchor matches multiple nodes." });
+        }
+
+        private static IReadOnlyList<AnswerCandidate> SeedAmbiguousAnchorCandidates(
+            QuestionAnalysis question,
+            LRD_Core core,
+            NlpOptions options)
+        {
+            HashSet<Guid> seenIDs = new HashSet<Guid>();
+            List<Web_Node> nodes = new List<Web_Node>();
+
+            foreach (Guid candidateID in question.AnchorCandidateNodeIDs)
+            {
+                if (seenIDs.Add(candidateID)
+                    && core.TryGetNode(candidateID, out Web_Node? node)
+                    && node is not null
+                    && !node.IsDisposed)
+                {
+                    nodes.Add(node);
+                }
+            }
+
+            if (nodes.Count == 0)
+            {
+                FrameArgument? anchor = question.AnchorRole switch
+                {
+                    FrameRole.Object => question.Object,
+                    FrameRole.Qualifier => question.Qualifier,
+                    _ => question.Subject
+                };
+                string? lookup = anchor?.SurfaceText;
+                if (string.IsNullOrWhiteSpace(lookup))
+                    lookup = anchor?.Lemma;
+
+                if (!string.IsNullOrWhiteSpace(lookup))
+                {
+                    foreach (Web_Node node in core.FindByLabel(lookup.Trim()))
+                    {
+                        if (seenIDs.Add(node.ID) && !node.IsDisposed)
+                            nodes.Add(node);
+                    }
+                }
+            }
+
+            int relationLinkTypeID = 0;
+            if (!string.IsNullOrWhiteSpace(question.RelationName)
+                && RelationRegistry.TryGet(question.RelationName, out RelationLinkType relation))
+            {
+                relationLinkTypeID = relation.Id;
+            }
+            else if (question.Variants.Count > 0)
+            {
+                relationLinkTypeID = question.Variants[0].ForwardLinkTypeId;
+            }
+
+            return nodes
+                .OrderByDescending(node => node.IsPermanent)
+                .ThenByDescending(node => node.Get_WeightUp())
+                .ThenBy(node => node.ID)
+                .Take(Math.Max(1, options.MaxAnswerCandidates))
+                .Select(node => new AnswerCandidate(
+                    node.ID,
+                    string.IsNullOrWhiteSpace(ResolveLabel(node))
+                        ? node.ID.ToString()
+                        : ResolveLabel(node),
+                    node.Get_NodeType(),
+                    0.50,
+                    0,
+                    relationLinkTypeID,
+                    question.LinkClass,
+                    new[] { node.ID },
+                    node.IsTemporary))
+                .ToArray();
         }
 
         private static NlpAnswer GenerateBoolean(

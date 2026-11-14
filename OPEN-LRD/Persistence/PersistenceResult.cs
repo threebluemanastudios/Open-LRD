@@ -22,6 +22,14 @@ namespace OPEN_LRD.Persistence
 
         public int ResponseChainCount { get; init; }
 
+        public bool IsSplit { get; init; }
+
+        public int CorePartCount { get; init; }
+
+        public int TransientPartCount { get; init; }
+
+        public long TotalBytes { get; init; }
+
         public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     }
 

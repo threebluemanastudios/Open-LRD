@@ -64,6 +64,9 @@ namespace OPEN_LRD.Ontology
 
                 foreach (Link link in current.Get_ReferenceLinks())
                 {
+                    if (!link.IsActive)
+                        continue;
+
                     if (link.SourceID != current.Get_ID() || link.ForwardLink.Id != OntologyRelations.IsA)
                         continue;
 

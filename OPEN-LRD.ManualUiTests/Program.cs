@@ -190,6 +190,13 @@ namespace OPEN_LRD.ManualUiTests
             Check(window.ExportLogsButton is not null, "Export section present (ExportLogsButton).");
             Check(window.ImportCoreLogButton is not null, "Import section present (ImportCoreLogButton).");
             Check(window.SeedOntologyButton is not null, "Ontology section present (SeedOntologyButton).");
+            Check(window.RunMaintenanceButton is not null, "Graph Maintenance section present (RunMaintenanceButton).");
+            Check(window.MaintenanceMergeNodesCheckBox.IsChecked == true, "Node consolidation is selected by default in the explicit maintenance panel.");
+            Check(window.MaintenanceMetadataCheckBox.IsChecked == true, "Node metadata materialization is selected by default in the explicit maintenance panel.");
+            Check(window.MaintenanceCompositionCheckBox.IsChecked == true, "Composition is selected by default in the explicit maintenance panel.");
+            Check(window.MaintenancePatternCheckBox.IsChecked == true, "Pattern abstraction is selected by default in the explicit maintenance panel.");
+            Check(window.MaintenanceElevationCheckBox.IsChecked == true, "Relation concept elevation is selected by default in the explicit maintenance panel.");
+            Check(window.MaintenancePruningCheckBox.IsChecked == true, "Superseded-link pruning is selected by default in the explicit maintenance panel.");
             Check(window.StatusBox is not null, "Status box present (StatusBox).");
 
             Check(window.TextImportPathBox.Text == "", "Default File path is empty.");

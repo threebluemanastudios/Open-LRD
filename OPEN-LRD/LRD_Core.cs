@@ -1,4 +1,5 @@
 ﻿using OPEN_LRD.NLP;
+using OPEN_LRD.Maintenance;
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
 using System.Collections.ObjectModel;
@@ -215,6 +216,11 @@ namespace OPEN_LRD
             return nodes.TryAdd(tempNode.Get_ID(), tempNode);
         }
 
+        public MaintenanceReport IngestNodeMetadata(Guid nodeID)
+        {
+            return NodeMetadataReasoner.IngestNode(this, nodeID);
+        }
+
         // Returns the existing node at index (NodeID) or null when it does not exist.
         public Web_Node? GetExistingNode(Guid nodeID)
         {
@@ -261,40 +267,187 @@ namespace OPEN_LRD
             return nodes.Remove(nodeID);
         }
 
+        internal bool MergeNodes(Guid survivorID, Guid duplicateID)
+        {
+            if (!initialized || nodes is null || survivorID == duplicateID
+                || !nodes.TryGetValue(survivorID, out Web_Node? survivor)
+                || !nodes.TryGetValue(duplicateID, out Web_Node? duplicate)
+                || survivor.IsDisposed || duplicate.IsDisposed)
+            {
+                return false;
+            }
+
+            DataPointer? survivorPointer = survivor.Get_DataPointer();
+            DataPointer? duplicatePointer = duplicate.Get_DataPointer();
+            if (survivorPointer is not null && duplicatePointer is not null
+                && !Equals(survivorPointer, duplicatePointer))
+            {
+                return false;
+            }
+
+            Dictionary<string, Link> affectedLinks = new Dictionary<string, Link>(StringComparer.Ordinal);
+            foreach (Web_Node node in nodes.Values)
+            {
+                foreach (Link link in node.Get_ReferenceLinks())
+                {
+                    if (link.SourceID != duplicateID && link.DestinationID != duplicateID)
+                        continue;
+
+                    string key = string.Join("|", link.SourceID, link.DestinationID,
+                        link.ForwardLink.Id, link.InverseLink.Id, link.Classification.Id);
+                    if (!affectedLinks.TryGetValue(key, out Link? existing)
+                        || (!existing.IsActive && link.IsActive))
+                    {
+                        if (existing is not null)
+                            link.AddOrigin(existing.Origins);
+                        affectedLinks[key] = link;
+                    }
+                    else
+                    {
+                        existing.AddOrigin(link.Origins);
+                    }
+                }
+            }
+
+            if (!survivor.MergeMetadataFrom(duplicate))
+                return false;
+
+            foreach (Web_Node node in nodes.Values)
+                node.RemoveLinksFor(duplicateID);
+
+            foreach (Link oldLink in affectedLinks.Values)
+            {
+                Guid sourceID = oldLink.SourceID == duplicateID ? survivorID : oldLink.SourceID;
+                Guid destinationID = oldLink.DestinationID == duplicateID ? survivorID : oldLink.DestinationID;
+
+                if (sourceID == destinationID || !nodes.TryGetValue(sourceID, out Web_Node? source))
+                    continue;
+
+                Link replacement = new Link(
+                    sourceID,
+                    destinationID,
+                    oldLink.ForwardLink,
+                    oldLink.InverseLink,
+                    oldLink.Classification,
+                    oldLink.Origins);
+
+                if (!oldLink.IsActive)
+                    replacement.Invalidate();
+
+                source.Add_Link(replacement);
+            }
+
+            return RemoveExistingNode(duplicateID);
+        }
+
+        internal bool InvalidateLink(Link target)
+        {
+            ArgumentNullException.ThrowIfNull(target);
+
+            if (!initialized || nodes is null)
+                return false;
+
+            bool changed = false;
+            foreach (Web_Node node in nodes.Values)
+            {
+                foreach (Link link in node.Get_ReferenceLinks())
+                {
+                    if (link.HasSameIdentity(target) && link.IsActive)
+                    {
+                        link.Invalidate();
+                        changed = true;
+                    }
+                }
+            }
+
+            return changed;
+        }
+
+        internal (int FactsRemoved, int LinksInvalidated) ReconcileMetadataLinks(
+            Guid sourceID,
+            IReadOnlySet<string> expectedLinkKeys)
+        {
+            ArgumentNullException.ThrowIfNull(expectedLinkKeys);
+            if (!initialized || nodes is null || !nodes.TryGetValue(sourceID, out Web_Node? source))
+                return (0, 0);
+
+            int factsRemoved = 0;
+            int invalidated = 0;
+            foreach (Link link in source.Get_ReferenceLinks())
+            {
+                if (link.SourceID != sourceID
+                    || (link.Origins & LinkOrigin.NodeMetadata) == 0
+                    || expectedLinkKeys.Contains(Maintenance.NodeMetadataReasoner.GetLinkKey(link)))
+                {
+                    continue;
+                }
+
+                LinkOrigin remaining = link.RemoveOrigin(LinkOrigin.NodeMetadata);
+                factsRemoved++;
+                if (remaining == LinkOrigin.None && link.IsActive)
+                {
+                    link.Invalidate();
+                    invalidated++;
+                }
+            }
+
+            return (factsRemoved, invalidated);
+        }
+
         // Adds a two-way connection between the source and destination nodes.
         public bool AddConnection(Guid sourceID, Guid destinationID)
         {
-            return AddConnections(sourceID, destinationID, LinkClass.basic, ForwardLinkTypes.basic.Id, true);
+            return AddConnections(sourceID, destinationID, LinkClass.basic, ForwardLinkTypes.basic.Id, true,
+                LinkOrigin.Explicit);
         }
 
         // Adds a two-way connection between the source and destination nodes.
         public bool AddConnection(Guid sourceID, Guid destinationID, LinkClass linkClass)
         {
-            return AddConnections(sourceID, destinationID, linkClass, ForwardLinkTypes.basic.Id, true);
+            return AddConnections(sourceID, destinationID, linkClass, ForwardLinkTypes.basic.Id, true,
+                LinkOrigin.Explicit);
         }
 
         public bool AddConnection(Guid sourceID, Guid destinationID, LinkClass linkClass, int linkType)
         {
-            return AddConnections(sourceID, destinationID, linkClass, linkType, true);
+            return AddConnections(sourceID, destinationID, linkClass, linkType, true, LinkOrigin.Explicit);
         }
 
         // Adds a single directed connection from the source node to the destination node.
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID)
         {
-            return AddConnections(sourceID, destinationID, LinkClass.basic, ForwardLinkTypes.basic.Id, false);
+            return AddConnections(sourceID, destinationID, LinkClass.basic, ForwardLinkTypes.basic.Id, false,
+                LinkOrigin.Explicit);
         }
 
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID, LinkClass linkClass)
         {
-            return AddConnections(sourceID, destinationID, linkClass, ForwardLinkTypes.basic.Id, false);
+            return AddConnections(sourceID, destinationID, linkClass, ForwardLinkTypes.basic.Id, false,
+                LinkOrigin.Explicit);
         }
 
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID, LinkClass linkClass, int linkType)
         {
-            return AddConnections(sourceID, destinationID, linkClass, linkType, false);
+            return AddConnections(sourceID, destinationID, linkClass, linkType, false, LinkOrigin.Explicit);
         }
 
-        private bool AddConnections(Guid sourceID, Guid destinationID, LinkClass linkClass, int linkType, bool bidirectional)
+        internal bool AddDirectedConnection(
+            Guid sourceID,
+            Guid destinationID,
+            LinkClass linkClass,
+            int linkType,
+            LinkOrigin origin)
+        {
+            return AddConnections(sourceID, destinationID, linkClass, linkType, false, origin);
+        }
+
+        private bool AddConnections(
+            Guid sourceID,
+            Guid destinationID,
+            LinkClass linkClass,
+            int linkType,
+            bool bidirectional,
+            LinkOrigin origin)
         {
             if (!initialized || nodes is null)
                 return false;
@@ -305,10 +458,10 @@ namespace OPEN_LRD
             if (!nodes.TryGetValue(destinationID, out Web_Node? destination))
                 return false;
 
-            source.Add_Link(new Link(sourceID, destinationID, linkType, linkType, linkClass));
+            source.Add_Link(new Link(sourceID, destinationID, linkType, linkType, linkClass, origin));
 
             if (bidirectional && sourceID != destinationID)
-                destination.Add_Link(new Link(destinationID, sourceID, linkType, linkType, linkClass));
+                destination.Add_Link(new Link(destinationID, sourceID, linkType, linkType, linkClass, origin));
 
             return true;
         }
@@ -389,7 +542,7 @@ namespace OPEN_LRD
 
                 if (criteria.LinkClass is not null)
                     results = results.Where(node => node.Get_ReferenceLinks().Any(
-                        link => link.Classification == criteria.LinkClass));
+                        link => link.IsActive && link.Classification == criteria.LinkClass));
             }
 
             return results.ToList();
@@ -450,6 +603,9 @@ namespace OPEN_LRD
             {
                 foreach (Link link in node.Get_ReferenceLinks())
                 {
+                    if (!link.IsActive)
+                        continue;
+
                     if (link.SourceID != nodeID)
                         linkedNodeIDs.Add(link.SourceID);
 
@@ -464,7 +620,7 @@ namespace OPEN_LRD
                     continue;
 
                 if (candidate.Get_ReferenceLinks().Any(
-                    link => link.SourceID == nodeID || link.DestinationID == nodeID))
+                    link => link.IsActive && (link.SourceID == nodeID || link.DestinationID == nodeID)))
                 {
                     linkedNodeIDs.Add(candidate.ID);
                 }
@@ -477,6 +633,16 @@ namespace OPEN_LRD
         }
 
         public IReadOnlyList<Link> GetLinks(Guid nodeID)
+        {
+            if (!initialized || nodes is null)
+                return Array.Empty<Link>();
+
+            return nodes.TryGetValue(nodeID, out Web_Node? node)
+                ? node.Get_ReferenceLinks().Where(link => link.IsActive).ToArray()
+                : Array.Empty<Link>();
+        }
+
+        internal IReadOnlyList<Link> GetStoredLinks(Guid nodeID)
         {
             if (!initialized || nodes is null)
                 return Array.Empty<Link>();
@@ -605,14 +771,28 @@ namespace OPEN_LRD
                 : new LinkedList<Chain_Node>(replacementResponse);
         }
 
-        public void RunMaintenanceCycle()
+        public MaintenanceReport RunMaintenanceCycle()
         {
+            return RunMaintenanceCycle(new MaintenanceOptions());
+        }
+
+        public MaintenanceReport RunMaintenanceCycle(MaintenanceOptions options)
+        {
+            ArgumentNullException.ThrowIfNull(options);
+            options.Validate();
+            MaintenanceReport report = new MaintenanceReport();
+
             if (!initialized || nodes is null)
-                return;
+            {
+                report.Complete();
+                return report;
+            }
 
             HashSet<Guid> nodesToRemove = new HashSet<Guid>();
 
-            foreach (Web_Node node in nodes.Values.ToList())
+            Web_Node[] maintenanceNodes = nodes.Values.ToArray();
+            report.NodesExamined = maintenanceNodes.Length;
+            foreach (Web_Node node in maintenanceNodes)
             {
                 node.PerformMaintenance();
 
@@ -622,6 +802,11 @@ namespace OPEN_LRD
 
             foreach (Guid nodeID in nodesToRemove)
                 RemoveExistingNode(nodeID);
+
+            report.NodesRemoved = nodesToRemove.Count;
+            MaintenanceReasoningEngine.Run(this, options, report);
+            report.Complete();
+            return report;
         }
 
     }

@@ -104,7 +104,7 @@ namespace OPEN_LRD.NLP
             "old", "permanent", "poor", "possible", "quick", "real", "red", "rich",
             "sad", "safe", "same", "second", "short", "simple", "slow", "small", "smart",
             "strong", "tall", "temporary", "true", "warm", "weak", "well", "white",
-            "young");
+            "young", "dangerous", "geographic", "geographical", "national", "regional");
 
         private static readonly HashSet<string> commonAdverbs = Create(
             "almost", "already", "also", "always", "here", "just", "maybe", "never",
@@ -121,7 +121,8 @@ namespace OPEN_LRD.NLP
             "africa", "asia", "australia", "berlin", "california", "canada",
             "china", "england", "europe", "france", "germany", "india", "italy",
             "japan", "london", "mexico", "new york", "paris", "seattle", "spain",
-            "tokyo", "united states", "usa", "washington", "york");
+            "tokyo", "united states", "united states of america", "the united states of america",
+            "unites states of america", "the unites states of america", "usa", "washington", "york");
 
         private static readonly HashSet<string> organizationGazetteer = Create(
             "acme", "amazon", "apple", "google", "ibm", "microsoft", "nasa",

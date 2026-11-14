@@ -512,7 +512,7 @@ namespace OPEN_LRD.Ontology.Gcide
 
             foreach (Link link in source.Get_ReferenceLinks())
             {
-                if (link.DestinationID == destinationID && link.ForwardLink.Id == relationId)
+                if (link.IsActive && link.DestinationID == destinationID && link.ForwardLink.Id == relationId)
                     return true;
             }
 
