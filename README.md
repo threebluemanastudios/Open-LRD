@@ -105,11 +105,15 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 
 ### Future Reasoning Extensions
 
-- General graph matching beyond linear chains.
-- Spatiotemporal reasoning over event time and location.
-- Abstraction and inductive generalization from conflicting examples.
-- Explicit inferred-edge confidence and reasoning traces.
-- Graph refactoring, relation extraction, and graph compression during maintenance.
+- General graph matching and query shapes beyond the current bounded linear
+  query chains.
+- Broader event reasoning beyond timestamp windows, including recurring events,
+  temporal relations, and richer event/location constraints.
+- Causal, conditional, and counterfactual reasoning with explicit uncertainty
+  for inferred conclusions.
+- Extend Module 5's bounded rule-based maintenance with additional explainable
+  consolidation and abstraction policies.
+- Large-graph performance and memory testing at production-scale graph sizes.
 
 ## Module 3: The NLP Pipeline
 
@@ -122,7 +126,8 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 3. Parse grammatical dependencies to identify subjects, verbs, objects, and modifiers.
 4. Perform named-entity recognition and chunk proper names into single concepts.
 5. Extract relationships and qualifiers from the sentence structure.
-6. Convert the result into temporary nodes, links, and a query graph.
+6. Convert the result into temporary graph chains; dated event statements can
+   also create reified Event nodes with temporal windows.
 7. Use surrounding context to disambiguate entities and word senses.
 8. Pass the temporary chain to the Reasoning Engine for matching and merging.
 
@@ -364,7 +369,8 @@ full terms.
 ## Cross-Cutting Principles
 
 - **README module order is authoritative.**
-- **Graph first, reasoning second, language third, ontology fourth.**
+- **Graph, reasoning, language, and ontology are the foundation; maintenance,
+  conversation, and event/time capabilities build on those layers.**
 - **Permanent knowledge is protected; temporary knowledge is disposable.**
 - **All facts should carry provenance, trust, and confidence where possible.**
 - **Traversal must be bounded and cycle-safe.**
@@ -376,9 +382,28 @@ full terms.
 
 ## Suggested Delivery Roadmap
 
-1. Maintain and extend the completed graph backend and reasoning engine.
-2. Build the NLP ingestion path and response-generation path.
-3. Add the Upper Ontology startup layer and curated knowledge-loading tools.
-4. Connect the modules into an end-to-end ingest, reason, and answer loop.
-5. Add stress tests for ambiguity, contradictions, cycles, trust loss, and large graphs.
-6. Add maintenance passes for graph refactoring, graph compression, and inferred-memory cleanup.
+The original staged delivery is complete:
+
+1. **Graph backend and reasoning** — node/link storage, trust, contradiction
+   handling, bounded matching, and response extraction.
+2. **NLP pipeline and Workbench** — ingestion, question answering, conversation
+   context, provenance, and read-only commands.
+3. **Upper Ontology and lexical loading** — foundational relations and curated
+   GCIDE ingestion.
+4. **Tools and Visualizer** — versioned/segmented persistence, large text import,
+   graph maintenance controls, and the separate 3D Visualizer.
+5. **Maintenance reasoning** — opt-in consolidation, metadata materialization,
+   relation induction, and superseded-link handling.
+6. **Conversational Ask** — social dialogue, preamble unwrapping, multi-answer
+   synthesis, and evidence-aware language.
+7. **Event and temporal support** — Event nodes, time windows, variance, automatic
+   temporal extraction, and individual/range queries.
+
+Current integrated verification is **167 smoke tests** and **287 automated UI
+checks**; application and test builds complete with zero warnings and zero
+errors.
+
+Potential follow-on work, not yet assigned to a module, includes broader temporal
+language and recurring-event support, non-linear graph queries, richer causal and
+uncertainty reasoning, and production-scale performance testing. These extend
+the completed capabilities above rather than restating them as unfinished work.

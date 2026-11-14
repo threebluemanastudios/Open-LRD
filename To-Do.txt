@@ -388,6 +388,7 @@ Issues found (step, expected, actual, screenshot/log path):
   1. Fixed: TextImportCancel_Button_Click previously updated status even when no import was active; now returns immediately when textImport is null.
   2. Fixed: Tools.xaml.cs async UI continuations required DispatcherSynchronizationContext in test harnesses.
   3. Fixed: VisualizerWindow safely checks this.IsLoaded before setting Owner in MainWindow to avoid unshown window owner exceptions.
+  4. Fixed: queued text-import progress callbacks could overwrite the cancel status; callbacks now ignore cancelled or superseded imports.
 
 Notes:
   All checklist verification executed through WPF STA UI test runner (OPEN-LRD.ManualUiTests)

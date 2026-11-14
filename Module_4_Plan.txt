@@ -434,9 +434,10 @@ Phase 7: Documentation and acceptance
 - Domain/range and reality rules are advisory, not enforced in matching yet.
 - A full-corpus load is memory and CPU heavy (roughly 300k nodes and 400k+
   links); the default is a curated subset.
-- The persistence importer keeps 64 MB / 100k-node / 500k-link safety caps
-  from Module 3, so a full-corpus .lrdlog needs a future cap change. Curated
-  subsets, including the 2,000-entry default, fit comfortably.
+- Core-log import currently allows files up to 512 MiB, 1,000,000 nodes, and
+  5,000,000 links, with segmented export keeping individual files below 500 MiB.
+  A full-corpus load is still bounded by those aggregate safety limits and the
+  memory/CPU cost noted above; the curated subset remains the default.
 - Multiword and phrase headwords resolve best-effort by normalized string
   match.
 
