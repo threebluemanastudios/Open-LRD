@@ -114,6 +114,71 @@ namespace OPEN_LRD.Visualization
             return true;
         }
 
+        public bool TryProjectCompleteBox(
+            Vector3 center,
+            float halfExtent,
+            out Vector2 centerScreen,
+            out double centerDepth,
+            out float minX,
+            out float minY,
+            out float maxX,
+            out float maxY)
+        {
+            minX = minY = maxX = maxY = 0f;
+
+            if (!TryProject(center, out centerScreen, out centerDepth))
+                return false;
+
+            // Test all 8 corners of the axis-aligned cube in world space
+            float x0 = center.X - halfExtent;
+            float x1 = center.X + halfExtent;
+            float y0 = center.Y - halfExtent;
+            float y1 = center.Y + halfExtent;
+            float z0 = center.Z - halfExtent;
+            float z1 = center.Z + halfExtent;
+
+            minX = float.PositiveInfinity;
+            minY = float.PositiveInfinity;
+            maxX = float.NegativeInfinity;
+            maxY = float.NegativeInfinity;
+
+            Span<Vector3> corners = stackalloc Vector3[8]
+            {
+                new Vector3(x0, y0, z0),
+                new Vector3(x0, y0, z1),
+                new Vector3(x0, y1, z0),
+                new Vector3(x0, y1, z1),
+                new Vector3(x1, y0, z0),
+                new Vector3(x1, y0, z1),
+                new Vector3(x1, y1, z0),
+                new Vector3(x1, y1, z1)
+            };
+
+            for (int i = 0; i < 8; i++)
+            {
+                if (!TryProject(corners[i], out Vector2 cornerScreen, out double cornerDepth))
+                    return false;
+
+                // Corner must be in front of near clipping plane
+                if (cornerDepth <= NearPlaneDistance)
+                    return false;
+
+                // Corner must be within viewport boundaries
+                if (cornerScreen.X < 0f || cornerScreen.X > ViewportWidth ||
+                    cornerScreen.Y < 0f || cornerScreen.Y > ViewportHeight)
+                {
+                    return false;
+                }
+
+                if (cornerScreen.X < minX) minX = cornerScreen.X;
+                if (cornerScreen.X > maxX) maxX = cornerScreen.X;
+                if (cornerScreen.Y < minY) minY = cornerScreen.Y;
+                if (cornerScreen.Y > maxY) maxY = cornerScreen.Y;
+            }
+
+            return true;
+        }
+
         public void CreateRay(Vector2 screen, out Vector3 origin, out Vector3 direction)
         {
             if (!TryCreateRay(screen, out origin, out direction))
@@ -181,8 +246,8 @@ namespace OPEN_LRD.Visualization
                 ? radius / Math.Sin(halfAngle) * margin
                 : margin;
             Vector3 position = center - camera.LookDirection * (float)distance;
-            double near = Math.Max(0.01, distance - radius * 2.0);
-            double far = Math.Max(near + 1.0, distance + radius * 2.0 + 1.0);
+            double near = Math.Clamp(radius > 0f ? radius / 1000.0 : 0.05, 0.01, 0.1);
+            double far = Math.Max(5000.0, (distance + radius * 2.0) * 2.0);
 
             return new CameraView(
                 position,

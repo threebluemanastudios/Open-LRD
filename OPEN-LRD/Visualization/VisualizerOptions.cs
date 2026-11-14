@@ -15,6 +15,7 @@ namespace OPEN_LRD.Visualization
         public const int DefaultMaxLinks = 50000;
         public const int DefaultMaxLabels = 1000;
         public const int DefaultLabelCharacterLimit = 48;
+        public const double DefaultNearPlaneDistance = 0.05;
         public const double MinimumSpacing = 0.05;
 
         public double Spread { get; set; } = DefaultSpread;
@@ -41,6 +42,12 @@ namespace OPEN_LRD.Visualization
 
         public bool ShowLabels { get; set; } = true;
 
+        public bool InvertMouseX { get; set; } = true;
+
+        public bool InvertMouseY { get; set; } = false;
+
+        public double NearPlaneDistance { get; set; } = DefaultNearPlaneDistance;
+
         public double MinSpacing => Math.Max(CubeSize * MinSpacingFactor, MinimumSpacing);
 
         public VisualizerOptions Clone()
@@ -60,6 +67,14 @@ namespace OPEN_LRD.Visualization
             ValidatePositiveInteger(MaxLinks, nameof(MaxLinks));
             ValidatePositiveInteger(MaxLabels, nameof(MaxLabels));
             ValidatePositiveInteger(LabelCharacterLimit, nameof(LabelCharacterLimit));
+
+            if (!double.IsFinite(NearPlaneDistance) || NearPlaneDistance < 0.01 || NearPlaneDistance > 100.0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(NearPlaneDistance),
+                    NearPlaneDistance,
+                    "NearPlaneDistance must be finite and between 0.01 and 100.0.");
+            }
 
             if (!double.IsFinite(Gravity) || Gravity < 0d)
             {

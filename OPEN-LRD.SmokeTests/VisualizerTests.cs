@@ -354,7 +354,8 @@ namespace OPEN_LRD.SmokeTests
                     CubeSize = 1.2,
                     LineWidth = 0.2,
                     ShowLabels = false,
-                    MaxLabels = 250
+                    MaxLabels = 250,
+                    NearPlaneDistance = 0.75
                 };
 
                 VisualizerSettings settings = VisualizerSettings.From(colors, options);
@@ -386,6 +387,7 @@ namespace OPEN_LRD.SmokeTests
                 Assert(loadedOptions.LineWidth == 0.2, "line width should round trip");
                 Assert(!loadedOptions.ShowLabels, "label visibility should round trip");
                 Assert(loadedOptions.MaxLabels == 250, "label cap should round trip");
+                Assert(loadedOptions.NearPlaneDistance == 0.75, "near plane distance should round trip");
             }
             finally
             {
@@ -475,6 +477,12 @@ namespace OPEN_LRD.SmokeTests
             AssertThrows<ArgumentOutOfRangeException>(
                 () => new VisualizerOptions { LabelCharacterLimit = 0 }.Validate(),
                 "zero label length should be rejected");
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => new VisualizerOptions { NearPlaneDistance = 0.005 }.Validate(),
+                "near plane distance below 0.01 should be rejected");
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => new VisualizerOptions { NearPlaneDistance = 150.0 }.Validate(),
+                "near plane distance above 100.0 should be rejected");
             AssertThrows<ArgumentOutOfRangeException>(
                 () => new VisualizerOptions { Gravity = -0.1 }.Validate(),
                 "negative gravity should be rejected");
@@ -573,6 +581,14 @@ namespace OPEN_LRD.SmokeTests
             float distance = Vector3.Distance(framed.Position, new Vector3(0f, 0f, 10f));
             Assert(distance > 2f, "framing should move the camera outside the sphere");
             Assert(Vector3.Distance(framed.LookDirection, Vector3.UnitZ) < 1e-5f, "framing should preserve the view axis");
+
+            FlyCamera orbitCam = new FlyCamera(new Vector3(0f, 0f, -10f), 0d, 0d);
+            Vector3 target = Vector3.Zero;
+            orbitCam.OrbitAroundTarget(target, deltaYawRadians: Math.PI / 2.0, deltaPitchRadians: 0.0);
+            float orbitDistance = Vector3.Distance(orbitCam.Position, target);
+            Assert(Near(orbitDistance, 10f, 1e-2f), "orbiting should preserve radial distance to target");
+            Vector3 expectedDir = Vector3.Normalize(target - orbitCam.Position);
+            Assert(Vector3.Distance(orbitCam.LookDirection, expectedDir) < 1e-3f, "orbiting should keep camera facing target");
         }
 
         private static void TestRayAabbPicking()

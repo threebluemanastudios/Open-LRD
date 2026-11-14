@@ -69,6 +69,12 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        public Func<int, bool>? IsNodeVisible { get; set; }
+
+        public double? MaxLabelDistance { get; set; }
+
+        public double NodeBoxSize { get; set; } = 1.0;
+
         public int MaxLabels
         {
             get => maxLabels;
@@ -149,70 +155,197 @@ namespace OPEN_LRD.Visualizer
             double width = ActualWidth > 0 ? ActualWidth : currentCamera.ViewportWidth;
             double height = ActualHeight > 0 ? ActualHeight : currentCamera.ViewportHeight;
 
-            // Collect on-screen candidate labels
+            // Collect candidate labels for nodes whose complete 3D box is visible
             List<ProjectedLabel> candidates = new List<ProjectedLabel>();
+            float halfExtent = (float)(Math.Max(NodeBoxSize, 0.01) * 0.5);
 
             for (int index = 0; index < snapshot.Nodes.Count && index < cachedLabels.Count; index++)
             {
+                if (IsNodeVisible is not null && !IsNodeVisible(index))
+                    continue;
+
                 Vector3 worldPos = positions[index];
+                bool isSpecial = (selectedNodeIndex.HasValue && index == selectedNodeIndex.Value) ||
+                                 (hoveredNodeIndex.HasValue && index == hoveredNodeIndex.Value);
 
-                if (!currentCamera.TryProject(worldPos, out Vector2 screenPos, out double depth))
-                    continue;
+                Vector2 screenPos;
+                double depth;
+                Rect boxScreenRect;
 
-                // Screen margin culling
-                if (screenPos.X < -60 || screenPos.X > width + 60 ||
-                    screenPos.Y < -40 || screenPos.Y > height + 40)
+                if (isSpecial)
                 {
-                    continue;
+                    // Special nodes (selected / hovered) only require their center to project
+                    if (!currentCamera.TryProject(worldPos, out screenPos, out depth))
+                        continue;
+
+                    if (screenPos.X < -100 || screenPos.X > width + 100 ||
+                        screenPos.Y < -100 || screenPos.Y > height + 100)
+                    {
+                        continue;
+                    }
+
+                    boxScreenRect = new Rect(screenPos.X - 10, screenPos.Y - 10, 20, 20);
+                }
+                else
+                {
+                    // Regular nodes: test all 8 corners of the 3D cube.
+                    // The complete node box must be inside viewport bounds and in front of near clipping plane.
+                    if (!currentCamera.TryProjectCompleteBox(
+                        worldPos,
+                        halfExtent,
+                        out screenPos,
+                        out depth,
+                        out float minX,
+                        out float minY,
+                        out float maxX,
+                        out float maxY))
+                    {
+                        continue;
+                    }
+
+                    // Proximity / distance culling
+                    if (MaxLabelDistance.HasValue && depth > MaxLabelDistance.Value)
+                        continue;
+
+                    float boxWidth = maxX - minX;
+                    float boxHeight = maxY - minY;
+
+                    // Minimum projected box size (LOD): ignore tiny distant specks
+                    if (boxWidth < 8f || boxHeight < 8f)
+                        continue;
+
+                    boxScreenRect = new Rect(minX, minY, boxWidth, boxHeight);
                 }
 
-                candidates.Add(new ProjectedLabel(index, screenPos, depth));
+                candidates.Add(new ProjectedLabel(index, screenPos, depth, boxScreenRect));
             }
 
             if (candidates.Count == 0)
                 return;
 
-            // Sort far to near so closer labels render on top
-            candidates.Sort((a, b) => b.Depth.CompareTo(a.Depth));
+            // Sort near to far so closer labels and boxes get priority
+            candidates.Sort((a, b) => a.Depth.CompareTo(b.Depth));
 
-            // Select which candidates to draw
+            // Select which candidates to draw using screen-space decluttering and occlusion
             HashSet<int> indicesToDraw = new HashSet<int>();
+            List<Rect> placedBadgeRects = new List<Rect>();
+            List<Rect> foregroundBoxRects = new List<Rect>();
 
-            if (showLabels)
-            {
-                int countToTake = Math.Min(candidates.Count, maxLabels);
-                for (int i = 0; i < countToTake; i++)
-                {
-                    indicesToDraw.Add(candidates[i].Index);
-                }
-            }
-
-            // Always ensure selected and hovered nodes are included if on-screen
-            if (selectedNodeIndex.HasValue)
-                indicesToDraw.Add(selectedNodeIndex.Value);
-            if (hoveredNodeIndex.HasValue)
-                indicesToDraw.Add(hoveredNodeIndex.Value);
-
-            // Draw regular labels first
+            // 1. Always prioritize selected and hovered nodes first
             ProjectedLabel? selectedLabel = null;
             ProjectedLabel? hoveredLabel = null;
 
-            foreach (ProjectedLabel proj in candidates)
+            if (selectedNodeIndex.HasValue)
             {
+                int selIdx = selectedNodeIndex.Value;
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    if (candidates[i].Index == selIdx)
+                    {
+                        selectedLabel = candidates[i];
+                        indicesToDraw.Add(selIdx);
+                        placedBadgeRects.Add(GetBadgeRect(selIdx, candidates[i].ScreenPosition, isSelected: true));
+                        foregroundBoxRects.Add(candidates[i].BoxScreenRect);
+                        break;
+                    }
+                }
+            }
+
+            if (hoveredNodeIndex.HasValue && hoveredNodeIndex.Value != selectedNodeIndex)
+            {
+                int hovIdx = hoveredNodeIndex.Value;
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    if (candidates[i].Index == hovIdx)
+                    {
+                        hoveredLabel = candidates[i];
+                        indicesToDraw.Add(hovIdx);
+                        placedBadgeRects.Add(GetBadgeRect(hovIdx, candidates[i].ScreenPosition, isSelected: false));
+                        foregroundBoxRects.Add(candidates[i].BoxScreenRect);
+                        break;
+                    }
+                }
+            }
+
+            // 2. Select remaining candidates front-to-back
+            if (showLabels)
+            {
+                for (int i = 0; i < candidates.Count && indicesToDraw.Count < maxLabels; i++)
+                {
+                    ProjectedLabel proj = candidates[i];
+                    if (indicesToDraw.Contains(proj.Index))
+                        continue;
+
+                    // Occlusion test: Is this node box occluded / covered by a closer foreground box?
+                    bool boxOccluded = false;
+                    for (int b = 0; b < foregroundBoxRects.Count; b++)
+                    {
+                        if (foregroundBoxRects[b].Contains(new Point(proj.ScreenPosition.X, proj.ScreenPosition.Y)))
+                        {
+                            boxOccluded = true;
+                            break;
+                        }
+                    }
+
+                    if (boxOccluded)
+                        continue;
+
+                    Rect candidateBadgeRect = GetBadgeRect(proj.Index, proj.ScreenPosition, isSelected: false);
+
+                    // Badge collision test: Does the candidate badge collide with already placed badges?
+                    // Include 8px breathing margin around badges to avoid tiled walls of text.
+                    Rect expandedBadgeRect = new Rect(
+                        candidateBadgeRect.Left - 4.0,
+                        candidateBadgeRect.Top - 3.0,
+                        candidateBadgeRect.Width + 8.0,
+                        candidateBadgeRect.Height + 6.0);
+
+                    bool collides = false;
+                    for (int r = 0; r < placedBadgeRects.Count; r++)
+                    {
+                        if (expandedBadgeRect.IntersectsWith(placedBadgeRects[r]))
+                        {
+                            collides = true;
+                            break;
+                        }
+                    }
+
+                    // Does the badge cover an existing foreground node box?
+                    if (!collides)
+                    {
+                        for (int b = 0; b < foregroundBoxRects.Count; b++)
+                        {
+                            if (candidateBadgeRect.IntersectsWith(foregroundBoxRects[b]))
+                            {
+                                collides = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!collides)
+                    {
+                        indicesToDraw.Add(proj.Index);
+                        placedBadgeRects.Add(candidateBadgeRect);
+                    }
+
+                    // Register this visible box so it blocks farther boxes and badges behind it
+                    foregroundBoxRects.Add(proj.BoxScreenRect);
+                }
+            }
+
+            // Draw regular labels in far-to-near order so nearer badges paint over any background geometry
+            for (int i = candidates.Count - 1; i >= 0; i--)
+            {
+                ProjectedLabel proj = candidates[i];
                 if (!indicesToDraw.Contains(proj.Index))
                     continue;
 
                 if (selectedNodeIndex.HasValue && proj.Index == selectedNodeIndex.Value)
-                {
-                    selectedLabel = proj;
                     continue;
-                }
 
                 if (hoveredNodeIndex.HasValue && proj.Index == hoveredNodeIndex.Value)
-                {
-                    hoveredLabel = proj;
                     continue;
-                }
 
                 DrawLabel(dc, proj.Index, proj.ScreenPosition, isSelected: false, isHovered: false);
             }
@@ -228,6 +361,25 @@ namespace OPEN_LRD.Visualizer
             {
                 DrawLabel(dc, selectedLabel.Value.Index, selectedLabel.Value.ScreenPosition, isSelected: true, isHovered: false);
             }
+        }
+
+        private Rect GetBadgeRect(int nodeIndex, Vector2 screenPos, bool isSelected)
+        {
+            if (nodeIndex >= cachedLabels.Count)
+                return Rect.Empty;
+
+            CachedLabel label = cachedLabels[nodeIndex];
+            FormattedText text = isSelected ? label.SelectedText : label.NormalText;
+
+            const double paddingX = 6.0;
+            const double paddingY = 3.0;
+            double badgeWidth = text.Width + paddingX * 2.0;
+            double badgeHeight = text.Height + paddingY * 2.0;
+
+            double left = screenPos.X - badgeWidth * 0.5;
+            double top = screenPos.Y - badgeHeight - 10.0;
+
+            return new Rect(left, top, badgeWidth, badgeHeight);
         }
 
         private void DrawLabel(
@@ -317,6 +469,7 @@ namespace OPEN_LRD.Visualizer
         private readonly record struct ProjectedLabel(
             int Index,
             Vector2 ScreenPosition,
-            double Depth);
+            double Depth,
+            Rect BoxScreenRect);
     }
 }

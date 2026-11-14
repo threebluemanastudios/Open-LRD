@@ -43,6 +43,12 @@ namespace OPEN_LRD.Visualizer
 
         public FlyCamera FlyCamera => flyCamera;
 
+        public bool InvertMouseX { get; set; } = true;
+
+        public bool InvertMouseY { get; set; } = false;
+
+        public Func<Vector3?>? GetOrbitTarget { get; set; }
+
         public double SpeedMultiplier
         {
             get => speedMultiplier;
@@ -130,9 +136,12 @@ namespace OPEN_LRD.Visualizer
             double deltaY = currentPosition.Y - lastMousePosition.Y;
             lastMousePosition = currentPosition;
 
-            if (Math.Abs(deltaX) > 1e-4 || Math.Abs(deltaY) > 1e-4)
+            double lookDeltaX = InvertMouseX ? -deltaX : deltaX;
+            double lookDeltaY = InvertMouseY ? -deltaY : deltaY;
+
+            if (Math.Abs(lookDeltaX) > 1e-4 || Math.Abs(lookDeltaY) > 1e-4)
             {
-                flyCamera.Look(deltaX, deltaY);
+                flyCamera.Look(lookDeltaX, lookDeltaY);
                 scene.SyncCameraFromFlyCamera();
                 CameraMoved?.Invoke();
             }
@@ -170,6 +179,39 @@ namespace OPEN_LRD.Visualizer
             IInputElement? focused = Keyboard.FocusedElement;
             if (focused is System.Windows.Controls.TextBox or System.Windows.Controls.ComboBox)
                 return;
+
+            bool isAltDown = Keyboard.IsKeyDown(Key.LeftAlt) || Keyboard.IsKeyDown(Key.RightAlt);
+            Vector3? orbitTarget = GetOrbitTarget?.Invoke();
+
+            if (isAltDown && orbitTarget.HasValue)
+            {
+                double orbitYaw = 0.0;
+                double orbitPitch = 0.0;
+
+                if (Keyboard.IsKeyDown(Key.A) || Keyboard.IsKeyDown(Key.Left))
+                    orbitYaw += 1.0;
+                if (Keyboard.IsKeyDown(Key.D) || Keyboard.IsKeyDown(Key.Right))
+                    orbitYaw -= 1.0;
+                if (Keyboard.IsKeyDown(Key.W) || Keyboard.IsKeyDown(Key.Up))
+                    orbitPitch += 1.0;
+                if (Keyboard.IsKeyDown(Key.S) || Keyboard.IsKeyDown(Key.Down))
+                    orbitPitch -= 1.0;
+
+                if (orbitYaw != 0.0 || orbitPitch != 0.0)
+                {
+                    bool isBoosted = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
+                    double baseAngularSpeed = Math.PI / 4.0; // 45 degrees per second
+                    double effectiveAngularSpeed = baseAngularSpeed * (isBoosted ? 4.0 : 1.0);
+
+                    flyCamera.OrbitAroundTarget(
+                        orbitTarget.Value,
+                        orbitYaw * effectiveAngularSpeed * dt,
+                        orbitPitch * effectiveAngularSpeed * dt);
+                    scene.SyncCameraFromFlyCamera();
+                    CameraMoved?.Invoke();
+                    return;
+                }
+            }
 
             double forward = 0.0;
             double strafe = 0.0;

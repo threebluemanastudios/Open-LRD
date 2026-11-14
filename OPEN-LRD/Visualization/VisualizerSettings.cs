@@ -216,6 +216,15 @@ namespace OPEN_LRD.Visualization
         [JsonPropertyName("maxLabels")]
         public int MaxLabels { get; set; } = VisualizerOptions.DefaultMaxLabels;
 
+        [JsonPropertyName("invertMouseX")]
+        public bool InvertMouseX { get; set; } = true;
+
+        [JsonPropertyName("invertMouseY")]
+        public bool InvertMouseY { get; set; } = false;
+
+        [JsonPropertyName("nearPlaneDistance")]
+        public double NearPlaneDistance { get; set; } = VisualizerOptions.DefaultNearPlaneDistance;
+
         public void FromOptions(VisualizerOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -225,6 +234,9 @@ namespace OPEN_LRD.Visualization
             LineWidth = options.LineWidth;
             ShowLabels = options.ShowLabels;
             MaxLabels = options.MaxLabels;
+            InvertMouseX = options.InvertMouseX;
+            InvertMouseY = options.InvertMouseY;
+            NearPlaneDistance = options.NearPlaneDistance;
         }
 
         public void ApplyTo(VisualizerOptions options)
@@ -244,6 +256,11 @@ namespace OPEN_LRD.Visualization
             options.MaxLabels = MaxLabels > 0
                 ? MaxLabels
                 : VisualizerOptions.DefaultMaxLabels;
+            options.InvertMouseX = InvertMouseX;
+            options.InvertMouseY = InvertMouseY;
+            options.NearPlaneDistance = double.IsFinite(NearPlaneDistance) && NearPlaneDistance >= 0.01 && NearPlaneDistance <= 100.0
+                ? NearPlaneDistance
+                : VisualizerOptions.DefaultNearPlaneDistance;
         }
 
         private static bool IsPositiveFinite(double value)

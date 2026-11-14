@@ -230,6 +230,7 @@
                             <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Left-Click on node — Select node &amp; inspect details" />
                             <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Left-Click on empty space — Clear selection" />
                             <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Hover on node — Show details in bottom status bar" />
+                            <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• Alt + WASD / Arrows — Orbit camera around selected node (45°/s, Shift for 4x boost)" />
                             <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• F — Frame selection (or all nodes if none selected)" />
                             <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• R — Reset view to initial framed orientation" />
                             <TextBlock Margin="0,0,0,3" Foreground="#C7D3E2" Text="• L — Toggle 2D node labels overlay" />
@@ -384,7 +385,41 @@
                                         TickFrequency="50"
                                         IsSnapToTickEnabled="True"
                                         ValueChanged="MaxLabelsSlider_ValueChanged"
+                                        Margin="0,0,0,8" />
+
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Near Clip Plane:" />
+                                    <TextBlock x:Name="NearPlaneValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="0.05" />
+                                </DockPanel>
+                                <Slider x:Name="NearPlaneSlider"
+                                        Minimum="0.01"
+                                        Maximum="100.0"
+                                        Value="0.05"
+                                        TickFrequency="0.01"
+                                        ValueChanged="NearPlaneSlider_ValueChanged"
                                         Margin="0,0,0,10" />
+
+                                <TextBlock Margin="0,4,0,6"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="#8AB4F8"
+                                           Text="MOUSE ROTATION AXES" />
+
+                                <CheckBox x:Name="InvertMouseXCheckBox"
+                                          Margin="0,0,0,6"
+                                          Foreground="#C7D3E2"
+                                          IsChecked="True"
+                                          Click="InvertMouseX_Click"
+                                          Content="Invert Horizontal Axis (Yaw)"
+                                          ToolTip="Invert horizontal mouse look rotation (left/right)." />
+
+                                <CheckBox x:Name="InvertMouseYCheckBox"
+                                          Margin="0,0,0,10"
+                                          Foreground="#C7D3E2"
+                                          IsChecked="False"
+                                          Click="InvertMouseY_Click"
+                                          Content="Invert Vertical Axis (Pitch)"
+                                          ToolTip="Invert vertical mouse look rotation (up/down)." />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                     <Button x:Name="ApplySettingsButton"
@@ -422,6 +457,14 @@
                                                     Click="ClearSelection_Button_Click"
                                                     Content="Clear"
                                                     ToolTip="Clear current selection (or click empty space)." />
+                                            <Button x:Name="CenterSelectionButton"
+                                                    DockPanel.Dock="Right"
+                                                    Margin="0,0,6,0"
+                                                    Padding="8,2"
+                                                    FontSize="11"
+                                                    Click="CenterSelection_Button_Click"
+                                                    Content="Center View"
+                                                    ToolTip="Center the camera view on the selected node." />
                                         </DockPanel>
                                         <TextBlock x:Name="SelectedLabelText" Margin="0,0,0,3" FontWeight="SemiBold" Foreground="#FFFFFF" TextWrapping="Wrap" />
                                         <TextBlock x:Name="SelectedIdText" Margin="0,0,0,3" FontSize="11" Foreground="#8AB4F8" TextWrapping="Wrap" />

@@ -805,6 +805,10 @@ namespace OPEN_LRD.ManualUiTests
         {
             Console.WriteLine("\n--- SECTION 11: 3D VISUALIZER SHELL AND LIFECYCLE (Phase 3) ---");
 
+            string defaultSettingsPath = VisualizerSettings.GetDefaultPath();
+            if (File.Exists(defaultSettingsPath))
+                File.Delete(defaultSettingsPath);
+
             // 1. MainWindow gating
             MainWindow mainWindow = new MainWindow();
             mainWindow.Show();
@@ -988,6 +992,12 @@ namespace OPEN_LRD.ManualUiTests
             Check(visualizerWin.SelectedTypeText.Text.Contains("Basic"), $"Selection card displays node type (actual: '{visualizerWin.SelectedTypeText.Text}').");
             Check(visualizerWin.Labels.SelectedNodeIndex == 0, "LabelOverlay reflects SelectedNodeIndex = 0.");
 
+            // Center View button in SelectionCard
+            MethodInfo? centerSelectionClick = typeof(VisualizerWindow).GetMethod("CenterSelection_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            centerSelectionClick?.Invoke(visualizerWin, new object[] { visualizerWin.CenterSelectionButton, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.StatusText.Text == "Centered view on selected node.", "CenterSelectionButton centers view on selected node.");
+
             // 'F' key frames selection when one exists
             KeyEventArgs fKeyEvent = new KeyEventArgs(
                 Keyboard.PrimaryDevice,
@@ -1032,6 +1042,27 @@ namespace OPEN_LRD.ManualUiTests
             Check(visualizerWin.LinkColorsPanel.Children.Count >= 1, $"Link colors panel has rows for forward link types (count: {visualizerWin.LinkColorsPanel.Children.Count}).");
             Check(visualizerWin.ClassColorsPanel.Children.Count >= 8, $"Class colors panel has rows for link classes (count: {visualizerWin.ClassColorsPanel.Children.Count}).");
 
+            // Verify visibility toggle checkboxes in Node Colors and Link Colors
+            DockPanel firstNodeRow = (DockPanel)visualizerWin.NodeColorsPanel.Children[0];
+            CheckBox? nodeCheckBox = firstNodeRow.Children.OfType<CheckBox>().FirstOrDefault();
+            Check(nodeCheckBox is not null, "Node color row contains visibility CheckBox.");
+            Check(nodeCheckBox!.IsChecked == true, "Node visibility CheckBox is checked by default.");
+
+            DockPanel firstLinkRow = (DockPanel)visualizerWin.LinkColorsPanel.Children[0];
+            CheckBox? linkCheckBox = firstLinkRow.Children.OfType<CheckBox>().FirstOrDefault();
+            Check(linkCheckBox is not null, "Link color row contains visibility CheckBox.");
+            Check(linkCheckBox!.IsChecked == true, "Link visibility CheckBox is checked by default.");
+
+            // Toggle node visibility off
+            nodeCheckBox.IsChecked = false;
+            DoEvents();
+            Check(!visualizerWin.Scene.IsNodeTypeVisible(NodeTypes.Basics.Id), "Unchecking node visibility hides node type in scene.");
+
+            // Toggle node visibility back on
+            nodeCheckBox.IsChecked = true;
+            DoEvents();
+            Check(visualizerWin.Scene.IsNodeTypeVisible(NodeTypes.Basics.Id), "Re-checking node visibility shows node type in scene.");
+
             // Live color override and material update
             RgbColor overrideColor = new RgbColor(220, 60, 60); // Red
             visualizerWin.ColorsMap.SetNodeColor(NodeTypes.Concepts.Id, overrideColor);
@@ -1062,12 +1093,15 @@ namespace OPEN_LRD.ManualUiTests
             visualizerWin.CubeSizeSlider.Value = 1.2;
             visualizerWin.LineWidthSlider.Value = 0.2;
             visualizerWin.MaxLabelsSlider.Value = 500;
+            visualizerWin.NearPlaneSlider.Value = 0.25;
             DoEvents();
 
             Check(visualizerWin.Options.Spread == 7.5, "SpreadSlider updates options.Spread.");
             Check(visualizerWin.Options.CubeSize == 1.2, "CubeSizeSlider updates options.CubeSize.");
             Check(visualizerWin.Options.LineWidth == 0.2, "LineWidthSlider updates options.LineWidth.");
             Check(visualizerWin.Options.MaxLabels == 500, "MaxLabelsSlider updates options.MaxLabels.");
+            Check(visualizerWin.Options.NearPlaneDistance == 0.25, "NearPlaneSlider updates options.NearPlaneDistance.");
+            Check(visualizerWin.Scene.NearPlaneDistance == 0.25, "NearPlaneSlider updates scene.NearPlaneDistance.");
             Check(visualizerWin.Labels.MaxLabels == 500, "MaxLabels updates LabelOverlay.MaxLabels.");
 
             visualizerWin.SaveSettingsForTesting();
@@ -1077,6 +1111,26 @@ namespace OPEN_LRD.ManualUiTests
             string settingsJson = File.ReadAllText(settingsPath);
             Check(settingsJson.Contains("\"spread\": 7.5"), "Saved settings JSON contains updated spread (7.5).");
             Check(settingsJson.Contains("\"cubeSize\": 1.2"), "Saved settings JSON contains updated cubeSize (1.2).");
+
+            // Mouse Axis Inversion controls
+            Check(visualizerWin.InvertMouseXCheckBox.IsChecked == true, "InvertMouseXCheckBox is checked by default (horizontal inverted).");
+            Check(visualizerWin.InvertMouseYCheckBox.IsChecked == false, "InvertMouseYCheckBox is unchecked by default.");
+            Check(visualizerWin.Controller!.InvertMouseX == true, "Controller InvertMouseX is true.");
+            Check(visualizerWin.Controller!.InvertMouseY == false, "Controller InvertMouseY is false.");
+
+            visualizerWin.InvertMouseXCheckBox.IsChecked = false;
+            MethodInfo? invertXClick = typeof(VisualizerWindow).GetMethod("InvertMouseX_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            invertXClick?.Invoke(visualizerWin, new object[] { visualizerWin.InvertMouseXCheckBox, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.Options.InvertMouseX == false, "InvertMouseX_Click sets options.InvertMouseX to false.");
+            Check(visualizerWin.Controller.InvertMouseX == false, "InvertMouseX_Click updates Controller.InvertMouseX to false.");
+
+            visualizerWin.InvertMouseYCheckBox.IsChecked = true;
+            MethodInfo? invertYClick = typeof(VisualizerWindow).GetMethod("InvertMouseY_Click", BindingFlags.NonPublic | BindingFlags.Instance);
+            invertYClick?.Invoke(visualizerWin, new object[] { visualizerWin.InvertMouseYCheckBox, new RoutedEventArgs() });
+            DoEvents();
+            Check(visualizerWin.Options.InvertMouseY == true, "InvertMouseY_Click sets options.InvertMouseY to true.");
+            Check(visualizerWin.Controller.InvertMouseY == true, "InvertMouseY_Click updates Controller.InvertMouseY to true.");
 
             // Reset view settings
             MethodInfo? resetViewSettings = typeof(VisualizerWindow).GetMethod("ResetViewSettings_Click", BindingFlags.NonPublic | BindingFlags.Instance);

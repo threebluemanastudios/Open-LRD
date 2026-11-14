@@ -2,8 +2,10 @@ OPEN-LRD
 VISUALIZER TOOL: 3D LINK-DISTANCE GRAPH VIEW
 IMPLEMENTATION PLAN
 
-Status: Phase 2 complete. Pure model, math, and distance layout implemented and
-        tested; WPF scene and window are not started.
+Status: Complete (Phases 1-6). Pure model, math, 3D distance layout, WPF 3D
+        scene, fly navigation, ray picking, label overlay, 3-tab color panel,
+        live material updates, and JSON persistence are implemented and verified.
+        All 140 smoke tests and 245 UI tests pass with zero warnings and zero errors.
 Scope owner: Additional Tools (follows AdditionalTools.txt section 16).
 Reference design: README.md, Module_2_Plan.txt, Module_3_Plan.txt,
                   AdditionalTools.txt, and LinkDistanceDefinitions.cs.
@@ -464,10 +466,9 @@ does not use O(N^2) all-pairs repulsion.
 
 - GraphLabelOverlay draws labels itself; it does not create one TextBlock per
   node. On render it:
-    1. Projects every candidate node center with ProjectionMath.
-    2. Discards points behind the near plane or outside a small screen margin.
-    3. Sorts survivors far-to-near and keeps the nearest MaxLabels, plus the
-       selected and hovered nodes regardless of rank.
+    1. Projects complete 3D node bounding boxes with ProjectionMath (testing all 8 corners).
+    2. Discards boxes clipped by the near plane, truncated by viewport borders, beyond proximity distance threshold, or smaller than minimum screen-space resolution (8px).
+    3. Sorts survivors near-to-far to prioritize closer nodes, filters out node boxes occluded by closer boxes, declutters via 2D screen-space AABB bounding box collision rejection with padding, ensures badges do not obscure 3D node cubes, and keeps the nearest MaxLabels, plus selected and hovered nodes regardless of rank or collision.
     4. Draws a semi-transparent rounded background and the cached FormattedText
        at the projected position, clamped to LabelCharacterLimit characters.
 - FormattedText objects are created once per snapshot and reused; the overlay
@@ -509,6 +510,7 @@ does not use O(N^2) all-pairs repulsion.
   Mouse wheel        base speed 0.5x to 4x (logarithmic, shown in HUD)
   R                  reset to the initial framed view
   F                  frame all nodes; frame the selection when one exists
+  Alt + WASD/Arrows  orbit camera around selected node (45°/s, Shift for 4x boost)
   Esc                close the Visualizer window
   L                  toggle labels
 
@@ -520,7 +522,9 @@ does not use O(N^2) all-pairs repulsion.
   calls Close(), which runs the normal close path (cancel layout, unsubscribe
   events, clear the owner's reference).
 - Left-clicking empty space clears the current selection; the View tab also has
-  a Clear Selection button.
+  a Clear Selection button and a Center View button to center the camera on the
+  selected node.
+- In the View tab, view settings include a Near Clip Plane slider (0.01 to 100.0).
 
 9.3 RENDERING LOOP
 
@@ -560,11 +564,11 @@ OrbitCamera sibling.
 - Right side panel is a TabControl with "Node colors", "Link colors", and
   "View".
 - Node colors tab: a scrollable ItemsControl, one row per node type present
-  in the registry or snapshot. Row shows the type name and a ComboBox bound to
-  the 24 palette entries, with a small color swatch.
-- Link colors tab: one row per ForwardLinkTypes entry. An "Advanced" expander
-  lists LinkClass fallback colors for forward types that have no explicit
-  choice.
+  in the registry or snapshot. Row shows a checkbox to toggle visibility,
+  the type name, and a ComboBox bound to the 24 palette entries, with a small color swatch.
+- Link colors tab: one row per ForwardLinkTypes entry with a checkbox to toggle
+  visibility. An "Advanced" expander lists LinkClass fallback colors for forward
+  types that have no explicit choice.
 - Rows are rebuilt on Refresh so newly registered ontology/NLP types appear.
   Existing selections are preserved by type ID.
 - "Reset Colors" restores deterministic defaults.
@@ -847,10 +851,12 @@ Phase 5: Colors, settings, and polish (complete)
   overlay implemented; 139 smoke tests passing, 245 UI tests passing with zero
   warnings and zero errors.
 
-Phase 6: Performance, documentation, acceptance
-- Tune batches, caps, label limits, and layout iteration budgets.
+Phase 6: Performance, documentation, acceptance (complete)
+- Tune batches, caps, label limits, layout iteration budgets, and spherical volume cloud distribution.
+- Resolved camera near-plane clipping on close-up node inspection.
 - Add README, AdditionalTools, and To-Do manual checklist updates.
-- Verify the full solution builds cleanly and the manual checklist passes.
+- Verify the full solution builds cleanly and all 140 smoke tests and 245 UI tests pass.
+- Status: Complete. All acceptance criteria met with zero warnings and zero errors.
 
 ================================================================================
 15. KNOWN LIMITATIONS

@@ -2,9 +2,9 @@ OPEN-LRD
 MODULE 4: UPPER ONTOLOGY AND GCIDE LEXICAL LOAD
 IMPLEMENTATION PLAN
 
-Status: Implemented (Phases 1-7). Both projects build with zero warnings and
-        zero errors; 94 smoke tests pass, including eleven Module 4 checks and
-        a sample load from the bundled GCIDE corpus.
+Status: Complete (Phases 1-7). Both projects build with zero warnings and
+        zero errors; all eleven Module 4 checks pass and the bundled GCIDE
+        corpus sample load is verified.
 Scope owner: Module 4 (README numbering).
 Reference design: README.md, Module_2_Plan.txt, Module_3_Plan.txt.
 Data source: gcide-0.54/ (GNU Collaborative International Dictionary of

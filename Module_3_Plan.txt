@@ -7,7 +7,7 @@ Status: Approved. Phases 1-12 implemented. Phase 8 manual WPF acceptance is
         tests, and manually verified for export and core import. Phase 10 adds
         coordination and negation handling. Phase 11 adds copula who-question
         orientation and per-frame ingestion reuse. Phase 12 adds large text-file
-        import.
+        import (fully implemented and manually verified through WPF STA UI runner).
 Scope owner: Module 3 (README numbering).
 Reference design: README.md, Module_2_Plan.txt, Module_3_Phase_8_Plan.txt,
                   and AdditionalTools.txt.

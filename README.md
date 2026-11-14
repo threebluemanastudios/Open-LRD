@@ -25,8 +25,9 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 |---|---|---|---|
 | 1 | The Graph Backend (Core and Data Storage) | Nodes, links, storage, search, memory lifecycle | Complete |
 | 2 | The Reasoning Engine | Subgraph matching, trust, contradiction resolution, response extraction | Complete |
-| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | In Progress (Phases 1–10 complete) |
+| 3 | The NLP Pipeline (Ingestion/Output) | Text-to-graph ingestion and graph-to-text responses | Complete (Phases 1–12) |
 | 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts, structural rules, and curated GCIDE lexical loading | Complete (Phases 1-7) |
+| Tools | Additional Tools & 3D Visualizer | Log persistence, large text file import, and native 3D visualizer | Complete (Phases 1-6) |
 
 ## Module 1: The Graph Backend
 
@@ -281,9 +282,23 @@ occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
 (2,000,000). The smoke suite adds eleven Module 4 checks, thirteen
 text-import checks, and thirty-three visualizer model/math/layout checks, for
 140 passing tests in total. The distance layout is deterministic and reports
-progress and cancellation. See `Module_4_Plan.txt` for the full
-plan, `AdditionalTools.txt` section 16 for the text import tool, and
-`Visualizer_Plan.txt` for the 3D visualizer.
+progress and cancellation. In addition, 253 automated WPF UI checklist tests
+verify the Tools window, text import pipeline, and 3D Visualizer window. See
+`Module_4_Plan.txt` for the full ontology plan, `AdditionalTools.txt` for log
+persistence and text file import, and `Visualizer_Plan.txt` for the 3D visualizer.
+
+## Additional Tools & 3D Visualizer
+
+- **Log Persistence (.lrdlog)**: Versioned JSON snapshots supporting separate
+  core and transient query/response chains, with Merge and Replace import modes.
+- **Large Text File Import**: Automated paragraph/sentence chunking, retry on
+  overflow, shared conversational context, and automatic Source node provenance.
+- **Native 3D Visualizer**: Standalone fullscreen 3D window rendering node
+  cubes and colored link lines laid out by semantic link distance into an
+  isotropic spherical volume cloud. Includes WASD/QE fly navigation, mouse look,
+  nearest-label 2D overlay badges with distance culling, ray-AABB node picking
+  and selection inspection, live palette material switching, and JSON settings
+  persistence.
 
 ### Data Source
 

@@ -25,6 +25,8 @@ namespace OPEN_LRD.Visualizer
         private readonly List<GeometryModel3D> geometryModels = new List<GeometryModel3D>();
         private readonly Dictionary<int, GeometryModel3D> nodeModels = new Dictionary<int, GeometryModel3D>();
         private readonly Dictionary<int, (GeometryModel3D Model, int ClassId)> linkModels = new Dictionary<int, (GeometryModel3D, int)>();
+        private readonly HashSet<int> hiddenNodeTypes = new HashSet<int>();
+        private readonly HashSet<int> hiddenLinkTypes = new HashSet<int>();
         private readonly FlyCamera flyCamera = new FlyCamera();
 
         private GeometryModel3D? selectedHighlightModel;
@@ -63,6 +65,56 @@ namespace OPEN_LRD.Visualizer
 
         public int GeometryModelCount => geometryModels.Count;
 
+        public double NearPlaneDistance
+        {
+            get => camera.NearPlaneDistance;
+            set => camera.NearPlaneDistance = Math.Clamp(value, 0.01, 100.0);
+        }
+
+        public bool IsNodeTypeVisible(int nodeTypeId) => !hiddenNodeTypes.Contains(nodeTypeId);
+
+        public bool IsLinkTypeVisible(int forwardTypeId) => !hiddenLinkTypes.Contains(forwardTypeId);
+
+        public void SetNodeTypeVisible(int nodeTypeId, bool visible)
+        {
+            if (visible)
+            {
+                hiddenNodeTypes.Remove(nodeTypeId);
+                if (nodeModels.TryGetValue(nodeTypeId, out GeometryModel3D? model) && !sceneGroup.Children.Contains(model))
+                {
+                    sceneGroup.Children.Add(model);
+                }
+            }
+            else
+            {
+                hiddenNodeTypes.Add(nodeTypeId);
+                if (nodeModels.TryGetValue(nodeTypeId, out GeometryModel3D? model) && sceneGroup.Children.Contains(model))
+                {
+                    sceneGroup.Children.Remove(model);
+                }
+            }
+        }
+
+        public void SetLinkTypeVisible(int forwardTypeId, bool visible)
+        {
+            if (visible)
+            {
+                hiddenLinkTypes.Remove(forwardTypeId);
+                if (linkModels.TryGetValue(forwardTypeId, out var tuple) && !sceneGroup.Children.Contains(tuple.Model))
+                {
+                    sceneGroup.Children.Add(tuple.Model);
+                }
+            }
+            else
+            {
+                hiddenLinkTypes.Add(forwardTypeId);
+                if (linkModels.TryGetValue(forwardTypeId, out var tuple) && sceneGroup.Children.Contains(tuple.Model))
+                {
+                    sceneGroup.Children.Remove(tuple.Model);
+                }
+            }
+        }
+
         public void Apply(SceneGeometry geometry, GraphColorMap colors)
         {
             ArgumentNullException.ThrowIfNull(geometry);
@@ -75,7 +127,11 @@ namespace OPEN_LRD.Visualizer
                 Material material = CreateNodeMaterial(colors.GetNodeColor(batch.NodeTypeId));
                 GeometryModel3D? model = AddModel(batch.Mesh, material, backMaterial: null);
                 if (model is not null)
+                {
                     nodeModels[batch.NodeTypeId] = model;
+                    if (hiddenNodeTypes.Contains(batch.NodeTypeId))
+                        sceneGroup.Children.Remove(model);
+                }
             }
 
             foreach (LinkMeshBatch batch in geometry.LinkBatches)
@@ -84,7 +140,11 @@ namespace OPEN_LRD.Visualizer
                     colors.GetLinkColor(batch.ForwardTypeId, batch.ClassId));
                 GeometryModel3D? model = AddModel(batch.Mesh, material, material);
                 if (model is not null)
+                {
                     linkModels[batch.ForwardTypeId] = (model, batch.ClassId);
+                    if (hiddenLinkTypes.Contains(batch.ForwardTypeId))
+                        sceneGroup.Children.Remove(model);
+                }
             }
 
             center = geometry.Center;

@@ -47,10 +47,28 @@ namespace OPEN_LRD.Visualizer
             controller = new FlyCameraController(ViewportHost, this, scene);
             controller.CameraMoved += OnCameraMoved;
             controller.SpeedChanged += OnSpeedChanged;
+            controller.GetOrbitTarget = () =>
+            {
+                if (selectedNodeIndex.HasValue && geometry is not null && selectedNodeIndex.Value < geometry.Layout.Positions.Count)
+                    return geometry.Layout.Positions[selectedNodeIndex.Value];
+                return null;
+            };
+
+            LabelOverlay.IsNodeVisible = index =>
+            {
+                if (snapshot is not null && index < snapshot.Nodes.Count)
+                    return scene.IsNodeTypeVisible(snapshot.Nodes[index].TypeId);
+                return true;
+            };
 
             colors.Changed += OnColorsChanged;
 
             LoadSettings();
+            if (controller is not null)
+            {
+                controller.InvertMouseX = options.InvertMouseX;
+                controller.InvertMouseY = options.InvertMouseY;
+            }
             UpdateCommands();
         }
 
@@ -218,7 +236,17 @@ namespace OPEN_LRD.Visualizer
         private void ClearSelection_Button_Click(object sender, RoutedEventArgs e)
         {
             SetSelectedNode(null);
-            SetStatus("Selection cleared.");
+        }
+
+        private void CenterSelection_Button_Click(object sender, RoutedEventArgs e)
+        {
+            if (selectedNodeIndex.HasValue && geometry is not null && selectedNodeIndex.Value < geometry.Layout.Positions.Count)
+            {
+                Vector3 target = geometry.Layout.Positions[selectedNodeIndex.Value];
+                scene.FrameTarget(target, (float)options.CubeSize * 2.5f);
+                UpdateCameraView();
+                SetStatus("Centered view on selected node.");
+            }
         }
 
         private void Close_Button_Click(object sender, RoutedEventArgs e)
@@ -329,6 +357,9 @@ namespace OPEN_LRD.Visualizer
 
             for (int i = 0; i < geometry.Layout.Positions.Count && i < snapshot.Nodes.Count; i++)
             {
+                if (!scene.IsNodeTypeVisible(snapshot.Nodes[i].TypeId))
+                    continue;
+
                 Vector3 center = geometry.Layout.Positions[i];
                 Vector3 min = center - halfVector;
                 Vector3 max = center + halfVector;
@@ -514,6 +545,8 @@ namespace OPEN_LRD.Visualizer
                 LabelOverlay.SetGraph(fresh, built.Layout.Positions, options.LabelCharacterLimit);
                 LabelOverlay.MaxLabels = options.MaxLabels;
                 LabelOverlay.ShowLabels = options.ShowLabels;
+                LabelOverlay.NodeBoxSize = options.CubeSize;
+                LabelOverlay.MaxLabelDistance = Math.Max(built.Radius * 3.0f, 50.0f);
                 UpdateCameraView();
 
                 SetSelectedNode(null);
@@ -741,6 +774,7 @@ namespace OPEN_LRD.Visualizer
 
                 CubeSizeSlider.Value = options.CubeSize;
                 CubeSizeValText.Text = options.CubeSize.ToString("F1", CultureInfo.InvariantCulture);
+                LabelOverlay.NodeBoxSize = options.CubeSize;
 
                 LineWidthSlider.Value = options.LineWidth;
                 LineWidthValText.Text = options.LineWidth.ToString("F2", CultureInfo.InvariantCulture);
@@ -748,7 +782,20 @@ namespace OPEN_LRD.Visualizer
                 MaxLabelsSlider.Value = options.MaxLabels;
                 MaxLabelsValText.Text = options.MaxLabels.ToString(CultureInfo.InvariantCulture);
 
+                NearPlaneSlider.Value = options.NearPlaneDistance;
+                NearPlaneValText.Text = options.NearPlaneDistance.ToString("F2", CultureInfo.InvariantCulture);
+                scene.NearPlaneDistance = options.NearPlaneDistance;
+
                 ToggleLabelsButton.IsChecked = options.ShowLabels;
+
+                InvertMouseXCheckBox.IsChecked = options.InvertMouseX;
+                InvertMouseYCheckBox.IsChecked = options.InvertMouseY;
+
+                if (controller is not null)
+                {
+                    controller.InvertMouseX = options.InvertMouseX;
+                    controller.InvertMouseY = options.InvertMouseY;
+                }
             }
             finally
             {
@@ -789,6 +836,7 @@ namespace OPEN_LRD.Visualizer
             foreach ((int typeId, string name) in nodeTypes)
             {
                 RgbColor currentColor = colors.GetNodeColor(typeId);
+                bool isVisible = scene.IsNodeTypeVisible(typeId);
                 NodeColorsPanel.Children.Add(CreateColorRow(
                     name,
                     currentColor,
@@ -796,7 +844,25 @@ namespace OPEN_LRD.Visualizer
                     {
                         colors.SetNodeColor(typeId, selectedColor);
                         scene.UpdateMaterials(colors);
-                    }));
+                    },
+                    onVisibilityChanged: visible =>
+                    {
+                        scene.SetNodeTypeVisible(typeId, visible);
+                        if (!visible && selectedNodeIndex.HasValue && snapshot is not null &&
+                            selectedNodeIndex.Value < snapshot.Nodes.Count &&
+                            snapshot.Nodes[selectedNodeIndex.Value].TypeId == typeId)
+                        {
+                            SetSelectedNode(null);
+                        }
+                        if (!visible && hoveredNodeIndex.HasValue && snapshot is not null &&
+                            hoveredNodeIndex.Value < snapshot.Nodes.Count &&
+                            snapshot.Nodes[hoveredNodeIndex.Value].TypeId == typeId)
+                        {
+                            SetHoveredNode(null);
+                        }
+                        LabelOverlay.InvalidateVisual();
+                    },
+                    isVisible: isVisible));
             }
         }
 
@@ -825,6 +891,7 @@ namespace OPEN_LRD.Visualizer
             foreach ((int fwdId, string name) in forwardTypes)
             {
                 RgbColor currentColor = colors.GetLinkColor(fwdId, 0);
+                bool isVisible = scene.IsLinkTypeVisible(fwdId);
                 LinkColorsPanel.Children.Add(CreateColorRow(
                     name,
                     currentColor,
@@ -832,7 +899,12 @@ namespace OPEN_LRD.Visualizer
                     {
                         colors.SetLinkColor(fwdId, selectedColor);
                         scene.UpdateMaterials(colors);
-                    }));
+                    },
+                    onVisibilityChanged: visible =>
+                    {
+                        scene.SetLinkTypeVisible(fwdId, visible);
+                    },
+                    isVisible: isVisible));
             }
         }
 
@@ -858,7 +930,9 @@ namespace OPEN_LRD.Visualizer
         private UIElement CreateColorRow(
             string label,
             RgbColor currentColor,
-            Action<RgbColor> onColorSelected)
+            Action<RgbColor> onColorSelected,
+            Action<bool>? onVisibilityChanged = null,
+            bool isVisible = true)
         {
             DockPanel row = new DockPanel
             {
@@ -937,6 +1011,22 @@ namespace OPEN_LRD.Visualizer
 
             row.Children.Add(combo);
 
+            if (onVisibilityChanged is not null)
+            {
+                CheckBox visibilityCheckBox = new CheckBox
+                {
+                    IsChecked = isVisible,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 6, 0),
+                    ToolTip = $"Toggle rendering of {label}"
+                };
+                visibilityCheckBox.Checked += (_, _) => onVisibilityChanged(true);
+                visibilityCheckBox.Unchecked += (_, _) => onVisibilityChanged(false);
+
+                DockPanel.SetDock(visibilityCheckBox, Dock.Left);
+                row.Children.Add(visibilityCheckBox);
+            }
+
             TextBlock labelText = new TextBlock
             {
                 Text = label,
@@ -960,20 +1050,41 @@ namespace OPEN_LRD.Visualizer
         private void ResetNodeColors_Click(object sender, RoutedEventArgs e)
         {
             colors.ClearNodeColors();
+            if (snapshot is not null && snapshot.Nodes.Count > 0)
+            {
+                foreach (int typeId in snapshot.NodeTypeIds)
+                    scene.SetNodeTypeVisible(typeId, true);
+            }
+            else
+            {
+                foreach (NodeTypes nt in NodeTypes.GetAll())
+                    scene.SetNodeTypeVisible(nt.Id, true);
+            }
             RebuildNodeColorsPanel();
+            LabelOverlay.InvalidateVisual();
             scene.UpdateMaterials(colors);
             SaveSettings();
-            SetStatus("Reset node colors to defaults.");
+            SetStatus("Reset node colors and visibility to defaults.");
         }
 
         private void ResetLinkColors_Click(object sender, RoutedEventArgs e)
         {
             colors.ClearLinkColors();
+            if (snapshot is not null && snapshot.Links.Count > 0)
+            {
+                foreach (int fwdId in snapshot.ForwardTypeIds)
+                    scene.SetLinkTypeVisible(fwdId, true);
+            }
+            else
+            {
+                foreach (ForwardLinkTypes flt in ForwardLinkTypes.GetAll())
+                    scene.SetLinkTypeVisible(flt.Id, true);
+            }
             RebuildLinkColorsPanel();
             RebuildClassColorsPanel();
             scene.UpdateMaterials(colors);
             SaveSettings();
-            SetStatus("Reset link colors to defaults.");
+            SetStatus("Reset link colors and visibility to defaults.");
         }
 
         private void ResetViewSettings_Click(object sender, RoutedEventArgs e)
@@ -984,12 +1095,34 @@ namespace OPEN_LRD.Visualizer
             options.LineWidth = defaults.LineWidth;
             options.MaxLabels = defaults.MaxLabels;
             options.ShowLabels = defaults.ShowLabels;
+            options.InvertMouseX = defaults.InvertMouseX;
+            options.InvertMouseY = defaults.InvertMouseY;
+            options.NearPlaneDistance = defaults.NearPlaneDistance;
+            scene.NearPlaneDistance = defaults.NearPlaneDistance;
 
             SyncViewControls();
             SaveSettings();
 
             if (snapshot is not null)
                 Recompute_Button_Click(this, new RoutedEventArgs());
+        }
+
+        private void InvertMouseX_Click(object sender, RoutedEventArgs e)
+        {
+            options.InvertMouseX = InvertMouseXCheckBox.IsChecked == true;
+            if (controller is not null)
+                controller.InvertMouseX = options.InvertMouseX;
+            SaveSettings();
+            SetStatus(options.InvertMouseX ? "Horizontal mouse axis inverted." : "Horizontal mouse axis normal.");
+        }
+
+        private void InvertMouseY_Click(object sender, RoutedEventArgs e)
+        {
+            options.InvertMouseY = InvertMouseYCheckBox.IsChecked == true;
+            if (controller is not null)
+                controller.InvertMouseY = options.InvertMouseY;
+            SaveSettings();
+            SetStatus(options.InvertMouseY ? "Vertical mouse axis inverted." : "Vertical mouse axis normal.");
         }
 
         private void ApplySettings_Click(object sender, RoutedEventArgs e)
@@ -1017,6 +1150,8 @@ namespace OPEN_LRD.Visualizer
             options.CubeSize = Math.Round(CubeSizeSlider.Value, 1);
             if (CubeSizeValText is not null)
                 CubeSizeValText.Text = options.CubeSize.ToString("F1", CultureInfo.InvariantCulture);
+
+            LabelOverlay.NodeBoxSize = options.CubeSize;
         }
 
         private void LineWidthSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1039,6 +1174,20 @@ namespace OPEN_LRD.Visualizer
                 MaxLabelsValText.Text = options.MaxLabels.ToString(CultureInfo.InvariantCulture);
 
             LabelOverlay.MaxLabels = options.MaxLabels;
+        }
+
+        private void NearPlaneSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (isInitializingControls || scene is null || options is null)
+                return;
+
+            options.NearPlaneDistance = Math.Clamp(NearPlaneSlider.Value, 0.01, 100.0);
+            scene.NearPlaneDistance = options.NearPlaneDistance;
+            if (NearPlaneValText is not null)
+                NearPlaneValText.Text = options.NearPlaneDistance.ToString("F2", CultureInfo.InvariantCulture);
+
+            UpdateCameraView();
+            SaveSettings();
         }
     }
 }

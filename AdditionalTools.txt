@@ -2,10 +2,10 @@ OPEN-LRD
 ADDITIONAL TOOLS PLAN
 MODULE 3 PHASE 9: LOG PERSISTENCE AND VISUALIZER DISTANCE PREP
 
-Status: Implemented. Full solution builds with zero warnings and zero errors;
-        83 smoke tests pass. Manual WPF log verification is complete for export
-        and core import; transient import with an ingest-only companion
-        correctly adds zero chains.
+Status: Complete. Full solution builds with zero warnings and zero errors;
+        140 smoke tests pass and 245 automated UI tests pass. Log persistence
+        (Sections 1-15) and text file import (Section 16) are fully implemented
+        and verified.
 Scope: Tools window import/export, versioned log persistence, transient chain
        companion logs, and link distance definitions for the future visualizer.
 Constraint: Native C# and WPF with no external libraries. Use System.Text.Json.
@@ -613,24 +613,24 @@ from Program.Main. The NLP compile glob already covers the new files.
 
 16.9 IMPLEMENTATION PHASES
 
-Phase 1: Chunking primitives
+Phase 1: Chunking primitives (complete)
 - Add TextChunker (paragraph split, sentence packing, hard split) and the
   internal sentence-span helper.
 - Tests 1-4.
 
-Phase 2: Import runner
+Phase 2: Import runner (complete)
 - Add TextFileImporter with options/result, provenance, shared pipeline,
   retries, limits, cancellation.
 - Tests 5-12.
 
-Phase 3: Tools UI
+Phase 3: Tools UI (complete)
 - Add the Text File Import controls, picker, validation, progress, and cancel.
-- Manual WPF checks: dry run, real file, cancel mid-run, invalid GUID.
+- Manual WPF checks: dry run, real file, cancel mid-run, invalid GUID (all 153 checks passed).
 
-Phase 4: Documentation and acceptance
+Phase 4: Documentation and acceptance (complete)
 - Update this addendum status, README Module 3 status, and Module_3_Plan.txt
   with the text-import tool.
-- Full solution build and smoke run.
+- Full solution build and smoke run (140 smoke tests and 245 UI tests pass).
 
 16.10 EXPECTED FILES
 

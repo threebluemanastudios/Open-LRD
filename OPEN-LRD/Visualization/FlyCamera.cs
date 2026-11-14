@@ -133,6 +133,43 @@ namespace OPEN_LRD.Visualization
             Position = center - LookDirection * (float)distance;
         }
 
+        public void OrbitAroundTarget(Vector3 target, double deltaYawRadians, double deltaPitchRadians)
+        {
+            ValidateVector(target, nameof(target));
+
+            if (!double.IsFinite(deltaYawRadians))
+                throw new ArgumentOutOfRangeException(nameof(deltaYawRadians));
+
+            if (!double.IsFinite(deltaPitchRadians))
+                throw new ArgumentOutOfRangeException(nameof(deltaPitchRadians));
+
+            Vector3 offset = Position - target;
+            float radius = offset.Length();
+            if (radius < 1e-4f)
+                radius = 1e-4f;
+
+            // Current spherical angles from target to camera
+            double currentElevation = Math.Asin(Math.Clamp(offset.Y / radius, -1f, 1f));
+            double currentAzimuth = Math.Atan2(offset.X, offset.Z);
+
+            double newAzimuth = currentAzimuth + deltaYawRadians;
+            double newElevation = Math.Clamp(currentElevation + deltaPitchRadians, -MaximumPitchRadians, MaximumPitchRadians);
+
+            float cosElev = (float)Math.Cos(newElevation);
+            Vector3 newOffset = new Vector3(
+                radius * cosElev * (float)Math.Sin(newAzimuth),
+                radius * (float)Math.Sin(newElevation),
+                radius * cosElev * (float)Math.Cos(newAzimuth));
+
+            Vector3 newPosition = target + newOffset;
+            Vector3 lookDir = Vector3.Normalize(target - newPosition);
+
+            double pitch = Math.Asin(Math.Clamp(lookDir.Y, -1f, 1f));
+            double yaw = Math.Atan2(lookDir.X, lookDir.Z);
+
+            SetPose(newPosition, yaw, pitch);
+        }
+
         private static void ValidateFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))
