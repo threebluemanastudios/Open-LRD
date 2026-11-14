@@ -3,7 +3,7 @@ ADDITIONAL TOOLS PLAN
 MODULE 3 PHASE 9: LOG PERSISTENCE AND VISUALIZER DISTANCE PREP
 
 Status: Sections 1-17 complete. Current integrated solution builds with zero
-        warnings and zero errors; 167 smoke tests and 287 automated UI checks pass.
+        warnings and zero errors; 169 smoke tests and 289 automated UI checks pass.
 Scope: Tools window import/export, versioned log persistence, transient chain
        companion logs, and link distance definitions used by the 3D Visualizer.
 Constraint: Native C# and WPF with no external libraries. Use System.Text.Json.

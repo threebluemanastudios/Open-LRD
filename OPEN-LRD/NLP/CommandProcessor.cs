@@ -1,3 +1,4 @@
+using System.Globalization;
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Reasoning;
 
@@ -42,8 +43,34 @@ namespace OPEN_LRD.NLP
                 CommandTargetKind.Conversation => BuildConversation(conversation),
                 CommandTargetKind.Summary => BuildSummary(core, conversation),
                 CommandTargetKind.Node => BuildNode(command, core, options),
+                CommandTargetKind.CountNodes => BuildCount(core.FindNodes().Count, "node", AnswerKind.Quantity),
+                CommandTargetKind.CountFacts => BuildCount(CountLinks(core, factsOnly: true), "fact", AnswerKind.Quantity),
+                CommandTargetKind.CountEvents => BuildCount(core.FindByType(NodeTypes.Events).Count, "event", AnswerKind.Quantity),
+                CommandTargetKind.CountLinks => BuildCount(CountLinks(core, factsOnly: false), "link", AnswerKind.Quantity),
+                CommandTargetKind.CountConversation => BuildCount(conversation.Mentions.Count, "mention", AnswerKind.Quantity),
                 _ => CreateClarification(command)
             };
+        }
+
+        private static NlpAnswer BuildCount(int count, string unit, AnswerKind kind)
+        {
+            string plural = count == 1 ? unit : unit + "s";
+            return CreateAnswer(
+                AnswerStatus.Answered,
+                $"There are {count} {plural}.",
+                count.ToString(CultureInfo.InvariantCulture),
+                null,
+                false,
+                false,
+                1.0,
+                Array.Empty<string>(),
+                kind);
+        }
+
+        private static int CountLinks(LRD_Core core, bool factsOnly)
+        {
+            return core.FindNodes().Sum(node => core.GetStoredLinks(node.ID).Count(link =>
+                link.SourceID == node.ID && (!factsOnly || link.IsActive)));
         }
 
         private static NlpAnswer BuildFacts(LRD_Core core, NlpOptions options)
@@ -249,11 +276,12 @@ namespace OPEN_LRD.NLP
             bool usesTemporaryEvidence,
             bool usesSessionProvenance,
             double confidence,
-            IReadOnlyList<string> diagnostics)
+            IReadOnlyList<string> diagnostics,
+            AnswerKind kind = AnswerKind.Description)
         {
             return new NlpAnswer(
                 status,
-                AnswerKind.Description,
+                kind,
                 text,
                 shortAnswer,
                 answerNodeID,

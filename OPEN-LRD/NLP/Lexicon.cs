@@ -159,7 +159,10 @@ namespace OPEN_LRD.NLP
 
         private static readonly HashSet<string> timeWords = Create(
             "afternoon", "evening", "midnight", "morning", "night", "noon",
-            "today", "tomorrow", "tonight", "yesterday");
+            "ago", "day", "days", "hour", "hours", "minute", "minutes",
+            "month", "months", "now", "past", "second", "seconds",
+            "today", "tomorrow", "tonight",
+            "week", "weeks", "year", "years", "yesterday");
 
         private static readonly Dictionary<string, string> irregularLemmas =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

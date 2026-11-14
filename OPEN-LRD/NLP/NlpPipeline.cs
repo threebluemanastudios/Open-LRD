@@ -135,7 +135,7 @@ namespace OPEN_LRD.NLP
 
             if (TemporalExpressionParser.TryParseQuestionRange(
                 text,
-                DateTimeOffset.Now,
+                options.ReferenceTime ?? DateTimeOffset.Now,
                 out TemporalRangeQuery temporalQuery))
             {
                 conversation.BeginTurn();
@@ -257,6 +257,28 @@ namespace OPEN_LRD.NLP
 
             if (command.TargetKind == CommandTargetKind.Query)
             {
+                if (TemporalExpressionParser.TryParseQuestionRange(
+                    command.TargetText,
+                    options.ReferenceTime ?? DateTimeOffset.Now,
+                    out TemporalRangeQuery temporalQuery))
+                {
+                    NlpAnswer temporalAnswer = AnswerGenerator.GenerateTemporalRangeAnswer(
+                        temporalQuery,
+                        core,
+                        options);
+                    diagnostics.AddRange(temporalAnswer.Diagnostics);
+                    return new NlpResult(
+                        MapAnswerStatus(temporalAnswer.Status),
+                        Deduplicate(diagnostics),
+                        analysis.Parsed)
+                    {
+                        Frames = analysis.Frames,
+                        Answer = temporalAnswer,
+                        Command = command,
+                        OriginalInput = analysis.OriginalInput
+                    };
+                }
+
                 NlpResult queryAnalysis = Analyze(command.TargetText);
                 NlpResult result = queryAnalysis.Status == NlpStatus.InvalidInput
                     || queryAnalysis.Parsed is null
@@ -705,9 +727,10 @@ namespace OPEN_LRD.NLP
                 Sentence sentence = parsed.Sentences[frame.SentenceIndex];
                 if (!TemporalExpressionParser.TryParseEventWindow(
                     sentence.Text,
-                    DateTimeOffset.Now,
+                    options.ReferenceTime ?? DateTimeOffset.Now,
                     out DateTimeOffset? startTime,
-                    out DateTimeOffset? endTime))
+                    out DateTimeOffset? endTime,
+                    futureTense: frame.Tense == Tense.Future))
                 {
                     continue;
                 }

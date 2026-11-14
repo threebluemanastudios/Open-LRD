@@ -33,7 +33,9 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP social dialogue is read-only", TestNlpSocialDialogue);
             Program.Run("NLP conversational preambles and punctuation", TestNlpConversationalInput);
             Program.Run("NLP multi-answer synthesis", TestNlpMultiAnswerSynthesis);
+            Program.Run("NLP quantity Ask and Count commands", TestNlpQuantityQueries);
             Program.Run("NLP temporal event representation and Ask", TestNlpTemporalEvents);
+            Program.Run("NLP relative temporal expressions", TestNlpRelativeTemporalExpressions);
             Program.Run("NLP yes-no answers", TestNlpYesNoAnswers);
             Program.Run("NLP answer ambiguity and no-match", TestNlpAnswerAmbiguityAndNoMatch);
             Program.Run("NLP ambiguous anchor candidates", TestNlpAmbiguousAnchorCandidates);
@@ -738,6 +740,85 @@ namespace OPEN_LRD.SmokeTests
                 "multi-answer synthesis should be configurable off");
         }
 
+        private static void TestNlpQuantityQueries()
+        {
+            LRD_Core core = NewCore();
+            Guid alice = AddNode(core, NodeTypes.Entities, "Alice", NodeLifetime.Permanent);
+            Guid bob = AddNode(core, NodeTypes.Entities, "Bob", NodeLifetime.Permanent);
+            Guid acme = AddNode(core, NodeTypes.Entities, "Acme", NodeLifetime.Permanent);
+            AddNode(core, NodeTypes.Entities, "Globex", NodeLifetime.Permanent);
+            RelationLinkType worksAt = RelationRegistry.GetOrRegister("work_at");
+            core.AddDirectedConnection(alice, acme, LinkClass.actions, worksAt.Forward.Id);
+            core.AddDirectedConnection(bob, acme, LinkClass.actions, worksAt.Forward.Id);
+
+            NlpPipeline pipeline = new NlpPipeline(core);
+            NlpResult people = pipeline.Ask("How many people work at Acme?");
+            Assert(people.Answer?.Status == AnswerStatus.Answered
+                && people.Answer.Kind == AnswerKind.Quantity
+                && people.Answer.ShortAnswer == "2",
+                $"how-many subject query should return a numeric quantity: {people.Answer?.Text}; {string.Join("; ", people.Diagnostics)}");
+            Assert(people.Answer?.Candidates.Select(candidate => candidate.NodeID).ToHashSet()
+                .SetEquals(new[] { alice, bob }) == true,
+                "quantity answers should retain each counted graph node as a candidate");
+            Assert(people.Answer?.Text.Contains("Alice and Bob", StringComparison.Ordinal) == true,
+                "quantity response should list the counted entities");
+
+            Guid chess = AddNode(core, NodeTypes.Objects, "chess", NodeLifetime.Permanent);
+            RelationLinkType sees = RelationRegistry.GetOrRegister("see");
+            core.AddDirectedConnection(alice, chess, LinkClass.actions, sees.Forward.Id);
+            core.AddDirectedConnection(bob, chess, LinkClass.actions, sees.Forward.Id);
+            NlpResult objectCount = pipeline.Ask("How many objects does Alice see?");
+            Assert(objectCount.Answer?.Status == AnswerStatus.Answered
+                && objectCount.Answer.ShortAnswer == "1"
+                && objectCount.Answer.Candidates.Any(candidate => candidate.NodeID == chess),
+                $"object-count question should count outgoing objects: {objectCount.Answer?.Text}");
+
+            NlpResult none = pipeline.Ask("How many people work at Globex?");
+            Assert(none.Answer?.Status == AnswerStatus.Answered
+                && none.Answer.Kind == AnswerKind.Quantity
+                && none.Answer.ShortAnswer == "0",
+                $"zero-result quantity query should answer zero rather than return no-match: {none.Answer?.Text}");
+
+            NlpResult countNodes = pipeline.Ask("Count nodes");
+            Assert(countNodes.Answer?.Kind == AnswerKind.Quantity
+                && countNodes.Answer.ShortAnswer == "5",
+                $"fixed Count nodes command should return graph count: {countNodes.Answer?.Text}");
+            NlpResult countPeople = pipeline.Ask("Count how many people work at Acme");
+            Assert(countPeople.Answer?.ShortAnswer == "2"
+                && countPeople.Answer.Kind == AnswerKind.Quantity,
+                $"Count query command should route to quantity Ask: {countPeople.Answer?.Text}");
+
+            DateTimeOffset reference = new DateTimeOffset(2026, 5, 13, 14, 0, 0, TimeSpan.Zero);
+            LRD_Core eventCore = NewCore();
+            Web_Node eventNode = eventCore.CreateEvent(
+                "Yesterday Meeting",
+                new DateTimeOffset(2026, 5, 12, 10, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 5, 12, 11, 0, 0, TimeSpan.Zero));
+            NlpPipeline eventPipeline = new NlpPipeline(
+                eventCore,
+                new NlpOptions { ReferenceTime = reference });
+            NlpResult eventCount = eventPipeline.Ask("How many events happened yesterday?");
+            Assert(eventCount.Answer?.Kind == AnswerKind.Quantity
+                && eventCount.Answer.ShortAnswer == "1"
+                && eventCount.Answer.Candidates.Any(candidate => candidate.NodeID == eventNode.ID),
+                $"temporal how-many should count matching events and seed candidates: {eventCount.Answer?.Text}");
+            NlpResult countEventsYesterday = eventPipeline.Ask("Count events happened yesterday");
+            Assert(countEventsYesterday.Answer?.Kind == AnswerKind.Quantity
+                && countEventsYesterday.Answer.ShortAnswer == "1",
+                $"Count event-query command should route to temporal quantity search: {countEventsYesterday.Answer?.Text}");
+            NlpResult countEventQuery = eventPipeline.Ask("Count events that happened yesterday");
+            Assert(countEventQuery.Answer?.Kind == AnswerKind.Quantity
+                && countEventQuery.Answer.ShortAnswer == "1",
+                $"Count events-that query should route to temporal quantity search: {countEventQuery.Answer?.Text}");
+            NlpResult noEvents = eventPipeline.Ask("How many events happened last week?");
+            Assert(noEvents.Answer?.Kind == AnswerKind.Quantity
+                && noEvents.Answer.ShortAnswer == "0"
+                && noEvents.Answer.Status == AnswerStatus.Answered,
+                $"empty temporal count should answer zero: {noEvents.Answer?.Text}");
+            Assert(eventPipeline.Ask("Count events").Answer?.ShortAnswer == "1",
+                "fixed Count events command should count Event nodes");
+        }
+
         private static void TestNlpTemporalEvents()
         {
             DateTimeOffset start = new DateTimeOffset(2026, 5, 12, 14, 0, 0, TimeSpan.Zero);
@@ -893,6 +974,133 @@ namespace OPEN_LRD.SmokeTests
             Assert(whenArrival.Answer?.Status == AnswerStatus.Answered
                 && whenArrival.Answer.Candidates.Any(candidate => candidate.NodeID == arrivalEvent.ID),
                 $"When question should correlate with an intransitive located event: {whenArrival.Answer?.Text}; {string.Join("; ", whenArrival.Diagnostics)}");
+        }
+
+        private static void TestNlpRelativeTemporalExpressions()
+        {
+            DateTimeOffset reference = new DateTimeOffset(2026, 5, 13, 14, 0, 0, TimeSpan.Zero);
+
+            void AssertDay(string expression, DateTime date, bool futureTense = false)
+            {
+                Assert(TemporalExpressionParser.TryParseRelativeExpression(
+                    expression,
+                    reference,
+                    futureTense,
+                    out DateTimeOffset start,
+                    out DateTimeOffset end,
+                    out _), $"relative expression '{expression}' should parse");
+                DateTimeOffset expectedStart = new DateTimeOffset(date, TimeSpan.Zero);
+                Assert(start == expectedStart && end == expectedStart.AddDays(1).AddTicks(-1),
+                    $"'{expression}' should resolve to {expectedStart:d}; got {start:o} to {end:o}");
+            }
+
+            void AssertPeriod(string expression, DateTime startDate, DateTime endDate)
+            {
+                Assert(TemporalExpressionParser.TryParseRelativeExpression(
+                    expression,
+                    reference,
+                    futureTense: false,
+                    out DateTimeOffset start,
+                    out DateTimeOffset end,
+                    out _), $"calendar period '{expression}' should parse");
+                DateTimeOffset expectedStart = new DateTimeOffset(startDate, TimeSpan.Zero);
+                DateTimeOffset expectedEnd = new DateTimeOffset(endDate, TimeSpan.Zero)
+                    .AddDays(1).AddTicks(-1);
+                Assert(start == expectedStart && end == expectedEnd,
+                    $"'{expression}' should resolve to [{expectedStart:o}, {expectedEnd:o}]");
+            }
+
+            AssertDay("yesterday", new DateTime(2026, 5, 12));
+            AssertDay("today", new DateTime(2026, 5, 13));
+            AssertDay("tomorrow", new DateTime(2026, 5, 14));
+            AssertPeriod("last week", new DateTime(2026, 5, 4), new DateTime(2026, 5, 10));
+            AssertPeriod("this week", new DateTime(2026, 5, 11), new DateTime(2026, 5, 17));
+            AssertPeriod("next week", new DateTime(2026, 5, 18), new DateTime(2026, 5, 24));
+            AssertPeriod("last month", new DateTime(2026, 4, 1), new DateTime(2026, 4, 30));
+            AssertPeriod("this month", new DateTime(2026, 5, 1), new DateTime(2026, 5, 31));
+            AssertPeriod("next month", new DateTime(2026, 6, 1), new DateTime(2026, 6, 30));
+            AssertPeriod("last year", new DateTime(2025, 1, 1), new DateTime(2025, 12, 31));
+            AssertPeriod("this year", new DateTime(2026, 1, 1), new DateTime(2026, 12, 31));
+            AssertPeriod("next year", new DateTime(2027, 1, 1), new DateTime(2027, 12, 31));
+            AssertDay("last Friday", new DateTime(2026, 5, 8));
+            AssertDay("this Monday", new DateTime(2026, 5, 11));
+            AssertDay("next Tuesday", new DateTime(2026, 5, 19));
+            AssertDay("on Monday", new DateTime(2026, 5, 11));
+            AssertDay("Monday", new DateTime(2026, 5, 18), futureTense: true);
+            AssertPeriod("in March", new DateTime(2026, 3, 1), new DateTime(2026, 3, 31));
+            AssertPeriod("last January", new DateTime(2026, 1, 1), new DateTime(2026, 1, 31));
+            AssertPeriod("this March", new DateTime(2026, 3, 1), new DateTime(2026, 3, 31));
+            AssertPeriod("next November", new DateTime(2026, 11, 1), new DateTime(2026, 11, 30));
+            AssertDay("2 days ago", new DateTime(2026, 5, 11));
+            AssertDay("three weeks in the past", new DateTime(2026, 4, 22));
+            AssertDay("2 weeks from today", new DateTime(2026, 5, 27));
+            AssertDay("1 month from now", new DateTime(2026, 6, 13));
+
+            Assert(TemporalExpressionParser.TryParseRelativeExpression(
+                "4 hours ago",
+                reference,
+                futureTense: false,
+                out DateTimeOffset hoursStart,
+                out DateTimeOffset hoursEnd,
+                out _)
+                && hoursStart == reference.AddHours(-4)
+                && hoursEnd == reference.AddHours(-4),
+                "clock-unit offsets should resolve to an exact instant");
+
+            LRD_Core core = NewCore();
+            NlpOptions options = new NlpOptions { ReferenceTime = reference };
+            NlpPipeline pipeline = new NlpPipeline(core, options);
+            NlpResult ingested = pipeline.Ingest(
+                "Alice met Bob yesterday. Alice met Bob last week. Alice meets Bob in two weeks from today. Alice met Bob in March. Alice meets Bob on Monday from 10:00 to 11:00.");
+            Assert(ingested.Status == NlpStatus.Ingested,
+                $"relative temporal statements should ingest: {string.Join("; ", ingested.Diagnostics)}");
+
+            IReadOnlyList<Web_Node> events = core.FindByType(NodeTypes.Events);
+            Assert(events.Count == 5, $"expected five relative-time Event nodes, found {events.Count}");
+            Assert(events.Any(node => EventNodeHelper.TryGetWindow(node, out DateTimeOffset? s, out _)
+                && s == new DateTimeOffset(2026, 5, 12, 0, 0, 0, TimeSpan.Zero)),
+                "Ingest should resolve yesterday using NlpOptions.ReferenceTime");
+            Assert(events.Any(node => EventNodeHelper.TryGetWindow(node, out DateTimeOffset? s, out _)
+                && s == new DateTimeOffset(2026, 5, 4, 0, 0, 0, TimeSpan.Zero)),
+                "Ingest should resolve last week using ISO Monday-Sunday week boundaries");
+            Assert(events.Any(node => EventNodeHelper.TryGetWindow(node, out DateTimeOffset? s, out _)
+                && s == new DateTimeOffset(2026, 5, 27, 0, 0, 0, TimeSpan.Zero)),
+                "Ingest should resolve word-number future offsets");
+            Assert(events.Any(node => EventNodeHelper.TryGetWindow(node, out DateTimeOffset? s, out DateTimeOffset? e)
+                && s == new DateTimeOffset(2026, 5, 11, 10, 0, 0, TimeSpan.Zero)
+                && e == new DateTimeOffset(2026, 5, 11, 11, 0, 0, TimeSpan.Zero)),
+                "Ingest should combine a named weekday with a clock range");
+
+            NlpResult askYesterday = pipeline.Ask("What happened yesterday?");
+            Assert(askYesterday.Answer?.Status == AnswerStatus.Answered
+                && askYesterday.Answer.Candidates.Any(candidate => candidate.NodeID == events.Single(node =>
+                    EventNodeHelper.TryGetWindow(node, out DateTimeOffset? s, out _)
+                    && s == new DateTimeOffset(2026, 5, 12, 0, 0, 0, TimeSpan.Zero)).ID),
+                $"Ask should resolve deictic time phrases with the same reference time: {askYesterday.Answer?.Text}");
+
+            NlpResult askWeek = pipeline.Ask("What happened last week?");
+            Assert(askWeek.Answer?.Status == AnswerStatus.Answered
+                && askWeek.Answer.Candidates.Any(candidate => events.Any(node =>
+                    candidate.NodeID == node.ID
+                    && EventNodeHelper.TryGetWindow(node, out DateTimeOffset? s, out _)
+                    && s == new DateTimeOffset(2026, 5, 4, 0, 0, 0, TimeSpan.Zero))),
+                "Ask should resolve ISO week deictics consistently with ingestion");
+
+            NlpResult askOffset = pipeline.Ask("What happened two weeks from today?");
+            Assert(askOffset.Answer?.Status == AnswerStatus.Answered
+                && askOffset.Answer.Candidates.Any(candidate => events.Any(node =>
+                    candidate.NodeID == node.ID
+                    && EventNodeHelper.TryGetWindow(node, out DateTimeOffset? s, out _)
+                    && s == new DateTimeOffset(2026, 5, 27, 0, 0, 0, TimeSpan.Zero))),
+                "Ask should resolve word-number future offsets using ReferenceTime");
+
+            NlpResult askMonth = pipeline.Ask("What happened in March?");
+            Assert(askMonth.Answer?.Status == AnswerStatus.Answered
+                && askMonth.Answer.Candidates.Any(candidate => events.Any(node =>
+                    candidate.NodeID == node.ID
+                    && EventNodeHelper.TryGetWindow(node, out DateTimeOffset? s, out _)
+                    && s == new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero))),
+                "Ask should resolve named months to their calendar window");
         }
 
         private static void TestNlpRelationExtractionExclusions()
@@ -1323,14 +1531,19 @@ namespace OPEN_LRD.SmokeTests
             Assert(multiMarried.Answer?.ShortAnswer == "Mehri", $"expected Mehri but got {multiMarried.Answer?.ShortAnswer}");
 
             LRD_Core timeCore = NewCore();
-            NlpPipeline timePipeline = new NlpPipeline(timeCore);
+            NlpOptions timeOptions = new NlpOptions
+            {
+                ReferenceTime = new DateTimeOffset(2026, 5, 13, 14, 0, 0, TimeSpan.Zero)
+            };
+            NlpPipeline timePipeline = new NlpPipeline(timeCore, timeOptions);
             Assert(timePipeline.Ingest("Alice arrived on Monday.").Status == NlpStatus.Ingested, "time ingestion failed");
 
             NlpResult time = timePipeline.Ask("When did Alice arrive?");
             Assert(time.Status == NlpStatus.Answered, $"expected Answered but got {time.Status}: {string.Join("; ", time.Diagnostics)}");
-            Assert(
-                time.Answer?.ShortAnswer?.Contains("Monday", StringComparison.OrdinalIgnoreCase) == true,
-                $"expected Monday but got {time.Answer?.ShortAnswer}");
+            Web_Node mondayEvent = timeCore.FindByType(NodeTypes.Events).Single();
+            Assert(EventNodeHelper.TryGetWindow(mondayEvent, out DateTimeOffset? mondayStart, out _)
+                && mondayStart?.DayOfWeek == DayOfWeek.Monday,
+                $"an unqualified Monday reference should resolve to Monday using ReferenceTime: {time.Answer?.ShortAnswer}");
 
             LRD_Core passiveCore = NewCore();
             NlpPipeline passivePipeline = new NlpPipeline(passiveCore);

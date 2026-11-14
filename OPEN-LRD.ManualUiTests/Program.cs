@@ -853,6 +853,19 @@ namespace OPEN_LRD.ManualUiTests
             Check(window.AnswerText.Text.Contains("Alice and Bob work at Acme.", StringComparison.Ordinal),
                 $"Workbench displays the synthesized conversational answer (actual: '{window.AnswerText.Text}').");
 
+            window.AskInput.Text = "How many people work at Acme?";
+            askClick?.Invoke(window, new object[] { window.AskButton, new RoutedEventArgs() });
+            DoEvents();
+            CandidateRow[] countRows = window.CandidatesGrid.ItemsSource
+                ?.Cast<CandidateRow>()
+                .ToArray() ?? Array.Empty<CandidateRow>();
+            Check(window.ShortAnswerText.Text == "2"
+                && window.AnswerText.Text.Contains("2 people", StringComparison.Ordinal),
+                $"Workbench shows a numeric quantity answer (short: '{window.ShortAnswerText.Text}', text: '{window.AnswerText.Text}').");
+            Check(countRows.Select(row => row.Label).ToHashSet(StringComparer.Ordinal)
+                .SetEquals(new[] { "Alice", "Bob" }),
+                "quantity answer retains all counted nodes in Evidence / Candidates.");
+
             window.AskInput.Text = "Tell me about Acme";
             askClick?.Invoke(window, new object[] { window.AskButton, new RoutedEventArgs() });
             DoEvents();

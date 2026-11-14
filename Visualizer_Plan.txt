@@ -5,7 +5,7 @@ IMPLEMENTATION PLAN
 Status: Complete (Phases 1-6). Pure model, math, 3D distance layout, WPF 3D
         scene, fly navigation, ray picking, label overlay, 3-tab color panel,
         live material updates, and JSON persistence are implemented and verified.
-        Current integrated verification is 167 smoke tests and 287 UI checks;
+        Current integrated verification is 169 smoke tests and 289 UI checks;
         builds complete with zero warnings and zero errors.
 Scope owner: Additional Tools (follows AdditionalTools.txt section 16).
 Reference design: README.md, Module_2_Plan.txt, Module_3_Plan.txt,

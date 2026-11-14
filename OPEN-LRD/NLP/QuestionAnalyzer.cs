@@ -234,6 +234,15 @@ namespace OPEN_LRD.NLP
                 whEnd,
                 tokens,
                 end);
+            FrameRole quantityAnswerRole = questionType == QuestionType.WhQuantity
+                ? DetermineQuantityAnswerRole(
+                    parsed,
+                    sentence,
+                    whEnd,
+                    mainVerb,
+                    predicateToken,
+                    prepositionalPhrases)
+                : AnswerRoleFor(questionType);
 
             AnswerKind expectedAnswer = DetermineAnswerKind(questionType, wh);
             List<NodeTypes> expectedTypes = DetermineExpectedTypes(
@@ -249,7 +258,9 @@ namespace OPEN_LRD.NLP
                     parsed,
                     whIndex,
                     whEnd,
-                    WhQuestionRole(questionType),
+                    questionType == QuestionType.WhQuantity
+                        ? quantityAnswerRole
+                        : WhQuestionRole(questionType),
                     GetWhPreposition(questionType, leadingPreposition, strandedPreposition))
                 : null;
 
@@ -259,7 +270,40 @@ namespace OPEN_LRD.NLP
             FrameArgument? anchorArgument = null;
             FrameRole anchorRole = FrameRole.Subject;
 
-            if (questionType == QuestionType.YesNo)
+            if (questionType == QuestionType.WhQuantity)
+            {
+                FrameArgument? quantifiedArgument = whArgument is null
+                    ? null
+                    : whArgument with { Role = quantityAnswerRole };
+
+                if (quantityAnswerRole == FrameRole.Subject)
+                {
+                    subject = quantifiedArgument;
+                    FrameArgument? knownArgument = firstQualifier ?? directObject;
+                    objectArgument = knownArgument;
+                    anchorArgument = knownArgument;
+                    anchorRole = firstQualifier is not null
+                        ? FrameRole.Qualifier
+                        : FrameRole.Object;
+                    if (firstQualifier is not null)
+                        qualifier = firstQualifier;
+                }
+                else
+                {
+                    subject = invertedSubject
+                        ?? FindFirstMentionAfter(
+                            parsed,
+                            sentence,
+                            whEnd,
+                            Math.Max(whEnd, relationAnchorIndex - 1),
+                            prepositionalPhrases,
+                            true);
+                    objectArgument = quantifiedArgument;
+                    anchorArgument = subject;
+                    anchorRole = FrameRole.Subject;
+                }
+            }
+            else if (questionType == QuestionType.YesNo)
             {
                 subject = invertedSubject
                     ?? FindFirstArgumentBefore(parsed, sentence, tokens, relationAnchorIndex, true);
@@ -608,8 +652,11 @@ namespace OPEN_LRD.NLP
                                 options.TemporaryNodeTimeToLive);
                             Chain_Node variantAnchor = CreateNode(anchorNodeID, anchor, options);
 
-                            Link link = questionType is QuestionType.WhSubject
-                                ? new Link(
+                             bool answerIsSubject = questionType == QuestionType.WhSubject
+                                 || (questionType == QuestionType.WhQuantity
+                                     && quantityAnswerRole == FrameRole.Subject);
+                             Link link = answerIsSubject
+                                 ? new Link(
                                     whNodeID,
                                     anchorNodeID,
                                     relation.Forward.Id,
@@ -637,7 +684,9 @@ namespace OPEN_LRD.NLP
                                 link.ForwardLink.Id,
                                 link.InverseLink.Id,
                                 candidate.LinkClass,
-                                AnswerRoleFor(questionType),
+                                 questionType == QuestionType.WhQuantity
+                                     ? quantityAnswerRole
+                                     : AnswerRoleFor(questionType),
                                 false,
                                 false));
                         }
@@ -662,7 +711,9 @@ namespace OPEN_LRD.NLP
                             fallbackRelation.Forward.Id,
                             fallbackRelation.Inverse.Id,
                             fallbackCandidate.LinkClass,
-                            AnswerRoleFor(questionType),
+                             questionType == QuestionType.WhQuantity
+                                 ? quantityAnswerRole
+                                 : AnswerRoleFor(questionType),
                             true,
                             false));
                     }
@@ -756,6 +807,24 @@ namespace OPEN_LRD.NLP
             return QuestionType.Unknown;
         }
 
+        private static FrameRole DetermineQuantityAnswerRole(
+            ParsedText parsed,
+            Sentence sentence,
+            int whEnd,
+            Token? mainVerb,
+            Token predicateToken,
+            IReadOnlyList<Chunk> prepositionalPhrases)
+        {
+            int predicateIndex = mainVerb?.TokenIndex ?? predicateToken.TokenIndex;
+            bool hasKnownSubjectAfterQuantity = parsed.Mentions.Any(mention =>
+                mention.SentenceIndex == sentence.Index
+                && mention.StartToken > whEnd
+                && mention.EndToken < predicateIndex
+                && !IsInsidePrepositionalPhrase(mention, prepositionalPhrases));
+
+            return hasKnownSubjectAfterQuantity ? FrameRole.Object : FrameRole.Subject;
+        }
+
         private static AnswerKind DetermineAnswerKind(QuestionType questionType, WhKind wh)
         {
             if (questionType == QuestionType.YesNo)
@@ -793,7 +862,7 @@ namespace OPEN_LRD.NLP
                 return new List<NodeTypes> { NodeTypes.RawData, NodeTypes.Events };
 
             if (questionType == QuestionType.WhQuantity)
-                return new List<NodeTypes> { NodeTypes.RawData };
+                return DetermineQuantityTypes(tokens, whIndex, whEnd);
 
             if (wh is WhKind.Who or WhKind.Whom or WhKind.Whose)
                 return new List<NodeTypes> { NodeTypes.Entities };
@@ -821,6 +890,42 @@ namespace OPEN_LRD.NLP
             }
 
             return types;
+        }
+
+        private static List<NodeTypes> DetermineQuantityTypes(
+            IReadOnlyList<Token> tokens,
+            int whIndex,
+            int whEnd)
+        {
+            if (whIndex < 0 || whEnd <= whIndex + 1)
+            {
+                return new List<NodeTypes>(broadWhatTypes.Where(type => type != NodeTypes.Empties));
+            }
+
+            string noun = string.IsNullOrWhiteSpace(tokens[whEnd].Lemma)
+                ? tokens[whEnd].Normalized
+                : tokens[whEnd].Lemma;
+            noun = Lemmatizer.Lemmatize(noun, PartOfSpeech.Noun).ToLowerInvariant();
+
+            if (Lexicon.IsEventNoun(noun))
+                return new List<NodeTypes> { NodeTypes.Events };
+
+            if (noun is "city" or "country" or "place" or "location" or "state" or "town"
+                or "province" or "region")
+            {
+                return new List<NodeTypes> { NodeTypes.Locations };
+            }
+
+            if (noun is "person" or "people" or "man" or "woman" or "employee" or "student"
+                or "doctor" or "teacher" or "company" or "organization")
+            {
+                return new List<NodeTypes> { NodeTypes.Entities };
+            }
+
+            if (noun is "book" or "car" or "object" or "device" or "product")
+                return new List<NodeTypes> { NodeTypes.Objects };
+
+            return new List<NodeTypes> { NodeTypes.Entities, NodeTypes.Concepts, NodeTypes.Objects };
         }
 
         private static FrameRole WhQuestionRole(QuestionType questionType)
@@ -882,7 +987,23 @@ namespace OPEN_LRD.NLP
                 && whIndex + 1 <= end
                 && tokens[whIndex + 1].Normalized is "many" or "much")
             {
-                return whIndex + 1;
+                int spanEnd = whIndex + 1;
+                for (int index = whIndex + 2; index <= end; index++)
+                {
+                    if (tokens[index].PartOfSpeech is PartOfSpeech.Determiner
+                        or PartOfSpeech.Adjective
+                        or PartOfSpeech.Noun
+                        or PartOfSpeech.ProperNoun
+                        or PartOfSpeech.Number)
+                    {
+                        spanEnd = index;
+                        continue;
+                    }
+
+                    break;
+                }
+
+                return spanEnd;
             }
 
             if (wh is "which" or "what"

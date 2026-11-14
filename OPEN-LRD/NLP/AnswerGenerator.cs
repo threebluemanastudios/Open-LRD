@@ -380,6 +380,18 @@ namespace OPEN_LRD.NLP
         {
             if (question.AnchorNodeID is null)
             {
+                if (question.ExpectedAnswer == AnswerKind.Quantity)
+                {
+                    return CreateQuantityAnswer(
+                        question,
+                        Array.Empty<AnswerCandidate>(),
+                        evaluations,
+                        core,
+                        options,
+                        conversation,
+                        new List<string>());
+                }
+
                 List<string> missingDiagnostics = new List<string>();
 
                 foreach (QuestionEvaluation evaluation in evaluations)
@@ -453,6 +465,18 @@ namespace OPEN_LRD.NLP
 
             if (candidates.Count == 0)
             {
+                if (question.ExpectedAnswer == AnswerKind.Quantity && !structuralFailure)
+                {
+                    return CreateQuantityAnswer(
+                        question,
+                        Array.Empty<AnswerCandidate>(),
+                        evaluations,
+                        core,
+                        options,
+                        conversation,
+                        diagnostics);
+                }
+
                 if (ambiguousReasoning)
                 {
                     return CreateAmbiguousAnswer(
@@ -503,6 +527,18 @@ namespace OPEN_LRD.NLP
 
             if (candidates.Count == 0)
             {
+                if (question.ExpectedAnswer == AnswerKind.Quantity)
+                {
+                    return CreateQuantityAnswer(
+                        question,
+                        Array.Empty<AnswerCandidate>(),
+                        evaluations,
+                        core,
+                        options,
+                        conversation,
+                        diagnostics);
+                }
+
                 diagnostics.Add("No answer candidate passed the relation and type filters.");
 
                 return new NlpAnswer(
@@ -542,6 +578,18 @@ namespace OPEN_LRD.NLP
             {
                 diagnostics.Add("Kept answer candidates matching the strongest relation interpretation.");
                 candidates = relationMatchedCandidates;
+            }
+
+            if (question.ExpectedAnswer == AnswerKind.Quantity)
+            {
+                return CreateQuantityAnswer(
+                    question,
+                    candidates,
+                    evaluations,
+                    core,
+                    options,
+                    conversation,
+                    diagnostics);
             }
 
             if (options.EnableMultiAnswerSynthesis && candidates.Count > 1)
@@ -633,6 +681,129 @@ namespace OPEN_LRD.NLP
                 Math.Clamp(selected.Score, 0.0, 1.0),
                 Deduplicate(diagnostics),
                 usesSessionProvenance);
+        }
+
+        private static NlpAnswer CreateQuantityAnswer(
+            QuestionAnalysis question,
+            IReadOnlyList<AnswerCandidate> candidates,
+            IReadOnlyList<QuestionEvaluation> evaluations,
+            LRD_Core core,
+            NlpOptions options,
+            ConversationContext? conversation,
+            List<string> diagnostics)
+        {
+            int count = candidates.Count;
+            string quantifiedNoun = GetQuantifiedNoun(question);
+            bool massNoun = question.WhSurface?.Contains("much", StringComparison.OrdinalIgnoreCase) == true;
+            string singular = Lemmatizer.Lemmatize(quantifiedNoun, PartOfSpeech.Noun);
+            string plural = massNoun
+                ? quantifiedNoun
+                : EndsInPlural(singular) ? singular : PluralizeNoun(singular);
+            bool countsSubject = question.Variants.FirstOrDefault()?.AnswerRole == FrameRole.Subject
+                || (question.Type == QuestionType.WhQuantity
+                    && question.AnchorRole is FrameRole.Qualifier or FrameRole.Object);
+            string labels = FormatConjunction(candidates.Select(candidate => candidate.Label).ToList());
+            string text;
+
+            if (countsSubject)
+            {
+                string anchor = question.Qualifier?.SurfaceText
+                    ?? question.Object?.SurfaceText
+                    ?? string.Empty;
+                string? preposition = question.Qualifier?.Preposition;
+                string anchorPhrase = string.IsNullOrWhiteSpace(anchor)
+                    ? string.Empty
+                    : string.IsNullOrWhiteSpace(preposition)
+                        ? " " + anchor
+                        : " " + preposition + " " + anchor;
+                string verbPhrase = PluralVerbPhrase(question.PredicateLemma, question.Tense);
+                text = $"There are {count} {plural} who {verbPhrase}{anchorPhrase}";
+                if (count > 0 && !string.IsNullOrWhiteSpace(labels))
+                    text += ": " + labels;
+                text += ".";
+            }
+            else
+            {
+                string subject = question.Subject?.SurfaceText
+                    ?? question.Qualifier?.SurfaceText
+                    ?? "The subject";
+                string verbPhrase = string.IsNullOrWhiteSpace(question.PredicateLemma)
+                    ? "has"
+                    : BuildVerbPhrase(question.PredicateLemma, question.Tense);
+                text = count == 0
+                    ? $"{subject} {verbPhrase} no {plural}."
+                    : $"{subject} {verbPhrase} {count} {plural}: {labels}.";
+            }
+
+            IReadOnlyList<GraphPath> paths = EvidencePathsFor(candidates, evaluations, options, core);
+            bool usesTemporaryEvidence = candidates.Any(candidate => candidate.UsesTemporaryEvidence);
+            bool usesSessionProvenance = paths.Any(path => UsesSessionProvenance(path, conversation, options));
+            if (usesSessionProvenance)
+            {
+                text = AppendSessionCaveat(text, options, diagnostics);
+                diagnostics.Add("Quantity evidence was provided in this session.");
+            }
+            else if (usesTemporaryEvidence)
+            {
+                text += temporaryCaveat;
+            }
+
+            diagnostics.Add($"Counted {count} matching {plural}.");
+            return new NlpAnswer(
+                AnswerStatus.Answered,
+                AnswerKind.Quantity,
+                TrimText(text, options.MaxAnswerTextLength, diagnostics),
+                count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                count == 1 ? candidates[0].NodeID : null,
+                candidates,
+                paths,
+                question,
+                evaluations.FirstOrDefault()?.Result,
+                usesTemporaryEvidence,
+                candidates.Count == 0 ? 0.85 : candidates.Max(candidate => candidate.Score),
+                Deduplicate(diagnostics),
+                usesSessionProvenance);
+        }
+
+        private static string GetQuantifiedNoun(QuestionAnalysis question)
+        {
+            string surface = question.WhSurface ?? question.WhArgument?.SurfaceText ?? string.Empty;
+            string[] words = surface.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            int start = words.Length >= 2
+                && words[0].Equals("how", StringComparison.OrdinalIgnoreCase)
+                && (words[1].Equals("many", StringComparison.OrdinalIgnoreCase)
+                    || words[1].Equals("much", StringComparison.OrdinalIgnoreCase))
+                ? 2
+                : words.Length;
+            string noun = string.Join(" ", words.Skip(start)).Trim();
+            return string.IsNullOrWhiteSpace(noun) ? "items" : noun;
+        }
+
+        private static bool EndsInPlural(string noun)
+        {
+            return noun.EndsWith("s", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(noun, "people", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string PluralVerbPhrase(string? predicate, Tense tense)
+        {
+            if (string.IsNullOrWhiteSpace(predicate))
+                return "are";
+
+            string verb = predicate.ToLowerInvariant();
+            if (verb == "be")
+                return tense == Tense.Past ? "were" : tense == Tense.Future ? "will be" : "are";
+            if (verb == "have")
+                return tense == Tense.Past ? "had" : tense == Tense.Future ? "will have" : "have";
+            if (verb == "do")
+                return tense == Tense.Past ? "did" : tense == Tense.Future ? "will do" : "do";
+
+            string baseVerb = Lemmatizer.Lemmatize(verb, PartOfSpeech.Verb);
+            if (tense == Tense.Past)
+                return PastTense(baseVerb);
+            if (tense == Tense.Future)
+                return "will " + baseVerb;
+            return baseVerb;
         }
 
         public static NlpAnswer GenerateExploration(
@@ -809,7 +980,7 @@ namespace OPEN_LRD.NLP
                     new[] { "The event has no encoded start or end time." });
             }
 
-            EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode);
+            EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode, options.ReferenceTime);
             string window = FormatEventWindow(start, end);
             string text = FormatEventTimeStatement(name, window, variance);
             bool temporary = eventNode.IsTemporary;
@@ -854,7 +1025,7 @@ namespace OPEN_LRD.NLP
             string text = string.Join(" ", eventNodes.Select(eventNode =>
             {
                 EventNodeHelper.TryGetWindow(eventNode, out DateTimeOffset? start, out DateTimeOffset? end);
-                EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode);
+                EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode, options.ReferenceTime);
                 return FormatEventTimeStatement(
                     EventNodeHelper.GetDisplayName(eventNode),
                     FormatEventWindow(start, end),
@@ -893,17 +1064,19 @@ namespace OPEN_LRD.NLP
             {
                 string range = FormatRangeHeading(query);
                 return new NlpAnswer(
-                    AnswerStatus.NoMatch,
-                    AnswerKind.Description,
-                    $"No events were found {range}.",
-                    null,
+                    query.IsCountQuery ? AnswerStatus.Answered : AnswerStatus.NoMatch,
+                    query.IsCountQuery ? AnswerKind.Quantity : AnswerKind.Description,
+                    query.IsCountQuery
+                        ? $"0 events matched {range}."
+                        : $"No events were found {range}.",
+                    query.IsCountQuery ? "0" : null,
                     null,
                     Array.Empty<AnswerCandidate>(),
                     Array.Empty<GraphPath>(),
                     null,
                     null,
                     false,
-                    0.0,
+                    query.IsCountQuery ? 0.85 : 0.0,
                     new[] { "No Event nodes overlap the requested time window." });
             }
 
@@ -915,7 +1088,7 @@ namespace OPEN_LRD.NLP
                 .ToList();
             string heading = FormatRangeHeading(query);
             string descriptions = string.Join(" ", events.Select(eventNode =>
-                BuildEventDescription(eventNode, core) + " ("
+                BuildEventDescription(eventNode, core, options.ReferenceTime) + " ("
                 + (EventNodeHelper.TryGetWindow(eventNode, out DateTimeOffset? eventStart, out DateTimeOffset? eventEnd)
                     ? FormatEventWindow(eventStart, eventEnd)
                     : "time unknown") + ")."));
@@ -924,11 +1097,21 @@ namespace OPEN_LRD.NLP
             if (usesTemporary)
                 text += temporaryCaveat;
 
+            if (query.IsCountQuery)
+            {
+                string eventWord = events.Count == 1 ? "event" : "events";
+                text = $"{events.Count} {eventWord} matched {heading}: {descriptions}";
+                if (usesTemporary)
+                    text += temporaryCaveat;
+            }
+
             return new NlpAnswer(
                 AnswerStatus.Answered,
-                AnswerKind.Description,
+                query.IsCountQuery ? AnswerKind.Quantity : AnswerKind.Description,
                 TrimText(text, options.MaxAnswerTextLength, new List<string>()),
-                FormatConjunction(candidates.Select(candidate => candidate.Label).ToList()),
+                query.IsCountQuery
+                    ? events.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : FormatConjunction(candidates.Select(candidate => candidate.Label).ToList()),
                 events.Count == 1 ? events[0].ID : null,
                 candidates,
                 paths,
@@ -975,7 +1158,10 @@ namespace OPEN_LRD.NLP
             };
         }
 
-        private static string BuildEventDescription(Web_Node eventNode, LRD_Core core)
+        private static string BuildEventDescription(
+            Web_Node eventNode,
+            LRD_Core core,
+            DateTimeOffset? referenceTime)
         {
             string? subject = EventRoleLabel(eventNode, core, "has_subject");
             string? action = EventRoleLabel(eventNode, core, "has_action");
@@ -987,7 +1173,7 @@ namespace OPEN_LRD.NLP
                 return name;
 
             string actionPhrase;
-            EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode);
+            EventTimeVariance variance = EventTimeVarianceCalculator.Calculate(eventNode, referenceTime);
             if (variance.Status == EventTemporalStatus.Past)
             {
                 actionPhrase = PastTense(action);
@@ -1082,13 +1268,13 @@ namespace OPEN_LRD.NLP
                 }
             }
 
-            string relation = query.OriginalExpression.StartsWith("from ", StringComparison.OrdinalIgnoreCase)
-                ? "From "
-                : "Between ";
-            return relation
-                + query.Start.ToString("g", System.Globalization.CultureInfo.CurrentCulture)
-                + " and "
-                + query.End.ToString("g", System.Globalization.CultureInfo.CurrentCulture);
+            string expression = query.OriginalExpression
+                .Trim()
+                .TrimEnd('.', '!', '?', ';', ',')
+                .TrimEnd();
+            return expression.Length == 0
+                ? "In the requested time window"
+                : char.ToUpperInvariant(expression[0]) + expression[1..];
         }
 
         private static bool IsBlockedExplorationType(NodeTypes type)

@@ -22,7 +22,7 @@ Status key: [ ] not run   [x] pass   [!] fail (describe below)
        dotnet build OPEN-LRD\OPEN-LRD.csproj --nologo
        dotnet build OPEN-LRD.SmokeTests\OPEN-LRD.SmokeTests.csproj --nologo
        dotnet build OPEN-LRD.ManualUiTests\OPEN-LRD.ManualUiTests.csproj --nologo
-[x] Current automation: 167 smoke checks and 287 WPF UI checks pass.
+[x] Current automation: 169 smoke checks and 289 WPF UI checks pass.
 [x] Create the test fixtures below in %TEMP%\open-lrd-manual\.
 [x] Launch OPEN-LRD.exe from
     OPEN-LRD\bin\Debug\net10.0-windows\, click "Launch Core", then "Tools".
@@ -373,15 +373,17 @@ Recommended fixture script (PowerShell):
 [x] Event answer text includes the event name and linked subject/action/object/
     location details.
 [x] Incoming and outgoing exploration facts remain visible in the candidate table.
+[x] Relational quantity Ask returns a numeric ShortAnswer and preserves counted
+    entity candidates in Evidence / Candidates.
 
 
 ================================================================================
 11. SIGN-OFF
 ================================================================================
 
-Automated verification: 167 passed, 0 failed (smoke suite); 287 passed, 0 failed (WPF STA UI test suite).
+Automated verification: 169 passed, 0 failed (smoke suite); 289 passed, 0 failed (WPF STA UI test suite).
 Sections run: Sections 0 through 12 (Tools import, NLP Workbench, temporal events, and 3D Visualizer).
-Passed: All (287/287)  Failed: 0
+Passed: All (289/289)  Failed: 0
 
 Issues found (step, expected, actual, screenshot/log path):
 

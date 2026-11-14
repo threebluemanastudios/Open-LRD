@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace OPEN_LRD.NLP
 {
     internal enum CommandTargetKind
@@ -8,6 +10,11 @@ namespace OPEN_LRD.NLP
         Conversation,
         Summary,
         Node,
+        CountNodes,
+        CountFacts,
+        CountEvents,
+        CountLinks,
+        CountConversation,
         Query
     }
 
@@ -23,10 +30,10 @@ namespace OPEN_LRD.NLP
     internal static class CommandRecognizer
     {
         private const string SupportedTargets =
-            "facts, graph, conversation, summary, node <id>, or a question";
+            "facts, graph, conversation, summary, events, nodes, links, node <id>, or a question";
 
         private static readonly HashSet<string> commandVerbs = new HashSet<string>(
-            new[] { "output", "print", "respond", "reply" },
+            new[] { "output", "print", "respond", "reply", "count" },
             StringComparer.OrdinalIgnoreCase);
 
         private static readonly HashSet<string> separators = new HashSet<string>(
@@ -86,6 +93,32 @@ namespace OPEN_LRD.NLP
                 " ",
                 targetTokens.Select(token => token.Normalized));
             string targetText = BuildTargetText(parsed, targetTokens);
+
+            if (string.Equals(verb, "count", StringComparison.OrdinalIgnoreCase))
+            {
+                CommandTargetKind? countTarget = normalizedTarget switch
+                {
+                    "nodes" or "node" or "graph" => CommandTargetKind.CountNodes,
+                    "facts" or "all facts" or "data" or "all data" => CommandTargetKind.CountFacts,
+                    "events" or "event" => CommandTargetKind.CountEvents,
+                    "links" or "connections" => CommandTargetKind.CountLinks,
+                    "conversation" or "session" or "mentions" => CommandTargetKind.CountConversation,
+                    _ => null
+                };
+
+                if (countTarget.HasValue)
+                {
+                    command = CreateSuccess(verb, countTarget.Value, targetText);
+                    return true;
+                }
+
+                string countQuestion = BuildCountQueryText(targetText, normalizedTarget);
+                if (!string.IsNullOrWhiteSpace(countQuestion))
+                {
+                    command = CreateSuccess(verb, CommandTargetKind.Query, countQuestion);
+                    return true;
+                }
+            }
 
             if (normalizedTarget is "facts" or "all facts" or "data" or "all data")
             {
@@ -204,6 +237,32 @@ namespace OPEN_LRD.NLP
                 query += "?";
 
             return query;
+        }
+
+        private static string BuildCountQueryText(string targetText, string normalizedTarget)
+        {
+            string query = targetText.Trim();
+            if (normalizedTarget.StartsWith("how many ", StringComparison.Ordinal)
+                || normalizedTarget.StartsWith("how much ", StringComparison.Ordinal))
+            {
+                return EnsureQuestionMark(query);
+            }
+
+            if (query.StartsWith("the ", StringComparison.OrdinalIgnoreCase))
+                query = query["the ".Length..].TrimStart();
+
+            query = Regex.Replace(query, @"\s+(?:who|that)\s+", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (query.Length == 0)
+                return string.Empty;
+
+            return EnsureQuestionMark("How many " + query);
+        }
+
+        private static string EnsureQuestionMark(string query)
+        {
+            while (query.Length > 0 && query[^1] is '.' or '!' or ';' or ',')
+                query = query[..^1].TrimEnd();
+            return query.EndsWith('?') ? query : query + "?";
         }
 
         private static NlpCommand CreateSuccess(

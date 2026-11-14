@@ -1093,7 +1093,8 @@ namespace OPEN_LRD.SmokeTests
             {
                 EnableSocialDialogue = false,
                 EnableConversationalPreambles = false,
-                EnableMultiAnswerSynthesis = true
+                EnableMultiAnswerSynthesis = true,
+                ReferenceTime = new DateTimeOffset(2026, 5, 13, 14, 0, 0, TimeSpan.Zero)
             };
             NlpOptionsLog log = NlpOptionsLogMapper.ToLog(configured);
             string json = JsonSerializer.Serialize(log, LogJson.Options);
@@ -1102,14 +1103,16 @@ namespace OPEN_LRD.SmokeTests
 
             Program.Assert(!restored.EnableSocialDialogue
                 && !restored.EnableConversationalPreambles
-                && restored.EnableMultiAnswerSynthesis,
+                && restored.EnableMultiAnswerSynthesis
+                && restored.ReferenceTime == configured.ReferenceTime,
                 "new conversational options should round-trip through conversation persistence");
 
             NlpOptionsLog legacy = JsonSerializer.Deserialize<NlpOptionsLog>("{}", LogJson.Options)!;
             NlpOptions legacyDefaults = NlpOptionsLogMapper.FromLog(legacy);
             Program.Assert(legacyDefaults.EnableSocialDialogue
                 && legacyDefaults.EnableConversationalPreambles
-                && legacyDefaults.EnableMultiAnswerSynthesis,
+                && legacyDefaults.EnableMultiAnswerSynthesis
+                && legacyDefaults.ReferenceTime is null,
                 "older conversation logs that omit conversational options should receive default-on behavior");
 
             string directory = NewTempDirectory();

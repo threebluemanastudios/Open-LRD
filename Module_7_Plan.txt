@@ -2,9 +2,10 @@ OPEN-LRD
 MODULE 7: EVENT REPRESENTATION AND CHRONOLOGICAL QUESTION ANSWERING
 IMPLEMENTATION PLAN
 
-Status: Complete (Phases 1-2)
+Status: Complete (Phases 1-4)
 Scope: Reified Event nodes, event time windows, temporal variance, automatic
-  extraction during Ingest, and date/time queries through Ask.
+  extraction during Ingest, chronological and quantity queries through Ask, and
+  graph-count commands.
 Implementation constraints: Native C# and WPF, no external dependencies.
   `Node.cs` and `Web_Node.cs` remain unchanged.
 
@@ -36,6 +37,10 @@ Accepted decisions:
    DTO schema changes are required.
 7. Keep Ask read-only. Time searches and event descriptions do not create or
    modify graph nodes.
+8. Interpret relative temporal expressions against `NlpOptions.ReferenceTime`
+   when set, otherwise use the current system time. Weeks use ISO 8601 Monday-
+   through-Sunday boundaries. Only seconds, minutes, hours, days, weeks, months,
+   and years are supported as relative-offset units in this phase.
 
 ================================================================================
 2. EVENT DATA MODEL AND LABEL FORMAT
@@ -150,6 +155,10 @@ Modified:
 - `OPEN-LRD/NLP/AnswerGenerator.cs`: event-time and range response generation.
 - `OPEN-LRD/NLP/QuestionAnalyzer.cs`: allow When copula analysis.
 - `OPEN-LRD/NLP/TextTokenizer.cs`: retain clock times as single tokens.
+- `OPEN-LRD/NLP/Lexicon.cs` and `NamedEntityRecognizer.cs`: recognize relative
+  time units and temporal phrases as date/time mentions.
+- `OPEN-LRD/NLP/NlpOptions.cs` and `OPEN-LRD/Persistence/CoreLogDocument.cs`:
+  configure and persist a deterministic temporal reference time.
 - Event display consumers: resolve event aliases rather than exposing encoded
   time metadata as a user-facing label.
 - Smoke tests, Manual UI checks, README.
@@ -168,20 +177,26 @@ Smoke coverage verifies:
 - Overlapping and disjoint interval search.
 - Automatic Event extraction from a dated/time-ranged sentence and duplicate
   ingestion behavior.
-- `When was [event]?`, range searches, point-date searches, no-match behavior,
-  and candidate preservation.
+- `When was [event]?`, range searches, point-date searches, relative dates,
+  quantity queries, no-match behavior, and candidate preservation.
 - `.lrdlog` round-trip of Label/Aliases event metadata.
+- Relative and deictic ingestion/search for yesterday/today/tomorrow,
+  last/this/next week, month, and year, named weekdays/months, and numeric or
+  word-number offsets using the seven supported time units.
+- ReferenceTime option round-trip and deterministic temporal resolution.
 
 Manual UI coverage verifies:
 - Ranged Ask responses display event descriptions.
 - Matching Event nodes appear in Evidence / Candidates.
 - The event's subject/action/object/location phrasing is visible in the answer.
+- Quantity answers show a numeric ShortAnswer and preserve every counted entity
+  or Event row in Evidence / Candidates.
 
 Acceptance: solution and test projects build with zero warnings/errors; all smoke
 and Manual UI tests pass; event timestamps round-trip through existing persistence;
 base node classes remain unchanged; Ask searches remain graph-read-only.
 
-Verification result: 167 smoke tests and 287 Manual UI checks pass. Application
+Verification result: 169 smoke tests and 289 Manual UI checks pass. Application
 and Manual UI test builds complete with zero warnings and zero errors.
 
 ================================================================================
@@ -206,9 +221,82 @@ Phase 2 closes edge cases identified after the initial event implementation:
   "2 hours"). Manually labeled Event nodes without a window-encoding prefix keep
   their label as the display name when they have no aliases.
 
-Phase 2 acceptance/verification:
+Phase 2 acceptance/verification at the time of delivery:
 - Tests cover temporal-query intent gating, subject/action/object correlation,
   intransitive location events, future/active/past wording, singular time units,
   and manual-label fallback.
-- Verification remains 167 passing smoke tests and 287 passing Manual UI checks;
-  app and Manual UI builds have zero warnings and zero errors.
+- Verification at the Phase 2 milestone was 167 smoke tests and 287 Manual UI
+  checks; app and Manual UI builds had zero warnings and zero errors.
+
+================================================================================
+10. PHASE 3: RELATIVE AND DEICTIC TEMPORAL EXPRESSIONS
+================================================================================
+
+Phase 3 extends temporal interpretation in both ingestion and Ask:
+- Resolve yesterday/today/tomorrow; last/this/next ISO week, calendar month,
+  and calendar year.
+- Resolve named weekdays and month names, including optional last/this/next
+  modifiers and explicit years.
+- Resolve amount expressions with digits or supported number words for seconds,
+  minutes, hours, days, weeks, months, and years, using `ago`, `in the past`,
+  `from now`, or `from today`.
+- Accept common abbreviated weekday and month names, and interpret an unmodified
+  weekday/month according to whether the temporal question is future-tense.
+- Use `ReferenceTime` for deterministic tests and application-level control;
+  absent a value, use local system time for interpreting calendar references.
+- Store resulting absolute DateTimeOffset windows in the existing Event Label
+  encoding so later Ask searches and variance calculations do not depend on the
+  machine clock at read time.
+
+Phase 3 acceptance:
+- Relative expressions are recognized as temporal mentions and successfully
+  produce the intended Event windows during normal Ingest.
+- Ask point/range searches resolve relative expressions against the same
+  configured ReferenceTime and return the corresponding Events.
+- ISO week boundaries are Monday through Sunday; offset units remain limited to
+  the seven core units listed above.
+- Existing date/time parsing, event persistence, and ordinary non-event
+  questions continue to pass.
+
+Phase 3 verification at the time of delivery: 168 smoke tests and 287 Manual UI
+checks passed; application and Manual UI builds completed with zero warnings and
+zero errors.
+
+================================================================================
+11. PHASE 4: QUANTITY QUESTIONS AND COUNT COMMANDS
+================================================================================
+
+Phase 4 extends Ask with relational and event quantity answers:
+- Parse "How many [type] [relation] ...?" and "How much [type] ...?" as a
+  quantity question with the quantified noun span and the proper answer role.
+- Map common noun classes to Entities, Locations, Objects, Concepts, or Events
+  so the query variants match the counted node types.
+- Return an Answered NlpAnswer with `Kind = Quantity` and the numeric count as
+  ShortAnswer, including zero-result counts. Preserve all counted candidate
+  nodes, scores, and graph paths for the Workbench table.
+- For event queries such as "How many events happened yesterday?", use the
+  temporal window search and return all matching Event candidates, including a
+  successful zero count when none match.
+- Recognize fixed read-only commands: "Count nodes/graph", "Count facts",
+  "Count links", "Count events", and "Count conversation/mentions".
+- Recognize query-form Count commands, including "Count how many people work at
+  Acme" and "Count events that happened yesterday", and route them through the
+  same quantity Ask paths without mutating graph or conversation state.
+- Harden chronological query forms: recognize future event questions such as
+  "What will happen next Monday?", and fronted temporal ranges such as
+  "Between May 12 and May 13, what happened?" Preserve the user's original date
+  expression in range-answer headings.
+
+Phase 4 acceptance:
+- Subject-count and object-count questions report numeric counts and fluent text.
+- Zero results produce a Quantity answer with ShortAnswer `0`, not a generic
+  no-match response.
+- All counted graph nodes remain available in the Evidence / Candidates table.
+- Fixed Count commands return the appropriate total without changing the graph.
+- Event quantity questions honor ReferenceTime and the same range-overlap rules.
+- Future-tense, fronted-range, abbreviated-date, and natural range-heading
+  behavior is covered alongside the existing relative-time and chronological
+  regression cases.
+
+Phase 4 verification: 169 smoke tests and 289 Manual UI checks pass; application
+and Manual UI builds complete with zero warnings and zero errors.

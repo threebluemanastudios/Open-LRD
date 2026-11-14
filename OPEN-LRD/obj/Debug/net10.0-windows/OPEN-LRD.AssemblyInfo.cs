@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OPEN-LRD")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+870af78b603c67fd55496cb993afdba9fb8a2c67")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+87d2f0de4a84c7bb3cd056f3f4774baa7b54a737")]
 [assembly: System.Reflection.AssemblyProductAttribute("OPEN-LRD")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OPEN-LRD")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

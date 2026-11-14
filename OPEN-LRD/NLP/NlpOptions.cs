@@ -25,6 +25,7 @@ namespace OPEN_LRD.NLP
         public bool EnableSocialDialogue { get; init; } = true;
         public bool EnableConversationalPreambles { get; init; } = true;
         public bool EnableMultiAnswerSynthesis { get; init; } = true;
+        public DateTimeOffset? ReferenceTime { get; init; }
         public int MaxConversationMentions { get; init; } = 32;
         public int MaxSessionProvenanceEntries { get; init; } = 256;
         public int MaxPronounCandidates { get; init; } = 8;

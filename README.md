@@ -29,7 +29,7 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 | 4 | Upper Ontology (Base Knowledge) | Hardcoded foundational concepts, structural rules, and curated GCIDE lexical loading | Complete (Phases 1-7) |
 | 5 | Maintenance Reasoning Engine | Optional graph consolidation, relation induction, superseded-link handling, and metadata-driven graph formation | Complete (Phases 1-2) |
 | 6 | Conversational Ask and Natural-Language Responses | Social dialogue, contextual follow-ups, multi-answer synthesis, and natural evidence phrasing | Complete (Phases 1-4) |
-| 7 | Event Representation and Chronological Questions | Reified Event nodes, temporal windows, variance, and date/time Ask searches | Complete |
+| 7 | Event Representation and Chronological Questions | Reified Event nodes, relative time, date/time searches, and quantity questions | Complete (Phases 1-4) |
 | Tools | Additional Tools & 3D Visualizer | Log persistence, large text file import, and native 3D visualizer | Complete (Phases 1-7) |
 
 ## Module 1: The Graph Backend
@@ -241,7 +241,7 @@ Upper Ontology, Load GCIDE Lexicon (subset, letter, and entry cap with progress
 and cancel), and Export Ontology Log actions. Nineteen foundational structural
 relations occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
 (2,000,000). The original Module 4 delivery added eleven ontology checks. The
-current integrated suite has 167 smoke tests and 287 automated UI checks. The
+current integrated suite has 169 smoke tests and 289 automated UI checks. The
 Visualizer layout is deterministic and reports progress and cancellation. See
 `Module_4_Plan.txt` for the ontology plan, `AdditionalTools.txt` for persistence
 and text import, and `Visualizer_Plan.txt` for the visualizer implementation.
@@ -272,8 +272,8 @@ relation inference during an explicitly enabled maintenance run.
   keeping stale facts inactive for audit while preserving other link origins.
   Generated DataPointer resource values do not carry the owner's pointer, so
   they cannot trigger identity-based node merging.
-- Modules 5-7 and NLP conversational coverage bring the complete suite to 167
-  passing smoke checks and 287 passing automated UI checks.
+- Modules 5-7 and NLP conversational coverage bring the complete suite to 169
+  passing smoke checks and 289 passing automated UI checks.
 
 See `Module_5_Plan.txt` for the detailed phased design and acceptance criteria.
 
@@ -301,7 +301,7 @@ question answering.
   round-trip through conversation persistence, with defaults preserved for old
   logs.
 - At Module 6 completion, 165 smoke tests and 285 automated UI checks passed;
-  current integrated verification is 167 smoke tests and 287 UI checks.
+  current integrated verification is 169 smoke tests and 289 UI checks.
 
 See `Module_6_Plan.txt` for design decisions, implementation details, and
 acceptance criteria.
@@ -325,14 +325,29 @@ links and searchable time windows.
 - Ask answers `When was [event]?` and searches overlapping event windows with
   questions such as `What happened between [start] and [end]?` or `What happened
   on [date]?`. Matching Event nodes and their links populate Evidence / Candidates.
+- Temporal search and ingestion recognize yesterday/today/tomorrow, ISO Monday-
+  Sunday week phrases, named weekdays/months, and relative offsets using seconds,
+  minutes, hours, days, weeks, months, or years. Weekday and month abbreviations
+  are accepted, as are offset phrases such as "three weeks in the past".
+  `NlpOptions.ReferenceTime` provides a deterministic anchor and persists with
+  conversation options.
 - `When did [subject] [verb] [object]?` correlates participants and action to
   matching reified events. Range parsing is restricted to event-occurrence
   questions, and intransitive events with locations do not acquire fake objects.
-- `When did [subject] [verb] [object]?` correlates to matching Event nodes.
-  Temporal range parsing is limited to event-occurrence questions, and normal
-  temporal qualifiers remain with standard relation queries. Intransitive
-  location events are extracted without inventing an object.
-- Verification: 167 smoke tests and 287 automated UI checks pass.
+  Future-tense and fronted temporal questions are recognized (for example,
+  "What will happen next Monday?" and
+  "Between May 12, 2026 and May 13, 2026, what happened?").
+  Range answers retain the user's date-range wording in their heading.
+- Quantity questions such as "How many people work at Acme?" and
+  "How many objects does Alice see?" return a numeric ShortAnswer and retain
+  every counted candidate in Evidence / Candidates. Subject and object counts
+  are supported; zero matches return numeric zero.
+- Fixed read-only Count commands include "Count nodes" / "Count graph",
+  "Count facts", "Count links", "Count events", and "Count conversation" /
+  "Count mentions". Query-form commands such as "Count how many people work at
+  Acme" and "Count events that happened yesterday" use the same Ask paths;
+  temporal event counts honor the requested date/range and ReferenceTime.
+- Verification: 169 smoke tests and 289 automated UI checks pass.
 
 See `Module_7_Plan.txt` for the complete design and acceptance criteria.
 
@@ -396,10 +411,10 @@ The original staged delivery is complete:
    relation induction, and superseded-link handling.
 6. **Conversational Ask** — social dialogue, preamble unwrapping, multi-answer
    synthesis, and evidence-aware language.
-7. **Event and temporal support** — Event nodes, time windows, variance, automatic
-   temporal extraction, and individual/range queries.
+7. **Event and temporal support** — Event nodes, relative-time windows, automatic
+   temporal extraction, individual/range and quantity queries, and Count commands.
 
-Current integrated verification is **167 smoke tests** and **287 automated UI
+Current integrated verification is **169 smoke tests** and **289 automated UI
 checks**; application and test builds complete with zero warnings and zero
 errors.
 

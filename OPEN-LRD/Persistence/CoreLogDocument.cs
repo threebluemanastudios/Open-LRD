@@ -341,6 +341,7 @@ namespace OPEN_LRD.Persistence
                 EnableSocialDialogue = options.EnableSocialDialogue,
                 EnableConversationalPreambles = options.EnableConversationalPreambles,
                 EnableMultiAnswerSynthesis = options.EnableMultiAnswerSynthesis,
+                ReferenceTime = options.ReferenceTime,
                 MaxConversationMentions = options.MaxConversationMentions,
                 MaxSessionProvenanceEntries = options.MaxSessionProvenanceEntries,
                 MaxPronounCandidates = options.MaxPronounCandidates,
@@ -376,6 +377,7 @@ namespace OPEN_LRD.Persistence
                 EnableSocialDialogue = options.EnableSocialDialogue,
                 EnableConversationalPreambles = options.EnableConversationalPreambles,
                 EnableMultiAnswerSynthesis = options.EnableMultiAnswerSynthesis,
+                ReferenceTime = options.ReferenceTime,
                 MaxConversationMentions = options.MaxConversationMentions,
                 MaxSessionProvenanceEntries = options.MaxSessionProvenanceEntries,
                 MaxPronounCandidates = options.MaxPronounCandidates,
@@ -428,6 +430,8 @@ namespace OPEN_LRD.Persistence
         public bool EnableConversationalPreambles { get; set; } = true;
 
         public bool EnableMultiAnswerSynthesis { get; set; } = true;
+
+        public DateTimeOffset? ReferenceTime { get; set; }
 
         public int MaxConversationMentions { get; set; } = 32;
 
