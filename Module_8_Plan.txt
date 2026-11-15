@@ -1,17 +1,18 @@
 OPEN-LRD
-MODULE 8: TOOLS UI, VISUALIZER USABILITY, AND DATA FILE INGESTION
+MODULE 8: GCIDE ASK, TOOLS UI, VISUALIZER, AND DATA FILE INGESTION
 IMPLEMENTATION PLAN
 
 Status: Planned. No Module 8 implementation is included in this document update.
-Scope: Tools window organization, Visualizer layout controls and selection HUD,
-       and ingestion of text, JSON, CSV, and XML data files.
+Scope: GCIDE dictionary question answering, Tools window organization, Visualizer
+       layout controls and selection HUD, and text/JSON/CSV/XML file ingestion.
 Target: .NET 10 WPF (net10.0-windows), using existing OPEN-LRD graph and NLP
        services. No external dependencies are planned.
 Decisions confirmed with the user:
-  - Tools has Logs, Ingestion, Ontology, and Maintenance tabs in Phase 1, with
-    Status pinned outside the tabs. Phase 1 may prepare the Data Files tab
-    layout; its controls and behavior are implemented in Phase 3.
-  - Phase 2 spread range is 10-100 with default 20.
+  - New Phase 1 fixes GCIDE definition questions such as "What is commit?".
+  - Tools has Logs, Ingestion, Ontology, and Maintenance tabs in Phase 2, with
+    Status pinned outside the tabs. Phase 2 may prepare the Data Files tab
+    layout; its controls and behavior are implemented in Phase 4.
+  - Phase 3 spread range is 10-100 with default 20.
   - The selected-node info pane is a bottom-right HUD over the 3D viewport.
   - Structured graph records/triples and NLP text extraction are both in scope
     for JSON, CSV, and XML ingestion.
@@ -37,17 +38,17 @@ Decisions confirmed with the user:
     rendering and replaces it with the requested layout.
   - The selected-node HUD is fixed in the viewport and automatically hides when
     no node is selected. Previously saved spread values below 10 clamp to 10.
-  - Phase 2 must capture the exception encountered when Apply Layout or Reset
+  - Phase 3 must capture the exception encountered when Apply Layout or Reset
     View is clicked while a 3D model/layout is generating.
 
 ================================================================================
 1. PURPOSE AND SCOPE
 ================================================================================
 
-Module 8 improves tool discoverability, makes selected-node information easier
-to access, broadens the Visualizer's spread control, and adds multi-format file
-ingestion. Work is divided into three phases so the Tools UI and Visualizer can
-be improved before structured file ingestion is added.
+Module 8 fixes dictionary definition retrieval, improves tool discoverability,
+makes selected-node information easier to access, broadens the Visualizer's
+spread control, and adds multi-format file ingestion. Work is divided into four
+phases, with the GCIDE Ask fix delivered before the UI and file-ingestion work.
 
 Implementation constraints:
 - Keep graph mutations within existing graph/NLP service boundaries.
@@ -70,12 +71,83 @@ Current implementation references:
   spread option defaults, validation, and persisted settings.
 - `OPEN-LRD/NLP/TextFileImporter.cs`: existing bounded, cancellable plain-text
   file ingestion through the NLP pipeline.
+- `OPEN-LRD/NLP/PosTagger.cs`, `ShallowParser.cs`, `NamedEntityRecognizer.cs`,
+  `QuestionAnalyzer.cs`, and `AnswerGenerator.cs`: GCIDE definition-question
+  parsing, Lexeme/Sense retrieval, and answer generation.
 
 ================================================================================
-2. PHASE 1: TOOLS WINDOW ORGANIZATION
+2. PHASE 1: GCIDE DICTIONARY QUESTION ANSWERING
 ================================================================================
 
-2.1 Objectives
+2.1 Objective
+Make GCIDE definitions answerable through Ask after the corpus is loaded. A
+query such as "What is commit?" must resolve `commit` as the dictionary
+headword, traverse its Lexeme-to-Sense `has_sense` relationship, and return the
+Sense definition rather than searching for facts about the question word
+`What`.
+
+2.2 Analysis and implementation scope
+- Correct the copula-question parse path so a lowercase dictionary headword
+  following "is" is not automatically classified as an adjective merely
+  because it follows an auxiliary. Preserve ordinary adjective-complement and
+  existing copula behavior.
+- Ensure the complement after the copula is recognized as the queried anchor
+  even when the headword is also a verb in another context (for example,
+  `commit`). The fix should be context-aware rather than globally reclassifying
+  every dictionary headword as a noun.
+- Extend dictionary-aware question resolution to include GCIDE Lexeme and Sense
+  node types and the `has_sense` link. Reuse the existing graph structure:
+  `Lexeme --has_sense--> Sense`, with the Sense carrying the definition label.
+- With one matching Sense, write `The definition of [article] [word] is [sense].`
+  to the text output box and populate ShortAnswer with the definition. Include
+  `a`, `an`, or `the` before the headword only when that same article appears
+  before the headword in the input question; otherwise omit it.
+- With multiple matching Senses, write `Multiple definitions for [article]
+  [word] were found.` and return the matching Sense nodes as a candidate list
+  ordered by ascending GUID. Include an article only when the same article was
+  present before the headword in the question. Preserve Lexeme/Sense evidence
+  paths for the Workbench.
+- Preserve normal relation questions, ordinary "What is [entity]?" queries, and
+  no-match behavior when no matching Lexeme/Sense or other fact exists.
+
+2.3 Relevant implementation and test files
+- `OPEN-LRD/NLP/PosTagger.cs`: context-sensitive tagging after auxiliaries.
+- `OPEN-LRD/NLP/ShallowParser.cs` and `NamedEntityRecognizer.cs`: noun-phrase
+  and mention generation for lowercase headwords.
+- `OPEN-LRD/NLP/QuestionAnalyzer.cs`: copula anchor, expected node types, and
+  dictionary relation candidates.
+- `OPEN-LRD/NLP/AnswerGenerator.cs`: natural Sense-definition answer text and
+  ShortAnswer/evidence output.
+- `OPEN-LRD.SmokeTests/NlpTests.cs` and `OntologyTests.cs`: Ask regressions using
+  loaded Lexeme/Sense graph fixtures.
+
+2.4 Acceptance criteria
+- With GCIDE entries loaded, "What is commit?" finds the Sense definition
+  "To give in trust; to put into charge or keeping; to intrust; to consign; --
+  used with to, unto." and writes `The definition of commit is [sense].` to the
+  text output box; no article is added because the question had none.
+- The fixed phrase prefix `The definition of` remains. Any optional article
+  immediately before the headword is copied only if the input question contains
+  that same article; otherwise it is omitted.
+- A single Sense produces the requested definition sentence, a ShortAnswer with
+  the definition, and Evidence / Candidates containing the `commit` Lexeme, its
+  Sense, and the `has_sense` path.
+- Multiple matching Senses produce `Multiple definitions for [word] were found.`
+  and a candidate list ordered by ascending GUID, with evidence paths retained;
+  if the question included an article before the headword, preserve it in the
+  generated statement.
+- "What is dog?" and a synonym/headword query such as "What is canine?" resolve
+  when their GCIDE senses are present.
+- Ordinary copula questions (including existing "What is Alice?" coverage),
+  adjective complements, and non-dictionary Ask behavior continue to pass.
+- When no matching dictionary entry or fact exists, the system returns an
+  appropriate no-match response without treating `What` as the subject anchor.
+
+================================================================================
+3. PHASE 2: TOOLS WINDOW ORGANIZATION
+================================================================================
+
+3.1 Objectives
 - Replace the long single-column Tools layout with four focused tabs and a
   prepared Data Files tab shell.
 - Keep Status/Diagnostics visible regardless of the selected tab.
@@ -83,7 +155,7 @@ Current implementation references:
 - Preserve current Core Log import/export, ontology, GCIDE, maintenance, and
   existing plain-text file import workflows during the transition.
 
-2.2 Window layout and tabs
+3.2 Window layout and tabs
 The Tools window uses a two-row layout: a tab control in the flexible upper row
 and the shared Status group in a persistent bottom row.
 
@@ -99,8 +171,8 @@ Tabs:
      temporary conversation and do not modify the graph.
    - A dry-run option is available. Topic defaults to base/general/none unless
      the user specifies a topic at entry.
-   - Retain the existing text-file import workflow during Phase 1; move it to
-     Data Files when that tab's functionality is implemented in Phase 3.
+   - Retain the existing text-file import workflow during Phase 2; move it to
+     Data Files when that tab's functionality is implemented in Phase 4.
    - Existing text-file options (source/topic assignment, dry run, file/chunk
      limits, progress, cancellation) remain available while the legacy importer
      remains on this tab. Default the topic to base/general/none.
@@ -112,9 +184,9 @@ Tabs:
    - Existing opt-in graph maintenance passes and their options.
    - Run Maintenance action and detailed maintenance result/diagnostics.
 5. Data Files
-   - Phase 1 prepares the tab layout only, with no active file-ingestion
+   - Phase 2 prepares the tab layout only, with no active file-ingestion
      controls or behavior. The existing plain-text import remains in Ingestion
-     until the Data Files functionality is implemented in Phase 3.
+     until the Data Files functionality is implemented in Phase 4.
 
 Pinned Status:
 - Keep the shared multiline StatusBox visible beneath the tab control.
@@ -123,7 +195,7 @@ Pinned Status:
   the current status text; this display is not an append-only history.
 - Ensure the window remains usable at its minimum dimensions and when resized.
 
-2.3 Direct text ingestion
+3.3 Direct text ingestion
 - Submit the entered text using the existing NlpPipeline path. Create a new
   conversation for each submission; a dry run uses a temporary conversation
   that is not persisted. Do not create a parallel relation-extraction
@@ -143,7 +215,7 @@ Pinned Status:
 - Define character/input bounds for manually entered text separately from the
   500 MiB single-file limit.
 
-2.4 Acceptance criteria
+3.4 Acceptance criteria
 - Logs, Ingestion, Ontology, and Maintenance are separate tabs, and the Data
   Files shell is present; Status remains visible while switching tabs.
 - Existing log import/export, ontology, maintenance, and text-file ingestion
@@ -154,16 +226,16 @@ Pinned Status:
 - Dry runs do not mutate the graph; topic defaults and file source attribution
   follow the confirmed rules; files over 500 MiB are rejected.
 - The Data Files tab shell is present but has no active file-ingestion controls
-  or behavior until Phase 3.
+  or behavior until Phase 4.
 - All controls remain accessible at minimum and typical window sizes.
 - Automated UI checks cover tab presence, control defaults, tab switching,
   pinned status output, and all retained workflows.
 
 ================================================================================
-3. PHASE 2: VISUALIZER SPREAD, SELECTION HUD, AND GENERATION EXCEPTION
+4. PHASE 3: VISUALIZER SPREAD, SELECTION HUD, AND GENERATION EXCEPTION
 ================================================================================
 
-3.1 Spread slider range
+4.1 Spread slider range
 - Set Spread minimum to 10.0, maximum to 100.0, and default to 20.0.
 - Update slider display/formatting, option validation, reset behavior, and
   persisted-settings handling consistently.
@@ -173,7 +245,7 @@ Pinned Status:
   existing settings and tests before implementation.
 - Preserve the selected spread through settings save/reload and Apply Layout.
 
-3.2 Selected-node floating HUD
+4.2 Selected-node floating HUD
 - Move the selected-node information card out of the View tab and overlay it
   inside the 3D viewport, anchored to its bottom-right corner.
 - Show the card when a node is selected and collapse it when selection clears.
@@ -185,7 +257,7 @@ Pinned Status:
 - Ensure pointer input on HUD buttons does not accidentally select or clear a
   graph node underneath the overlay.
 
-3.3 Capture Apply Layout / Reset View exception during generation
+4.3 Capture Apply Layout / Reset View exception during generation
 Observed code context: `ApplySettings_Click` and `ResetViewSettings_Click` are
 async-void WPF event handlers. The layout operation tracks active generation,
 and its buttons currently need explicit testing when `isLoading` is true. The
@@ -218,7 +290,7 @@ Required investigation and behavior:
   test, preserve a repeatable manual stress procedure and add tests for handler
   safety/state recovery using an injectable or controllable layout task.
 
-3.4 Acceptance criteria
+4.4 Acceptance criteria
 - Spread slider and persisted options support 10.0-100.0 with a default of
   20.0; old values below 10 clamp to 10. Values above 100 and invalid values
   follow the selected normalization/fallback policy.
@@ -240,18 +312,18 @@ Required investigation and behavior:
   selection lifecycle, spread boundaries/defaults, and settings migration.
 
 ================================================================================
-4. PHASE 3: TEXT, JSON, CSV, AND XML FILE INGESTION
+5. PHASE 4: TEXT, JSON, CSV, AND XML FILE INGESTION
 ================================================================================
 
-4.1 Objectives and Tools tab
+5.1 Objectives and Tools tab
 - Activate and populate the fifth Tools tab, Data Files / File Ingestion, whose
-  layout shell is prepared in Phase 1.
+  layout shell is prepared in Phase 2.
 - Support text, JSON, CSV, and XML files.
 - Provide both structured graph ingestion and textual-content ingestion through
   the existing NLP pipeline.
 - Reuse the existing text importer for plain-text files rather than maintaining
   duplicate chunking and cancellation implementations.
-- Move the existing text-file controls from the Phase 1 Ingestion tab into the
+- Move the existing text-file controls from the Phase 2 Ingestion tab into the
   new Data Files tab; keep direct text/sentence input on Ingestion.
 
 Suggested controls:
@@ -265,7 +337,7 @@ Suggested controls:
 - Per-record diagnostics, including malformed/skipped/failed counts and a
   bounded sample of diagnostic messages.
 
-4.2 Format handling
+5.2 Format handling
 - Plain text: route through `TextFileImporter` with its existing chunking,
   provenance, dry-run, cancellation, and size-limit behavior; set the maximum
   size of any one input file to 500 MiB.
@@ -302,7 +374,7 @@ Suggested controls:
   with element Alias = `XML Element`.
 - NLP text mode: extract configured text content from each supported format and
   submit it through the existing NLP ingestion path. Field selection, ordering,
-  and treatment of nested/empty values are specified in 6.2.
+  and treatment of nested/empty values are specified in section 6.2.
 - Preserve structured triples and generic entity/attribute data through the
   documented format mappings; all CSV tables retain the common row/cell graph
   structure above. Whether recognized CSV triples additionally create semantic
@@ -313,7 +385,7 @@ Suggested controls:
   selected format and report parse errors rather than silently falling back to
   plain text.
 
-4.3 Graph semantics and operational guarantees
+5.3 Graph semantics and operational guarantees
 - Structured records map to existing node/link conventions and relation/type
   registries; do not invent IDs, relation names, or type semantics implicitly.
 - When ingestion from a new source finds an existing duplicate node, increase
@@ -355,10 +427,10 @@ Suggested controls:
   reported as partial import; do not claim file-level atomic rollback.
 - Repeated imports and source-node reuse behavior must be defined and tested.
 
-4.4 Acceptance criteria
+5.4 Acceptance criteria
 - The Data Files tab provides distinct, understandable controls for all four
   formats and both ingestion modes.
-- Its Phase 1 placeholder becomes functional in Phase 3; no file-ingestion
+- Its Phase 2 placeholder becomes functional in Phase 4; no file-ingestion
   controls or behavior need to be implemented before this phase.
 - Valid sample files for each format ingest via structured mode and NLP-text
   mode where the format contains relevant content.
@@ -400,12 +472,14 @@ Build and regression:
   maintenance, Visualizer rendering, selection, and settings persistence.
 
 Phase verification:
-- Phase 1: verify all four tabs, pinned status, direct text input, and retained
+- Phase 1: verify GCIDE definition questions, successful Lexeme-to-Sense lookup,
+  readable definitions, and no regression in ordinary copula questions.
+- Phase 2: verify all four tabs, pinned status, direct text input, and retained
   legacy workflows, including minimum-size/resized-window interaction.
-- Phase 2: test spread boundaries and old settings; HUD layout and controls;
+- Phase 3: test spread boundaries and old settings; HUD layout and controls;
   each Apply/Reset click during active generation; exception capture, operation
   cancellation, and UI recovery.
-- Phase 3: fixture-based CSV/JSON/XML/text tests for both modes; malformed and
+- Phase 4: fixture-based CSV/JSON/XML/text tests for both modes; malformed and
   boundary inputs; dry-run graph immutability; source attribution; cancellation;
   duplicate/reimport behavior; and partial import reports.
 - Add/update the manual UI checklist for visual behavior not reliable to assert
@@ -438,8 +512,13 @@ requirements; resolve them before implementing the affected behavior.
   a minimum of 30%.
 - Confirmed: higher-trust nodes override lower-trust nodes and have priority in
   maintenance merge cycles.
+- Confirmed: single-sense definition text uses the fixed prefix `The definition
+  of`; an optional `a`, `an`, or `the` before the headword is included only if
+  the same article appeared before that headword in the input question.
+- Confirmed: multiple matching senses are listed as candidates ordered by
+  ascending GUID, with a generated multiple-definitions statement.
 
-6.2 Phase 3: data contracts and graph semantics still to be determined
+6.2 Phase 4: data contracts and graph semantics still to be determined
 1. JSON/XML node roles and labels are specified, but exact input schemas remain
    TBD: nested elements/objects, arrays, attributes, text nodes, scalar roots,
    and how multiple top-level records are represented.
@@ -477,7 +556,7 @@ requirements; resolve them before implementing the affected behavior.
     partial graph changes (the proposed default is partial commit with an
     explicit report, not rollback).
 
-6.3 Phase 2: exception capture and HUD details
+6.3 Phase 3: exception capture and HUD details
 1. The reported Apply/Reset exception needs a captured reproduction with exact
    exception details and a stable trigger. Current implementation uses
    `isLoading` and async layout methods; the plan intentionally does not assume
