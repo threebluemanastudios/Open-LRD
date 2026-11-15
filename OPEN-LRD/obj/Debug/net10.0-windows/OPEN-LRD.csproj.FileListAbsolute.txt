@@ -26,3 +26,4 @@ C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\bin\Debug\net10.0-windows\OPEN-LRD
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\Visualizer\VisualizerWindow.baml
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\Visualizer\VisualizerWindow.g.cs
 C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\GeneratedInternalTypeHelper.g.cs
+C:\Users\three\source\repos\OPEN-LRD\OPEN-LRD\obj\Debug\net10.0-windows\OPEN-LRD.csproj.Up2Date

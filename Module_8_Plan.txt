@@ -1,0 +1,504 @@
+OPEN-LRD
+MODULE 8: TOOLS UI, VISUALIZER USABILITY, AND DATA FILE INGESTION
+IMPLEMENTATION PLAN
+
+Status: Planned. No Module 8 implementation is included in this document update.
+Scope: Tools window organization, Visualizer layout controls and selection HUD,
+       and ingestion of text, JSON, CSV, and XML data files.
+Target: .NET 10 WPF (net10.0-windows), using existing OPEN-LRD graph and NLP
+       services. No external dependencies are planned.
+Decisions confirmed with the user:
+  - Tools has Logs, Ingestion, Ontology, and Maintenance tabs in Phase 1, with
+    Status pinned outside the tabs. Phase 1 may prepare the Data Files tab
+    layout; its controls and behavior are implemented in Phase 3.
+  - Phase 2 spread range is 10-100 with default 20.
+  - The selected-node info pane is a bottom-right HUD over the 3D viewport.
+  - Structured graph records/triples and NLP text extraction are both in scope
+    for JSON, CSV, and XML ingestion.
+  - Each direct text submission uses a new conversation; dry runs use a
+    temporary conversation and do not modify the graph. Manually entered text
+    uses a `user` source node with 50% trust. File provenance includes the source
+    file name and a pointer to its location. Topic defaults to base/general/none
+    unless specified at entry. A single input file is limited to 500 MiB.
+  - All tables use one schema regardless of column count. CSV structure is
+    Source -> Table -> Row Head -> ordered cell chain; the header row is index 0
+    and its header cells are represented as nodes.
+  - A non-dictionary file imported without errors receives a 90% trust rating.
+    Failed data-extraction chunks lower the rating relative to successful
+    chunks, with a floor of 30%; the exact formula is TBD.
+  - Dictionary imports use a `dictionary` source node and receive 100% trust.
+  - Higher-trust nodes take precedence over lower-trust nodes during conflict
+    resolution and receive priority in maintenance merge cycles.
+  - Duplicate nodes found while importing a new source increase the original
+    node's weightUp by 1, are ignored as new entries, and count as successful reads.
+    Same-file re-imports above 80% trust are skipped; at or below 80%, re-imports
+    do not increase their own nodes' weightUp and can only raise source trust.
+  - Apply Layout or Reset View during active rendering cancels the current
+    rendering and replaces it with the requested layout.
+  - The selected-node HUD is fixed in the viewport and automatically hides when
+    no node is selected. Previously saved spread values below 10 clamp to 10.
+  - Phase 2 must capture the exception encountered when Apply Layout or Reset
+    View is clicked while a 3D model/layout is generating.
+
+================================================================================
+1. PURPOSE AND SCOPE
+================================================================================
+
+Module 8 improves tool discoverability, makes selected-node information easier
+to access, broadens the Visualizer's spread control, and adds multi-format file
+ingestion. Work is divided into three phases so the Tools UI and Visualizer can
+be improved before structured file ingestion is added.
+
+Implementation constraints:
+- Keep graph mutations within existing graph/NLP service boundaries.
+- Preserve existing import/export, ontology, maintenance, text-file import, and
+  Visualizer behavior unless a phase explicitly changes its location or range.
+- Retain stable control names and event contracts where practical; update UI
+  automation when controls intentionally move or new tabs are added.
+- Parsing and ingestion must be bounded, cancellable where applicable, and
+  report partial failures rather than silently dropping records.
+- Do not introduce third-party parsing/UI packages without a separate decision.
+
+Current implementation references:
+- `OPEN-LRD/Tools.xaml` and `OPEN-LRD/Tools.xaml.cs`: current vertically stacked
+  export, import/text-file import, ontology, maintenance, and status controls.
+- `OPEN-LRD/Visualizer/VisualizerWindow.xaml`: View sidebar, Spread slider, and
+  current selected-node card.
+- `OPEN-LRD/Visualizer/VisualizerWindow.xaml.cs`: layout handlers, layout
+  generation state, selection updates, and view-control synchronization.
+- `OPEN-LRD/Visualization/VisualizerOptions.cs` and `VisualizerSettings.cs`:
+  spread option defaults, validation, and persisted settings.
+- `OPEN-LRD/NLP/TextFileImporter.cs`: existing bounded, cancellable plain-text
+  file ingestion through the NLP pipeline.
+
+================================================================================
+2. PHASE 1: TOOLS WINDOW ORGANIZATION
+================================================================================
+
+2.1 Objectives
+- Replace the long single-column Tools layout with four focused tabs and a
+  prepared Data Files tab shell.
+- Keep Status/Diagnostics visible regardless of the selected tab.
+- Add direct text/sentence ingestion controls to the Ingestion tab.
+- Preserve current Core Log import/export, ontology, GCIDE, maintenance, and
+  existing plain-text file import workflows during the transition.
+
+2.2 Window layout and tabs
+The Tools window uses a two-row layout: a tab control in the flexible upper row
+and the shared Status group in a persistent bottom row.
+
+Tabs:
+1. Logs
+   - Core log export and optional transient companion export.
+   - Core and transient log import, Merge/Replace selection, and import guidance.
+   - The existing core/transient log formats and workflows remain unchanged.
+2. Ingestion
+   - Direct text/sentence input through the existing NLP pipeline.
+   - Input area, ingest action, clear action, and status/result display.
+   - Every direct text submission uses a new conversation; dry runs use a
+     temporary conversation and do not modify the graph.
+   - A dry-run option is available. Topic defaults to base/general/none unless
+     the user specifies a topic at entry.
+   - Retain the existing text-file import workflow during Phase 1; move it to
+     Data Files when that tab's functionality is implemented in Phase 3.
+   - Existing text-file options (source/topic assignment, dry run, file/chunk
+     limits, progress, cancellation) remain available while the legacy importer
+     remains on this tab. Default the topic to base/general/none.
+3. Ontology
+   - Seed Upper Ontology, load GCIDE, and export ontology log actions.
+   - Corpus subset, letter, entry limit, progress, cancellation, and status.
+   - Mark dictionary imports with a `dictionary` source node and 100% trust.
+4. Maintenance
+   - Existing opt-in graph maintenance passes and their options.
+   - Run Maintenance action and detailed maintenance result/diagnostics.
+5. Data Files
+   - Phase 1 prepares the tab layout only, with no active file-ingestion
+     controls or behavior. The existing plain-text import remains in Ingestion
+     until the Data Files functionality is implemented in Phase 3.
+
+Pinned Status:
+- Keep the shared multiline StatusBox visible beneath the tab control.
+- Show the most recent result from imports, exports, ontology actions,
+  maintenance, or ingestion. Selecting a different tab must not clear or reset
+  the current status text; this display is not an append-only history.
+- Ensure the window remains usable at its minimum dimensions and when resized.
+
+2.3 Direct text ingestion
+- Submit the entered text using the existing NlpPipeline path. Create a new
+  conversation for each submission; a dry run uses a temporary conversation
+  that is not persisted. Do not create a parallel relation-extraction
+  implementation.
+- Show a useful result for empty input, accepted input, unsupported sentences,
+  and pipeline errors.
+- Support dry run using a temporary conversation without mutating the graph.
+- Attribute manually entered text to a source node named `user`.
+- Assign the `user` source node a trust rating of 50%.
+- For file-backed input, create/reuse source attribution containing the source
+  file name and a DataPointer to its location. Reject a single input file larger
+  than 500 MiB before ingestion.
+- Default the topic to base/general/none for direct and file ingestion; allow a
+  user-specified topic at entry.
+- Keep UI interaction on the dispatcher and run only work suitable for
+  background execution off the UI thread.
+- Define character/input bounds for manually entered text separately from the
+  500 MiB single-file limit.
+
+2.4 Acceptance criteria
+- Logs, Ingestion, Ontology, and Maintenance are separate tabs, and the Data
+  Files shell is present; Status remains visible while switching tabs.
+- Existing log import/export, ontology, maintenance, and text-file ingestion
+  functions remain operable with their current options and validation.
+- Direct text ingestion uses the existing NLP pipeline, creates a new
+  conversation (temporary for dry runs), attributes manually entered text to
+  source `user` at 50% trust, and reports completion and failures clearly.
+- Dry runs do not mutate the graph; topic defaults and file source attribution
+  follow the confirmed rules; files over 500 MiB are rejected.
+- The Data Files tab shell is present but has no active file-ingestion controls
+  or behavior until Phase 3.
+- All controls remain accessible at minimum and typical window sizes.
+- Automated UI checks cover tab presence, control defaults, tab switching,
+  pinned status output, and all retained workflows.
+
+================================================================================
+3. PHASE 2: VISUALIZER SPREAD, SELECTION HUD, AND GENERATION EXCEPTION
+================================================================================
+
+3.1 Spread slider range
+- Set Spread minimum to 10.0, maximum to 100.0, and default to 20.0.
+- Update slider display/formatting, option validation, reset behavior, and
+  persisted-settings handling consistently.
+- Normalize persisted spread values outside the new range. Proposed behavior:
+  clamp finite values below/above the range to 10.0/100.0 respectively; use
+  20.0 for non-finite or otherwise invalid values. Verify this policy against
+  existing settings and tests before implementation.
+- Preserve the selected spread through settings save/reload and Apply Layout.
+
+3.2 Selected-node floating HUD
+- Move the selected-node information card out of the View tab and overlay it
+  inside the 3D viewport, anchored to its bottom-right corner.
+- Show the card when a node is selected and collapse it when selection clears.
+- Retain the currently displayed information: label, ID, type, lifetime,
+  degree, aliases, and the existing Center View and Clear actions.
+- Keep the View tab focused on graph/layout metrics and visual settings.
+- Verify the HUD remains readable and usable after window resizing, on narrow
+  viewports, with long labels/aliases, and while changing sidebar tabs.
+- Ensure pointer input on HUD buttons does not accidentally select or clear a
+  graph node underneath the overlay.
+
+3.3 Capture Apply Layout / Reset View exception during generation
+Observed code context: `ApplySettings_Click` and `ResetViewSettings_Click` are
+async-void WPF event handlers. The layout operation tracks active generation,
+and its buttons currently need explicit testing when `isLoading` is true. The
+reported exception must be captured from the actual failure; do not assume its
+type or cause in advance.
+
+Required investigation and behavior:
+- Reproduce the reported failure by starting a sufficiently long 3D model/layout
+  generation and clicking each View-tab action separately while generation is
+  active: Apply Layout and Reset View.
+- Capture diagnostic context for any thrown exception: initiating button,
+  exception type, message, stack trace, and whether a layout was active. Surface
+  a concise message in Visualizer status/warnings and append the full exception
+  record to `.logs/_exceptions.log`.
+- Create `.logs/` and the exception log when absent; otherwise open the existing
+  log in append mode. Keep one continuous log rather than replacing it per run.
+  Include a timestamp, action/button, exception details, and active-rendering
+  context in each appended record.
+- If writing the exception log fails, preserve the original exception context
+  and report the logging failure without raising a second unhandled UI exception.
+- Prevent an exception from escaping an async-void UI handler and becoming an
+  unhandled dispatcher exception.
+- When either action is invoked during active generation, cancel the current
+  rendering and replace it with the layout requested by that action. Coordinate
+  cancellation so the old and replacement layouts do not mutate scene state
+  concurrently; do not silently discard the click.
+- Keep cancellation (`OperationCanceledException`) distinct from unexpected
+  failures, and restore button/loading state in every exit path.
+- If the original failure cannot be reproduced in a deterministic automated
+  test, preserve a repeatable manual stress procedure and add tests for handler
+  safety/state recovery using an injectable or controllable layout task.
+
+3.4 Acceptance criteria
+- Spread slider and persisted options support 10.0-100.0 with a default of
+  20.0; old values below 10 clamp to 10. Values above 100 and invalid values
+  follow the selected normalization/fallback policy.
+- Selected-node information appears as a bottom-right viewport HUD, not in the
+  View sidebar tab; it is fixed in place, auto-hides when there is no selection,
+  and preserves selection/clear/center behavior.
+- Apply Layout and Reset View are each exercised while generation is active.
+- Any exception from either action is captured with diagnostic context; no
+  unhandled dispatcher exception occurs and the Visualizer returns to a usable
+  state.
+- Exception records are appended to `.logs/_exceptions.log`; existing entries
+  survive subsequent application runs and new records appear at the end.
+- Tests verify log creation, append-to-existing behavior, diagnostic fields, and
+  safe reporting if the log cannot be written.
+- Clicking either action during generation cancels the current rendering and
+  starts the requested replacement; stale generation results cannot overwrite
+  the replacement scene.
+- Tests cover layout cancellation, repeated actions during generation, HUD
+  selection lifecycle, spread boundaries/defaults, and settings migration.
+
+================================================================================
+4. PHASE 3: TEXT, JSON, CSV, AND XML FILE INGESTION
+================================================================================
+
+4.1 Objectives and Tools tab
+- Activate and populate the fifth Tools tab, Data Files / File Ingestion, whose
+  layout shell is prepared in Phase 1.
+- Support text, JSON, CSV, and XML files.
+- Provide both structured graph ingestion and textual-content ingestion through
+  the existing NLP pipeline.
+- Reuse the existing text importer for plain-text files rather than maintaining
+  duplicate chunking and cancellation implementations.
+- Move the existing text-file controls from the Phase 1 Ingestion tab into the
+  new Data Files tab; keep direct text/sentence input on Ingestion.
+
+Suggested controls:
+- File picker and supported-format filter; detected format shown to the user.
+- Ingestion mode selector: Structured Data or Extract Text for NLP.
+- Automatically record source filename and a DataPointer to its location;
+  provide source/topic assignment controls where applicable.
+- Default topic to base/general/none unless another topic is specified at entry.
+- Dry run, bounded file/record limits, progress, cancellation, and summary.
+- Reject files larger than 500 MiB before parsing or graph mutation.
+- Per-record diagnostics, including malformed/skipped/failed counts and a
+  bounded sample of diagnostic messages.
+
+4.2 Format handling
+- Plain text: route through `TextFileImporter` with its existing chunking,
+  provenance, dry-run, cancellation, and size-limit behavior; set the maximum
+  size of any one input file to 500 MiB.
+- CSV: support quoted fields, escaped quotes, delimiters, and line endings.
+  Treat all table widths with the same table schema; do not switch schemas based
+  on column count. For each CSV table:
+  - Create a `base/basic` Table node with Label `table_` plus its integer index
+    within the source document (for example, `table_0`, `table_1`). Connect the
+    Source node to the Table node, then connect the Table node to each row head.
+  - Treat the first row as the header row at integer index 0. Create its
+    `base/basic` row-head node with Label `0` and Alias equal to the number of
+    cells.
+  - Create one `base/basic` node for each header cell, with Label equal to the
+    header text and Alias `HEADER`. Connect the header row head to the header
+    cells in their original order as a directed chain.
+  - For each remaining row, create a `base/basic` row-head node with Label equal
+    to its integer row index and Alias equal to the number of cells. Create one
+    `base/basic` cell node per cell, with Label equal to its contents and Alias
+    equal to the corresponding header. Connect each row head to its cells in
+    column order as a directed chain.
+  - The resulting sequence is Source -> Table -> Row Head -> Cell 1 -> Cell 2 ->
+    Cell 3 -> ... for each row. Source links to the Table; the Table links to
+    the header row head and every data row head. There are no direct Source-to-
+    row links and no all-to-all peer-cell links. Use base-type structural links.
+- JSON: parse with System.Text.Json. Represent each element using directed
+  source-to-element-to-property-to-value links:
+  - Element node: Label = element name, Type = `base/basic`, Alias = `JSON
+    Element`.
+  - Property node: Label = property name, Type = `Property`, Alias = `Property`.
+  - Value node: Label = value, Type = `Value`, Alias = the value type plus
+    `Value` (for example, `numberValue`, `stringValue`, or `pathValue`).
+- XML: parse with System.Xml using safe reader settings (DTD/external entity
+  resolution disabled). Use the same element/property/value structure as JSON,
+  with element Alias = `XML Element`.
+- NLP text mode: extract configured text content from each supported format and
+  submit it through the existing NLP ingestion path. Field selection, ordering,
+  and treatment of nested/empty values are specified in 6.2.
+- Preserve structured triples and generic entity/attribute data through the
+  documented format mappings; all CSV tables retain the common row/cell graph
+  structure above. Whether recognized CSV triples additionally create semantic
+  subject/relation/object links remains to be determined.
+- Every non-dry-run NLP file import creates a new conversation.
+- Reject any single input file larger than 500 MiB, regardless of format.
+- Auto-detection may select format by extension, but the UI must display the
+  selected format and report parse errors rather than silently falling back to
+  plain text.
+
+4.3 Graph semantics and operational guarantees
+- Structured records map to existing node/link conventions and relation/type
+  registries; do not invent IDs, relation names, or type semantics implicitly.
+- When ingestion from a new source finds an existing duplicate node, increase
+  the original node's `weightUp` by 1, ignore creation of the duplicate, and
+  count the duplicate as a successful read for trust calculations.
+- During re-import from the same source, a source trust rating above 80% skips
+  processing the file. At 80% or below, reprocess it without increasing
+  `weightUp` on its own existing nodes. New, nonduplicate data recovered during
+  re-import may be added. Only raise the source node's trust rating if the new
+  ingestion result has a higher success rate; do not change existing node
+  weights from that same source.
+- Skip empty files and show a warning that the file is empty; do not create table
+  or data nodes for an empty file.
+- Remaining record-validation policy must define unknown relation names, missing
+  triple fields, nulls, type conversion, and malformed records.
+- Keep graph mutation on the supported core APIs and attach file provenance in
+  a consistent way to imported data.
+- Assign a trust rating to each source/provenance record and associate imported
+  nodes with that source rating:
+  - Manually entered text: source node `user`, 50% trust.
+  - For non-dictionary imports with no parse/import errors: 90%.
+  - For non-dictionary chunked imports, count successful and failed chunks.
+    Divide failed chunks by successful chunks, normalize the result, then scale
+    it inversely from 90% down to 30%. The exact normalization/scoring formula
+    is TBD. No failed chunks yields 90%; failed chunks with no successful
+    chunks receive the 30% floor.
+  - Dictionary imports use a `dictionary` source node and are assigned 100%
+    trust.
+  - Associate imported nodes with their file/source rating so maintenance can
+    compare trust across manual, file, and dictionary sources.
+  - Higher-trust nodes override lower-trust nodes during conflicts and receive
+    priority in maintenance merge cycles.
+  - Persist ratings with their source/provenance records so they remain
+    available after reload and can be inspected by maintenance.
+- Enforce file-size, record/depth, diagnostic-count, and other resource bounds.
+- Dry run validates and summarizes the selected mapping without graph mutation.
+- Cancellation is cooperative and reports what was processed. Unless an
+  explicit transaction is designed, already committed records remain and are
+  reported as partial import; do not claim file-level atomic rollback.
+- Repeated imports and source-node reuse behavior must be defined and tested.
+
+4.4 Acceptance criteria
+- The Data Files tab provides distinct, understandable controls for all four
+  formats and both ingestion modes.
+- Its Phase 1 placeholder becomes functional in Phase 3; no file-ingestion
+  controls or behavior need to be implemented before this phase.
+- Valid sample files for each format ingest via structured mode and NLP-text
+  mode where the format contains relevant content.
+- Wide-table fixtures verify one row node per data row, one cell node per value,
+  header row index 0, header-cell nodes with Alias `HEADER`, the specified
+  labels/aliases, Source -> Table -> row-head linkage, and directed row/cell
+  chains for every table width.
+- Multi-table fixtures verify table labels are `table_` plus the table's
+  integer index within the source document and are unique within that document.
+- Trust-rating fixtures verify 50% for the `user` source, 90% for error-free
+  file imports, 100% for dictionary imports, a decreasing rating as
+  failed/successful chunk ratio rises, a 30% floor when all chunks fail, and
+  persistence of ratings.
+- Maintenance merge fixtures verify that higher-trust nodes take precedence
+  over lower-trust nodes and receive merge priority.
+- Duplicate-import fixtures verify weightUp increases by exactly 1 for
+  duplicates found from a new source, successful-read accounting for ignored
+  duplicates, re-import skip above 80% trust, and no weightUp increments on
+  same-source re-import.
+- Empty-file fixtures verify the warning and that no table/data nodes are made.
+- Dry run performs parsing/validation without changing graph state.
+- Malformed inputs, unsupported structures, limits, cancellation, and partial
+  failures produce clear summaries and bounded diagnostics.
+- XML parsing disallows DTD/external entity resolution; JSON/XML/CSV processing
+  observes documented resource limits.
+- Import provenance, duplicate handling, and deterministic test outcomes meet
+  the confirmed policy.
+
+================================================================================
+5. VERIFICATION AND DOCUMENTATION
+================================================================================
+
+Build and regression:
+- Build the application, smoke tests, and Manual UI tests with zero warnings
+  and zero errors.
+- Run existing smoke and UI suites and record updated aggregate counts after
+  the Module 8 tests are added.
+- Preserve existing checks for log import/export, text import, ontology,
+  maintenance, Visualizer rendering, selection, and settings persistence.
+
+Phase verification:
+- Phase 1: verify all four tabs, pinned status, direct text input, and retained
+  legacy workflows, including minimum-size/resized-window interaction.
+- Phase 2: test spread boundaries and old settings; HUD layout and controls;
+  each Apply/Reset click during active generation; exception capture, operation
+  cancellation, and UI recovery.
+- Phase 3: fixture-based CSV/JSON/XML/text tests for both modes; malformed and
+  boundary inputs; dry-run graph immutability; source attribution; cancellation;
+  duplicate/reimport behavior; and partial import reports.
+- Add/update the manual UI checklist for visual behavior not reliable to assert
+  in automated WPF checks.
+
+Documentation:
+- Update README.md and To-Do.txt when a phase is delivered, recording actual
+  implemented behavior and current verification counts.
+- Update this plan's status and milestone verification counts as phases finish.
+
+================================================================================
+6. COVERAGE GAPS AND DECISIONS TO CONFIRM
+================================================================================
+
+The following gaps were found while reviewing the requested scope and the
+current code. Items marked Proposed are assumptions in this plan, not confirmed
+requirements; resolve them before implementing the affected behavior.
+
+6.1 Confirmed user decisions
+- Confirmed: manually entered text is attributed to the `user` source node at
+  50% trust.
+- Confirmed: each direct submission gets a new conversation; dry runs use a
+  temporary conversation and do not modify the graph.
+- Confirmed: file-backed sources retain the file name and location pointer;
+  topic defaults to base/general/none unless specified at entry.
+- Confirmed: every CSV table uses Source -> Table -> row heads, and each row is
+  a directed, ordered cell chain; header nodes use Alias `HEADER`.
+- Confirmed: clean non-dictionary file imports receive 90% trust and dictionary
+  imports use a `dictionary` source at 100%. Failed chunks lower file trust to
+  a minimum of 30%.
+- Confirmed: higher-trust nodes override lower-trust nodes and have priority in
+  maintenance merge cycles.
+
+6.2 Phase 3: data contracts and graph semantics still to be determined
+1. JSON/XML node roles and labels are specified, but exact input schemas remain
+   TBD: nested elements/objects, arrays, attributes, text nodes, scalar roots,
+   and how multiple top-level records are represented.
+2. CSV table labels use `table_` plus a per-document integer index. Confirm
+   whether repeated table labels across different source documents are distinct
+   nodes or candidates for duplicate matching. Confirm whether row-head Alias
+   cell counts are stored as invariant strings.
+3. All CSV widths use the table chain. Confirm whether a recognized
+   subject/relation/object table also materializes semantic graph links, or is
+   represented only by the table, row-head, header, and value-cell nodes.
+4. The structured/text mode selection is clear, but behavior for format
+   auto-detection, per-format defaults, and mixed files containing facts and
+   prose remains open. Confirm per-file versus per-record mode for mixed files.
+5. NLP extraction field policy is open: known text fields only, all string
+   leaves, or user-selected fields; define traversal order and deduplication.
+6. Define how arbitrary CSV headers/XML tags/JSON properties map to relation
+   names and node types, including case normalization and unknown relations.
+7. Define null/empty cell and value handling, numeric/path type detection, and
+   whether valid elements/chunks continue after a malformed value.
+8. For a duplicate found from a new source, `weightUp` increases by 1. Define
+   the matching/identity criteria for deciding that two nodes are duplicates.
+9. Define how a matching source file is recognized across path changes, moves,
+   and modified contents. Confirm whether empty-file skips create a source node
+   or only report a warning.
+10. For same-source re-imports at or below 80% trust, define the success-rate
+    comparison used to raise trust and confirm whether newly recovered
+    nonduplicate nodes may be added. Existing same-source nodes must not receive
+    a `weightUp` increase; only source trust may rise.
+11. The trust-score formula is TBD. Define normalization/scaling of failed
+    chunks divided by successful chunks, how chunks are counted across formats,
+    and how warnings, empty files, and ignored duplicates affect trust. Define
+    persistence/integration with TrustScale and tie behavior in maintenance
+    merge priority.
+12. Define depth/record/column-count limits and whether cancellation leaves
+    partial graph changes (the proposed default is partial commit with an
+    explicit report, not rollback).
+
+6.3 Phase 2: exception capture and HUD details
+1. The reported Apply/Reset exception needs a captured reproduction with exact
+   exception details and a stable trigger. Current implementation uses
+   `isLoading` and async layout methods; the plan intentionally does not assume
+   the cause. The confirmed response is cancel-and-replace; confirm whether a
+   brief progress/status message is sufficient feedback in addition to the
+   exception diagnostics.
+2. HUD fixed placement and auto-hide when no node is selected are confirmed.
+   Verify viewport resizing and whether very long labels/aliases should scroll,
+   wrap, or be truncated.
+3. Previously saved finite spread values below 10 clamp to 10. The plan proposes
+   clamping values above 100 to 100; confirm fallback behavior for invalid or
+   non-finite saved values (proposed: use the 20 default).
+
+6.4 Cross-phase coverage
+- Accessibility (keyboard navigation, focus, screen-reader names and contrast)
+  is not yet specified for new tabs, direct ingestion, or the HUD.
+- Localization is not in current scope; confirm if labels/messages remain
+  English-only like the surrounding UI.
+- Add automated and manual coverage for error recovery, progress completion,
+  close-window behavior during background ingestion/layout, and cleanup of
+  cancellation resources.
+- Confirm whether all three phases may be delivered independently and whether
+  the UI transitions described above should preserve backward-compatible
+  settings and saved workflows.
