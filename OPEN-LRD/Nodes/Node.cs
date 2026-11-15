@@ -13,11 +13,14 @@
         protected NodeLifetime lifetime;
         private readonly List<string> aliases = new List<string>();
         private DataPointer? dataPointer;
+        private double? trustRating;
         private bool disposed;
 
         public string? Label { get; private set; }
 
         public IReadOnlyCollection<string> Aliases => aliases.AsReadOnly();
+
+        public double? TrustRating => trustRating;
 
         public Node()
             : this(Guid.NewGuid(), NodeTypes.Basics, NodeLifetime.Temporary, DefaultTimeToLive)
@@ -208,6 +211,20 @@
             dataPointer = null;
         }
 
+        public void Set_TrustRating(double? value)
+        {
+            if (value.HasValue
+                && (!double.IsFinite(value.Value) || value.Value < 0.0 || value.Value > 1.0))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(value),
+                    value,
+                    "Trust rating must be finite and between 0.0 and 1.0.");
+            }
+
+            trustRating = value;
+        }
+
         public float Get_WeightUp()
         {
             return weightUp;
@@ -267,6 +284,13 @@
 
             if (dataPointer is null)
                 dataPointer = other.dataPointer;
+
+            if (other.trustRating.HasValue)
+            {
+                trustRating = trustRating.HasValue
+                    ? Math.Max(trustRating.Value, other.trustRating.Value)
+                    : other.trustRating;
+            }
 
             if (Label is null && other.Label is not null)
                 Set_Label(other.Label);

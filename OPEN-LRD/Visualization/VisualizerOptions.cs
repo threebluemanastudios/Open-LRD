@@ -4,7 +4,9 @@ namespace OPEN_LRD.Visualization
 {
     internal sealed class VisualizerOptions
     {
-        public const double DefaultSpread = 6.0;
+        public const double MinimumSpread = 10.0;
+        public const double MaximumSpread = 100.0;
+        public const double DefaultSpread = 20.0;
         public const double DefaultCubeSize = 1.0;
         public const double DefaultLineWidth = 0.15;
         public const int DefaultMaxIterations = 300;
@@ -52,6 +54,15 @@ namespace OPEN_LRD.Visualization
 
         public double MinSpacing => Math.Max(CubeSize * MinSpacingFactor, MinimumSpacing);
 
+        public static double NormalizeSpread(double value)
+        {
+            if (!double.IsFinite(value))
+                return DefaultSpread;
+
+            double clamped = Math.Clamp(value, MinimumSpread, MaximumSpread);
+            return Math.Round(clamped, MidpointRounding.AwayFromZero);
+        }
+
         public VisualizerOptions Clone()
         {
             return (VisualizerOptions)MemberwiseClone();
@@ -59,7 +70,16 @@ namespace OPEN_LRD.Visualization
 
         public void Validate()
         {
-            ValidatePositiveFinite(Spread, nameof(Spread));
+            if (!double.IsFinite(Spread)
+                || Spread < MinimumSpread
+                || Spread > MaximumSpread
+                || Spread != Math.Truncate(Spread))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(Spread),
+                    Spread,
+                    $"Spread must be a whole number between {MinimumSpread} and {MaximumSpread}.");
+            }
             ValidatePositiveFinite(CubeSize, nameof(CubeSize));
             ValidatePositiveFinite(LineWidth, nameof(LineWidth));
             ValidatePositiveFinite(ConvergenceTolerance, nameof(ConvergenceTolerance));

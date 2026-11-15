@@ -1446,6 +1446,15 @@ namespace OPEN_LRD.Persistence
                 return false;
             }
 
+            if (log.TrustRating.HasValue
+                && (!double.IsFinite(log.TrustRating.Value)
+                    || log.TrustRating.Value < 0.0
+                    || log.TrustRating.Value > 1.0))
+            {
+                error = "TrustRating must be finite and between 0.0 and 1.0.";
+                return false;
+            }
+
             if (!Enum.IsDefined(log.Lifetime))
             {
                 error = "Lifetime is not valid.";
@@ -1489,6 +1498,8 @@ namespace OPEN_LRD.Persistence
 
             if (log.WeightDown > 0)
                 imported.Add_WeightDown(log.WeightDown);
+
+            imported.Set_TrustRating(log.TrustRating);
 
             if (pointer is not null)
                 imported.Set_DataPointer(pointer);
@@ -1535,6 +1546,7 @@ namespace OPEN_LRD.Persistence
                 && existing.Get_TTL() == imported.Get_TTL()
                 && existing.Get_WeightUp().Equals(imported.Get_WeightUp())
                 && existing.Get_WeightDown().Equals(imported.Get_WeightDown())
+                && existing.TrustRating.Equals(imported.TrustRating)
                 && string.Equals(existing.Label, imported.Label, StringComparison.Ordinal)
                 && existing.Aliases.SequenceEqual(imported.Aliases, StringComparer.Ordinal)
                 && Equals(existingPointer, importedPointer);

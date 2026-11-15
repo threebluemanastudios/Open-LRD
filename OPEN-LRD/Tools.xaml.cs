@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Win32;
 using OPEN_LRD.NLP;
+using OPEN_LRD.Nodes;
 using OPEN_LRD.Maintenance;
 using OPEN_LRD.Ontology;
 using OPEN_LRD.Ontology.Gcide;
@@ -25,10 +26,297 @@ namespace OPEN_LRD
 
         private CancellationTokenSource? ontologyLoad;
         private CancellationTokenSource? textImport;
+        private bool directIngestBusy;
 
         public Tools()
         {
             InitializeComponent();
+            InitializeTopicSelectors();
+        }
+
+        private bool IsIngestionBusy => textImport is not null || ontologyLoad is not null || directIngestBusy;
+
+        private void InitializeTopicSelectors()
+        {
+            OntologyTypes.EnsureRegistered();
+            TopicNodeTypeComboBox.ItemsSource = NodeTypes.GetAll()
+                .OrderBy(type => type.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            TopicNodeTypeComboBox.SelectedItem = NodeTypes.Concepts;
+            TopicModeComboBox.SelectedIndex = 0;
+            UpdateTopicSelectionControls();
+        }
+
+        private void TopicModeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (TopicSelectionStatusText is null)
+                return;
+
+            TextImportTopicBox.Clear();
+            UpdateTopicSelectionControls();
+        }
+
+        private void TopicNodeTypeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (TopicNodePickerComboBox is null)
+                return;
+
+            RefreshTopicNodePicker();
+        }
+
+        private void UpdateTopicSelectionControls()
+        {
+            string mode = SelectedTopicMode;
+            bool usesText = mode is "Guid" or "Label" or "Alias";
+            bool usesNodePicker = mode is "Sense" or "Category" or "Field" or "Taxon"
+                or "Reality" or "NodeType";
+            bool usesNodeType = mode == "NodeType";
+
+            TopicValueLabel.Text = mode switch
+            {
+                "Guid" => "Node GUID:",
+                "Label" => "Node label:",
+                "Alias" => "Alias:",
+                _ => "Value:"
+            };
+            TopicValueLabel.Visibility = usesText ? Visibility.Visible : Visibility.Collapsed;
+            TextImportTopicBox.Visibility = usesText ? Visibility.Visible : Visibility.Collapsed;
+            TextImportTopicBox.IsEnabled = usesText && !IsIngestionBusy;
+            TopicNodeTypeLabel.Visibility = usesNodeType ? Visibility.Visible : Visibility.Collapsed;
+            TopicNodeTypeComboBox.Visibility = usesNodeType ? Visibility.Visible : Visibility.Collapsed;
+            TopicNodeTypeComboBox.IsEnabled = usesNodeType && !IsIngestionBusy;
+            TopicNodePickerLabel.Visibility = usesNodePicker ? Visibility.Visible : Visibility.Collapsed;
+            TopicNodePickerComboBox.Visibility = usesNodePicker ? Visibility.Visible : Visibility.Collapsed;
+            TopicNodePickerComboBox.IsEnabled = usesNodePicker && !IsIngestionBusy;
+
+            TopicSelectionStatusText.Text = mode switch
+            {
+                "Base" => "No topic override; use base/general/none.",
+                "CurrentTopic" => "Uses the most recent topic recorded by a conversation.",
+                "Source" => "Uses the source node for this text or file import.",
+                _ => "Select or enter one existing graph node as the topic."
+            };
+
+            if (usesNodePicker)
+                RefreshTopicNodePicker();
+            else
+                TopicNodePickerComboBox.ItemsSource = Array.Empty<Web_Node>();
+        }
+
+        private void RefreshTopicNodePicker()
+        {
+            if (TopicNodePickerComboBox is null)
+                return;
+
+            Guid? previouslySelected = (TopicNodePickerComboBox.SelectedItem as Web_Node)?.ID;
+            if (!Core.initialized)
+            {
+                TopicNodePickerComboBox.ItemsSource = Array.Empty<Web_Node>();
+                TopicNodePickerComboBox.SelectedIndex = -1;
+                return;
+            }
+
+            NodeTypes? type = SelectedTopicMode switch
+            {
+                "Sense" => OntologyTypes.Senses,
+                "Category" => OntologyTypes.Categories,
+                "Field" => OntologyTypes.Fields,
+                "Taxon" => OntologyTypes.Taxa,
+                "Reality" => OntologyTypes.Realities,
+                "NodeType" => TopicNodeTypeComboBox.SelectedItem as NodeTypes,
+                _ => null
+            };
+
+            Web_Node[] nodes = type is null
+                ? Array.Empty<Web_Node>()
+                : Core.FindByType(type)
+                    .Where(node => !string.IsNullOrWhiteSpace(node.Label))
+                    .OrderBy(node => node.Label, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(node => node.ID)
+                    .ToArray();
+            TopicNodePickerComboBox.ItemsSource = nodes;
+            TopicNodePickerComboBox.SelectedItem = previouslySelected.HasValue
+                ? nodes.FirstOrDefault(node => node.ID == previouslySelected.Value)
+                : null;
+        }
+
+        private string SelectedTopicMode =>
+            (TopicModeComboBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string
+            ?? "Base";
+
+        private bool TryResolveTopicNode(
+            Guid? sourceNodeID,
+            string? filePath,
+            bool dryRun,
+            out Guid? topicNodeID,
+            out bool useSourceAsTopic)
+        {
+            topicNodeID = null;
+            useSourceAsTopic = false;
+
+            switch (SelectedTopicMode)
+            {
+                case "Base":
+                    return true;
+
+                case "Guid":
+                    string guidText = TextImportTopicBox.Text.Trim();
+                    if (!Guid.TryParse(guidText, out Guid topicID) || topicID == Guid.Empty)
+                        return TopicSelectionError("Enter a non-empty Topic GUID.");
+                    if (!Core.TryGetNode(topicID, out _))
+                        return TopicSelectionError($"Topic node '{topicID}' was not found.");
+                    topicNodeID = topicID;
+                    return true;
+
+                case "Label":
+                    return ResolveUniqueTopic(
+                        Core.FindByLabel(TextImportTopicBox.Text.Trim()),
+                        "Node Label",
+                        out topicNodeID);
+
+                case "Alias":
+                    string alias = TextImportTopicBox.Text.Trim();
+                    if (alias.Length == 0)
+                        return TopicSelectionError("Enter a node alias.");
+                    return ResolveUniqueTopic(
+                        Core.FindNodes().Where(node => node.Has_Alias(alias)).ToArray(),
+                        "Alias",
+                        out topicNodeID);
+
+                case "Sense":
+                case "Category":
+                case "Field":
+                case "Taxon":
+                case "Reality":
+                case "NodeType":
+                    if (TopicNodePickerComboBox.SelectedItem is not Web_Node selectedTopic
+                        || !Core.TryGetNode(selectedTopic.ID, out _))
+                    {
+                        return TopicSelectionError("Select an existing topic node.");
+                    }
+                    topicNodeID = selectedTopic.ID;
+                    return true;
+
+                case "CurrentTopic":
+                    topicNodeID = FindMostRecentTopicNodeID();
+                    if (!topicNodeID.HasValue)
+                        TopicSelectionStatusText.Text = "No prior topic was found; using base/general/none.";
+                    return true;
+
+                case "Source":
+                    if (sourceNodeID.HasValue)
+                    {
+                        topicNodeID = sourceNodeID;
+                        return true;
+                    }
+
+                    if (filePath is not null)
+                    {
+                        // TextFileImporter creates/reuses the file Source node after
+                        // validation; this avoids mutating the graph during a dry run.
+                        useSourceAsTopic = true;
+                        return true;
+                    }
+
+                    if (dryRun)
+                    {
+                        topicNodeID = FindUserSourceNode()?.ID;
+                        return true;
+                    }
+
+                    return TopicSelectionError("The user Source node is unavailable.");
+
+                default:
+                    return TopicSelectionError("Select a valid topic option.");
+            }
+        }
+
+        private bool ResolveUniqueTopic(
+            IReadOnlyList<Web_Node> matches,
+            string selectionName,
+            out Guid? topicNodeID)
+        {
+            topicNodeID = null;
+            if (matches.Count == 0)
+                return TopicSelectionError($"No graph node matches the selected {selectionName}.");
+            if (matches.Count > 1)
+                return TopicSelectionError(
+                    $"The selected {selectionName} matches multiple graph nodes; choose a GUID or a more specific selection.");
+
+            topicNodeID = matches[0].ID;
+            return true;
+        }
+
+        private bool TopicSelectionError(string message)
+        {
+            TopicSelectionStatusText.Text = message;
+            return false;
+        }
+
+        private Guid? FindMostRecentTopicNodeID()
+        {
+            IReadOnlyDictionary<Guid, ConversationContext>? conversations = Core.GetConversations();
+            if (conversations is null)
+                return null;
+
+            foreach (ConversationContext conversation in conversations.Values
+                .OrderByDescending(candidate => candidate.TurnIndex))
+            {
+                Guid? topic = conversation.Provenance
+                    .OrderByDescending(entry => entry.TurnIndex)
+                    .ThenByDescending(entry => entry.Sequence)
+                    .Select(entry => entry.TopicNodeID)
+                    .FirstOrDefault(candidate => candidate.HasValue);
+                if (topic.HasValue)
+                    return topic;
+            }
+
+            return null;
+        }
+
+        private static Web_Node? FindUserSourceNode()
+        {
+            return Core.FindByLabel("user", NodeTypes.Sources).FirstOrDefault();
+        }
+
+        private static Web_Node EnsureUserSourceNode()
+        {
+            Web_Node? existing = FindUserSourceNode();
+            if (existing is not null)
+            {
+                existing.Set_TrustRating(0.5);
+                return existing;
+            }
+
+            Web_Node source = new Web_Node(
+                Guid.NewGuid(),
+                NodeTypes.Sources,
+                NodeLifetime.Permanent,
+                0);
+            source.Set_Label("user");
+            source.Set_TrustRating(0.5);
+            if (!Core.AddExistingNode(source))
+                throw new InvalidOperationException("The user Source node could not be created.");
+            return source;
+        }
+
+        private void SetIngestionControlsEnabled(bool enabled)
+        {
+            DirectTextInput.IsEnabled = enabled;
+            DirectTextDryRunCheckBox.IsEnabled = enabled;
+            DirectTextIngestButton.IsEnabled = enabled;
+            DirectTextClearButton.IsEnabled = enabled;
+            TopicModeComboBox.IsEnabled = enabled;
+            TextImportPathBox.IsEnabled = enabled;
+            TextImportBrowseButton.IsEnabled = enabled;
+            TextImportSourceBox.IsEnabled = enabled;
+            TextImportDryRunCheckBox.IsEnabled = enabled;
+            TextImportMaxMegabytesBox.IsEnabled = enabled;
+            TextImportMaxChunksBox.IsEnabled = enabled;
+            TextImportButton.IsEnabled = enabled;
+            TextImportTopicBox.IsEnabled = enabled && TextImportTopicBox.Visibility == Visibility.Visible;
+            TopicNodeTypeComboBox.IsEnabled = enabled && TopicNodeTypeComboBox.Visibility == Visibility.Visible;
+            TopicNodePickerComboBox.IsEnabled = enabled && TopicNodePickerComboBox.Visibility == Visibility.Visible;
         }
 
         private void RunMaintenance_Button_Click(object sender, RoutedEventArgs e)
@@ -159,6 +447,182 @@ namespace OPEN_LRD
             }
         }
 
+        private void DirectTextIngest_Button_Click(object sender, RoutedEventArgs e)
+        {
+            if (!EnsureCoreInitialized())
+                return;
+
+            if (IsIngestionBusy)
+            {
+                SetDirectTextStatus("An ingestion or ontology load is already running.");
+                return;
+            }
+
+            string text = DirectTextInput.Text;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                SetDirectTextStatus("Enter text to ingest.");
+                return;
+            }
+
+            if (text.Length > 1000)
+            {
+                SetDirectTextStatus("Direct text must be 1,000 characters or fewer.");
+                return;
+            }
+
+            bool dryRun = DirectTextDryRunCheckBox.IsChecked == true;
+            NlpPipeline? pipeline = null;
+            Guid? temporaryConversationID = null;
+            bool keepConversation = false;
+            SetDirectTextBusy(true);
+            DirectTextProgressBar.Value = 0;
+            SetDirectTextStatus(dryRun ? "Preparing dry run..." : "Preparing ingestion...");
+
+            try
+            {
+                pipeline = new NlpPipeline(Core);
+                if (dryRun)
+                    temporaryConversationID = pipeline.ConversationID;
+
+                NlpResult initialAnalysis = pipeline.Analyze(text);
+                if (initialAnalysis.Status == NlpStatus.InvalidInput || initialAnalysis.Parsed is null)
+                {
+                    SetDirectTextStatus(
+                        initialAnalysis.Diagnostics.FirstOrDefault() ?? "Text could not be analyzed.");
+                    SetStatus("Direct text ingestion failed: " + DirectTextStatusText.Text);
+                    return;
+                }
+
+                string[] sentences = initialAnalysis.Parsed.Sentences
+                    .Select(sentence => sentence.Text.Trim())
+                    .Where(sentence => sentence.Length > 0)
+                    .ToArray();
+
+                if (sentences.Length == 0)
+                {
+                    SetDirectTextStatus("No sentences were found in the input.");
+                    SetStatus("Direct text ingestion found no sentences.");
+                    return;
+                }
+
+                Guid? sourceNodeID = dryRun
+                    ? FindUserSourceNode()?.ID
+                    : SelectedTopicMode == "Source"
+                        ? EnsureUserSourceNode().ID
+                        : null;
+                if (!TryResolveTopicNode(
+                    sourceNodeID,
+                    null,
+                    dryRun,
+                    out Guid? topicNodeID,
+                    out _))
+                {
+                    SetDirectTextStatus(TopicSelectionStatusText.Text);
+                    SetStatus(TopicSelectionStatusText.Text);
+                    return;
+                }
+
+                if (!dryRun && !sourceNodeID.HasValue)
+                    sourceNodeID = EnsureUserSourceNode().ID;
+                if (!dryRun)
+                    keepConversation = true;
+
+                int ingested = 0;
+                int unsupported = 0;
+                int failed = 0;
+                List<string> sentenceDiagnostics = new List<string>();
+
+                for (int index = 0; index < sentences.Length; index++)
+                {
+                    string sentence = sentences[index];
+                    if (dryRun)
+                    {
+                        NlpResult analysis = pipeline.Analyze(sentence);
+                        if (analysis.Status == NlpStatus.Parsed
+                            && analysis.Frames.Any(frame => frame.Ingestible))
+                        {
+                            ingested++;
+                        }
+                        else
+                        {
+                            unsupported++;
+                        }
+
+                        sentenceDiagnostics.AddRange(analysis.Diagnostics);
+                    }
+                    else
+                    {
+                        NlpResult result = pipeline.Ingest(sentence, sourceNodeID, topicNodeID);
+                        if (result.Status == NlpStatus.Ingested)
+                            ingested++;
+                        else if (result.Status == NlpStatus.Unsupported)
+                            unsupported++;
+                        else
+                            failed++;
+
+                        sentenceDiagnostics.AddRange(result.Diagnostics);
+                    }
+
+                    DirectTextProgressBar.Value = (double)(index + 1) / sentences.Length * 100.0;
+                    SetDirectTextStatus(
+                        $"Processed sentence {index + 1} of {sentences.Length}: " +
+                        $"{ingested} supported, {unsupported} unsupported, {failed} failed.");
+                }
+
+                string summary = dryRun
+                    ? $"Direct text dry run: {sentences.Length} sentence(s), {ingested} supported, {unsupported} unsupported."
+                    : $"Direct text ingestion: {sentences.Length} sentence(s), {ingested} ingested, {unsupported} unsupported, {failed} failed.";
+                SetDirectTextStatus(summary);
+
+                StringBuilder report = new StringBuilder();
+                report.AppendLine(dryRun ? "Direct text dry run." : "Direct text ingestion complete.");
+                report.AppendLine($"Sentences: {sentences.Length}");
+                report.AppendLine($"Ingested: {ingested}");
+                report.AppendLine($"Unsupported: {unsupported}");
+                report.AppendLine($"Failed: {failed}");
+                report.AppendLine("Conversation: " + (dryRun ? "(temporary)" : pipeline.ConversationID.ToString()));
+                report.AppendLine("Source node: " + (sourceNodeID?.ToString() ?? "(none)"));
+                report.AppendLine("Topic node: " + (topicNodeID?.ToString() ?? "(base/general/none)"));
+                AppendMessages(report, "Notes", sentenceDiagnostics
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList());
+                SetStatus(report.ToString().TrimEnd());
+            }
+            catch (Exception ex)
+            {
+                SetDirectTextStatus("Direct text ingestion failed: " + ex.Message);
+                SetStatus(DirectTextStatusText.Text);
+            }
+            finally
+            {
+                pipeline?.Dispose();
+                if (temporaryConversationID.HasValue && (dryRun || !keepConversation))
+                    Core.RemoveConversation(temporaryConversationID.Value);
+
+                SetDirectTextBusy(false);
+            }
+        }
+
+        private void DirectTextClear_Button_Click(object sender, RoutedEventArgs e)
+        {
+            DirectTextInput.Clear();
+            DirectTextProgressBar.Value = 0;
+            SetDirectTextStatus("Ready.");
+        }
+
+        private void SetDirectTextBusy(bool busy)
+        {
+            directIngestBusy = busy;
+            SetIngestionControlsEnabled(!busy);
+            UpdateTopicSelectionControls();
+        }
+
+        private void SetDirectTextStatus(string text)
+        {
+            DirectTextStatusText.Text = text;
+        }
+
         private void TextImportBrowse_Button_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog dialog = new OpenFileDialog
@@ -205,10 +669,21 @@ namespace OPEN_LRD
             }
 
             if (!TryParseOptionalGuid(TextImportSourceBox.Text, "Source ID", out Guid? sourceNodeID)
-                || !TryParseOptionalGuid(TextImportTopicBox.Text, "Topic ID", out Guid? topicNodeID)
                 || !TryParsePositiveInt(TextImportMaxMegabytesBox.Text, "Max file MB", out int maxMegabytes)
                 || !TryParsePositiveInt(TextImportMaxChunksBox.Text, "Max chunks", out int maxChunks))
             {
+                return;
+            }
+
+            bool dryRun = TextImportDryRunCheckBox.IsChecked == true;
+            if (!TryResolveTopicNode(
+                sourceNodeID,
+                path,
+                dryRun,
+                out Guid? topicNodeID,
+                out bool useSourceAsTopic))
+            {
+                SetTextImportStatus("Text import failed: " + TopicSelectionStatusText.Text);
                 return;
             }
 
@@ -229,7 +704,8 @@ namespace OPEN_LRD
                 FilePath = path,
                 SourceNodeID = sourceNodeID,
                 TopicNodeID = topicNodeID,
-                DryRun = TextImportDryRunCheckBox.IsChecked == true,
+                DryRun = dryRun,
+                UseSourceAsTopic = useSourceAsTopic,
                 MaxFileBytes = maxFileBytes,
                 MaxChunks = maxChunks
             };
@@ -470,8 +946,8 @@ namespace OPEN_LRD
             ExportOntologyButton.IsEnabled = !busy;
             CancelOntologyButton.IsEnabled = busy;
             OntologyProgressBar.IsIndeterminate = busy;
-            TextImportButton.IsEnabled = !busy;
-            TextImportBrowseButton.IsEnabled = !busy;
+            TextImportCancelButton.IsEnabled = false;
+            SetIngestionControlsEnabled(!busy);
         }
 
         private void SetOntologyStatus(string text)
@@ -481,14 +957,7 @@ namespace OPEN_LRD
 
         private void SetTextImportBusy(bool busy)
         {
-            TextImportButton.IsEnabled = !busy;
-            TextImportBrowseButton.IsEnabled = !busy;
-            TextImportPathBox.IsEnabled = !busy;
-            TextImportSourceBox.IsEnabled = !busy;
-            TextImportTopicBox.IsEnabled = !busy;
-            TextImportDryRunCheckBox.IsEnabled = !busy;
-            TextImportMaxMegabytesBox.IsEnabled = !busy;
-            TextImportMaxChunksBox.IsEnabled = !busy;
+            SetIngestionControlsEnabled(!busy);
             TextImportCancelButton.IsEnabled = busy;
 
             ImportCoreLogButton.IsEnabled = !busy;
@@ -680,7 +1149,7 @@ namespace OPEN_LRD
             if (Core.initialized)
                 return true;
 
-            SetStatus("Launch Core before importing or exporting logs.");
+            SetStatus("Launch Core before using Tools.");
             return false;
         }
 

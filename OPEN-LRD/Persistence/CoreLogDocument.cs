@@ -174,6 +174,8 @@ namespace OPEN_LRD.Persistence
 
         public float WeightDown { get; set; }
 
+        public double? TrustRating { get; set; }
+
         public string? Label { get; set; }
 
         public List<string> Aliases { get; set; } = new List<string>();

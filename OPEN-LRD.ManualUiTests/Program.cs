@@ -51,6 +51,7 @@ namespace OPEN_LRD.ManualUiTests
             {
                 RunSection0_Preparation();
                 RunSection1_LayoutAndDefaults();
+                RunSection1_DirectTextIngestion();
                 RunSection2_InputValidation();
                 RunSection3_DryRun();
                 (Guid largeSourceId, Guid largeConvId) = RunSection4_RealImportAutomaticSource();
@@ -140,6 +141,33 @@ namespace OPEN_LRD.ManualUiTests
             DoEvents();
         }
 
+        private static void ClickDirectIngest(Tools window)
+        {
+            MethodInfo? method = typeof(Tools).GetMethod(
+                "DirectTextIngest_Button_Click",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            if (method is null)
+                throw new InvalidOperationException("Could not find DirectTextIngest_Button_Click");
+
+            method.Invoke(window, new object[] { window.DirectTextIngestButton, new RoutedEventArgs() });
+            DoEvents();
+        }
+
+        private static void SelectTopicMode(Tools window, string mode)
+        {
+            ComboBoxItem? item = window.TopicModeComboBox.Items
+                .Cast<ComboBoxItem>()
+                .FirstOrDefault(candidate => string.Equals(
+                    candidate.Tag?.ToString(),
+                    mode,
+                    StringComparison.Ordinal));
+            if (item is null)
+                throw new InvalidOperationException($"Topic mode '{mode}' was not found.");
+
+            window.TopicModeComboBox.SelectedItem = item;
+            DoEvents();
+        }
+
         private static void ClickCancel(Tools window)
         {
             MethodInfo? method = typeof(Tools).GetMethod(
@@ -201,6 +229,31 @@ namespace OPEN_LRD.ManualUiTests
             Check(window.MaintenanceElevationCheckBox.IsChecked == true, "Relation concept elevation is selected by default in the explicit maintenance panel.");
             Check(window.MaintenancePruningCheckBox.IsChecked == true, "Superseded-link pruning is selected by default in the explicit maintenance panel.");
             Check(window.StatusBox is not null, "Status box present (StatusBox).");
+            string[] tabHeaders = window.ToolsTabControl.Items
+                .Cast<TabItem>()
+                .Select(item => item.Header?.ToString() ?? string.Empty)
+                .ToArray();
+            Check(tabHeaders.SequenceEqual(new[] { "Logs", "Ingestion", "Ontology", "Maintenance", "Data Files" }),
+                $"Tools tabs appear in the planned order (actual: {string.Join(", ", tabHeaders)}).");
+            Check(window.DirectTextInput.MaxLength == 1000, "Direct text input is limited to 1,000 characters.");
+            Check(window.TopicModeComboBox.SelectedItem is ComboBoxItem defaultTopic
+                && defaultTopic.Tag?.ToString() == "Base",
+                "Default topic mode is base/general/none.");
+            string[] topicModes = window.TopicModeComboBox.Items
+                .Cast<ComboBoxItem>()
+                .Select(item => item.Tag?.ToString() ?? string.Empty)
+                .ToArray();
+            Check(topicModes.SequenceEqual(new[]
+                {
+                    "Base", "Guid", "Sense", "Label", "NodeType", "Alias", "Category",
+                    "Field", "Taxon", "Reality", "CurrentTopic", "Source"
+                }),
+                $"Topic dropdown contains separate single-select modes (actual: {string.Join(", ", topicModes)}).");
+            TabItem? dataFilesTab = window.ToolsTabControl.Items
+                .Cast<TabItem>()
+                .FirstOrDefault(item => item.Header?.ToString() == "Data Files");
+            Check(dataFilesTab?.Content is Grid dataFilesGrid && dataFilesGrid.Children.Count == 0,
+                "Phase 2 Data Files tab is blank with no placeholder content.");
 
             Check(window.TextImportPathBox.Text == "", "Default File path is empty.");
             Check(window.TextImportPathBox.IsReadOnly, "File path box is read-only.");
@@ -209,7 +262,7 @@ namespace OPEN_LRD.ManualUiTests
             Check(window.TextImportTopicBox.Text == "", "Default Topic ID is blank.");
 
             Check(window.TextImportDryRunCheckBox.IsChecked == false, "Default Dry run is unchecked.");
-            Check(window.TextImportMaxMegabytesBox.Text == "50", "Default Max file MB is 50.");
+            Check(window.TextImportMaxMegabytesBox.Text == "500", "Default Max file MB is 500.");
             Check(window.TextImportMaxChunksBox.Text == "10000", "Default Max chunks is 10000.");
 
             Check(window.TextImportButton.IsEnabled, "Default Import Text File button is enabled.");
@@ -227,6 +280,142 @@ namespace OPEN_LRD.ManualUiTests
             string? filter = filterField?.GetValue(null) as string;
             Check(filter == "Text files (*.txt;*.md;*.log)|*.txt;*.md;*.log|All files (*.*)|*.*",
                 $"Browse dialog filter matches specification: '{filter}'");
+        }
+
+        private static void RunSection1_DirectTextIngestion()
+        {
+            Console.WriteLine("\n--- SECTION 1A: DIRECT TEXT INGESTION AND TOPIC SELECTION ---");
+
+            LRD_Core core = LRD_Core.Instance;
+            core.InitializeCore();
+            Tools window = new Tools();
+            DoEvents();
+
+            string twoSentences = "Alice works at Acme. Bob sees Carol.";
+            int initialNodeCount = core.GetDictionary()?.Count ?? 0;
+            int initialConversationCount = core.GetConversations()?.Count ?? 0;
+            window.DirectTextInput.Text = twoSentences;
+            window.DirectTextDryRunCheckBox.IsChecked = true;
+            ClickDirectIngest(window);
+            Check(window.DirectTextStatusText.Text.Contains("2 sentence(s)", StringComparison.Ordinal)
+                && window.DirectTextStatusText.Text.Contains("supported", StringComparison.OrdinalIgnoreCase),
+                $"Direct dry run reports two sentence chunks (actual: '{window.DirectTextStatusText.Text}').");
+            Check((core.GetDictionary()?.Count ?? 0) == initialNodeCount,
+                "Direct dry run does not mutate the graph or create the user Source node.");
+            Check((core.GetConversations()?.Count ?? 0) == initialConversationCount,
+                "Direct dry run removes its temporary conversation after preview.");
+
+            window.DirectTextInput.Text = "Alice works at Acme. She sees Bob.";
+            window.DirectTextDryRunCheckBox.IsChecked = false;
+            ClickDirectIngest(window);
+            Check(window.DirectTextStatusText.Text.Contains("2 sentence(s)", StringComparison.Ordinal)
+                && window.DirectTextStatusText.Text.Contains("2 ingested", StringComparison.Ordinal),
+                $"Direct ingestion processes two sentences (actual: '{window.DirectTextStatusText.Text}').");
+            Web_Node? userSource = core.FindByLabel("user", NodeTypes.Sources).SingleOrDefault();
+            Check(userSource is not null, "Direct text creates/reuses the user Source node.");
+            Check(userSource?.TrustRating == 0.5, "The user Source node has a persisted 50% trust rating.");
+            Check(userSource?.Get_DataPointer() is null, "Manually entered text has no fabricated file pointer.");
+
+            ConversationContext firstConversation = GetDirectConversation(window);
+            Check(firstConversation.Provenance.Select(entry => entry.TurnIndex)
+                    .Distinct().OrderBy(index => index).SequenceEqual(new[] { 1, 2 }),
+                $"The sentences are ingested on separate turns in one conversation (turns: {string.Join(", ", firstConversation.Provenance.Select(entry => entry.TurnIndex).Distinct())}).");
+            Check(firstConversation.Provenance.Select(entry => entry.TrustSourceNodeID).Distinct().SequenceEqual(new[] { userSource?.ID }),
+                "Both sentence chunks use the same user Source node.");
+            Check(firstConversation.Provenance.All(entry => entry.TopicNodeID is null),
+                "The default base/general/none topic maps to no TopicNodeID.");
+
+            OntologyTypes.EnsureRegistered();
+            Guid guidTopic = AddTopicNode(core, NodeTypes.Concepts, "GuidTopic");
+            Guid labelTopic = AddTopicNode(core, NodeTypes.Entities, "LabelTopic");
+            Guid aliasTopic = AddTopicNode(core, NodeTypes.Entities, "AliasTopic", "topic-alias");
+            Guid typeTopic = AddTopicNode(core, NodeTypes.Concepts, "TypeTopic");
+            Guid senseTopic = AddTopicNode(core, OntologyTypes.Senses, "SenseTopic");
+            Guid categoryTopic = AddTopicNode(core, OntologyTypes.Categories, "CategoryTopic");
+            Guid fieldTopic = AddTopicNode(core, OntologyTypes.Fields, "FieldTopic");
+            Guid taxonTopic = AddTopicNode(core, OntologyTypes.Taxa, "TaxonTopic");
+            Guid realityTopic = AddTopicNode(core, OntologyTypes.Realities, "RealityTopic");
+
+            void RunTopicCase(
+                string mode,
+                string subjectName,
+                Guid? expectedTopicID,
+                string? value = null,
+                NodeTypes? typeFilter = null,
+                Guid? pickerID = null)
+            {
+                SelectTopicMode(window, mode);
+                if (mode is "Guid" or "Label" or "Alias")
+                    window.TextImportTopicBox.Text = value ?? string.Empty;
+                if (mode == "NodeType")
+                {
+                    window.TopicNodeTypeComboBox.SelectedItem = typeFilter;
+                    DoEvents();
+                }
+                if (pickerID.HasValue)
+                {
+                    Web_Node? topicChoice = window.TopicNodePickerComboBox.Items
+                        .Cast<Web_Node>()
+                        .FirstOrDefault(node => node.ID == pickerID.Value);
+                    Check(topicChoice is not null,
+                        $"Topic mode '{mode}' picker contains the requested graph node.");
+                    window.TopicNodePickerComboBox.SelectedItem = topicChoice;
+                }
+
+                window.DirectTextInput.Text = subjectName + " works at Acme.";
+                ClickDirectIngest(window);
+                Check(window.DirectTextStatusText.Text.Contains("1 ingested", StringComparison.Ordinal),
+                    $"Topic mode '{mode}' ingests its direct-text sentence (actual: '{window.DirectTextStatusText.Text}').");
+                ConversationContext conversation = GetDirectConversation(window);
+                Guid? actualTopic = conversation.Provenance.LastOrDefault()?.TopicNodeID;
+                Check(actualTopic == expectedTopicID,
+                    $"Topic mode '{mode}' resolves to '{expectedTopicID}' (actual: '{actualTopic}').");
+            }
+
+            RunTopicCase("CurrentTopic", "Dora", null);
+            RunTopicCase("Guid", "Elena", guidTopic, guidTopic.ToString());
+            RunTopicCase("CurrentTopic", "Fiona", guidTopic);
+            RunTopicCase("Label", "Grace", labelTopic, "LabelTopic");
+            RunTopicCase("Alias", "Heidi", aliasTopic, "topic-alias");
+            RunTopicCase("NodeType", "Judy", typeTopic, typeFilter: NodeTypes.Concepts, pickerID: typeTopic);
+            RunTopicCase("Sense", "Mallory", senseTopic, pickerID: senseTopic);
+            RunTopicCase("Category", "Oscar", categoryTopic, pickerID: categoryTopic);
+            RunTopicCase("Field", "Peggy", fieldTopic, pickerID: fieldTopic);
+            RunTopicCase("Taxon", "Sybil", taxonTopic, pickerID: taxonTopic);
+            RunTopicCase("Reality", "Trent", realityTopic, pickerID: realityTopic);
+            RunTopicCase("Source", "Victor", userSource!.ID);
+            RunTopicCase("Base", "Wendy", null);
+
+            window.DirectTextInput.Text = new string('x', 1001);
+            int beforeOverLimit = core.GetDictionary()?.Count ?? 0;
+            ClickDirectIngest(window);
+            Check(window.DirectTextStatusText.Text.Contains("1,000 characters", StringComparison.Ordinal),
+                $"Direct text rejects content above the character limit (actual: '{window.DirectTextStatusText.Text}').");
+            Check((core.GetDictionary()?.Count ?? 0) == beforeOverLimit,
+                "Over-limit direct text does not mutate the graph.");
+
+            window.Close();
+            DoEvents();
+
+            static Guid AddTopicNode(LRD_Core core, NodeTypes type, string label, string? alias = null)
+            {
+                Web_Node node = new Web_Node(Guid.NewGuid(), type, NodeLifetime.Permanent, 0);
+                node.Set_Label(label);
+                if (alias is not null)
+                    node.Add_Alias(alias);
+                Check(core.AddExistingNode(node), $"Topic node '{label}' should be added.");
+                return node.ID;
+            }
+
+            static ConversationContext GetDirectConversation(Tools window)
+            {
+                Match match = Regex.Match(
+                    window.StatusBox.Text,
+                    @"Conversation: (?<id>[0-9a-fA-F-]{36})");
+                if (!match.Success || !Guid.TryParse(match.Groups["id"].Value, out Guid conversationID))
+                    throw new InvalidOperationException("Direct ingestion report did not include a Conversation ID.");
+                return LRD_Core.Instance.GetConversation(conversationID);
+            }
         }
 
         // ================================================================================
@@ -274,11 +463,13 @@ namespace OPEN_LRD.ManualUiTests
             window.TextImportSourceBox.Text = "";
 
             // 5. Topic ID = "not-a-guid"
+            SelectTopicMode(window, "Guid");
             window.TextImportTopicBox.Text = "not-a-guid";
             ClickImport(window);
-            Check(window.TextImportStatusText.Text == "Topic ID must be a non-empty GUID, or blank.",
+            Check(window.TextImportStatusText.Text == "Text import failed: Enter a non-empty Topic GUID.",
                 $"Invalid Topic ID: status reports '{window.TextImportStatusText.Text}'");
             window.TextImportTopicBox.Text = "";
+            SelectTopicMode(window, "Base");
 
             // 6. Max file MB = 0, then -5, then "abc"
             string[] badMb = { "0", "-5", "abc" };
@@ -289,7 +480,7 @@ namespace OPEN_LRD.ManualUiTests
                 Check(window.TextImportStatusText.Text == "Max file MB must be a positive whole number.",
                     $"Max file MB = '{val}': status reports '{window.TextImportStatusText.Text}'");
             }
-            window.TextImportMaxMegabytesBox.Text = "50";
+            window.TextImportMaxMegabytesBox.Text = "500";
 
             // 7. Max chunks = 0, then -5, then "abc"
             string[] badChunks = { "0", "-5", "abc" };
@@ -307,7 +498,7 @@ namespace OPEN_LRD.ManualUiTests
             ClickImport(window);
             Check(window.TextImportStatusText.Text == "Max file MB must be a positive whole number.",
                 $"Max file MB overflow: status reports '{window.TextImportStatusText.Text}'");
-            window.TextImportMaxMegabytesBox.Text = "50";
+            window.TextImportMaxMegabytesBox.Text = "500";
 
             // 9. Cancel while idle
             string statusBeforeCancel = window.TextImportStatusText.Text;
@@ -524,6 +715,7 @@ namespace OPEN_LRD.ManualUiTests
             // 2. Provided Topic ID (valid existing node)
             Guid topicId = existingSourceId; // use existing node as topic
             window.TextImportSourceBox.Text = "";
+            SelectTopicMode(window, "Guid");
             window.TextImportTopicBox.Text = topicId.ToString();
 
             ClickImport(window);
@@ -534,6 +726,7 @@ namespace OPEN_LRD.ManualUiTests
             // 3. Unknown Source ID
             Guid unknownSource = Guid.Parse("11111111-1111-1111-1111-111111111111");
             window.TextImportSourceBox.Text = unknownSource.ToString();
+            SelectTopicMode(window, "Base");
             window.TextImportTopicBox.Text = "";
 
             ClickImport(window);
@@ -545,6 +738,7 @@ namespace OPEN_LRD.ManualUiTests
             // 4. Unknown Topic ID
             Guid unknownTopic = Guid.Parse("22222222-2222-2222-2222-222222222222");
             window.TextImportSourceBox.Text = "";
+            SelectTopicMode(window, "Guid");
             window.TextImportTopicBox.Text = unknownTopic.ToString();
 
             ClickImport(window);
@@ -552,6 +746,25 @@ namespace OPEN_LRD.ManualUiTests
 
             Check(window.TextImportStatusText.Text == $"Text import failed: Topic node '{unknownTopic}' was not found.",
                 $"Unknown Topic ID reports expected error: '{window.TextImportStatusText.Text}'");
+
+            // 5. Use the automatically attributed file Source as the topic.
+            window.TextImportSourceBox.Text = "";
+            SelectTopicMode(window, "Source");
+            window.TextImportPathBox.Text = smallPath;
+            ClickImport(window);
+            WaitForImportToFinish(window);
+            Match sourceMatch = Regex.Match(window.StatusBox.Text, @"Source node:\s+([a-fA-F0-9\-]{36})");
+            Match conversationMatch = Regex.Match(window.StatusBox.Text, @"Conversation:\s+([a-fA-F0-9\-]{36})");
+            Check(sourceMatch.Success && conversationMatch.Success,
+                "File Source topic import reports its Source and Conversation IDs.");
+            if (sourceMatch.Success && conversationMatch.Success)
+            {
+                Guid fileSourceID = Guid.Parse(sourceMatch.Groups[1].Value);
+                Guid conversationID = Guid.Parse(conversationMatch.Groups[1].Value);
+                Check(LRD_Core.Instance.GetConversation(conversationID).Provenance
+                        .All(entry => entry.TopicNodeID == fileSourceID),
+                    "Source topic mode uses the file's automatically created Source node as topic.");
+            }
         }
 
         // ================================================================================
@@ -627,7 +840,7 @@ namespace OPEN_LRD.ManualUiTests
             // 2. Binary file
             string binaryPath = Path.Combine(fixtureDir, "binary.bin");
             window.TextImportPathBox.Text = binaryPath;
-            window.TextImportMaxMegabytesBox.Text = "50";
+            window.TextImportMaxMegabytesBox.Text = "500";
 
             ClickImport(window);
             WaitForImportToFinish(window);
@@ -658,10 +871,10 @@ namespace OPEN_LRD.ManualUiTests
                 "Status box notes that remainder of the file was not imported.");
 
             // Restore defaults
-            window.TextImportMaxMegabytesBox.Text = "50";
+            window.TextImportMaxMegabytesBox.Text = "500";
             window.TextImportMaxChunksBox.Text = "10000";
-            Check(window.TextImportMaxMegabytesBox.Text == "50" && window.TextImportMaxChunksBox.Text == "10000",
-                "Restored default limits (50 MB, 10000 chunks).");
+            Check(window.TextImportMaxMegabytesBox.Text == "500" && window.TextImportMaxChunksBox.Text == "10000",
+                "Restored default limits (500 MiB, 10000 chunks).");
         }
 
         // ================================================================================
@@ -686,6 +899,10 @@ namespace OPEN_LRD.ManualUiTests
 
             // Verify controls disabled while active
             Check(!window.TextImportButton.IsEnabled, "Busy state: TextImportButton is disabled.");
+            Check(!window.DirectTextInput.IsEnabled && !window.DirectTextIngestButton.IsEnabled,
+                "Busy state: Direct text input and Ingest button are disabled.");
+            Check(!window.TopicModeComboBox.IsEnabled,
+                "Busy state: shared Topic selector is disabled.");
             Check(!window.TextImportBrowseButton.IsEnabled, "Busy state: TextImportBrowseButton is disabled.");
             Check(!window.TextImportPathBox.IsEnabled, "Busy state: TextImportPathBox is disabled.");
             Check(!window.TextImportSourceBox.IsEnabled, "Busy state: TextImportSourceBox is disabled.");
@@ -1044,6 +1261,8 @@ namespace OPEN_LRD.ManualUiTests
             Guid n3 = Guid.Parse("00000000-0000-0000-0000-000000000003");
             Web_Node node1 = new Web_Node(n1, NodeTypes.Basics, NodeLifetime.Permanent, 100);
             node1.Set_Label("Node Alpha");
+            for (int aliasIndex = 0; aliasIndex < 100; aliasIndex++)
+                node1.Add_Alias("Long selected-node alias segment number " + aliasIndex.ToString());
             Web_Node node2 = new Web_Node(n2, NodeTypes.Basics, NodeLifetime.Permanent, 100);
             node2.Set_Label("Node Beta");
             Web_Node node3 = new Web_Node(n3, NodeTypes.Concepts, NodeLifetime.Permanent, 100);
@@ -1076,6 +1295,10 @@ namespace OPEN_LRD.ManualUiTests
             Check(visualizerWin.FrameAllButton.IsEnabled, "FrameAllButton is enabled on populated graph.");
             Check(visualizerWin.RecomputeButton.IsEnabled, "RecomputeButton is enabled on populated graph.");
             Check(visualizerWin.ResetViewButton.IsEnabled, "ResetViewButton is enabled on populated graph.");
+            Check(visualizerWin.SelectionCard.Parent == visualizerWin.ViewportHost,
+                "Selected-node HUD is an overlay in the viewport, outside the sidebar.");
+            Check(visualizerWin.SelectionScrollViewer.VerticalScrollBarVisibility == ScrollBarVisibility.Auto,
+                "Selected-node HUD uses an auto-hiding vertical scrollbar.");
 
             // 6. Toolbar actions
             MethodInfo? frameClick = typeof(VisualizerWindow).GetMethod("FrameAll_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -1153,6 +1376,12 @@ namespace OPEN_LRD.ManualUiTests
 
             Check(visualizerWin.SelectedIndex == 0, "Selected node index is set to 0.");
             Check(visualizerWin.SelectionCard.Visibility == Visibility.Visible, "SelectionCard is visible when a node is selected.");
+            Check(visualizerWin.SelectedLabelText.TextWrapping == TextWrapping.Wrap
+                && visualizerWin.SelectedAliasesText.TextWrapping == TextWrapping.Wrap,
+                "Long selected-node labels and aliases wrap inside the HUD.");
+            visualizerWin.SelectionScrollViewer.UpdateLayout();
+            Check(visualizerWin.SelectionScrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible,
+                "Long selected-node content shows the auto vertical scrollbar.");
             Check(visualizerWin.SelectedLabelText.Text.Contains("Node Alpha"), $"Selection card displays node label (actual: '{visualizerWin.SelectedLabelText.Text}').");
             Check(visualizerWin.SelectedIdText.Text.Contains(n1.ToString()), "Selection card displays node GUID.");
             Check(visualizerWin.SelectedTypeText.Text.Contains("Basic"), $"Selection card displays node type (actual: '{visualizerWin.SelectedTypeText.Text}').");
@@ -1255,7 +1484,11 @@ namespace OPEN_LRD.ManualUiTests
             Check(visualizerWin.ColorsMap.LinkColors.Count == 0 && visualizerWin.ColorsMap.ClassColors.Count == 0, "ResetLinkColors clears all link and class overrides.");
 
             // 11. Phase 5: View Sliders, Settings & Persistence
-            visualizerWin.SpreadSlider.Value = 7.5;
+            Check(visualizerWin.SpreadSlider.Minimum == 10.0 && visualizerWin.SpreadSlider.Maximum == 100.0,
+                "SpreadSlider range is 10 through 100.");
+            Check(visualizerWin.SpreadSlider.TickFrequency == 1.0 && visualizerWin.SpreadSlider.IsSnapToTickEnabled,
+                "SpreadSlider snaps to whole units.");
+            visualizerWin.SpreadSlider.Value = 17.6;
             visualizerWin.CubeSizeSlider.Value = 1.2;
             visualizerWin.LineWidthSlider.Value = 0.2;
             visualizerWin.MaxLabelsSlider.Value = 500;
@@ -1272,7 +1505,7 @@ namespace OPEN_LRD.ManualUiTests
             maxLinksInput?.Invoke(visualizerWin, new object[] { visualizerWin.MaxLinksInputBox, new RoutedEventArgs() });
             DoEvents();
 
-            Check(visualizerWin.Options.Spread == 7.5, "SpreadSlider updates options.Spread.");
+            Check(visualizerWin.Options.Spread == 18.0, "SpreadSlider rounds/snaps to a whole-unit options.Spread.");
             Check(visualizerWin.Options.CubeSize == 1.2, "CubeSizeSlider updates options.CubeSize.");
             Check(visualizerWin.Options.LineWidth == 0.2, "LineWidthSlider updates options.LineWidth.");
             Check(visualizerWin.Options.MaxLabels == 500, "MaxLabelsSlider updates options.MaxLabels.");
@@ -1284,7 +1517,8 @@ namespace OPEN_LRD.ManualUiTests
 
             MethodInfo? applySettings = typeof(VisualizerWindow).GetMethod("ApplySettings_Click", BindingFlags.NonPublic | BindingFlags.Instance);
             applySettings?.Invoke(visualizerWin, new object[] { visualizerWin.ApplySettingsButton, new RoutedEventArgs() });
-            WaitForCondition(() => !visualizerWin.IsLoading, 10000, "Apply layout with raised graph caps");
+            WaitForCondition(() => !visualizerWin.HasPendingLayoutReplacement && !visualizerWin.IsLoading,
+                15000, "debounced Apply layout with raised graph caps");
             Check(visualizerWin.Snapshot?.Nodes.Count == 3, "Apply Layout refreshes graph snapshot after changing caps.");
 
             visualizerWin.SaveSettingsForTesting();
@@ -1292,7 +1526,7 @@ namespace OPEN_LRD.ManualUiTests
             Check(File.Exists(settingsPath), $"Visualizer settings saved to JSON file: {settingsPath}");
 
             string settingsJson = File.ReadAllText(settingsPath);
-            Check(settingsJson.Contains("\"spread\": 7.5"), "Saved settings JSON contains updated spread (7.5).");
+            Check(settingsJson.Contains("\"spread\": 18"), "Saved settings JSON contains updated whole-unit spread (18).");
             Check(settingsJson.Contains("\"cubeSize\": 1.2"), "Saved settings JSON contains updated cubeSize (1.2).");
             Check(settingsJson.Contains("\"maxNodes\": 31000"), "Saved settings JSON contains updated maxNodes (31000).");
             Check(settingsJson.Contains("\"maxLinks\": 76000"), "Saved settings JSON contains updated maxLinks (76000).");
@@ -1321,11 +1555,121 @@ namespace OPEN_LRD.ManualUiTests
             MethodInfo? resetViewSettings = typeof(VisualizerWindow).GetMethod("ResetViewSettings_Click", BindingFlags.NonPublic | BindingFlags.Instance);
             resetViewSettings?.Invoke(visualizerWin, new object[] { visualizerWin.ResetViewSettingsButton, new RoutedEventArgs() });
             DoEvents();
-            Check(visualizerWin.Options.Spread == 6.0, "ResetViewSettings restores default Spread (6.0).");
+            WaitForCondition(() => !visualizerWin.HasPendingLayoutReplacement && !visualizerWin.IsLoading,
+                15000, "debounced sidebar Reset View");
+            Check(visualizerWin.Options.Spread == 20.0, "Sidebar Reset View restores default Spread (20.0).");
             Check(visualizerWin.Options.CubeSize == 1.0, "ResetViewSettings restores default CubeSize (1.0).");
             Check(visualizerWin.Options.MaxNodes == VisualizerOptions.DefaultMaxNodes, "ResetViewSettings restores default node cap.");
             Check(visualizerWin.Options.MaxLinks == VisualizerOptions.DefaultMaxLinks, "ResetViewSettings restores default link cap.");
             Check(visualizerWin.Options.MaxIterations == 300, "ResetViewSettings keeps max layout iterations at 300.");
+
+            // Phase 3: cancel-and-replace, trailing-edge debounce, and exception logging.
+            string exceptionDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "open-lrd-visualizer-exceptions-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(exceptionDirectory);
+            string exceptionLogPath = Path.Combine(exceptionDirectory, "_exceptions.log");
+            VisualizerWindow.ExceptionLogPathOverrideForTesting = exceptionLogPath;
+            try
+            {
+                using ManualResetEventSlim firstLayoutStarted = new ManualResetEventSlim();
+                int layoutCalls = 0;
+                long replacementStartTicks = 0;
+                visualizerWin.LayoutComputationForTesting = (graph, options, token) =>
+                {
+                    int call = Interlocked.Increment(ref layoutCalls);
+                    if (call == 1)
+                    {
+                        firstLayoutStarted.Set();
+                        token.WaitHandle.WaitOne();
+                        token.ThrowIfCancellationRequested();
+                    }
+                    else if (call == 2)
+                    {
+                        Interlocked.Exchange(ref replacementStartTicks, DateTime.UtcNow.Ticks);
+                    }
+
+                    return DistanceLayout3D.Compute(graph, options, token);
+                };
+
+                Task cancelledLayout = visualizerWin.RefreshGraphForTestingAsync();
+                WaitForCondition(() => firstLayoutStarted.IsSet, 10000, "initial injected layout to start");
+                Check(visualizerWin.IsLoading, "Injected initial layout is actively generating.");
+
+                resetViewSettings?.Invoke(
+                    visualizerWin,
+                    new object[] { visualizerWin.ResetViewSettingsButton, new RoutedEventArgs() });
+                visualizerWin.SpreadSlider.Value = 37.0;
+                applySettings?.Invoke(
+                    visualizerWin,
+                    new object[] { visualizerWin.ApplySettingsButton, new RoutedEventArgs() });
+                DateTime latestSettingsClickUtc = DateTime.UtcNow;
+
+                WaitForCondition(
+                    () => Interlocked.Read(ref replacementStartTicks) > 0,
+                    15000,
+                    "debounced replacement layout to start");
+                TimeSpan debounceElapsed = new TimeSpan(
+                    Interlocked.Read(ref replacementStartTicks) - latestSettingsClickUtc.Ticks);
+                Check(debounceElapsed >= TimeSpan.FromSeconds(2),
+                    $"Replacement waits at least two seconds after the latest click (actual: {debounceElapsed.TotalSeconds:F2}s).");
+                WaitForCondition(
+                    () => cancelledLayout.IsCompleted
+                        && !visualizerWin.HasPendingLayoutReplacement
+                        && !visualizerWin.IsLoading,
+                    15000,
+                    "cancelled and replacement layouts to complete");
+                Check(layoutCalls == 2, $"Latest settings replace the cancelled layout (layout calls: {layoutCalls}).");
+                Check(visualizerWin.Options.Spread == 37.0,
+                    "The latest Apply Layout click wins over the earlier Reset View request.");
+
+                string cancellationLog = File.ReadAllText(exceptionLogPath);
+                Check(cancellationLog.Contains(nameof(OperationCanceledException), StringComparison.Ordinal),
+                    "OperationCanceledException is appended to the exception log during replacement.");
+                Check(cancellationLog.Contains("Apply Layout", StringComparison.Ordinal),
+                    "Exception log records the latest action that replaced the active layout.");
+
+                visualizerWin.LayoutComputationForTesting = (_, _, _) =>
+                    throw new InvalidOperationException("injected visualizer layout failure");
+                resetViewSettings?.Invoke(
+                    visualizerWin,
+                    new object[] { visualizerWin.ResetViewSettingsButton, new RoutedEventArgs() });
+                WaitForCondition(
+                    () => !visualizerWin.HasPendingLayoutReplacement
+                        && !visualizerWin.IsLoading
+                        && visualizerWin.StatusText.Text.Contains("injected visualizer layout failure", StringComparison.Ordinal),
+                    15000,
+                    "injected layout exception to be reported");
+                string appendedLog = File.ReadAllText(exceptionLogPath);
+                Check(appendedLog.Contains("InvalidOperationException", StringComparison.Ordinal)
+                    && appendedLog.Contains("injected visualizer layout failure", StringComparison.Ordinal),
+                    "Unexpected layout exceptions are appended with their type and message.");
+
+                string blockingFile = Path.Combine(exceptionDirectory, "not-a-directory");
+                File.WriteAllText(blockingFile, "block directory creation");
+                VisualizerWindow.ExceptionLogPathOverrideForTesting = Path.Combine(
+                    blockingFile,
+                    "nested",
+                    "_exceptions.log");
+                resetViewSettings?.Invoke(
+                    visualizerWin,
+                    new object[] { visualizerWin.ResetViewSettingsButton, new RoutedEventArgs() });
+                WaitForCondition(
+                    () => !visualizerWin.HasPendingLayoutReplacement
+                        && !visualizerWin.IsLoading
+                        && visualizerWin.WarningsText.Text.Contains("Exception log write failed", StringComparison.Ordinal),
+                    15000,
+                    "exception-log write failure to be reported safely");
+                Check(visualizerWin.StatusText.Text.Contains("injected visualizer layout failure", StringComparison.Ordinal),
+                    "Log write failure does not mask the original exception.");
+            }
+            finally
+            {
+                visualizerWin.LayoutComputationForTesting = null;
+                VisualizerWindow.ExceptionLogPathOverrideForTesting = null;
+                if (Directory.Exists(exceptionDirectory))
+                    Directory.Delete(exceptionDirectory, recursive: true);
+            }
 
             // 12. Phase 5: Help Overlay
             Check(visualizerWin.HelpOverlay.Visibility == Visibility.Collapsed, "HelpOverlay is collapsed by default.");

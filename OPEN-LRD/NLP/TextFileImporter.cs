@@ -12,7 +12,8 @@ namespace OPEN_LRD.NLP
         public Guid? SourceNodeID { get; init; }
         public Guid? TopicNodeID { get; init; }
         public bool DryRun { get; init; }
-        public long MaxFileBytes { get; init; } = 50L * 1024 * 1024;
+        public bool UseSourceAsTopic { get; init; }
+        public long MaxFileBytes { get; init; } = 500L * 1024 * 1024;
         public int MaxChunks { get; init; } = 10000;
         public int MaxChunkCharacters { get; init; } = 15000;
         public int MaxSentencesPerChunk { get; init; } = 40;
@@ -147,6 +148,9 @@ namespace OPEN_LRD.NLP
             {
                 sourceNodeID = EnsureSourceNode(core, filePath, out sourceCreated);
             }
+
+            if (options.UseSourceAsTopic)
+                topicNodeID = sourceNodeID;
 
             int processedChunks = 0;
             int ingestedChunks = 0;

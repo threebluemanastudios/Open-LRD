@@ -238,6 +238,77 @@
                         </StackPanel>
                     </Border>
                 </Border>
+
+                <Border x:Name="SelectionCard"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,16,16"
+                        MaxWidth="340"
+                        MaxHeight="360"
+                        Padding="10"
+                        Background="#E6121722"
+                        BorderBrush="#3D4A60"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Visibility="Collapsed">
+                    <DockPanel LastChildFill="True">
+                        <DockPanel DockPanel.Dock="Top" LastChildFill="False" Margin="0,0,0,6">
+                            <TextBlock DockPanel.Dock="Left"
+                                       VerticalAlignment="Center"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="#4FC3F7"
+                                       Text="SELECTED NODE" />
+                            <Button x:Name="ClearSelectionButton"
+                                    DockPanel.Dock="Right"
+                                    Margin="6,0,0,0"
+                                    Padding="8,2"
+                                    FontSize="11"
+                                    Click="ClearSelection_Button_Click"
+                                    Content="Clear"
+                                    ToolTip="Clear current selection (or click empty space)." />
+                            <Button x:Name="CenterSelectionButton"
+                                    DockPanel.Dock="Right"
+                                    Padding="8,2"
+                                    FontSize="11"
+                                    Click="CenterSelection_Button_Click"
+                                    Content="Center View"
+                                    ToolTip="Center the camera view on the selected node." />
+                        </DockPanel>
+                        <ScrollViewer x:Name="SelectionScrollViewer"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      MaxHeight="310">
+                            <StackPanel>
+                                <TextBlock x:Name="SelectedLabelText"
+                                           Margin="0,0,0,3"
+                                           FontWeight="SemiBold"
+                                           Foreground="#FFFFFF"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedIdText"
+                                           Margin="0,0,0,3"
+                                           FontSize="11"
+                                           Foreground="#8AB4F8"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedTypeText"
+                                           Margin="0,0,0,3"
+                                           Foreground="#D7E2F0"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedLifetimeText"
+                                           Margin="0,0,0,3"
+                                           Foreground="#D7E2F0"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedDegreeText"
+                                           Margin="0,0,0,3"
+                                           Foreground="#D7E2F0"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedAliasesText"
+                                           Foreground="#9FB0C6"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
             </Grid>
 
             <Border Grid.Column="1"
@@ -337,13 +408,13 @@
 
                                 <DockPanel Margin="0,0,0,4">
                                     <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Spread:" />
-                                    <TextBlock x:Name="SpreadValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="6.0" />
+                                    <TextBlock x:Name="SpreadValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="20" />
                                 </DockPanel>
                                 <Slider x:Name="SpreadSlider"
-                                        Minimum="1.0"
-                                        Maximum="20.0"
-                                        Value="6.0"
-                                        TickFrequency="0.5"
+                                        Minimum="10.0"
+                                        Maximum="100.0"
+                                        Value="20.0"
+                                        TickFrequency="1.0"
                                         IsSnapToTickEnabled="True"
                                         ValueChanged="SpreadSlider_ValueChanged"
                                         Margin="0,0,0,8" />
@@ -474,46 +545,6 @@
                                             Content="Reset View"
                                             ToolTip="Reset view settings to defaults." />
                                 </StackPanel>
-
-                                <Border x:Name="SelectionCard"
-                                        Margin="0,6,0,10"
-                                        Padding="10"
-                                        Background="#181F2E"
-                                        BorderBrush="#3D4A60"
-                                        BorderThickness="1"
-                                        CornerRadius="4"
-                                        Visibility="Collapsed">
-                                    <StackPanel>
-                                        <DockPanel LastChildFill="False" Margin="0,0,0,6">
-                                            <TextBlock DockPanel.Dock="Left"
-                                                       FontSize="13"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="#4FC3F7"
-                                                       Text="SELECTED NODE" />
-                                            <Button x:Name="ClearSelectionButton"
-                                                    DockPanel.Dock="Right"
-                                                    Padding="8,2"
-                                                    FontSize="11"
-                                                    Click="ClearSelection_Button_Click"
-                                                    Content="Clear"
-                                                    ToolTip="Clear current selection (or click empty space)." />
-                                            <Button x:Name="CenterSelectionButton"
-                                                    DockPanel.Dock="Right"
-                                                    Margin="0,0,6,0"
-                                                    Padding="8,2"
-                                                    FontSize="11"
-                                                    Click="CenterSelection_Button_Click"
-                                                    Content="Center View"
-                                                    ToolTip="Center the camera view on the selected node." />
-                                        </DockPanel>
-                                        <TextBlock x:Name="SelectedLabelText" Margin="0,0,0,3" FontWeight="SemiBold" Foreground="#FFFFFF" TextWrapping="Wrap" />
-                                        <TextBlock x:Name="SelectedIdText" Margin="0,0,0,3" FontSize="11" Foreground="#8AB4F8" TextWrapping="Wrap" />
-                                        <TextBlock x:Name="SelectedTypeText" Margin="0,0,0,3" Foreground="#D7E2F0" />
-                                        <TextBlock x:Name="SelectedLifetimeText" Margin="0,0,0,3" Foreground="#D7E2F0" />
-                                        <TextBlock x:Name="SelectedDegreeText" Margin="0,0,0,3" Foreground="#D7E2F0" />
-                                        <TextBlock x:Name="SelectedAliasesText" Foreground="#9FB0C6" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
 
                                 <TextBlock Margin="0,8,0,6"
                                            FontSize="13"

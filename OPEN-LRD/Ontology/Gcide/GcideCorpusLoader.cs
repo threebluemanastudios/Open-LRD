@@ -32,6 +32,7 @@ namespace OPEN_LRD.Ontology.Gcide
         private int senseNodes;
         private int linksCreated;
         private int skippedRelations;
+        private Guid? dictionarySourceNodeID;
 
         private GcideCorpusLoader(LRD_Core core, GcideLoadOptions options)
         {
@@ -111,6 +112,7 @@ namespace OPEN_LRD.Ontology.Gcide
 
                 LoadEntry(entry);
                 entriesLoaded++;
+                EnsureDictionarySourceNode();
                 ReportProgress(entry);
 
                 if (options.MaxEntries > 0 && entriesLoaded >= options.MaxEntries)
@@ -172,6 +174,33 @@ namespace OPEN_LRD.Ontology.Gcide
 
             foreach (string alias in node.Aliases)
                 index.TryAdd(alias, node.Get_ID());
+        }
+
+        private void EnsureDictionarySourceNode()
+        {
+            if (dictionarySourceNodeID.HasValue)
+                return;
+
+            Web_Node? existing = core.FindByLabel("dictionary", NodeTypes.Sources).FirstOrDefault();
+            if (existing is not null)
+            {
+                existing.Set_TrustRating(1.0);
+                dictionarySourceNodeID = existing.ID;
+                return;
+            }
+
+            Web_Node source = new Web_Node(
+                Guid.NewGuid(),
+                NodeTypes.Sources,
+                NodeLifetime.Permanent,
+                0);
+            source.Set_Label("dictionary");
+            source.Set_TrustRating(1.0);
+
+            if (!core.AddExistingNode(source))
+                throw new InvalidOperationException("The dictionary source node could not be added.");
+
+            dictionarySourceNodeID = source.ID;
         }
 
         private void LoadEntry(GcideEntry entry)

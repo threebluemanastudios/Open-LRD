@@ -350,7 +350,7 @@ namespace OPEN_LRD.SmokeTests
 
                 VisualizerOptions options = new VisualizerOptions
                 {
-                    Spread = 7.5,
+                    Spread = 17.0,
                     CubeSize = 1.2,
                     LineWidth = 0.2,
                     ShowLabels = false,
@@ -384,7 +384,7 @@ namespace OPEN_LRD.SmokeTests
                 Assert(
                     loadedColors.GetClassColor(LinkClass.identities.Id) == Color("Violet").Color,
                     "class color should round trip");
-                Assert(loadedOptions.Spread == 7.5, "spread should round trip");
+                Assert(loadedOptions.Spread == 17.0, "spread should round trip");
                 Assert(loadedOptions.CubeSize == 1.2, "cube size should round trip");
                 Assert(loadedOptions.LineWidth == 0.2, "line width should round trip");
                 Assert(!loadedOptions.ShowLabels, "label visibility should round trip");
@@ -423,6 +423,27 @@ namespace OPEN_LRD.SmokeTests
                 Assert(futureWarning is not null, "unsupported versions should report a warning");
                 Assert(future.View.Spread == VisualizerOptions.DefaultSpread, "unsupported versions should use defaults");
 
+                VisualizerOptions migrated = new VisualizerOptions();
+                VisualizerSettings oldLowSpread = VisualizerSettings.CreateDefault();
+                oldLowSpread.View.Spread = 7.5;
+                oldLowSpread.ApplyTo(new GraphColorMap(), migrated);
+                Assert(migrated.Spread == 10.0, "old saved spread values below the slider minimum should clamp to 10");
+
+                VisualizerSettings oldHighSpread = VisualizerSettings.CreateDefault();
+                oldHighSpread.View.Spread = 125.0;
+                oldHighSpread.ApplyTo(new GraphColorMap(), migrated);
+                Assert(migrated.Spread == 100.0, "old saved spread values above the slider maximum should clamp to 100");
+
+                VisualizerSettings fractionalSpread = VisualizerSettings.CreateDefault();
+                fractionalSpread.View.Spread = 23.6;
+                fractionalSpread.ApplyTo(new GraphColorMap(), migrated);
+                Assert(migrated.Spread == 24.0, "fractional saved spread values should round to the nearest whole number");
+
+                VisualizerSettings invalidSpread = VisualizerSettings.CreateDefault();
+                invalidSpread.View.Spread = double.NaN;
+                invalidSpread.ApplyTo(new GraphColorMap(), migrated);
+                Assert(migrated.Spread == VisualizerOptions.DefaultSpread, "invalid saved spread values should reset to 20");
+
                 GraphColorMap colors = new GraphColorMap();
                 colors.SetNodeColor(NodeTypes.Basics.Id, Color("Red").Color);
                 VisualizerOptions options = new VisualizerOptions { Spread = 42.0 };
@@ -440,7 +461,7 @@ namespace OPEN_LRD.SmokeTests
         {
             VisualizerOptions valid = new VisualizerOptions
             {
-                Spread = 1e-9,
+                Spread = VisualizerOptions.MinimumSpread,
                 CubeSize = 1e-9,
                 LineWidth = 1e-9,
                 MaxIterations = 1,
@@ -455,11 +476,23 @@ namespace OPEN_LRD.SmokeTests
 
             valid.Validate();
             Assert(valid.MinSpacing == VisualizerOptions.MinimumSpacing, "minimum spacing should clamp tiny values");
+            Assert(VisualizerOptions.NormalizeSpread(9.9) == 10.0, "spread below the slider range should clamp to 10");
+            Assert(VisualizerOptions.NormalizeSpread(100.1) == 100.0, "spread above the slider range should clamp to 100");
+            Assert(VisualizerOptions.NormalizeSpread(34.4) == 34.0, "spread should round down to the nearest whole number");
+            Assert(VisualizerOptions.NormalizeSpread(34.6) == 35.0, "spread should round up to the nearest whole number");
+            Assert(VisualizerOptions.NormalizeSpread(double.PositiveInfinity) == VisualizerOptions.DefaultSpread,
+                "non-finite spread should reset to the default");
             Assert(new VisualizerOptions().MinSpacing == 1.75, "default spacing should scale from the default cube size");
 
             AssertThrows<ArgumentOutOfRangeException>(
                 () => new VisualizerOptions { Spread = double.NaN }.Validate(),
                 "non-finite spread should be rejected");
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => new VisualizerOptions { Spread = 9.0 }.Validate(),
+                "spread below 10 should be rejected by options validation");
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => new VisualizerOptions { Spread = 100.5 }.Validate(),
+                "fractional spread should be rejected by options validation");
             AssertThrows<ArgumentOutOfRangeException>(
                 () => new VisualizerOptions { CubeSize = 0d }.Validate(),
                 "zero cube size should be rejected");
@@ -857,7 +890,8 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.AddConnection(NodeId(3), NodeId(4)), "second pair should connect");
 
             GraphSnapshot snapshot = GraphSnapshot.FromCore(core);
-            LayoutResult result = DistanceLayout3D.Compute(snapshot);
+            VisualizerOptions options = new VisualizerOptions();
+            LayoutResult result = DistanceLayout3D.Compute(snapshot, options);
 
             foreach (Vector3 position in result.Positions)
                 Assert(IsFinite(position), "packed positions should stay finite");
@@ -869,7 +903,7 @@ namespace OPEN_LRD.SmokeTests
                 Vector3.Distance(firstCentroid, secondCentroid) >= 7.4f,
                 "disconnected components should be packed apart by the pack margin");
             Assert(
-                Vector3.Distance(result.Positions[0], result.Positions[1]) <= 6f * 1.1f,
+                Vector3.Distance(result.Positions[0], result.Positions[1]) <= options.Spread * 1.1f,
                 "packing should translate whole components without stretching their links");
         }
 

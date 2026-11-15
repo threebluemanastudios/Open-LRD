@@ -177,6 +177,8 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(source.Add_Alias("alpha-alias"), "source alias should be added");
                 source.Add_WeightUp(3);
                 source.Add_WeightDown(2);
+                source.Set_TrustRating(0.5);
+                source.Set_TrustRating(0.5);
 
                 AddNode(
                     core,
@@ -284,6 +286,8 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(restored.Get_TTL() == 0, "TTL should round trip");
                 Program.Assert(restored.Get_WeightUp() == 3, "weight up should round trip");
                 Program.Assert(restored.Get_WeightDown() == 2, "weight down should round trip");
+                Program.Assert(restored.TrustRating == 0.5, "trust rating should round trip");
+                Program.Assert(restored.TrustRating == 0.5, "source trust rating should round trip");
                 Program.Assert(restored.Aliases.Contains("alpha-alias"), "aliases should round trip");
                 Program.Assert(
                     restored.Get_DataPointer() is not null

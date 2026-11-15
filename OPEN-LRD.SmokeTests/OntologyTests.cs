@@ -294,6 +294,8 @@ namespace OPEN_LRD.SmokeTests
                 Assert(result.WordNodes == 4, "four lexemes should be created");
                 Assert(result.SenseNodes == 5, "five senses should be created");
                 Assert(result.LinksCreated > 0, "the load should create links");
+                Web_Node dictionarySource = Node(core, "dictionary", NodeTypes.Sources);
+                Assert(dictionarySource.TrustRating == 1.0, "dictionary imports should use a 100% trust source");
 
                 Web_Node dog = Node(core, "dog", OntologyTypes.Lexemes);
                 Web_Node canine = Node(core, "canine", OntologyTypes.Lexemes);

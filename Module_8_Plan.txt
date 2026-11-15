@@ -2,9 +2,11 @@ OPEN-LRD
 MODULE 8: GCIDE ASK, TOOLS UI, VISUALIZER, AND DATA FILE INGESTION
 IMPLEMENTATION PLAN
 
-Status: Phase 1 complete; Phases 2-4 planned.
-Current integrated verification: 171 smoke tests and 299 WPF UI checks pass;
+Status: Phases 1-3 complete; Phase 4 planned.
+Current integrated verification: 171 smoke tests and 375 WPF UI checks pass;
 application and test builds complete with zero warnings and zero errors.
+Phase 4 implementation has not started; its open design decisions are listed in
+Section 6.3 and should be resolved before implementation begins.
 Scope: GCIDE dictionary question answering, Tools window organization, Visualizer
        layout controls and selection HUD, and text/JSON/CSV/XML file ingestion.
 Target: .NET 10 WPF (net10.0-windows), using existing OPEN-LRD graph and NLP
@@ -39,10 +41,18 @@ Decisions confirmed with the user:
     node's weightUp by 1, are ignored as new entries, and count as successful reads.
     Same-file re-imports above 80% trust are skipped; at or below 80%, re-imports
     do not increase their own nodes' weightUp and can only raise source trust.
-  - Apply Layout or Reset View during active rendering cancels the current
-    rendering and replaces it with the requested layout.
+  - The Phase 3 spread slider changes by whole units from 10 to 100, and saved
+    values above 100 clamp to 100 while fractional values round to the nearest
+    whole number.
+  - Apply Layout or the View-tab Reset View cancels active rendering; the latest
+    click wins, with a two-second trailing-edge debounce before replacement
+    rendering starts. The toolbar Reset View button is outside this requirement.
+  - Every caught exception, including `OperationCanceledException`, is appended
+    to the continuous `.logs/_exceptions.log` file.
   - The selected-node HUD is fixed in the viewport and automatically hides when
-    no node is selected. Previously saved spread values below 10 clamp to 10.
+    no node is selected; long content wraps and uses an auto-hiding vertical
+    scrollbar. Previously saved spread values below 10 clamp to 10, values above
+    100 clamp to 100, and invalid/non-finite values reset to 20.
   - Phase 3 must capture the exception encountered when Apply Layout or Reset
     View is clicked while a 3D model/layout is generating.
 
@@ -148,7 +158,7 @@ Sense definition rather than searching for facts about the question word
 - When no matching dictionary entry or fact exists, the system returns an
   appropriate no-match response without treating `What` as the subject anchor.
 
-Phase 1 verification: 171 smoke tests and 299 WPF UI checks pass. Application,
+Phase 1 completion verification: 171 smoke tests and 299 WPF UI checks passed. Application,
 smoke-test, and Manual UI test builds complete with zero warnings and zero errors.
 
 ================================================================================
@@ -265,18 +275,24 @@ Pinned Status:
   choices and field visibility, tab switching, pinned status output, and all
   retained workflows.
 
+Phase 2 completion verification: 171 smoke tests and 361 WPF UI checks pass.
+Application, smoke-test, and Manual UI test builds complete with zero warnings
+and zero errors.
+
 ================================================================================
 4. PHASE 3: VISUALIZER SPREAD, SELECTION HUD, AND GENERATION EXCEPTION
 ================================================================================
 
 4.1 Spread slider range
 - Set Spread minimum to 10.0, maximum to 100.0, and default to 20.0.
+- Set slider `TickFrequency` to 1.0 and `IsSnapToTickEnabled` to true so slider
+  changes land only on whole-number values one unit apart. `TickFrequency` also
+  spaces visible tick marks when tick placement is enabled.
 - Update slider display/formatting, option validation, reset behavior, and
   persisted-settings handling consistently.
-- Normalize persisted spread values outside the new range. Proposed behavior:
-  clamp finite values below/above the range to 10.0/100.0 respectively; use
-  20.0 for non-finite or otherwise invalid values. Verify this policy against
-  existing settings and tests before implementation.
+- Normalize persisted spread values by clamping finite values below/above the
+  range to 10.0/100.0 respectively and rounding fractional values to the nearest
+  whole number. Reset non-finite or otherwise invalid values to 20.0.
 - Preserve the selected spread through settings save/reload and Apply Layout.
 
 4.2 Selected-node floating HUD
@@ -285,23 +301,24 @@ Pinned Status:
 - Show the card when a node is selected and collapse it when selection clears.
 - Retain the currently displayed information: label, ID, type, lifetime,
   degree, aliases, and the existing Center View and Clear actions.
+- Wrap long labels and aliases. Constrain the pane to available viewport height
+  and provide an auto-hiding vertical scrollbar when content exceeds that height.
 - Keep the View tab focused on graph/layout metrics and visual settings.
 - Verify the HUD remains readable and usable after window resizing, on narrow
   viewports, with long labels/aliases, and while changing sidebar tabs.
 - Ensure pointer input on HUD buttons does not accidentally select or clear a
   graph node underneath the overlay.
 
-4.3 Capture Apply Layout / Reset View exception during generation
-Observed code context: `ApplySettings_Click` and `ResetViewSettings_Click` are
-async-void WPF event handlers. The layout operation tracks active generation,
-and its buttons currently need explicit testing when `isLoading` is true. The
-reported exception must be captured from the actual failure; do not assume its
-type or cause in advance.
+4.3 Capture Apply Layout / sidebar Reset View exceptions during generation
+The affected controls are `ApplySettingsButton` and the View-tab
+`ResetViewSettingsButton` (handler `ResetViewSettings_Click`). The toolbar's
+separate `ResetViewButton` is out of scope. The reported exception must be
+captured from the actual failure; do not assume its type or cause in advance.
 
 Required investigation and behavior:
 - Reproduce the reported failure by starting a sufficiently long 3D model/layout
-  generation and clicking each View-tab action separately while generation is
-  active: Apply Layout and Reset View.
+  generation and clicking Apply Layout and sidebar Reset View while generation
+  is active.
 - Capture diagnostic context for any thrown exception: initiating button,
   exception type, message, stack trace, and whether a layout was active. Surface
   a concise message in Visualizer status/warnings and append the full exception
@@ -315,35 +332,49 @@ Required investigation and behavior:
 - Prevent an exception from escaping an async-void UI handler and becoming an
   unhandled dispatcher exception.
 - When either action is invoked during active generation, cancel the current
-  rendering and replace it with the layout requested by that action. Coordinate
-  cancellation so the old and replacement layouts do not mutate scene state
-  concurrently; do not silently discard the click.
-- Keep cancellation (`OperationCanceledException`) distinct from unexpected
-  failures, and restore button/loading state in every exit path.
+  rendering immediately and queue the latest requested settings. Start the
+  replacement only after at least two seconds have elapsed since the latest
+  click. Coordinate cancellation so old and replacement layouts never mutate
+  scene state concurrently; do not silently discard the latest request.
+- Append every thrown exception, including `OperationCanceledException`, to
+  `.logs/_exceptions.log`. Distinguish intentional cancellation from unexpected
+  failure in the record/status, and restore button/loading state in every exit
+  path.
 - If the original failure cannot be reproduced in a deterministic automated
   test, preserve a repeatable manual stress procedure and add tests for handler
   safety/state recovery using an injectable or controllable layout task.
 
 4.4 Acceptance criteria
 - Spread slider and persisted options support 10.0-100.0 with a default of
-  20.0; old values below 10 clamp to 10. Values above 100 and invalid values
-  follow the selected normalization/fallback policy.
+  20.0 in whole-number slider increments; persisted values below 10 clamp to 10,
+  values above 100 clamp to 100, and fractional values round to the nearest
+  whole number. Invalid/non-finite values reset to 20.
 - Selected-node information appears as a bottom-right viewport HUD, not in the
   View sidebar tab; it is fixed in place, auto-hides when there is no selection,
-  and preserves selection/clear/center behavior.
-- Apply Layout and Reset View are each exercised while generation is active.
+  wraps long text, and shows an auto-hiding vertical scrollbar when needed.
+  Selection/clear/center behavior is preserved.
+- Apply Layout and the sidebar Reset View are each exercised while generation
+  is active; the separate toolbar Reset View is not in scope.
 - Any exception from either action is captured with diagnostic context; no
   unhandled dispatcher exception occurs and the Visualizer returns to a usable
   state.
-- Exception records are appended to `.logs/_exceptions.log`; existing entries
-  survive subsequent application runs and new records appear at the end.
-- Tests verify log creation, append-to-existing behavior, diagnostic fields, and
-  safe reporting if the log cannot be written.
+- All thrown exception records, including cancellation exceptions, are appended
+  to `.logs/_exceptions.log`; existing entries survive subsequent application
+  runs and new records appear at the end.
+- OperationCanceledExceptions and other thrown exceptions are both logged.
+- Tests verify log creation, append-to-existing behavior, diagnostic fields,
+  cancellation-exception capture, and safe reporting if the log cannot be written.
 - Clicking either action during generation cancels the current rendering and
-  starts the requested replacement; stale generation results cannot overwrite
-  the replacement scene.
-- Tests cover layout cancellation, repeated actions during generation, HUD
-  selection lifecycle, spread boundaries/defaults, and settings migration.
+  replaces it with the latest requested settings after a minimum two-second
+  trailing-edge debounce; stale generation results cannot overwrite the
+  replacement scene.
+- Tests cover layout cancellation/debounce and latest-click wins, exception-log
+  append behavior, HUD selection lifecycle and scrolling, spread bounds/rounding/
+  defaults, and settings migration.
+
+Phase 3 completion verification: 171 smoke tests and 375 WPF UI checks passed.
+Application, smoke-test, and Manual UI test builds completed with zero warnings
+and zero errors.
 
 ================================================================================
 5. PHASE 4: TEXT, JSON, CSV, AND XML FILE INGESTION
@@ -502,19 +533,20 @@ Suggested controls:
 Build and regression:
 - Build the application, smoke tests, and Manual UI tests with zero warnings
   and zero errors.
-- Run existing smoke and UI suites for Phase 1; record new aggregate counts as
-  Phases 2-4 are implemented and their tests are added.
+- Run smoke and UI suites after each phase and record the aggregate counts.
+  Phases 1-3 currently pass 171 smoke tests and 375 WPF UI checks; Phase 4
+  verification is pending its implementation and tests.
 - Preserve existing checks for log import/export, text import, ontology,
   maintenance, Visualizer rendering, selection, and settings persistence.
 
 Phase verification:
-- Phase 1: verify GCIDE definition questions, successful Lexeme-to-Sense lookup,
-  readable definitions, and no regression in ordinary copula questions.
-- Phase 2: verify all four tabs, pinned status, direct text input, and retained
-  legacy workflows, including minimum-size/resized-window interaction.
-- Phase 3: test spread boundaries and old settings; HUD layout and controls;
-  each Apply/Reset click during active generation; exception capture, operation
-  cancellation, and UI recovery.
+- Phase 1 (complete): GCIDE definition questions, Lexeme-to-Sense lookup,
+  readable definitions, and ordinary copula regressions passed.
+- Phase 2 (complete): Tools tabs, pinned status, direct text input, and retained
+  legacy workflows passed verification.
+- Phase 3 (complete): spread boundaries/settings persistence, HUD selection and
+  long-content scrolling, Apply/Reset cancellation and latest-click debounce,
+  exception logging, and recovery were verified; see the completion note below.
 - Phase 4: fixture-based CSV/JSON/XML/text tests for both modes; malformed and
   boundary inputs; dry-run graph immutability; source attribution; cancellation;
   duplicate/reimport behavior; and partial import reports.
@@ -557,14 +589,21 @@ requirements; resolve them before implementing the affected behavior.
 - Confirmed: multiple matching senses are listed as candidates ordered by
   ascending GUID, with a generated multiple-definitions statement.
 
-6.2 Phase 2: topic selection behavior still to be determined
-1. Define the lookup and ambiguity behavior for Node Label, Node Type, and Alias
-   choices when there are zero or multiple matching graph nodes.
-2. Define what Current Topic resolves to when the conversation has no topic or
-   focus, and whether Source means the current import's Source node or a
-   user-selected Source node.
+6.2 Phase 2: topic selection behavior (implemented)
+- Node Label and Alias modes resolve only when exactly one graph node matches;
+  zero or multiple matches report a selection error. GUID mode is available to
+  disambiguate.
+- Node Type and the other picker-backed modes require selecting an existing
+  graph node from the matching picker.
+- Current Topic uses the most recent topic recorded in conversation provenance;
+  if there is none, ingestion uses base/general/none and reports that fallback.
+- Source mode uses the current import's Source node. Direct text uses the `user`
+  Source; file import uses the file Source created/reused by the importer. Dry
+  runs do not create graph nodes.
 
 6.3 Phase 4: data contracts and graph semantics still to be determined
+Phase 4 remains in planning. The following decisions are open and block a
+deterministic implementation and acceptance suite:
 1. JSON/XML node roles and labels are specified, but exact input schemas remain
    TBD: nested elements/objects, arrays, attributes, text nodes, scalar roots,
    and how multiple top-level records are represented.
@@ -603,27 +642,23 @@ requirements; resolve them before implementing the affected behavior.
     explicit report, not rollback).
 
 6.4 Phase 3: exception capture and HUD details
-1. The reported Apply/Reset exception needs a captured reproduction with exact
-   exception details and a stable trigger. Current implementation uses
-   `isLoading` and async layout methods; the plan intentionally does not assume
-   the cause. The confirmed response is cancel-and-replace; confirm whether a
-   brief progress/status message is sufficient feedback in addition to the
-   exception diagnostics.
-2. HUD fixed placement and auto-hide when no node is selected are confirmed.
-   Verify viewport resizing and whether very long labels/aliases should scroll,
-   wrap, or be truncated.
-3. Previously saved finite spread values below 10 clamp to 10. The plan proposes
-   clamping values above 100 to 100; confirm fallback behavior for invalid or
-   non-finite saved values (proposed: use the 20 default).
+Phase 3 is complete. Apply Layout and sidebar Reset View use cancel-and-replace
+with a two-second trailing-edge debounce; injected layout tasks verify latest-
+click wins, cancellation logging, unexpected exception reporting, and recovery.
+Exceptions are appended with timestamp, initiating action, layout-active state,
+and full exception details. The original reported failure's root cause was not
+reproduced; the controllable layout test path provides the repeatable regression
+coverage described in the acceptance criteria. HUD selection, placement,
+wrapping, and scrolling, plus spread normalization/persistence, are covered by
+the 375-check WPF UI suite. The Visualizer window is maximized and non-resizable;
+viewport resizing is therefore not an interactive window workflow.
 
 6.5 Cross-phase coverage
 - Accessibility (keyboard navigation, focus, screen-reader names and contrast)
   is not yet specified for new tabs, direct ingestion, or the HUD.
 - Localization is not in current scope; confirm if labels/messages remain
   English-only like the surrounding UI.
-- Add automated and manual coverage for error recovery, progress completion,
-  close-window behavior during background ingestion/layout, and cleanup of
-  cancellation resources.
-- Confirm whether all three phases may be delivered independently and whether
-  the UI transitions described above should preserve backward-compatible
-  settings and saved workflows.
+- Additional coverage remains for close-window behavior during active ingestion
+  and layout, plus cleanup of cancellation resources under those close paths.
+- Preserve backward compatibility for existing settings and saved workflows
+  while Phase 4 adds the Data Files workflows.

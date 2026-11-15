@@ -1058,6 +1058,7 @@ namespace OPEN_LRD.Persistence
                 Ttl = node.Get_TTL(),
                 WeightUp = node.Get_WeightUp(),
                 WeightDown = node.Get_WeightDown(),
+                TrustRating = node.TrustRating,
                 Label = node.Label,
                 Aliases = node.Aliases.ToList(),
                 DataPointer = pointer is null

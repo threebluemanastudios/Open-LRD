@@ -235,7 +235,7 @@ namespace OPEN_LRD.Visualization
         {
             ArgumentNullException.ThrowIfNull(options);
 
-            Spread = options.Spread;
+            Spread = VisualizerOptions.NormalizeSpread(options.Spread);
             CubeSize = options.CubeSize;
             LineWidth = options.LineWidth;
             ShowLabels = options.ShowLabels;
@@ -251,9 +251,7 @@ namespace OPEN_LRD.Visualization
         {
             ArgumentNullException.ThrowIfNull(options);
 
-            options.Spread = IsPositiveFinite(Spread)
-                ? Spread
-                : VisualizerOptions.DefaultSpread;
+            options.Spread = VisualizerOptions.NormalizeSpread(Spread);
             options.CubeSize = IsPositiveFinite(CubeSize)
                 ? CubeSize
                 : VisualizerOptions.DefaultCubeSize;

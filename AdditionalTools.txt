@@ -3,7 +3,7 @@ ADDITIONAL TOOLS PLAN
 MODULE 3 PHASE 9: LOG PERSISTENCE AND VISUALIZER DISTANCE PREP
 
 Status: Sections 1-17 complete. Current integrated solution builds with zero
-        warnings and zero errors; 171 smoke tests and 299 automated UI checks pass.
+        warnings and zero errors; 171 smoke tests and 375 automated UI checks pass.
 Scope: Tools window import/export, versioned log persistence, transient chain
        companion logs, and link distance definitions used by the 3D Visualizer.
 Constraint: Native C# and WPF with no external libraries. Use System.Text.Json.
@@ -479,7 +479,7 @@ OPEN-LRD/Tools.xaml, below the core/transient log buttons:
 
   File:      [ read-only path box .................. ] [Browse...]
   Source ID: [ optional GUID ]   Topic ID: [ optional GUID ]
-  [x] Dry run    Max file MB: [ 50 ]   Max chunks: [ 10000 ]
+  [x] Dry run    Max file MB: [ 500 ]   Max chunks: [ 10000 ]
   [Import Text File] [Cancel]   [determinate progress bar]
   status: "Ready. 0 chunks."
 
@@ -531,9 +531,9 @@ sentence boundaries. No behavior change to Tokenize is intended.
 New type: OPEN-LRD/NLP/TextFileImporter.cs
 
 Options (TextImportOptions):
-- FilePath, SourceNodeID?, TopicNodeID?
+- FilePath, SourceNodeID?, TopicNodeID?, UseSourceAsTopic
 - DryRun
-- MaxFileBytes (default 50 MB), MaxChunks (default 10,000)
+- MaxFileBytes (default 500 MiB), MaxChunks (default 10,000)
 - MaxChunkCharacters (default 15,000)
 - Progress callback and CancellationToken
 

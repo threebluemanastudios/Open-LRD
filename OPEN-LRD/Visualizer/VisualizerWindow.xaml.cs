@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Numerics;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
 using OPEN_LRD.Visualization;
@@ -17,10 +19,14 @@ namespace OPEN_LRD.Visualizer
 {
     public partial class VisualizerWindow : Window
     {
+        private static readonly object exceptionLogLock = new object();
+        private static readonly TimeSpan LayoutReplacementDebounce = TimeSpan.FromSeconds(2);
+
         private readonly LRD_Core core;
         private readonly VisualizerOptions options = new VisualizerOptions();
         private readonly GraphColorMap colors = new GraphColorMap();
         private readonly VisualizerScene scene;
+        private readonly DispatcherTimer layoutReplacementTimer;
         private FlyCameraController? controller;
 
         private CancellationTokenSource? layoutCancellation;
@@ -33,6 +39,14 @@ namespace OPEN_LRD.Visualizer
         private bool isLoading;
         private bool isClosed;
         private bool isInitializingControls;
+        private string? pendingLayoutAction;
+
+        internal static string? ExceptionLogPathOverrideForTesting { get; set; }
+
+        internal Func<GraphSnapshot, VisualizerOptions, CancellationToken, LayoutResult>? LayoutComputationForTesting { get; set; }
+
+        internal bool HasPendingLayoutReplacement =>
+            pendingLayoutAction is not null || layoutReplacementTimer.IsEnabled;
 
         public VisualizerWindow()
             : this(LRD_Core.Instance)
@@ -45,6 +59,11 @@ namespace OPEN_LRD.Visualizer
             InitializeComponent();
 
             scene = new VisualizerScene(GraphViewport);
+            layoutReplacementTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(2)
+            };
+            layoutReplacementTimer.Tick += LayoutReplacementTimer_Tick;
 
             controller = new FlyCameraController(ViewportHost, this, scene);
             controller.CameraMoved += OnCameraMoved;
@@ -162,6 +181,8 @@ namespace OPEN_LRD.Visualizer
         private void Window_Closed(object? sender, EventArgs e)
         {
             isClosed = true;
+            layoutReplacementTimer.Stop();
+            pendingLayoutAction = null;
 
             SaveSettings();
 
@@ -191,7 +212,7 @@ namespace OPEN_LRD.Visualizer
                 return;
             }
 
-            await RunLayoutAsync(snapshot, updateSnapshotSummary: false);
+            await RunLayoutAsync(snapshot, updateSnapshotSummary: false, actionName: "Recompute Layout");
         }
 
         private void FrameAll_Button_Click(object sender, RoutedEventArgs e)
@@ -303,6 +324,12 @@ namespace OPEN_LRD.Visualizer
         {
             ViewportHost.Focus();
 
+            if (IsPointerOverSelectionCard(e))
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (e.ChangedButton == MouseButton.Right)
             {
                 controller?.HandleMouseDown(e);
@@ -326,6 +353,12 @@ namespace OPEN_LRD.Visualizer
 
         private void ViewportHost_MouseMove(object sender, MouseEventArgs e)
         {
+            if (IsPointerOverSelectionCard(e))
+            {
+                SetHoveredNode(null);
+                return;
+            }
+
             if (e.RightButton == MouseButtonState.Pressed)
             {
                 controller?.HandleMouseMove(e);
@@ -340,7 +373,22 @@ namespace OPEN_LRD.Visualizer
 
         private void ViewportHost_MouseWheel(object sender, MouseWheelEventArgs e)
         {
+            if (IsPointerOverSelectionCard(e))
+                return;
+
             controller?.HandleMouseWheel(e);
+        }
+
+        private bool IsPointerOverSelectionCard(MouseEventArgs e)
+        {
+            if (SelectionCard.Visibility != Visibility.Visible)
+                return false;
+
+            Point point = e.GetPosition(SelectionCard);
+            return point.X >= 0
+                && point.Y >= 0
+                && point.X <= SelectionCard.ActualWidth
+                && point.Y <= SelectionCard.ActualHeight;
         }
 
         private int? PickNode(Point screenPoint)
@@ -449,7 +497,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
-        private async Task RefreshGraphAsync()
+        private async Task RefreshGraphAsync(string actionName = "Refresh Graph")
         {
             if (isClosed)
                 return;
@@ -470,20 +518,17 @@ namespace OPEN_LRD.Visualizer
             }
             catch (Exception ex)
             {
-                SetStatus($"The graph could not be read: {ex.Message}");
-                MessageBox.Show(
-                    this,
-                    ex.Message,
-                    "Visualizer Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                ReportVisualizerException(actionName, ex, layoutWasActive: isLoading);
                 return;
             }
 
-            await RunLayoutAsync(fresh, updateSnapshotSummary: true);
+            await RunLayoutAsync(fresh, updateSnapshotSummary: true, actionName);
         }
 
-        private async Task RunLayoutAsync(GraphSnapshot fresh, bool updateSnapshotSummary)
+        private async Task RunLayoutAsync(
+            GraphSnapshot fresh,
+            bool updateSnapshotSummary,
+            string actionName = "Layout")
         {
             if (isClosed)
                 return;
@@ -523,7 +568,9 @@ namespace OPEN_LRD.Visualizer
             {
                 (SceneGeometry Geometry, PreparedSceneGeometry Prepared)? result = await Task.Run<(SceneGeometry, PreparedSceneGeometry)?>(() =>
                 {
-                    LayoutResult layout = DistanceLayout3D.Compute(fresh, options, token, progress);
+                    LayoutResult layout = LayoutComputationForTesting is null
+                        ? DistanceLayout3D.Compute(fresh, options, token, progress)
+                        : LayoutComputationForTesting(fresh, options, token);
                     token.ThrowIfCancellationRequested();
 
                     if (layout.Cancelled)
@@ -567,23 +614,27 @@ namespace OPEN_LRD.Visualizer
                     $"Showing {built.NodeCount.ToString("N0", CultureInfo.InvariantCulture)} nodes and " +
                     $"{built.LinkCount.ToString("N0", CultureInfo.InvariantCulture)} links.");
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
+                string cancellationAction = pendingLayoutAction is null
+                    ? actionName
+                    : actionName + " (replaced by " + pendingLayoutAction + ")";
+                string? logError = TryAppendExceptionRecord(
+                    cancellationAction,
+                    ex,
+                    layoutWasActive: true);
                 if (!isClosed)
-                    SetStatus("Layout cancelled.");
+                {
+                    SetStatus(pendingLayoutAction is null
+                        ? "Layout cancelled."
+                        : "Layout cancelled; " + pendingLayoutAction + " is queued.");
+                    if (logError is not null)
+                        WarningsText.Text = logError;
+                }
             }
             catch (Exception ex)
             {
-                if (isClosed)
-                    return;
-
-                SetStatus($"The visualizer could not build the scene: {ex.Message}");
-                MessageBox.Show(
-                    this,
-                    ex.Message,
-                    "Visualizer Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                ReportVisualizerException(actionName, ex, layoutWasActive: isLoading);
             }
             finally
             {
@@ -593,11 +644,13 @@ namespace OPEN_LRD.Visualizer
 
         private void FinishLayout(CancellationTokenSource cancellation)
         {
-            if (!isClosed)
-                SetLoading(false);
-
-            if (ReferenceEquals(layoutCancellation, cancellation))
+            bool isCurrentLayout = ReferenceEquals(layoutCancellation, cancellation);
+            if (isCurrentLayout)
+            {
                 layoutCancellation = null;
+                if (!isClosed)
+                    SetLoading(false);
+            }
 
             cancellation.Dispose();
         }
@@ -605,6 +658,128 @@ namespace OPEN_LRD.Visualizer
         private void CancelLayout()
         {
             layoutCancellation?.Cancel();
+        }
+
+        private void RequestLayoutReplacement(string actionName)
+        {
+            if (isClosed)
+                return;
+
+            pendingLayoutAction = actionName;
+            if (isLoading || layoutCancellation is not null)
+                CancelLayout();
+
+            layoutReplacementTimer.Stop();
+            layoutReplacementTimer.Interval = LayoutReplacementDebounce;
+            layoutReplacementTimer.Start();
+            SetStatus($"{actionName} queued; waiting for a two-second pause before rebuilding the layout.");
+        }
+
+        private async void LayoutReplacementTimer_Tick(object? sender, EventArgs e)
+        {
+            layoutReplacementTimer.Stop();
+            if (isClosed)
+            {
+                pendingLayoutAction = null;
+                return;
+            }
+
+            if (pendingLayoutAction is null)
+                return;
+
+            if (isLoading || layoutCancellation is not null)
+            {
+                layoutReplacementTimer.Interval = TimeSpan.FromMilliseconds(50);
+                layoutReplacementTimer.Start();
+                return;
+            }
+
+            string actionName = pendingLayoutAction;
+            pendingLayoutAction = null;
+
+            try
+            {
+                if (snapshot is null)
+                {
+                    SetStatus($"{actionName} settings saved. Refresh the graph to build a layout.");
+                    return;
+                }
+
+                if (options.MaxNodes != snapshotMaxNodes || options.MaxLinks != snapshotMaxLinks)
+                    await RefreshGraphAsync(actionName);
+                else
+                    await RunLayoutAsync(snapshot, updateSnapshotSummary: false, actionName: actionName);
+            }
+            catch (Exception ex)
+            {
+                ReportVisualizerException(actionName, ex, layoutWasActive: isLoading);
+            }
+        }
+
+        private void ReportVisualizerException(string actionName, Exception exception, bool layoutWasActive)
+        {
+            string concise = $"{actionName} failed: {exception.Message}";
+            string? logError = TryAppendExceptionRecord(actionName, exception, layoutWasActive);
+            WarningsText.Text = logError is null
+                ? exception.GetType().Name + ": " + exception.Message
+                : exception.GetType().Name + ": " + exception.Message + " " + logError;
+            SetStatus(concise);
+        }
+
+        private static string? TryAppendExceptionRecord(
+            string actionName,
+            Exception exception,
+            bool layoutWasActive)
+        {
+            try
+            {
+                string path = ResolveExceptionLogPath();
+                string? directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(directory))
+                    Directory.CreateDirectory(directory);
+
+                StringBuilder record = new StringBuilder();
+                record.AppendLine("TimestampUtc: " + DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+                record.AppendLine("Action: " + actionName);
+                record.AppendLine("Layout active: " + layoutWasActive.ToString(CultureInfo.InvariantCulture));
+                record.AppendLine("Exception type: " + exception.GetType().FullName);
+                record.AppendLine("Exception:");
+                record.AppendLine(exception.ToString());
+                record.AppendLine(new string('-', 80));
+
+                lock (exceptionLogLock)
+                    File.AppendAllText(path, record.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                return null;
+            }
+            catch (Exception logException)
+            {
+                return "Exception log write failed: " + logException.Message;
+            }
+        }
+
+        private static string ResolveExceptionLogPath()
+        {
+            if (!string.IsNullOrWhiteSpace(ExceptionLogPathOverrideForTesting))
+                return Path.GetFullPath(ExceptionLogPathOverrideForTesting);
+
+            DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null)
+            {
+                string logDirectory = Path.Combine(directory.FullName, ".logs");
+                if (Directory.Exists(logDirectory)
+                    || File.Exists(Path.Combine(directory.FullName, "OPEN-LRD.slnx")))
+                {
+                    return Path.Combine(logDirectory, "_exceptions.log");
+                }
+
+                directory = directory.Parent;
+            }
+
+            string localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (string.IsNullOrWhiteSpace(localApplicationData))
+                localApplicationData = Path.GetTempPath();
+            return Path.Combine(localApplicationData, "OPEN-LRD", ".logs", "_exceptions.log");
         }
 
         private void SetLoading(bool loading)
@@ -778,7 +953,7 @@ namespace OPEN_LRD.Visualizer
             try
             {
                 SpreadSlider.Value = options.Spread;
-                SpreadValText.Text = options.Spread.ToString("F1", CultureInfo.InvariantCulture);
+                SpreadValText.Text = options.Spread.ToString("F0", CultureInfo.InvariantCulture);
 
                 CubeSizeSlider.Value = options.CubeSize;
                 CubeSizeValText.Text = options.CubeSize.ToString("F1", CultureInfo.InvariantCulture);
@@ -1101,30 +1276,30 @@ namespace OPEN_LRD.Visualizer
             SetStatus("Reset link colors and visibility to defaults.");
         }
 
-        private async void ResetViewSettings_Click(object sender, RoutedEventArgs e)
+        private void ResetViewSettings_Click(object sender, RoutedEventArgs e)
         {
-            VisualizerOptions defaults = new VisualizerOptions();
-            options.Spread = defaults.Spread;
-            options.CubeSize = defaults.CubeSize;
-            options.LineWidth = defaults.LineWidth;
-            options.MaxLabels = defaults.MaxLabels;
-            options.MaxNodes = defaults.MaxNodes;
-            options.MaxLinks = defaults.MaxLinks;
-            options.ShowLabels = defaults.ShowLabels;
-            options.InvertMouseX = defaults.InvertMouseX;
-            options.InvertMouseY = defaults.InvertMouseY;
-            options.NearPlaneDistance = defaults.NearPlaneDistance;
-            scene.NearPlaneDistance = defaults.NearPlaneDistance;
-
-            SyncViewControls();
-            SaveSettings();
-
-            if (snapshot is not null)
+            try
             {
-                if (options.MaxNodes != snapshotMaxNodes || options.MaxLinks != snapshotMaxLinks)
-                    await RefreshGraphAsync();
-                else
-                    await RunLayoutAsync(snapshot, updateSnapshotSummary: false);
+                VisualizerOptions defaults = new VisualizerOptions();
+                options.Spread = defaults.Spread;
+                options.CubeSize = defaults.CubeSize;
+                options.LineWidth = defaults.LineWidth;
+                options.MaxLabels = defaults.MaxLabels;
+                options.MaxNodes = defaults.MaxNodes;
+                options.MaxLinks = defaults.MaxLinks;
+                options.ShowLabels = defaults.ShowLabels;
+                options.InvertMouseX = defaults.InvertMouseX;
+                options.InvertMouseY = defaults.InvertMouseY;
+                options.NearPlaneDistance = defaults.NearPlaneDistance;
+                scene.NearPlaneDistance = defaults.NearPlaneDistance;
+
+                SyncViewControls();
+                SaveSettings();
+                RequestLayoutReplacement("Sidebar Reset View");
+            }
+            catch (Exception ex)
+            {
+                ReportVisualizerException("Sidebar Reset View", ex, layoutWasActive: isLoading);
             }
         }
 
@@ -1146,21 +1321,22 @@ namespace OPEN_LRD.Visualizer
             SetStatus(options.InvertMouseY ? "Vertical mouse axis inverted." : "Vertical mouse axis normal.");
         }
 
-        private async void ApplySettings_Click(object sender, RoutedEventArgs e)
+        private void ApplySettings_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryApplyLimitInput(MaxNodesInputBox, isNodeLimit: true) ||
-                !TryApplyLimitInput(MaxLinksInputBox, isNodeLimit: false))
+            try
             {
-                return;
-            }
+                if (!TryApplyLimitInput(MaxNodesInputBox, isNodeLimit: true) ||
+                    !TryApplyLimitInput(MaxLinksInputBox, isNodeLimit: false))
+                {
+                    return;
+                }
 
-            SaveSettings();
-            if (snapshot is not null)
+                SaveSettings();
+                RequestLayoutReplacement("Apply Layout");
+            }
+            catch (Exception ex)
             {
-                if (options.MaxNodes != snapshotMaxNodes || options.MaxLinks != snapshotMaxLinks)
-                    await RefreshGraphAsync();
-                else
-                    await RunLayoutAsync(snapshot, updateSnapshotSummary: false);
+                ReportVisualizerException("Apply Layout", ex, layoutWasActive: isLoading);
             }
         }
 
@@ -1169,9 +1345,9 @@ namespace OPEN_LRD.Visualizer
             if (isInitializingControls)
                 return;
 
-            options.Spread = Math.Round(SpreadSlider.Value, 1);
+            options.Spread = VisualizerOptions.NormalizeSpread(SpreadSlider.Value);
             if (SpreadValText is not null)
-                SpreadValText.Text = options.Spread.ToString("F1", CultureInfo.InvariantCulture);
+                SpreadValText.Text = options.Spread.ToString("F0", CultureInfo.InvariantCulture);
         }
 
         private void CubeSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
