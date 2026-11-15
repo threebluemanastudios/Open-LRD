@@ -2,7 +2,9 @@ OPEN-LRD
 MODULE 8: GCIDE ASK, TOOLS UI, VISUALIZER, AND DATA FILE INGESTION
 IMPLEMENTATION PLAN
 
-Status: Planned. No Module 8 implementation is included in this document update.
+Status: Phase 1 complete; Phases 2-4 planned.
+Current integrated verification: 171 smoke tests and 299 WPF UI checks pass;
+application and test builds complete with zero warnings and zero errors.
 Scope: GCIDE dictionary question answering, Tools window organization, Visualizer
        layout controls and selection HUD, and text/JSON/CSV/XML file ingestion.
 Target: .NET 10 WPF (net10.0-windows), using existing OPEN-LRD graph and NLP
@@ -11,7 +13,7 @@ Decisions confirmed with the user:
   - New Phase 1 fixes GCIDE definition questions such as "What is commit?".
   - Tools has Logs, Ingestion, Ontology, and Maintenance tabs in Phase 2, with
     Status pinned outside the tabs. Phase 2 may prepare the Data Files tab
-    layout; its controls and behavior are implemented in Phase 4.
+    layout as a blank tab; its controls and behavior are implemented in Phase 4.
   - Phase 3 spread range is 10-100 with default 20.
   - The selected-node info pane is a bottom-right HUD over the 3D viewport.
   - Structured graph records/triples and NLP text extraction are both in scope
@@ -20,7 +22,10 @@ Decisions confirmed with the user:
     temporary conversation and do not modify the graph. Manually entered text
     uses a `user` source node with 50% trust. File provenance includes the source
     file name and a pointer to its location. Topic defaults to base/general/none
-    unless specified at entry. A single input file is limited to 500 MiB.
+    unless specified at entry. Topic selection is single-select, with options
+    for GUID, Sense, Node Label, Node Type, Alias, Category, Field/Discipline,
+    Taxon, Reality, Current Topic, and Source. Direct input is limited to 1,000
+    characters, and the Phase 2 text-file importer defaults to a 500 MiB limit.
   - All tables use one schema regardless of column count. CSV structure is
     Source -> Table -> Row Head -> ordered cell chain; the header row is index 0
     and its header cells are represented as nodes.
@@ -143,6 +148,9 @@ Sense definition rather than searching for facts about the question word
 - When no matching dictionary entry or fact exists, the system returns an
   appropriate no-match response without treating `What` as the subject anchor.
 
+Phase 1 verification: 171 smoke tests and 299 WPF UI checks pass. Application,
+smoke-test, and Manual UI test builds complete with zero warnings and zero errors.
+
 ================================================================================
 3. PHASE 2: TOOLS WINDOW ORGANIZATION
 ================================================================================
@@ -166,16 +174,24 @@ Tabs:
    - The existing core/transient log formats and workflows remain unchanged.
 2. Ingestion
    - Direct text/sentence input through the existing NLP pipeline.
-   - Input area, ingest action, clear action, and status/result display.
+   - Input area capped at 1,000 characters, ingest action, clear action, and
+     status/result display.
    - Every direct text submission uses a new conversation; dry runs use a
      temporary conversation and do not modify the graph.
-   - A dry-run option is available. Topic defaults to base/general/none unless
-     the user specifies a topic at entry.
+   - Split pasted multi-sentence text into individual sentences and ingest them
+     in order as sentence-sized chunks through the same conversation.
+   - A dry-run option is available. Topic selection uses the shared dropdown
+     described below.
    - Retain the existing text-file import workflow during Phase 2; move it to
      Data Files when that tab's functionality is implemented in Phase 4.
    - Existing text-file options (source/topic assignment, dry run, file/chunk
      limits, progress, cancellation) remain available while the legacy importer
-     remains on this tab. Default the topic to base/general/none.
+     remains on this tab. Set its default maximum file size to 500 MiB.
+   - Provide a single-select Topic dropdown with: `base/general/none` (default),
+     `GUID`, `Sense`, `Node Label`, `Node Type`, `Alias`, `Category`,
+     `Field/Discipline`, `Taxon`, `Reality`, `Current Topic`, and `Source`.
+     Show the appropriate picker/field for the selected option and resolve it to
+     one topic node. Do not offer combined or multi-select topics in this phase.
 3. Ontology
    - Seed Upper Ontology, load GCIDE, and export ontology log actions.
    - Corpus subset, letter, entry limit, progress, cancellation, and status.
@@ -184,9 +200,9 @@ Tabs:
    - Existing opt-in graph maintenance passes and their options.
    - Run Maintenance action and detailed maintenance result/diagnostics.
 5. Data Files
-   - Phase 2 prepares the tab layout only, with no active file-ingestion
-     controls or behavior. The existing plain-text import remains in Ingestion
-     until the Data Files functionality is implemented in Phase 4.
+   - Phase 2 creates a blank tab only: no explanatory placeholder text, active
+     file-ingestion controls, or file-ingestion behavior. The existing
+     plain-text import remains in Ingestion until Phase 4.
 
 Pinned Status:
 - Keep the shared multiline StatusBox visible beneath the tab control.
@@ -200,6 +216,12 @@ Pinned Status:
   conversation for each submission; a dry run uses a temporary conversation
   that is not persisted. Do not create a parallel relation-extraction
   implementation.
+- Limit the text input box to 1,000 characters and validate the submitted
+  content against the same limit.
+- Split a pasted multi-sentence submission into individual sentences and ingest
+  them sequentially as separate sentence-sized chunks in the same new
+  conversation. Preserve the original sentence order and report sentence-level
+  success/failure counts.
 - Show a useful result for empty input, accepted input, unsupported sentences,
   and pipeline errors.
 - Support dry run using a temporary conversation without mutating the graph.
@@ -208,8 +230,11 @@ Pinned Status:
 - For file-backed input, create/reuse source attribution containing the source
   file name and a DataPointer to its location. Reject a single input file larger
   than 500 MiB before ingestion.
-- Default the topic to base/general/none for direct and file ingestion; allow a
-  user-specified topic at entry.
+- Use one single-select topic dropdown for direct and file ingestion with the
+  Phase 2 options: `base/general/none` (default), `GUID`, `Sense`,
+  `Node Label`, `Node Type`, `Alias`, `Category`, `Field/Discipline`, `Taxon`,
+  `Reality`, `Current Topic`, and `Source`. Require and validate only the fields
+  needed by the selected option; each selection resolves to one topic node.
 - Keep UI interaction on the dispatcher and run only work suitable for
   background execution off the UI thread.
 - Define character/input bounds for manually entered text separately from the
@@ -223,13 +248,22 @@ Pinned Status:
 - Direct text ingestion uses the existing NLP pipeline, creates a new
   conversation (temporary for dry runs), attributes manually entered text to
   source `user` at 50% trust, and reports completion and failures clearly.
+- The direct text box enforces 1,000 characters; multi-sentence text is split
+  into sentence-sized chunks, processed in order in the same new conversation,
+  and reports sentence outcomes.
 - Dry runs do not mutate the graph; topic defaults and file source attribution
   follow the confirmed rules; files over 500 MiB are rejected.
-- The Data Files tab shell is present but has no active file-ingestion controls
-  or behavior until Phase 4.
+- Topic selector exposes the documented single-select options, defaults to
+  `base/general/none`, and validates only the fields needed by the selected
+  option.
+- The retained plain-text file importer defaults to a 500 MiB file limit.
+- The 1,000-character input boundary and over-limit behavior are tested.
+- The Data Files tab is present and blank, with no active file-ingestion controls
+  or explanatory placeholder text until Phase 4.
 - All controls remain accessible at minimum and typical window sizes.
-- Automated UI checks cover tab presence, control defaults, tab switching,
-  pinned status output, and all retained workflows.
+- Automated UI checks cover tab presence, control defaults, all topic-dropdown
+  choices and field visibility, tab switching, pinned status output, and all
+  retained workflows.
 
 ================================================================================
 4. PHASE 3: VISUALIZER SPREAD, SELECTION HUD, AND GENERATION EXCEPTION
@@ -330,10 +364,12 @@ Suggested controls:
 - File picker and supported-format filter; detected format shown to the user.
 - Ingestion mode selector: Structured Data or Extract Text for NLP.
 - Automatically record source filename and a DataPointer to its location;
-  provide source/topic assignment controls where applicable.
-- Default topic to base/general/none unless another topic is specified at entry.
+  provide source assignment controls where applicable.
+- Reuse the Phase 2 single-select topic dropdown, defaulting to
+  `base/general/none` and supporting its same topic-resolution choices.
 - Dry run, bounded file/record limits, progress, cancellation, and summary.
-- Reject files larger than 500 MiB before parsing or graph mutation.
+- Default the file-size control to 500 MiB and reject larger files before
+  parsing or graph mutation.
 - Per-record diagnostics, including malformed/skipped/failed counts and a
   bounded sample of diagnostic messages.
 
@@ -374,7 +410,7 @@ Suggested controls:
   with element Alias = `XML Element`.
 - NLP text mode: extract configured text content from each supported format and
   submit it through the existing NLP ingestion path. Field selection, ordering,
-  and treatment of nested/empty values are specified in section 6.2.
+  and treatment of nested/empty values are specified in section 6.3.
 - Preserve structured triples and generic entity/attribute data through the
   documented format mappings; all CSV tables retain the common row/cell graph
   structure above. Whether recognized CSV triples additionally create semantic
@@ -466,8 +502,8 @@ Suggested controls:
 Build and regression:
 - Build the application, smoke tests, and Manual UI tests with zero warnings
   and zero errors.
-- Run existing smoke and UI suites and record updated aggregate counts after
-  the Module 8 tests are added.
+- Run existing smoke and UI suites for Phase 1; record new aggregate counts as
+  Phases 2-4 are implemented and their tests are added.
 - Preserve existing checks for log import/export, text import, ontology,
   maintenance, Visualizer rendering, selection, and settings persistence.
 
@@ -505,6 +541,9 @@ requirements; resolve them before implementing the affected behavior.
   temporary conversation and do not modify the graph.
 - Confirmed: file-backed sources retain the file name and location pointer;
   topic defaults to base/general/none unless specified at entry.
+- Confirmed: Phase 2 uses a single-select topic dropdown for base/general/none,
+  GUID, Sense, Node Label, Node Type, Alias, Category, Field/Discipline, Taxon,
+  Reality, Current Topic, or Source. Combined/multi-select topics are deferred.
 - Confirmed: every CSV table uses Source -> Table -> row heads, and each row is
   a directed, ordered cell chain; header nodes use Alias `HEADER`.
 - Confirmed: clean non-dictionary file imports receive 90% trust and dictionary
@@ -518,7 +557,14 @@ requirements; resolve them before implementing the affected behavior.
 - Confirmed: multiple matching senses are listed as candidates ordered by
   ascending GUID, with a generated multiple-definitions statement.
 
-6.2 Phase 4: data contracts and graph semantics still to be determined
+6.2 Phase 2: topic selection behavior still to be determined
+1. Define the lookup and ambiguity behavior for Node Label, Node Type, and Alias
+   choices when there are zero or multiple matching graph nodes.
+2. Define what Current Topic resolves to when the conversation has no topic or
+   focus, and whether Source means the current import's Source node or a
+   user-selected Source node.
+
+6.3 Phase 4: data contracts and graph semantics still to be determined
 1. JSON/XML node roles and labels are specified, but exact input schemas remain
    TBD: nested elements/objects, arrays, attributes, text nodes, scalar roots,
    and how multiple top-level records are represented.
@@ -556,7 +602,7 @@ requirements; resolve them before implementing the affected behavior.
     partial graph changes (the proposed default is partial commit with an
     explicit report, not rollback).
 
-6.3 Phase 3: exception capture and HUD details
+6.4 Phase 3: exception capture and HUD details
 1. The reported Apply/Reset exception needs a captured reproduction with exact
    exception details and a stable trigger. Current implementation uses
    `isLoading` and async layout methods; the plan intentionally does not assume
@@ -570,7 +616,7 @@ requirements; resolve them before implementing the affected behavior.
    clamping values above 100 to 100; confirm fallback behavior for invalid or
    non-finite saved values (proposed: use the 20 default).
 
-6.4 Cross-phase coverage
+6.5 Cross-phase coverage
 - Accessibility (keyboard navigation, focus, screen-reader names and contrast)
   is not yet specified for new tabs, direct ingestion, or the HUD.
 - Localization is not in current scope; confirm if labels/messages remain

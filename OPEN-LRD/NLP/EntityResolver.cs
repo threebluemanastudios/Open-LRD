@@ -30,7 +30,7 @@ namespace OPEN_LRD.NLP
             this.options = options ?? new NlpOptions();
         }
 
-        public EntityResolution Resolve(FrameArgument argument)
+        public EntityResolution Resolve(FrameArgument argument, NodeTypes? requiredNodeType = null)
         {
             ArgumentNullException.ThrowIfNull(argument);
 
@@ -38,7 +38,8 @@ namespace OPEN_LRD.NLP
             string lemma = string.IsNullOrWhiteSpace(argument.Lemma)
                 ? label.ToLowerInvariant()
                 : argument.Lemma;
-            List<string> aliases = BuildAliases(label, lemma, argument.NodeType);
+            NodeTypes lookupType = requiredNodeType ?? argument.NodeType;
+            List<string> aliases = BuildAliases(label, lemma, lookupType);
 
             if (argument.IsPronoun
                 && options.EnablePronounResolution
@@ -117,7 +118,7 @@ namespace OPEN_LRD.NLP
                 return new EntityResolution(
                     label,
                     lemma,
-                    argument.NodeType,
+                    lookupType,
                     aliases,
                     null,
                     Array.Empty<Guid>(),
@@ -129,15 +130,15 @@ namespace OPEN_LRD.NLP
                     });
             }
 
-            List<Web_Node> candidates = FindCandidates(label, argument.NodeType);
+            List<Web_Node> candidates = FindCandidates(label, lookupType);
 
             if (candidates.Count == 0)
-                candidates = FindCandidates(argument.SurfaceText, argument.NodeType);
+                candidates = FindCandidates(argument.SurfaceText, lookupType);
 
             if (candidates.Count == 0)
-                candidates = FindCandidates(lemma, argument.NodeType);
+                candidates = FindCandidates(lemma, lookupType);
 
-            if (candidates.Count == 0)
+            if (candidates.Count == 0 && requiredNodeType is null)
             {
                 candidates = FindCandidates(label, null);
 
@@ -181,7 +182,7 @@ namespace OPEN_LRD.NLP
                 return new EntityResolution(
                     label,
                     lemma,
-                    argument.NodeType,
+                    lookupType,
                     aliases,
                     null,
                     distinct.Select(node => node.ID).ToArray(),
@@ -196,7 +197,7 @@ namespace OPEN_LRD.NLP
             return new EntityResolution(
                 label,
                 lemma,
-                argument.NodeType,
+                lookupType,
                 aliases,
                 null,
                 Array.Empty<Guid>(),

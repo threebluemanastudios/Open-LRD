@@ -241,7 +241,7 @@ Upper Ontology, Load GCIDE Lexicon (subset, letter, and entry cap with progress
 and cancel), and Export Ontology Log actions. Nineteen foundational structural
 relations occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
 (2,000,000). The original Module 4 delivery added eleven ontology checks. The
-current integrated suite has 169 smoke tests and 289 automated UI checks. The
+  current integrated suite has 171 smoke tests and 299 automated UI checks. The
 Visualizer layout is deterministic and reports progress and cancellation. See
 `Module_4_Plan.txt` for the ontology plan, `AdditionalTools.txt` for persistence
 and text import, and `Visualizer_Plan.txt` for the visualizer implementation.
@@ -272,8 +272,9 @@ relation inference during an explicitly enabled maintenance run.
   keeping stale facts inactive for audit while preserving other link origins.
   Generated DataPointer resource values do not carry the owner's pointer, so
   they cannot trigger identity-based node merging.
-- Modules 5-7 and NLP conversational coverage bring the complete suite to 169
-  passing smoke checks and 289 passing automated UI checks.
+- The completed Modules 5-7, Module 8 Phase 1, and NLP conversational coverage
+  bring the current suite to 171 passing smoke checks and 299 passing automated
+  UI checks.
 
 See `Module_5_Plan.txt` for the detailed phased design and acceptance criteria.
 
@@ -301,7 +302,7 @@ question answering.
   round-trip through conversation persistence, with defaults preserved for old
   logs.
 - At Module 6 completion, 165 smoke tests and 285 automated UI checks passed;
-  current integrated verification is 169 smoke tests and 289 UI checks.
+  current integrated verification is 171 smoke tests and 299 UI checks.
 
 See `Module_6_Plan.txt` for design decisions, implementation details, and
 acceptance criteria.
@@ -347,9 +348,31 @@ links and searchable time windows.
   "Count mentions". Query-form commands such as "Count how many people work at
   Acme" and "Count events that happened yesterday" use the same Ask paths;
   temporal event counts honor the requested date/range and ReferenceTime.
-- Verification: 169 smoke tests and 289 automated UI checks pass.
+- Module 7 completion verification: 169 smoke tests and 289 automated UI checks
+  passed at that milestone; current integrated verification is 171 smoke tests
+  and 299 UI checks.
 
 See `Module_7_Plan.txt` for the complete design and acceptance criteria.
+
+## Module 8: GCIDE Ask, Tools UI, Visualizer, and Data File Ingestion
+
+**Purpose:** Improve dictionary definition answering, reorganize the Tools
+window, refine Visualizer inspection and layout controls, and add structured and
+NLP-based ingestion for text, JSON, CSV, and XML files.
+
+- **Phase 1 complete — GCIDE dictionary Ask:** Questions such as "What is
+  commit?" resolve the GCIDE Lexeme and its `has_sense` Sense nodes. A single
+  Sense is shown as a definition sentence; multiple Senses are reported as a
+  GUID-ordered candidate list. Articles before the headword are preserved only
+  when present in the user's question. Lexeme/Sense evidence remains available
+  in the Workbench.
+- **Phases 2-4 planned:** Tools tab organization, Visualizer improvements, and
+  multi-format file ingestion are documented in `Module_8_Plan.txt`.
+- Current integrated verification: 171 smoke tests and 299 automated UI checks
+  pass; application and test builds complete with zero warnings and zero errors.
+
+See `Module_8_Plan.txt` for implementation details, remaining phases, and
+acceptance criteria.
 
 ## Additional Tools & 3D Visualizer
 
@@ -414,7 +437,7 @@ The original staged delivery is complete:
 7. **Event and temporal support** — Event nodes, relative-time windows, automatic
    temporal extraction, individual/range and quantity queries, and Count commands.
 
-Current integrated verification is **169 smoke tests** and **289 automated UI
+Current integrated verification is **171 smoke tests** and **299 automated UI
 checks**; application and test builds complete with zero warnings and zero
 errors.
 

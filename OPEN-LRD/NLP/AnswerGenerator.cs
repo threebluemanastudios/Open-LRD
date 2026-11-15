@@ -1,5 +1,6 @@
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
+using OPEN_LRD.Ontology;
 using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.NLP
@@ -508,6 +509,9 @@ namespace OPEN_LRD.NLP
                     Deduplicate(diagnostics));
             }
 
+            int answerCandidateLimit = IsDictionarySenseQuestion(question)
+                ? int.MaxValue
+                : Math.Max(1, options.MaxAnswerCandidates);
             candidates = candidates
                 .Where(candidate => candidate.Score >= options.MinimumAnswerScore)
                 .GroupBy(
@@ -522,7 +526,7 @@ namespace OPEN_LRD.NLP
                 .OrderByDescending(candidate => candidate.Score)
                 .ThenBy(candidate => candidate.Label, StringComparer.Ordinal)
                 .ThenBy(candidate => candidate.NodeID.ToString(), StringComparer.Ordinal)
-                .Take(Math.Max(1, options.MaxAnswerCandidates))
+                .Take(answerCandidateLimit)
                 .ToList();
 
             if (candidates.Count == 0)
@@ -578,6 +582,17 @@ namespace OPEN_LRD.NLP
             {
                 diagnostics.Add("Kept answer candidates matching the strongest relation interpretation.");
                 candidates = relationMatchedCandidates;
+            }
+
+            if (IsDictionarySenseQuestion(question))
+            {
+                return CreateDictionarySenseAnswer(
+                    question,
+                    candidates,
+                    evaluations,
+                    core,
+                    options,
+                    diagnostics);
             }
 
             if (question.ExpectedAnswer == AnswerKind.Quantity)
@@ -681,6 +696,128 @@ namespace OPEN_LRD.NLP
                 Math.Clamp(selected.Score, 0.0, 1.0),
                 Deduplicate(diagnostics),
                 usesSessionProvenance);
+        }
+
+        private static bool IsDictionarySenseQuestion(QuestionAnalysis question)
+        {
+            return question.Wh == WhKind.What
+                && question.Variants.Any(variant => string.Equals(
+                    variant.RelationName,
+                    "has_sense",
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static NlpAnswer CreateDictionarySenseAnswer(
+            QuestionAnalysis question,
+            IReadOnlyList<AnswerCandidate> candidates,
+            IReadOnlyList<QuestionEvaluation> evaluations,
+            LRD_Core core,
+            NlpOptions options,
+            List<string> diagnostics)
+        {
+            List<AnswerCandidate> senses = candidates
+                .Where(candidate => candidate.NodeType == OntologyTypes.Senses)
+                .GroupBy(candidate => candidate.NodeID)
+                .Select(group => group.First())
+                .OrderBy(candidate => candidate.NodeID)
+                .ToList();
+
+            string word = GetDictionaryHeadword(question, core);
+            string article = GetDictionaryArticle(question.Subject?.SurfaceText);
+            string nounPhrase = article.Length == 0 ? word : article + " " + word;
+
+            if (senses.Count == 1)
+            {
+                AnswerCandidate sense = senses[0];
+                string definition = EnsureSentenceEnding(sense.Label);
+                string text = $"The definition of {nounPhrase} is {definition}";
+                GraphPath? evidencePath = FindEvidencePath(sense, evaluations, core);
+                bool usesTemporaryEvidence = sense.UsesTemporaryEvidence;
+
+                if (usesTemporaryEvidence)
+                    diagnostics.Add("The dictionary definition is backed by temporary evidence.");
+
+                return new NlpAnswer(
+                    AnswerStatus.Answered,
+                    AnswerKind.Description,
+                    TrimText(text, options.MaxAnswerTextLength, diagnostics),
+                    sense.Label,
+                    sense.NodeID,
+                    senses,
+                    EvidencePathsFor(senses, evaluations, options, core, includeAllCandidates: true),
+                    question,
+                    evaluations.FirstOrDefault()?.Result,
+                    usesTemporaryEvidence,
+                    Math.Clamp(sense.Score, 0.0, 1.0),
+                    Deduplicate(diagnostics));
+            }
+
+            diagnostics.Add($"Found {senses.Count} matching GCIDE senses for '{word}'.");
+            string multipleText = $"Multiple definitions for {nounPhrase} were found.";
+
+            return new NlpAnswer(
+                AnswerStatus.Ambiguous,
+                AnswerKind.Description,
+                TrimText(multipleText, options.MaxAnswerTextLength, diagnostics),
+                null,
+                null,
+                senses,
+                EvidencePathsFor(senses, evaluations, options, core, includeAllCandidates: true),
+                question,
+                evaluations.FirstOrDefault()?.Result,
+                senses.Any(candidate => candidate.UsesTemporaryEvidence),
+                0.50,
+                Deduplicate(diagnostics));
+        }
+
+        private static string GetDictionaryHeadword(QuestionAnalysis question, LRD_Core core)
+        {
+            if (question.AnchorNodeID.HasValue
+                && core.TryGetNode(question.AnchorNodeID.Value, out Web_Node? anchor)
+                && anchor is not null
+                && !string.IsNullOrWhiteSpace(anchor.Label))
+            {
+                return anchor.Label!;
+            }
+
+            string surface = question.Subject?.SurfaceText
+                ?? question.Object?.SurfaceText
+                ?? "word";
+            string[] parts = surface.Split(
+                new[] { ' ', '\t', '\r', '\n' },
+                StringSplitOptions.RemoveEmptyEntries);
+            int start = parts.Length > 1 && IsArticle(parts[0]) ? 1 : 0;
+            return string.Join(" ", parts.Skip(start));
+        }
+
+        private static string GetDictionaryArticle(string? surfaceText)
+        {
+            if (string.IsNullOrWhiteSpace(surfaceText))
+                return string.Empty;
+
+            string? first = surfaceText
+                .Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault();
+            return first is not null && IsArticle(first)
+                ? first.ToLowerInvariant()
+                : string.Empty;
+        }
+
+        private static bool IsArticle(string value)
+        {
+            return value.Equals("a", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("an", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("the", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string EnsureSentenceEnding(string text)
+        {
+            string trimmed = text.Trim();
+            return trimmed.Length == 0 || trimmed.EndsWith(".", StringComparison.Ordinal)
+                || trimmed.EndsWith("!", StringComparison.Ordinal)
+                || trimmed.EndsWith("?", StringComparison.Ordinal)
+                ? trimmed
+                : trimmed + ".";
         }
 
         private static NlpAnswer CreateQuantityAnswer(
@@ -1564,14 +1701,15 @@ namespace OPEN_LRD.NLP
             IReadOnlyList<AnswerCandidate> candidates,
             IReadOnlyList<QuestionEvaluation> evaluations,
             NlpOptions options,
-            LRD_Core core)
+            LRD_Core core,
+            bool includeAllCandidates = false)
         {
             List<GraphPath> paths = new List<GraphPath>();
             HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (AnswerCandidate candidate in candidates)
             {
-                if (paths.Count >= Math.Max(1, options.MaxAnswerCandidates))
+                if (!includeAllCandidates && paths.Count >= Math.Max(1, options.MaxAnswerCandidates))
                     break;
 
                 GraphPath? match = FindEvidencePath(candidate, evaluations, core);

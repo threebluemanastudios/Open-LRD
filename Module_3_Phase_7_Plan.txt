@@ -11,7 +11,7 @@ Reference design: README.md, Module_3_Plan.txt, and
 Implementation constraint: native C#, WPF, no external libraries or packages.
 Planning baseline at Phase 7 start: full solution built with zero warnings and
                                  zero errors; 61 smoke tests passed.
-Current integrated baseline: 169 smoke tests and 289 automated UI checks pass.
+Current integrated baseline: 171 smoke tests and 299 automated UI checks pass.
 Historical scope note: Phase 7 describes the original placeholder Tools window.
   Later phases replaced that placeholder with persistence/import/maintenance
   controls and added the separate Visualizer window.

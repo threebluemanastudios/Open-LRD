@@ -30,6 +30,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP ingestion idempotence", TestNlpIngestionIdempotence);
             Program.Run("NLP question analysis", TestNlpQuestionAnalysis);
             Program.Run("NLP answer generation", TestNlpAnswerGeneration);
+            Program.Run("NLP GCIDE dictionary definitions", TestNlpGcideDictionaryDefinitions);
             Program.Run("NLP social dialogue is read-only", TestNlpSocialDialogue);
             Program.Run("NLP conversational preambles and punctuation", TestNlpConversationalInput);
             Program.Run("NLP multi-answer synthesis", TestNlpMultiAnswerSynthesis);
@@ -1552,6 +1553,187 @@ namespace OPEN_LRD.SmokeTests
             NlpResult passive = passivePipeline.Ask("Who was seen by Alice?");
             Assert(passive.Status == NlpStatus.Answered, $"expected Answered but got {passive.Status}: {string.Join("; ", passive.Diagnostics)}");
             Assert(passive.Answer?.ShortAnswer == "Bob", $"expected Bob but got {passive.Answer?.ShortAnswer}");
+        }
+
+        private static void TestNlpGcideDictionaryDefinitions()
+        {
+            OntologyTypes.EnsureRegistered();
+            OntologyRelations.EnsureRegistered();
+
+            const string commitDefinition = "To give in trust.";
+            LRD_Core core = NewCore();
+            Guid commit = AddNode(core, OntologyTypes.Lexemes, "commit", NodeLifetime.Permanent);
+            Guid commitSense = AddNode(
+                core,
+                OntologyTypes.Senses,
+                commitDefinition,
+                NodeLifetime.Permanent,
+                "commit#verb.1");
+            AddNode(core, NodeTypes.Concepts, "commit", NodeLifetime.Permanent);
+            Assert(
+                core.AddDirectedConnection(commit, commitSense, OntologyTypes.lexicon, OntologyRelations.HasSense),
+                "the commit Lexeme should link to its Sense");
+
+            NlpResult definition = new NlpPipeline(core).Ask("What is commit?");
+            Assert(
+                definition.Status == NlpStatus.Answered,
+                $"expected Answered but got {definition.Status}: {string.Join("; ", definition.Diagnostics)}");
+            Assert(
+                definition.Answer?.Text == "The definition of commit is To give in trust.",
+                $"unexpected definition text: {definition.Answer?.Text}");
+            Assert(definition.Answer?.ShortAnswer == commitDefinition, "ShortAnswer should contain the Sense definition");
+            Assert(definition.Answer?.Candidates.Any(candidate => candidate.NodeID == commitSense) == true,
+                "the Sense should be present in Answer candidates");
+            Assert(definition.Answer?.EvidencePaths.Any(path =>
+                path.NodeIDs.SequenceEqual(new[] { commit, commitSense })) == true,
+                "the answer should retain the Lexeme-to-Sense evidence path");
+
+            NlpResult aArticle = new NlpPipeline(core).Ask("What is a commit?");
+            Assert(
+                aArticle.Answer?.Text == "The definition of a commit is To give in trust.",
+                $"the input article 'a' should be preserved: {aArticle.Answer?.Text}");
+
+            NlpResult theArticle = new NlpPipeline(core).Ask("What is the commit?");
+            Assert(
+                theArticle.Answer?.Text == "The definition of the commit is To give in trust.",
+                $"the input article 'the' should be preserved: {theArticle.Answer?.Text}");
+
+            Guid apple = AddNode(core, OntologyTypes.Lexemes, "apple", NodeLifetime.Permanent);
+            Guid appleSense = AddNode(
+                core,
+                OntologyTypes.Senses,
+                "A fruit.",
+                NodeLifetime.Permanent,
+                "apple#noun.1");
+            Assert(
+                core.AddDirectedConnection(apple, appleSense, OntologyTypes.lexicon, OntologyRelations.HasSense),
+                "the apple Lexeme should link to its Sense");
+
+            NlpResult anArticle = new NlpPipeline(core).Ask("What is an apple?");
+            Assert(
+                anArticle.Answer?.Text == "The definition of an apple is A fruit.",
+                $"the input article 'an' should be preserved: {anArticle.Answer?.Text}");
+
+            Guid dog = AddNode(core, OntologyTypes.Lexemes, "dog", NodeLifetime.Permanent);
+            Guid dogSense = AddNode(core, OntologyTypes.Senses, "A domesticated animal.", NodeLifetime.Permanent);
+            Assert(
+                core.AddDirectedConnection(dog, dogSense, OntologyTypes.lexicon, OntologyRelations.HasSense),
+                "the dog Lexeme should link to its Sense");
+            Guid canine = AddNode(core, OntologyTypes.Lexemes, "canine", NodeLifetime.Permanent);
+            Guid canineSense = AddNode(core, OntologyTypes.Senses, "A member of the dog family.", NodeLifetime.Permanent);
+            Assert(
+                core.AddDirectedConnection(canine, canineSense, OntologyTypes.lexicon, OntologyRelations.HasSense),
+                "the canine Lexeme should link to its Sense");
+
+            NlpResult dogDefinition = new NlpPipeline(core).Ask("What is dog?");
+            Assert(dogDefinition.Answer?.ShortAnswer == "A domesticated animal.",
+                $"expected the dog definition but got {dogDefinition.Answer?.ShortAnswer}");
+            NlpResult canineDefinition = new NlpPipeline(core).Ask("What is canine?");
+            Assert(canineDefinition.Answer?.ShortAnswer == "A member of the dog family.",
+                $"expected the canine definition but got {canineDefinition.Answer?.ShortAnswer}");
+
+            LRD_Core missingLexemeCore = NewCore();
+            AddNode(missingLexemeCore, NodeTypes.Concepts, "commit", NodeLifetime.Permanent);
+            NlpResult missingSense = new NlpPipeline(missingLexemeCore).Ask("What is commit?");
+            Assert(
+                missingSense.Answer?.Status == AnswerStatus.NoMatch
+                    && missingSense.Answer.Text.Contains("commit", StringComparison.OrdinalIgnoreCase)
+                    && !missingSense.Answer.Text.Contains("about What", StringComparison.OrdinalIgnoreCase),
+                $"a missing dictionary Sense should no-match on the headword, not What: {missingSense.Answer?.Text}");
+
+            LRD_Core multipleCore = NewCore();
+            Guid multipleCommit = AddNode(
+                multipleCore,
+                OntologyTypes.Lexemes,
+                "commit",
+                NodeLifetime.Permanent);
+            Guid laterGuid = Guid.Parse("00000000-0000-0000-0000-000000000002");
+            Guid earlierGuid = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            Web_Node laterSense = new Web_Node(laterGuid, OntologyTypes.Senses, NodeLifetime.Permanent, 0);
+            laterSense.Set_Label("To entrust or consign.");
+            Web_Node earlierSense = new Web_Node(earlierGuid, OntologyTypes.Senses, NodeLifetime.Permanent, 0);
+            earlierSense.Set_Label("To carry out a promise.");
+            Assert(multipleCore.AddExistingNode(laterSense), "later-GUID Sense should be added");
+            Assert(multipleCore.AddExistingNode(earlierSense), "earlier-GUID Sense should be added");
+            Assert(
+                multipleCore.AddDirectedConnection(
+                    multipleCommit,
+                    laterGuid,
+                    OntologyTypes.lexicon,
+                    OntologyRelations.HasSense),
+                "later-GUID Sense link should be added");
+            Assert(
+                multipleCore.AddDirectedConnection(
+                    multipleCommit,
+                    earlierGuid,
+                    OntologyTypes.lexicon,
+                    OntologyRelations.HasSense),
+                "earlier-GUID Sense link should be added");
+
+            NlpResult multiple = new NlpPipeline(multipleCore).Ask("What is the commit?");
+            Assert(
+                multiple.Answer?.Status == AnswerStatus.Ambiguous,
+                $"expected Ambiguous but got {multiple.Answer?.Status}: {string.Join("; ", multiple.Diagnostics)}");
+            Assert(
+                multiple.Answer?.Text == "Multiple definitions for the commit were found.",
+                $"unexpected multiple-definition text: {multiple.Answer?.Text}");
+            Assert(
+                multiple.Answer?.Candidates.Select(candidate => candidate.NodeID)
+                    .SequenceEqual(new[] { earlierGuid, laterGuid }) == true,
+                "multiple Sense candidates should be ordered by ascending GUID");
+
+            LRD_Core duplicateLexemeCore = NewCore();
+            Guid firstLexeme = AddNode(
+                duplicateLexemeCore,
+                OntologyTypes.Lexemes,
+                "commit",
+                NodeLifetime.Permanent);
+            Guid secondLexeme = AddNode(
+                duplicateLexemeCore,
+                OntologyTypes.Lexemes,
+                "commit",
+                NodeLifetime.Permanent);
+            NlpResult duplicateLexemes = new NlpPipeline(duplicateLexemeCore).Ask("What is commit?");
+            Assert(
+                duplicateLexemes.Answer?.Status == AnswerStatus.Ambiguous
+                    && duplicateLexemes.Answer.Candidates.Select(candidate => candidate.NodeID)
+                        .ToHashSet().SetEquals(new[] { firstLexeme, secondLexeme }),
+                "duplicate Lexeme headwords should remain ambiguous rather than resolving to another node type");
+
+            LRD_Core manySensesCore = NewCore();
+            Guid manySensesLexeme = AddNode(
+                manySensesCore,
+                OntologyTypes.Lexemes,
+                "mull",
+                NodeLifetime.Permanent);
+            Guid[] senseIDs = Enumerable.Range(1, 7)
+                .Select(index => Guid.Parse($"00000000-0000-0000-0000-{index:D12}"))
+                .Reverse()
+                .ToArray();
+            foreach ((Guid senseID, int index) in senseIDs.Select((id, index) => (id, index)))
+            {
+                Web_Node sense = new Web_Node(senseID, OntologyTypes.Senses, NodeLifetime.Permanent, 0);
+                sense.Set_Label($"Definition {index + 1}.");
+                Assert(manySensesCore.AddExistingNode(sense), "each additional Sense should be added");
+                Assert(
+                    manySensesCore.AddDirectedConnection(
+                        manySensesLexeme,
+                        senseID,
+                        OntologyTypes.lexicon,
+                        OntologyRelations.HasSense),
+                    "each additional Sense link should be added");
+            }
+
+            NlpOptions limitedOptions = new NlpOptions { MaxAnswerCandidates = 2 };
+            NlpResult manySenses = new NlpPipeline(manySensesCore, limitedOptions).Ask("What is mull?");
+            Guid[] expectedSenseOrder = senseIDs.OrderBy(id => id).ToArray();
+            Assert(
+                manySenses.Answer?.Candidates.Select(candidate => candidate.NodeID)
+                    .SequenceEqual(expectedSenseOrder) == true,
+                "dictionary candidate lists should include all matching senses, ordered by GUID, beyond the generic answer limit");
+            Assert(
+                manySenses.Answer?.EvidencePaths.Count == senseIDs.Length,
+                "dictionary answers should preserve an evidence path for each returned Sense");
         }
 
         private static void TestNlpYesNoAnswers()

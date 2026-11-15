@@ -38,6 +38,18 @@ namespace OPEN_LRD.SmokeTests
             <hw>poodle</hw> <pos>n.</pos> <def>A curly-haired dog.</def></p>
             """;
 
+        private const string CommitDefinitionBlock = """
+            <p><ent>commit</ent><br/>
+            <hw>commit</hw> <pos>v.</pos> <sn>1.</sn>
+            <def>To give in trust; to put into charge or keeping.</def></p>
+            """;
+
+        private const string MultiSenseBlock = """
+            <p><ent>mull</ent><br/>
+            <hw>mull</hw> <pos>n.</pos> <sn>1.</sn><def>A mess or confusion.</def><br/>
+            <sn>2.</sn><def>A soft thin muslin.</def></p>
+            """;
+
         private const string PlainBlock = """
             <p><ent>zebra</ent><br/>
             <hw>zebra</hw> <pos>n.</pos> <def>An African striped mammal.</def></p>
@@ -51,6 +63,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("GCIDE markup decoding", TestMarkupDecoding);
             Program.Run("GCIDE entry parsing", TestEntryParsing);
             Program.Run("GCIDE corpus mapping", TestCorpusMapping);
+            Program.Run("GCIDE loader Ask definitions", TestGcideLoaderAskDefinitions);
             Program.Run("GCIDE idempotent reload", TestIdempotentReload);
             Program.Run("GCIDE subset policies", TestSubsetPolicies);
             Program.Run("GCIDE bundled corpus sample", TestBundledCorpusSample);
@@ -321,6 +334,48 @@ namespace OPEN_LRD.SmokeTests
                 Assert(
                     result.SkippedRelations == 2,
                     "the unresolved 'hound' synonym and the early 'dog' antonym should be skipped");
+            }
+            finally
+            {
+                DeleteDirectory(directory);
+            }
+        }
+
+        private static void TestGcideLoaderAskDefinitions()
+        {
+            LRD_Core core = NewCore();
+            string directory = WriteCorpus(
+                ("CIDE.C", CommitDefinitionBlock + MultiSenseBlock));
+
+            try
+            {
+                GcideLoadResult loaded = OntologyLoader.LoadCorpus(
+                    core,
+                    new GcideLoadOptions
+                    {
+                        CorpusDirectory = directory,
+                        Subset = GcideSubset.All,
+                        MaxEntries = 0
+                    });
+                Assert(loaded.EntriesLoaded == 2, "both dictionary entries should load");
+
+                NlpPipeline pipeline = new NlpPipeline(core);
+                NlpResult commit = pipeline.Ask("What is commit?");
+                Assert(
+                    commit.Answer?.Text ==
+                        "The definition of commit is To give in trust; to put into charge or keeping.",
+                    $"Ask should retrieve the loaded GCIDE definition (actual: '{commit.Answer?.Text}')");
+
+                NlpResult mull = pipeline.Ask("What is mull?");
+                Assert(
+                    mull.Answer?.Text == "Multiple definitions for mull were found.",
+                    $"Ask should report multiple loaded senses (actual: '{mull.Answer?.Text}')");
+                Assert(
+                    mull.Answer?.Candidates.Count == 2
+                        && mull.Answer.Candidates.All(candidate => candidate.NodeType == OntologyTypes.Senses)
+                        && mull.Answer.Candidates.Select(candidate => candidate.NodeID)
+                            .SequenceEqual(mull.Answer.Candidates.Select(candidate => candidate.NodeID).OrderBy(id => id)),
+                    "the loaded GCIDE senses should be returned as GUID-ordered Sense candidates");
             }
             finally
             {

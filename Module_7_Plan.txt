@@ -196,8 +196,9 @@ Acceptance: solution and test projects build with zero warnings/errors; all smok
 and Manual UI tests pass; event timestamps round-trip through existing persistence;
 base node classes remain unchanged; Ask searches remain graph-read-only.
 
-Verification result: 169 smoke tests and 289 Manual UI checks pass. Application
-and Manual UI test builds complete with zero warnings and zero errors.
+Verification at Module 7 delivery: 169 smoke tests and 289 Manual UI checks
+passed. Application and Manual UI test builds completed with zero warnings and
+zero errors.
 
 ================================================================================
 9. PHASE 2: CHRONOLOGICAL HARDENING
@@ -298,5 +299,5 @@ Phase 4 acceptance:
   behavior is covered alongside the existing relative-time and chronological
   regression cases.
 
-Phase 4 verification: 169 smoke tests and 289 Manual UI checks pass; application
-and Manual UI builds complete with zero warnings and zero errors.
+Phase 4 delivery verification: 169 smoke tests and 289 Manual UI checks passed;
+application and Manual UI builds completed with zero warnings and zero errors.

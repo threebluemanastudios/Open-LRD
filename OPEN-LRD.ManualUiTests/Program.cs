@@ -16,6 +16,7 @@ using OPEN_LRD;
 using OPEN_LRD.NLP;
 using OPEN_LRD.Nodes;
 using OPEN_LRD.Nodes.Links;
+using OPEN_LRD.Ontology;
 using OPEN_LRD.Persistence;
 using OPEN_LRD.Visualization;
 using OPEN_LRD.Visualizer;
@@ -901,6 +902,66 @@ namespace OPEN_LRD.ManualUiTests
             Check(window.AnswerText.Text.Contains("Project Launch", StringComparison.Ordinal)
                 && window.AnswerText.Text.Contains("Alice launched Bob", StringComparison.Ordinal),
                 $"Workbench renders ranged event details (actual: '{window.AnswerText.Text}').");
+
+            OntologyTypes.EnsureRegistered();
+            OntologyRelations.EnsureRegistered();
+            Web_Node commitLexeme = new Web_Node(
+                Guid.NewGuid(),
+                OntologyTypes.Lexemes,
+                NodeLifetime.Permanent,
+                0);
+            commitLexeme.Set_Label("commit");
+            Guid lowSenseId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            Guid highSenseId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+            Web_Node highSense = new Web_Node(highSenseId, OntologyTypes.Senses, NodeLifetime.Permanent, 0);
+            highSense.Set_Label("A second meaning.");
+            Check(core.AddExistingNode(commitLexeme) && core.AddExistingNode(highSense),
+                "Workbench dictionary fixture Lexeme and first Sense were added.");
+            Check(core.AddDirectedConnection(
+                    commitLexeme.ID,
+                    highSenseId,
+                    OntologyTypes.lexicon,
+                    OntologyRelations.HasSense),
+                "Workbench dictionary fixture has_sense link was added.");
+
+            window.AskInput.Text = "What is commit?";
+            askClick?.Invoke(window, new object[] { window.AskButton, new RoutedEventArgs() });
+            DoEvents();
+            CandidateRow[] definitionRows = window.CandidatesGrid.ItemsSource
+                ?.Cast<CandidateRow>()
+                .ToArray() ?? Array.Empty<CandidateRow>();
+            Check(window.AnswerText.Text == "The definition of commit is A second meaning.",
+                $"Workbench shows the dictionary definition (actual: '{window.AnswerText.Text}').");
+            Check(window.ShortAnswerText.Text == "A second meaning.",
+                $"Workbench Short Answer shows the Sense definition (actual: '{window.ShortAnswerText.Text}').");
+            Check(definitionRows.Length == 1 && definitionRows[0].Label == "A second meaning."
+                && definitionRows[0].PathNodeIDs.Contains(commitLexeme.ID.ToString(), StringComparison.Ordinal),
+                "Workbench single-definition candidate retains its Lexeme/Sense path.");
+
+            Web_Node lowSense = new Web_Node(lowSenseId, OntologyTypes.Senses, NodeLifetime.Permanent, 0);
+            lowSense.Set_Label("A first meaning.");
+            Check(core.AddExistingNode(lowSense), "Workbench dictionary fixture second Sense was added.");
+            Check(core.AddDirectedConnection(
+                    commitLexeme.ID,
+                    lowSenseId,
+                    OntologyTypes.lexicon,
+                    OntologyRelations.HasSense),
+                "Workbench dictionary fixture second has_sense link was added.");
+
+            window.AskInput.Text = "What is the commit?";
+            askClick?.Invoke(window, new object[] { window.AskButton, new RoutedEventArgs() });
+            DoEvents();
+            CandidateRow[] definitionCandidates = window.CandidatesGrid.ItemsSource
+                ?.Cast<CandidateRow>()
+                .ToArray() ?? Array.Empty<CandidateRow>();
+            Check(window.AnswerText.Text == "Multiple definitions for the commit were found.",
+                $"Workbench shows the multiple-definition message (actual: '{window.AnswerText.Text}').");
+            Check(definitionCandidates.Select(row => row.Label)
+                    .SequenceEqual(new[] { "A first meaning.", "A second meaning." }),
+                "Workbench displays Sense candidates in ascending GUID order.");
+            Check(definitionCandidates.All(row =>
+                    row.PathNodeIDs.Contains(commitLexeme.ID.ToString(), StringComparison.Ordinal)),
+                "Workbench multi-definition candidates retain the Lexeme evidence path.");
 
             window.Close();
             DoEvents();

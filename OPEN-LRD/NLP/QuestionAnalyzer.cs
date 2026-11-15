@@ -518,7 +518,20 @@ namespace OPEN_LRD.NLP
                     passive ? Voice.Passive : Voice.Active);
             }
 
-            EntityResolution anchor = resolver.Resolve(anchorArgument);
+            EntityResolution anchor;
+            if (copula && wh == WhKind.What && invertedSubject is not null)
+            {
+                EntityResolution lexemeAnchor = resolver.Resolve(
+                    invertedSubject,
+                    OntologyTypes.Lexemes);
+                anchor = lexemeAnchor.ResolvedNodeID.HasValue || lexemeAnchor.IsAmbiguous
+                    ? lexemeAnchor
+                    : resolver.Resolve(anchorArgument);
+            }
+            else
+            {
+                anchor = resolver.Resolve(anchorArgument);
+            }
             diagnostics.AddRange(anchor.Diagnostics);
 
             if (anchor.IsPronoun)
@@ -539,6 +552,17 @@ namespace OPEN_LRD.NLP
             {
                 diagnostics.Add("No relation candidate could be registered.");
                 supported = false;
+            }
+
+            if (copula
+                && wh == WhKind.What
+                && anchor.NodeType == OntologyTypes.Lexemes
+                && anchor.ResolvedNodeID.HasValue)
+            {
+                relationCandidates.Clear();
+                AddRelation(relationCandidates, "has_sense", OntologyTypes.lexicon);
+                expectedTypes.Clear();
+                expectedTypes.Add(OntologyTypes.Senses);
             }
 
             List<QuestionVariant> variants = new List<QuestionVariant>();
@@ -1226,16 +1250,36 @@ namespace OPEN_LRD.NLP
                 break;
             }
 
-            if (!hasNominal)
-                return null;
+            return CreateCopulaArgument(sentence, parsed, tokens, start, spanEnd);
+        }
 
-            return CreateArgument(
+        private static FrameArgument? CreateCopulaArgument(
+            Sentence sentence,
+            ParsedText parsed,
+            IReadOnlyList<Token> tokens,
+            int start,
+            int end)
+        {
+            FrameArgument? argument = CreateArgument(
                 sentence,
                 parsed,
                 start,
-                spanEnd,
+                end,
                 FrameRole.Subject,
                 null);
+
+            if (argument is null)
+                return null;
+
+            string surfaceText = string.Join(
+                " ",
+                tokens.Skip(start).Take(end - start + 1).Select(token => token.Text));
+            return argument with
+            {
+                SurfaceText = surfaceText,
+                StartToken = start,
+                EndToken = end
+            };
         }
 
         private static FrameArgument? FindDirectObject(
