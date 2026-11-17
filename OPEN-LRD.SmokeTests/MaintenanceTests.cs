@@ -24,6 +24,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Maintenance transfers DataPointer", TestPointerTransfer);
             Program.Run("Maintenance merges synonym-linked nodes", TestSemanticMerge);
             Program.Run("Maintenance prefers trust and preserves maximum WeightUp", TestTrustFirstMerge);
+            Program.Run("Maintenance equal-trust tiebreakers and metadata merge", TestEqualTrustTiebreakersAndMetadata);
             Program.Run("Maintenance applies composition rules", TestComposition);
             Program.Run("Maintenance composition is idempotent", TestCompositionIdempotence);
             Program.Run("Maintenance abstracts repeated patterns", TestPatternAbstraction);
@@ -32,6 +33,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Maintenance budgets cap node merges", TestMergeBudget);
         }
 
+        /// <summary>Verifies that default maintenance runs only TTL expiration without reasoning merges.</summary>
         private static void TestDefaultsToTtlOnly()
         {
             LRD_Core core = NewCore();
@@ -45,6 +47,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(report.NodesMerged == 0, "default report should show no reasoning merges");
         }
 
+        /// <summary>Verifies that nodes sharing an identical DataPointer consolidate across node types.</summary>
         private static void TestEqualPointersMergeAcrossTypes()
         {
             LRD_Core core = NewCore();
@@ -79,6 +82,7 @@ namespace OPEN_LRD.SmokeTests
                 "merge should discard resulting self-links");
         }
 
+        /// <summary>Verifies that distinct non-null DataPointers prevent a label-based node merge.</summary>
         private static void TestDistinctPointersBlockMerge()
         {
             LRD_Core core = NewCore();
@@ -95,6 +99,7 @@ namespace OPEN_LRD.SmokeTests
                 "report should explain the DataPointer veto");
         }
 
+        /// <summary>Verifies that node metadata ingestion creates typed value nodes and provenance-tagged links.</summary>
         private static void TestMetadataMaterialization()
         {
             OntologyTypes.EnsureRegistered();
@@ -172,6 +177,7 @@ namespace OPEN_LRD.SmokeTests
                 "different DataPointer variants must not merge through generated value labels");
         }
 
+        /// <summary>Verifies that metadata reconciliation inactivates stale metadata facts while preserving other link origins.</summary>
         private static void TestMetadataReconciliation()
         {
             OntologyTypes.EnsureRegistered();
@@ -232,6 +238,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that enabling node metadata reasoning in maintenance materializes owner facts.</summary>
         private static void TestMetadataMaintenanceRescan()
         {
             LRD_Core core = NewCore();
@@ -253,6 +260,7 @@ namespace OPEN_LRD.SmokeTests
                 && (link.Origins & LinkOrigin.NodeMetadata) != 0), "rescan should add metadata-origin links");
         }
 
+        /// <summary>Verifies that exhausting the metadata value-creation budget prevents partial owner mutation.</summary>
         private static void TestMetadataBudget()
         {
             LRD_Core core = NewCore();
@@ -278,6 +286,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetDictionary()!.Count == 1, "invalid metadata ingestion must not mutate the graph");
         }
 
+        /// <summary>Verifies that a non-null DataPointer transfers to the surviving node during consolidation.</summary>
         private static void TestPointerTransfer()
         {
             LRD_Core core = NewCore();
@@ -293,6 +302,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(survivor.Get_DataPointer() is not null, "non-null pointer should transfer to the survivor");
         }
 
+        /// <summary>Verifies that synonym-linked compatible nodes consolidate during maintenance.</summary>
         private static void TestSemanticMerge()
         {
             OntologyTypes.EnsureRegistered();
@@ -309,6 +319,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetDictionary()!.Count == 1, "semantic merge should remove the duplicate node");
         }
 
+        /// <summary>Verifies that node consolidation selects the higher-trust survivor and retains maximum WeightUp.</summary>
         private static void TestTrustFirstMerge()
         {
             LRD_Core core = NewCore();
@@ -335,6 +346,40 @@ namespace OPEN_LRD.SmokeTests
                 "metadata merge should preserve permanence from either merged node");
         }
 
+        /// <summary>Verifies equal-trust survivor tiebreakers and preservation of max WeightDown, TTL, and unioned aliases.</summary>
+        private static void TestEqualTrustTiebreakersAndMetadata()
+        {
+            LRD_Core core = NewCore();
+            Web_Node first = new Web_Node(Guid.NewGuid(), NodeTypes.Concepts, NodeLifetime.Temporary, 1500);
+            Web_Node second = new Web_Node(Guid.NewGuid(), NodeTypes.Concepts, NodeLifetime.Temporary, 3200);
+            first.Set_Label("Tiebreak concept");
+            second.Set_Label("tiebreak concept");
+            first.Add_Alias("AlphaAlias");
+            second.Add_Alias("BetaAlias");
+            first.Set_TrustRating(0.8);
+            second.Set_TrustRating(0.8);
+            first.Add_WeightUp(5f);
+            second.Add_WeightUp(5f);
+            first.Add_WeightDown(2f);
+            second.Add_WeightDown(9f);
+
+            Web_Node neighbor = Node(NodeTypes.Concepts, "Neighbor");
+            core.AddExistingNode(first);
+            core.AddExistingNode(second);
+            core.AddExistingNode(neighbor);
+            core.AddDirectedConnection(second.ID, neighbor.ID, LinkClass.basic);
+
+            MaintenanceReport report = core.RunMaintenanceCycle(ReasoningOptions());
+            Assert(report.NodesMerged == 1, "equal-trust nodes with matching labels should consolidate");
+            Assert(core.GetExistingNode(second.ID) is not null && core.GetExistingNode(first.ID) is null,
+                "on equal trust, permanence, and WeightUp, the node with more links should survive");
+            Assert(second.Aliases.Contains("AlphaAlias") && second.Aliases.Contains("BetaAlias"),
+                "metadata merge should union aliases from both nodes");
+            Assert(second.Get_WeightDown() == 9f && second.Get_TTL() >= 3199,
+                "metadata merge should preserve the maximum WeightDown and maximum TTL");
+        }
+
+        /// <summary>Verifies that compositional induction derives direct transitive ontology links.</summary>
         private static void TestComposition()
         {
             OntologyTypes.EnsureRegistered();
@@ -358,6 +403,7 @@ namespace OPEN_LRD.SmokeTests
                 && link.ForwardLink.Id == OntologyRelations.PartOf), "part_of chain should compose to a direct link");
         }
 
+        /// <summary>Verifies that repeating compositional induction does not generate duplicate links.</summary>
         private static void TestCompositionIdempotence()
         {
             OntologyTypes.EnsureRegistered();
@@ -377,6 +423,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(repeated.LinksGenerated == 0, "repeated composition should not add duplicate links");
         }
 
+        /// <summary>Verifies that repeated two-hop relation paths abstract into a synthetic relation and concept node.</summary>
         private static void TestPatternAbstraction()
         {
             OntologyTypes.EnsureRegistered();
@@ -419,6 +466,7 @@ namespace OPEN_LRD.SmokeTests
                 link.ForwardLink.Id == composite.Id)), "repeated paths should gain direct links");
         }
 
+        /// <summary>Verifies that superseded generic links are inactivated and persist their inactive state.</summary>
         private static void TestPruningAndPersistence()
         {
             OntologyTypes.EnsureRegistered();
@@ -471,6 +519,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that a bounded transitive semantic path invalidates a direct generic link.</summary>
         private static void TestTransitivePruning()
         {
             OntologyTypes.EnsureRegistered();
@@ -495,6 +544,7 @@ namespace OPEN_LRD.SmokeTests
                 "bounded advanced path should invalidate the direct generic link");
         }
 
+        /// <summary>Verifies that the per-cycle node-merge budget caps consolidation work.</summary>
         private static void TestMergeBudget()
         {
             LRD_Core core = NewCore();
@@ -519,6 +569,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetDictionary()!.Count == 2, "merge budget must prevent mutations");
         }
 
+        /// <summary>Builds maintenance options with the requested reasoning stages enabled.</summary>
         private static MaintenanceOptions ReasoningOptions(
             bool composition = false,
             bool patterns = false,
@@ -538,6 +589,7 @@ namespace OPEN_LRD.SmokeTests
             };
         }
 
+        /// <summary>Initializes and returns the singleton graph core.</summary>
         private static LRD_Core NewCore()
         {
             LRD_Core core = LRD_Core.Instance;
@@ -545,6 +597,7 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Creates a labeled graph node fixture with the specified type and lifetime.</summary>
         private static Web_Node Node(NodeTypes type, string label, NodeLifetime lifetime = NodeLifetime.Temporary)
         {
             Web_Node node = new Web_Node(Guid.NewGuid(), type, lifetime, 1000);
@@ -552,8 +605,10 @@ namespace OPEN_LRD.SmokeTests
             return node;
         }
 
+        /// <summary>Creates a data pointer fixture for the specified absolute URI string.</summary>
         private static DataPointer DataPointerFor(string uri) => new DataPointer(new Uri(uri));
 
+        /// <summary>Throws an exception with the specified message when the condition is false.</summary>
         private static void Assert(bool condition, string message)
         {
             if (!condition)

@@ -5,6 +5,7 @@ namespace OPEN_LRD.NLP
     /// <summary>Identifies and types named entities and temporal mentions in parsed sentences.</summary>
     internal static class NamedEntityRecognizer
     {
+        /// <summary>Extracts and classifies typed entity mentions from noun phrase chunks across all sentences.</summary>
         public static ParsedText Recognize(ParsedText parsed)
         {
             ArgumentNullException.ThrowIfNull(parsed);
@@ -29,6 +30,7 @@ namespace OPEN_LRD.NLP
             return parsed with { Mentions = mentions };
         }
 
+        /// <summary>Builds a typed mention from a noun phrase chunk when a head noun or number is present.</summary>
         private static Mention? CreateMention(Sentence sentence, Chunk chunk)
         {
             List<Token> tokens = sentence.Tokens
@@ -63,6 +65,7 @@ namespace OPEN_LRD.NLP
                 confidence);
         }
 
+        /// <summary>Classifies a noun phrase into a mention kind, graph node type, and confidence score.</summary>
         private static (MentionKind Kind, NodeTypes NodeType, double Confidence) Classify(
             IReadOnlyList<Token> tokens,
             string normalizedSurface,
@@ -109,6 +112,7 @@ namespace OPEN_LRD.NLP
             return (MentionKind.Concept, NodeTypes.Concepts, 0.85);
         }
 
+        /// <summary>Checks whether a noun phrase represents a calendar date or date expression.</summary>
         private static bool IsDateMention(IReadOnlyList<Token> tokens, string normalizedSurface)
         {
             if (tokens.Any(token => Lexicon.LooksLikeDateWord(token.Normalized)))
@@ -125,6 +129,7 @@ namespace OPEN_LRD.NLP
                 && normalizedSurface.Any(char.IsDigit);
         }
 
+        /// <summary>Checks whether a noun phrase matches person titles, given names, or proper-noun patterns.</summary>
         private static bool IsPersonMention(IReadOnlyList<Token> tokens, Token head)
         {
             if (tokens.Any(token => Lexicon.IsPersonTitle(token.Normalized))

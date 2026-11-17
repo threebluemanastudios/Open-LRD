@@ -5,6 +5,7 @@ namespace OPEN_LRD.Maintenance
     /// <summary>Runs selected bounded maintenance reasoning stages and aggregates their reports.</summary>
     internal static class MaintenanceReasoningEngine
     {
+        /// <summary>Executes enabled maintenance reasoning stages against the core graph.</summary>
         public static void Run(LRD_Core core, MaintenanceOptions options, MaintenanceReport report)
         {
             ArgumentNullException.ThrowIfNull(core);

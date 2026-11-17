@@ -14,6 +14,7 @@ namespace OPEN_LRD.Nodes.Links
         /// <summary>Gets the canonical name of this link type.</summary>
         public string Name { get; }
 
+        /// <summary>Initializes an inverse link type descriptor with an identifier and name.</summary>
         private InverseLinkTypes(int id, string name)
         {
             Id = id;

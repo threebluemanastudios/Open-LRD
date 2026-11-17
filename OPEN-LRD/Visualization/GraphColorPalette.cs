@@ -7,6 +7,7 @@ namespace OPEN_LRD.Visualization
     /// <summary>Represents an immutable RGB color with byte-sized components.</summary>
     internal readonly record struct RgbColor(byte R, byte G, byte B)
     {
+        /// <summary>Formats the color as an uppercase hexadecimal `#RRGGBB` string.</summary>
         public override string ToString()
         {
             return $"#{R:X2}{G:X2}{B:X2}";
@@ -54,21 +55,25 @@ namespace OPEN_LRD.Visualization
 
         public static IReadOnlyList<ColorChoice> Palette => palette;
 
+        /// <summary>Returns the deterministic default palette color for a node type ID.</summary>
         public static ColorChoice GetDefaultNodeColor(int nodeTypeId)
         {
             return palette[GetDefaultIndex(nodeTypeId)];
         }
 
+        /// <summary>Returns the deterministic default palette color for a forward link type ID.</summary>
         public static ColorChoice GetDefaultLinkColor(int forwardTypeId)
         {
             return palette[GetDefaultIndex(forwardTypeId)];
         }
 
+        /// <summary>Returns the deterministic default palette color for a link class ID.</summary>
         public static ColorChoice GetDefaultClassColor(int classId)
         {
             return palette[GetDefaultIndex(classId)];
         }
 
+        /// <summary>Attempts to resolve a palette color choice by its case-insensitive name.</summary>
         public static bool TryGet(string name, out ColorChoice choice)
         {
             if (name is not null
@@ -83,11 +88,13 @@ namespace OPEN_LRD.Visualization
             return false;
         }
 
+        /// <summary>Attempts to resolve the canonical palette name for an RGB color value.</summary>
         public static bool TryGetName(RgbColor color, out string? name)
         {
             return byColor.TryGetValue(color, out name);
         }
 
+        /// <summary>Returns the zero-based palette index of a named color, or -1 if not found.</summary>
         public static int IndexOf(string name)
         {
             if (name is null)
@@ -102,6 +109,7 @@ namespace OPEN_LRD.Visualization
             return -1;
         }
 
+        /// <summary>Maps an integer type or class ID to a deterministic index in the palette array.</summary>
         private static int GetDefaultIndex(int typeId)
         {
             long mapped = ((long)typeId * 5L + 7L) % palette.Length;
@@ -112,6 +120,7 @@ namespace OPEN_LRD.Visualization
             return (int)mapped;
         }
 
+        /// <summary>Builds a reverse lookup dictionary mapping RGB color values to their palette names.</summary>
         private static Dictionary<RgbColor, string> BuildColorLookup()
         {
             Dictionary<RgbColor, string> lookup = new Dictionary<RgbColor, string>();

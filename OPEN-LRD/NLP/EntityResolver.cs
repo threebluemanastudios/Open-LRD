@@ -22,6 +22,7 @@ namespace OPEN_LRD.NLP
         private readonly NlpOptions options;
         private Guid? firstPersonSpeakerNodeID;
 
+        /// <summary>Creates an entity resolver bound to the supplied core graph, conversation, and NLP options.</summary>
         public EntityResolver(
             LRD_Core core,
             ConversationContext? conversation = null,
@@ -32,6 +33,7 @@ namespace OPEN_LRD.NLP
             this.options = options ?? new NlpOptions();
         }
 
+        /// <summary>Resolves a frame argument to an existing graph node, pronoun antecedent, or candidate set.</summary>
         public EntityResolution Resolve(FrameArgument argument, NodeTypes? requiredNodeType = null)
         {
             ArgumentNullException.ThrowIfNull(argument);
@@ -208,6 +210,7 @@ namespace OPEN_LRD.NLP
                 Array.Empty<string>());
         }
 
+        /// <summary>Generates a non-empty node identifier that is not currently used in the core graph.</summary>
         public Guid CreateNodeId()
         {
             Guid nodeID;
@@ -221,6 +224,7 @@ namespace OPEN_LRD.NLP
             return nodeID;
         }
 
+        /// <summary>Resolves a first-person pronoun to the configured speaker entity node.</summary>
         private EntityResolution ResolveFirstPerson(PronounInfo pronoun)
         {
             string speakerLabel = string.IsNullOrWhiteSpace(options.FirstPersonSpeakerLabel)
@@ -290,6 +294,7 @@ namespace OPEN_LRD.NLP
                 new[] { $"First-person pronoun '{pronoun.Surface}' resolved to speaker '{speakerLabel}'." });
         }
 
+        /// <summary>Builds a first-person entity resolution from a matched speaker node.</summary>
         private static EntityResolution CreateFirstPersonResolution(
             Web_Node node,
             string speakerLabel,
@@ -316,6 +321,7 @@ namespace OPEN_LRD.NLP
                 diagnostics);
         }
 
+        /// <summary>Finds candidate graph nodes matching a label and optional node type.</summary>
         private List<Web_Node> FindCandidates(string label, NodeTypes? type)
         {
             if (string.IsNullOrWhiteSpace(label))
@@ -324,6 +330,7 @@ namespace OPEN_LRD.NLP
             return core.FindByLabel(label, type).ToList();
         }
 
+        /// <summary>Normalizes surface mention text into a canonical label without leading determiners.</summary>
         private static string BuildLabel(string surfaceText)
         {
             if (string.IsNullOrWhiteSpace(surfaceText))
@@ -341,6 +348,7 @@ namespace OPEN_LRD.NLP
             return string.Join(" ", parts.Skip(start)).Trim();
         }
 
+        /// <summary>Builds distinct lookup aliases for a resolved label, lemma, and node type.</summary>
         private static List<string> BuildAliases(string label, string lemma, NodeTypes nodeType)
         {
             List<string> aliases = new List<string>();
@@ -363,6 +371,7 @@ namespace OPEN_LRD.NLP
             return aliases;
         }
 
+        /// <summary>Copies existing node aliases while excluding duplicates of the primary label.</summary>
         private static List<string> MergeAliases(
             string label,
             IReadOnlyCollection<string> existingAliases)
@@ -375,6 +384,7 @@ namespace OPEN_LRD.NLP
             return aliases;
         }
 
+        /// <summary>Adds a trimmed alias when it is non-empty and distinct from the label and existing aliases.</summary>
         private static void AddAlias(List<string> aliases, string label, string? alias)
         {
             if (string.IsNullOrWhiteSpace(alias))

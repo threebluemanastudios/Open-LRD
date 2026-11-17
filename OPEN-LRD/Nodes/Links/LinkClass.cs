@@ -30,6 +30,7 @@ namespace OPEN_LRD.Nodes.Links
         /// <summary>Gets the canonical name of this class.</summary>
         public string Name { get; }
 
+        /// <summary>Initializes a link class descriptor with an identifier and name.</summary>
         private LinkClass(int id, string name)
         {
             Id = id;

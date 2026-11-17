@@ -39,6 +39,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Visualization link distance concurrency", TestLinkDistanceConcurrency);
         }
 
+        /// <summary>Initializes and returns the singleton graph core.</summary>
         private static LRD_Core NewCore()
         {
             LRD_Core core = LRD_Core.Instance;
@@ -46,11 +47,13 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Allocates a unique runtime type ID for persistence tests.</summary>
         private static int NextTypeId()
         {
             return Interlocked.Increment(ref nextTypeId);
         }
 
+        /// <summary>Creates and returns a unique temporary directory for persistence test logs.</summary>
         private static string NewTempDirectory()
         {
             string directory = Path.Combine(
@@ -60,12 +63,14 @@ namespace OPEN_LRD.SmokeTests
             return directory;
         }
 
+        /// <summary>Deletes a temporary test directory if it exists.</summary>
         private static void DeleteDirectory(string directory)
         {
             if (Directory.Exists(directory))
                 Directory.Delete(directory, recursive: true);
         }
 
+        /// <summary>Creates and adds a graph node fixture with optional label and data pointer.</summary>
         private static Web_Node AddNode(
             LRD_Core core,
             Guid id,
@@ -87,6 +92,7 @@ namespace OPEN_LRD.SmokeTests
             return node;
         }
 
+        /// <summary>Creates and registers a conversation fixture in the core.</summary>
         private static ConversationContext AddConversation(
             LRD_Core core,
             Guid id,
@@ -99,11 +105,13 @@ namespace OPEN_LRD.SmokeTests
             return conversation;
         }
 
+        /// <summary>Serializes a log document to JSON at the specified file path.</summary>
         private static void WriteJson<T>(string path, T document)
         {
             File.WriteAllText(path, JsonSerializer.Serialize(document, LogJson.Options));
         }
 
+        /// <summary>Reads and deserializes a core log document from the specified file path.</summary>
         private static CoreLogDocument ReadCoreDocument(string path)
         {
             CoreLogDocument? document = JsonSerializer.Deserialize<CoreLogDocument>(
@@ -113,6 +121,7 @@ namespace OPEN_LRD.SmokeTests
             return document!;
         }
 
+        /// <summary>Builds a temporary basic node log record for validation tests.</summary>
         private static NodeLog BuildNodeLog(Guid id, string label)
         {
             return new NodeLog
@@ -126,6 +135,7 @@ namespace OPEN_LRD.SmokeTests
             };
         }
 
+        /// <summary>Builds a link log record for validation tests.</summary>
         private static LinkLog BuildLinkLog(
             Guid source,
             Guid destination,
@@ -147,6 +157,7 @@ namespace OPEN_LRD.SmokeTests
             };
         }
 
+        /// <summary>Verifies full round-trip export and replace import of core nodes, links, types, and conversations.</summary>
         private static void TestCoreRoundTrip()
         {
             string directory = NewTempDirectory();
@@ -325,6 +336,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that replace-mode core import discards stale nodes, conversations, and transient chains.</summary>
         private static void TestReplaceImport()
         {
             string directory = NewTempDirectory();
@@ -376,6 +388,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that merge-mode core import preserves existing items when IDs conflict.</summary>
         private static void TestMergeConflicts()
         {
             string directory = NewTempDirectory();
@@ -438,6 +451,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that repeatedly merging the same core log is idempotent.</summary>
         private static void TestIdempotentMerge()
         {
             string directory = NewTempDirectory();
@@ -479,6 +493,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that malformed or invalid core logs fail without mutating existing core state.</summary>
         private static void TestInvalidInputSafety()
         {
             string directory = NewTempDirectory();
@@ -579,6 +594,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Asserts that a failed import reports errors and leaves the core state untouched.</summary>
         private static void AssertStateUnchanged(
             LRD_Core core,
             Guid nodeID,
@@ -596,6 +612,7 @@ namespace OPEN_LRD.SmokeTests
                 "failed import should not change conversation state");
         }
 
+        /// <summary>Verifies that log files exceeding the hard byte ceiling are rejected before parsing.</summary>
         private static void TestOversizedInput()
         {
             string directory = NewTempDirectory();
@@ -624,6 +641,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that exporting the same core and transient state with a fixed timestamp is deterministic.</summary>
         private static void TestDeterministicExport()
         {
             string directory = NewTempDirectory();
@@ -668,6 +686,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies round-trip export and import of transient query and response chains.</summary>
         private static void TestTransientRoundTrip()
         {
             string directory = NewTempDirectory();
@@ -787,6 +806,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that valid core logs exceeding the legacy 64 MB cap import via streaming.</summary>
         private static void TestImportAboveLegacySizeCap()
         {
             string directory = NewTempDirectory();
@@ -821,6 +841,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies segmented manifest-and-parts export, import, and checksum corruption rejection.</summary>
         private static void TestSegmentedExportRoundTrip()
         {
             string directory = NewTempDirectory();
@@ -948,6 +969,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Builds a linked chain of test nodes with the specified label prefix and link class.</summary>
         private static LinkedList<Chain_Node> BuildTestChain(string prefix, int count, LinkClass linkClass)
         {
             LinkedList<Chain_Node> chain = new LinkedList<Chain_Node>();
@@ -969,6 +991,7 @@ namespace OPEN_LRD.SmokeTests
             return chain;
         }
 
+        /// <summary>Verifies that a record exceeding the segmented part byte limit fails without overwriting an existing export.</summary>
         private static void TestOversizedSegmentRecord()
         {
             string directory = NewTempDirectory();
@@ -1001,6 +1024,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies streaming export of a multi-thousand-node graph.</summary>
         private static void TestLargeGraphStreamingExport()
         {
             string directory = NewTempDirectory();
@@ -1032,6 +1056,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies merge deduplication and replace behavior for transient chain logs.</summary>
         private static void TestTransientMergeAndReplace()
         {
             string directory = NewTempDirectory();
@@ -1093,6 +1118,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that conversational NLP options and follow-up question templates round-trip through persistence.</summary>
         private static void TestConversationalOptionsRoundTrip()
         {
             NlpOptions configured = new NlpOptions
@@ -1147,6 +1173,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that encoded event time-window labels and display aliases survive core log persistence.</summary>
         private static void TestEventWindowRoundTrip()
         {
             string directory = NewTempDirectory();
@@ -1201,6 +1228,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that malformed transient logs fail cleanly without modifying existing chains.</summary>
         private static void TestMalformedTransient()
         {
             string directory = NewTempDirectory();
@@ -1230,6 +1258,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies default semantic link rest distances for all seeded link classes.</summary>
         private static void TestLinkDistanceDefaults()
         {
             Dictionary<LinkClass, double> expected = new Dictionary<LinkClass, double>
@@ -1263,6 +1292,7 @@ namespace OPEN_LRD.SmokeTests
                 "link distance should resolve through its class");
         }
 
+        /// <summary>Verifies that forward-link distance overrides take precedence over class defaults.</summary>
         private static void TestLinkDistanceOverrides()
         {
             int forwardID = NextTypeId();
@@ -1290,6 +1320,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that custom link classes without explicit defaults fall back to the global rest distance.</summary>
         private static void TestLinkDistanceFallback()
         {
             int classID = NextTypeId();
@@ -1307,6 +1338,7 @@ namespace OPEN_LRD.SmokeTests
                 "unknown classes should ignore unregistered forward types");
         }
 
+        /// <summary>Verifies validation of positive finite link rest distances.</summary>
         private static void TestLinkDistanceValidation()
         {
             int classID = NextTypeId();
@@ -1344,6 +1376,7 @@ namespace OPEN_LRD.SmokeTests
                 "invalid forward override should throw");
         }
 
+        /// <summary>Verifies thread-safe concurrent updates and reads on link rest-distance definitions.</summary>
         private static void TestLinkDistanceConcurrency()
         {
             const int iterations = 100;

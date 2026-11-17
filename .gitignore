@@ -1,83 +1,65 @@
-# Prerequisites
+# Prerequisites & External Scratch Directories
 *.d
 github.com/
-gcide-0.54/
 
-# Compiled Object files
+# .NET Build and Intermediate Directories
+[Bb]in/
+[Oo]bj/
+[Bb]uild/
+build-*/
+
+# Visual Studio & User-Specific Files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Compiled Object & Library Files
 *.slo
 *.lo
 *.o
 *.obj
-
-# Precompiled Headers
 *.gch
 *.pch
-
-# Linker files
 *.ilk
-
-# Debugger Files
 *.pdb
-
-# Compiled Dynamic libraries
 *.so
 *.dylib
 *.dll
-*.so
 *.cache
 *.editorconfig
 *.g.*
 *.developer.*
-
-# Fortran module files
 *.mod
 *.smod
-
-# Compiled Static libraries
 *.lai
 *.la
 *.a
 *.lib
 *.csproj.*
-
-# Executables
 *.exe
 *.out
 *.app
+*.dwo
+*.AssemblyInfo*
 
-# Build directories
-build/
-Build/
-build-*/
-bin/
-obj/
-*Tests/
-
-# CMake generated files
+# CMake & vcpkg
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
 install_manifest.txt
 compile_commands.json
+vcpkg_installed/
 
-# Temporary files
+# Temporary, Log, & Session Files
 *.tmp
 *.log
 *.bak
 *.swp
 *_wpftmp.*
-
-# vcpkg
-vcpkg_installed/
-.vs/
-*.AssemblyInfo*
-
-# debug information files
-*.dwo
-
-# test output & cache
 Testing/
 .cache/
 .logs/
-*.md
+session-*.md

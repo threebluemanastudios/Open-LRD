@@ -57,6 +57,7 @@ namespace OPEN_LRD.Visualizer
         {
         }
 
+        /// <summary>Creates a Visualizer window bound to the specified graph core instance.</summary>
         internal VisualizerWindow(LRD_Core core)
         {
             this.core = core ?? throw new ArgumentNullException(nameof(core));
@@ -106,11 +107,17 @@ namespace OPEN_LRD.Visualizer
         internal bool IsLoading => isLoading;
         internal bool IsClosed => isClosed;
 
+        /// <summary>Triggers an asynchronous graph snapshot and layout refresh for test verification.</summary>
         internal Task RefreshGraphForTestingAsync() => RefreshGraphAsync();
+        /// <summary>Selects or clears a snapshot node index for test verification.</summary>
         internal void SelectNodeForTesting(int? index) => SetSelectedNode(index);
+        /// <summary>Hovers or clears a snapshot node index for test verification.</summary>
         internal void HoverNodeForTesting(int? index) => SetHoveredNode(index);
+        /// <summary>Performs ray-AABB node picking at the specified viewport coordinate for test verification.</summary>
         internal int? PickNodeForTesting(Point point) => PickNode(point);
+        /// <summary>Saves the current visualizer settings to disk for test verification.</summary>
         internal void SaveSettingsForTesting() => SaveSettings();
+        /// <summary>Loads the persisted visualizer settings from disk for test verification.</summary>
         internal void LoadSettingsForTesting() => LoadSettings();
 
         /// <summary>Maximizes the borderless window on its active monitor after native initialization.</summary>
@@ -124,6 +131,7 @@ namespace OPEN_LRD.Visualizer
             WindowState = WindowState.Maximized;
         }
 
+        /// <summary>Initializes sidebar controls and starts the initial graph layout when the window loads.</summary>
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             RebuildColorPanels();
@@ -140,6 +148,7 @@ namespace OPEN_LRD.Visualizer
             await RefreshGraphAsync();
         }
 
+        /// <summary>Handles global keyboard shortcuts for closing, help, view framing, and label toggling.</summary>
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Escape)
@@ -181,6 +190,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Persists settings, cancels active layouts, and releases scene resources when closing.</summary>
         private void Window_Closed(object? sender, EventArgs e)
         {
             isClosed = true;
@@ -203,11 +213,13 @@ namespace OPEN_LRD.Visualizer
             scene.Clear();
         }
 
+        /// <summary>Takes a fresh snapshot from the core and recomputes the 3D layout.</summary>
         private async void Refresh_Button_Click(object sender, RoutedEventArgs e)
         {
             await RefreshGraphAsync();
         }
 
+        /// <summary>Recomputes the 3D layout for the current graph snapshot.</summary>
         private async void Recompute_Button_Click(object sender, RoutedEventArgs e)
         {
             if (snapshot is null)
@@ -219,6 +231,7 @@ namespace OPEN_LRD.Visualizer
             await RunLayoutAsync(snapshot, updateSnapshotSummary: false, actionName: "Recompute Layout");
         }
 
+        /// <summary>Frames the selected node when one is active, or frames the entire graph.</summary>
         private void FrameAll_Button_Click(object sender, RoutedEventArgs e)
         {
             if (selectedNodeIndex.HasValue && geometry is not null && selectedNodeIndex.Value < geometry.Layout.Positions.Count)
@@ -236,6 +249,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Resets the camera orientation and frames all graph nodes.</summary>
         private void ResetView_Button_Click(object sender, RoutedEventArgs e)
         {
             scene.ResetView();
@@ -243,6 +257,7 @@ namespace OPEN_LRD.Visualizer
             SetStatus("View reset.");
         }
 
+        /// <summary>Updates label visibility from the toolbar toggle button and saves settings.</summary>
         private void ToggleLabels_Button_Click(object sender, RoutedEventArgs e)
         {
             options.ShowLabels = ToggleLabelsButton.IsChecked == true;
@@ -251,6 +266,7 @@ namespace OPEN_LRD.Visualizer
             SetStatus(options.ShowLabels ? "Labels visible." : "Labels hidden.");
         }
 
+        /// <summary>Inverts the current floating-label visibility state and updates UI controls.</summary>
         private void ToggleLabels()
         {
             options.ShowLabels = !options.ShowLabels;
@@ -260,11 +276,13 @@ namespace OPEN_LRD.Visualizer
             SetStatus(options.ShowLabels ? "Labels visible." : "Labels hidden.");
         }
 
+        /// <summary>Clears the active node selection and hides the selection HUD card.</summary>
         private void ClearSelection_Button_Click(object sender, RoutedEventArgs e)
         {
             SetSelectedNode(null);
         }
 
+        /// <summary>Centers and frames the camera on the currently selected node.</summary>
         private void CenterSelection_Button_Click(object sender, RoutedEventArgs e)
         {
             if (selectedNodeIndex.HasValue && geometry is not null && selectedNodeIndex.Value < geometry.Layout.Positions.Count)
@@ -276,21 +294,25 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Closes the Visualizer window when the toolbar close button is clicked.</summary>
         private void Close_Button_Click(object sender, RoutedEventArgs e)
         {
             Close();
         }
 
+        /// <summary>Toggles the keyboard and mouse help overlay when the help button is clicked.</summary>
         private void Help_Button_Click(object sender, RoutedEventArgs e)
         {
             ToggleHelp();
         }
 
+        /// <summary>Hides the keyboard and mouse help overlay.</summary>
         private void CloseHelp_Click(object sender, RoutedEventArgs e)
         {
             HelpOverlay.Visibility = Visibility.Collapsed;
         }
 
+        /// <summary>Shows or hides the keyboard and mouse help overlay.</summary>
         private void ToggleHelp()
         {
             HelpOverlay.Visibility = HelpOverlay.Visibility == Visibility.Visible
@@ -298,32 +320,38 @@ namespace OPEN_LRD.Visualizer
                 : Visibility.Visible;
         }
 
+        /// <summary>Hides the display-cap truncation warning banner.</summary>
         private void DismissTruncationBanner_Click(object sender, RoutedEventArgs e)
         {
             TruncationBanner.Visibility = Visibility.Collapsed;
         }
 
+        /// <summary>Synchronizes the label overlay projection whenever the camera moves.</summary>
         private void OnCameraMoved()
         {
             UpdateCameraView();
         }
 
+        /// <summary>Updates the status-bar speed indicator when the fly-camera speed multiplier changes.</summary>
         private void OnSpeedChanged(double speed)
         {
             SpeedText.Text = $"Speed: {speed:F1}x (Shift 4x)";
         }
 
+        /// <summary>Updates scene materials and persists settings when the color palette changes.</summary>
         private void OnColorsChanged(object? sender, EventArgs e)
         {
             scene.UpdateMaterials(colors);
             SaveSettings();
         }
 
+        /// <summary>Pushes the current 3D camera projection view to the 2D label overlay.</summary>
         private void UpdateCameraView()
         {
             LabelOverlay.UpdateCamera(scene.GetCameraView());
         }
 
+        /// <summary>Handles viewport mouse-down events for node picking and right-drag mouse look.</summary>
         private void ViewportHost_MouseDown(object sender, MouseButtonEventArgs e)
         {
             ViewportHost.Focus();
@@ -347,6 +375,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Releases right-button mouse look capture on the viewport.</summary>
         private void ViewportHost_MouseUp(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton == MouseButton.Right)
@@ -355,6 +384,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Handles viewport mouse movement for camera look rotation or hover node picking.</summary>
         private void ViewportHost_MouseMove(object sender, MouseEventArgs e)
         {
             if (IsPointerOverSelectionCard(e))
@@ -375,6 +405,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Forwards mouse-wheel events on the viewport to the fly-camera speed controller.</summary>
         private void ViewportHost_MouseWheel(object sender, MouseWheelEventArgs e)
         {
             if (IsPointerOverSelectionCard(e))
@@ -383,6 +414,7 @@ namespace OPEN_LRD.Visualizer
             controller?.HandleMouseWheel(e);
         }
 
+        /// <summary>Determines whether the mouse pointer is currently inside the visible selection HUD card.</summary>
         private bool IsPointerOverSelectionCard(MouseEventArgs e)
         {
             if (SelectionCard.Visibility != Visibility.Visible)
@@ -395,6 +427,7 @@ namespace OPEN_LRD.Visualizer
                 && point.Y <= SelectionCard.ActualHeight;
         }
 
+        /// <summary>Finds the nearest visible node intersected by a ray through the specified viewport point.</summary>
         private int? PickNode(Point screenPoint)
         {
             if (geometry is null || snapshot is null || spatialIndex is null || snapshot.Nodes.Count == 0)
@@ -411,6 +444,7 @@ namespace OPEN_LRD.Visualizer
                 nodeVisibilityFilter);
         }
 
+        /// <summary>Determines whether the node at the specified snapshot index belongs to a visible node type.</summary>
         private bool IsNodeTypeVisibleForIndex(int index)
         {
             return snapshot is null
@@ -419,6 +453,7 @@ namespace OPEN_LRD.Visualizer
                 || scene.IsNodeTypeVisible(snapshot.Nodes[index].TypeId);
         }
 
+        /// <summary>Updates the selected node state, 3D highlight cube, and selection HUD card.</summary>
         private void SetSelectedNode(int? index)
         {
             selectedNodeIndex = index;
@@ -448,6 +483,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Updates the hovered node state, 3D hover highlight, and status bar summary.</summary>
         private void SetHoveredNode(int? index)
         {
             if (hoveredNodeIndex == index)
@@ -489,6 +525,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Captures a fresh graph snapshot from the core and runs an asynchronous 3D layout.</summary>
         private async Task RefreshGraphAsync(string actionName = "Refresh Graph")
         {
             if (isClosed)
@@ -517,6 +554,7 @@ namespace OPEN_LRD.Visualizer
             await RunLayoutAsync(fresh, updateSnapshotSummary: true, actionName);
         }
 
+        /// <summary>Executes the background 3D layout, geometry preparation, and spatial indexing for a snapshot.</summary>
         private async Task RunLayoutAsync(
             GraphSnapshot fresh,
             bool updateSnapshotSummary,
@@ -640,6 +678,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Completes and disposes the active layout cancellation token source.</summary>
         private void FinishLayout(CancellationTokenSource cancellation)
         {
             bool isCurrentLayout = ReferenceEquals(layoutCancellation, cancellation);
@@ -653,11 +692,13 @@ namespace OPEN_LRD.Visualizer
             cancellation.Dispose();
         }
 
+        /// <summary>Requests cancellation of any currently running layout task.</summary>
         private void CancelLayout()
         {
             layoutCancellation?.Cancel();
         }
 
+        /// <summary>Cancels any active layout and queues a debounced replacement layout after a two-second pause.</summary>
         private void RequestLayoutReplacement(string actionName)
         {
             if (isClosed)
@@ -673,6 +714,7 @@ namespace OPEN_LRD.Visualizer
             SetStatus($"{actionName} queued; waiting for a two-second pause before rebuilding the layout.");
         }
 
+        /// <summary>Starts the queued replacement layout once the trailing-edge debounce interval elapses.</summary>
         private async void LayoutReplacementTimer_Tick(object? sender, EventArgs e)
         {
             layoutReplacementTimer.Stop();
@@ -714,6 +756,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Logs a visualizer exception and displays its concise summary in the status and warnings UI.</summary>
         private void ReportVisualizerException(string actionName, Exception exception, bool layoutWasActive)
         {
             string concise = $"{actionName} failed: {exception.Message}";
@@ -724,6 +767,7 @@ namespace OPEN_LRD.Visualizer
             SetStatus(concise);
         }
 
+        /// <summary>Appends a structured exception record to the visualizer exception log file.</summary>
         private static string? TryAppendExceptionRecord(
             string actionName,
             Exception exception,
@@ -756,6 +800,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Resolves the file path for the visualizer exception log.</summary>
         private static string ResolveExceptionLogPath()
         {
             if (!string.IsNullOrWhiteSpace(ExceptionLogPathOverrideForTesting))
@@ -780,6 +825,7 @@ namespace OPEN_LRD.Visualizer
             return Path.Combine(localApplicationData, "OPEN-LRD", ".logs", "_exceptions.log");
         }
 
+        /// <summary>Shows or hides the layout progress overlay and updates toolbar command availability.</summary>
         private void SetLoading(bool loading)
         {
             isLoading = loading;
@@ -802,6 +848,7 @@ namespace OPEN_LRD.Visualizer
             UpdateCommands();
         }
 
+        /// <summary>Updates the progress bar and stage label from a background layout progress report.</summary>
         private void UpdateProgress(LayoutProgress progress)
         {
             if (!isLoading || isClosed)
@@ -822,6 +869,7 @@ namespace OPEN_LRD.Visualizer
             };
         }
 
+        /// <summary>Enables or disables toolbar buttons based on loading state and scene availability.</summary>
         private void UpdateCommands()
         {
             bool ready = !isLoading && !isClosed;
@@ -835,6 +883,7 @@ namespace OPEN_LRD.Visualizer
             CloseButton.IsEnabled = true;
         }
 
+        /// <summary>Updates the sidebar snapshot summary counts and truncation banner.</summary>
         private void UpdateSnapshotSummary(GraphSnapshot fresh)
         {
             SummaryNodesText.Text =
@@ -862,6 +911,7 @@ namespace OPEN_LRD.Visualizer
             UpdateWarnings(null);
         }
 
+        /// <summary>Updates the sidebar layout timing, iteration count, and bounding-radius summary.</summary>
         private void UpdateLayoutSummary(LayoutResult? layout)
         {
             if (layout is null)
@@ -885,6 +935,7 @@ namespace OPEN_LRD.Visualizer
             UpdateWarnings(layout);
         }
 
+        /// <summary>Combines and displays snapshot and layout warning messages in the sidebar.</summary>
         private void UpdateWarnings(LayoutResult? layout)
         {
             List<string> messages = new List<string>();
@@ -900,11 +951,13 @@ namespace OPEN_LRD.Visualizer
                 : string.Join(Environment.NewLine, messages);
         }
 
+        /// <summary>Shows or hides the empty-graph overlay prompt.</summary>
         private void ShowEmptyState(bool show)
         {
             EmptyStateOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        /// <summary>Sets the bottom status bar text.</summary>
         private void SetStatus(string message)
         {
             StatusText.Text = message;
@@ -914,6 +967,7 @@ namespace OPEN_LRD.Visualizer
         // Phase 5: Color Panels, Customization, Persistence & Sliders
         // =====================================================================
 
+        /// <summary>Loads persisted visualizer color overrides and view options from disk.</summary>
         private void LoadSettings()
         {
             try
@@ -931,6 +985,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Saves the current visualizer color overrides and view options to disk.</summary>
         private void SaveSettings()
         {
             try
@@ -945,6 +1000,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Synchronizes sidebar sliders, inputs, and checkboxes with the current options.</summary>
         private void SyncViewControls()
         {
             isInitializingControls = true;
@@ -1005,6 +1061,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Rebuilds the node, link, and class color customization panels in the sidebar.</summary>
         private void RebuildColorPanels()
         {
             RebuildNodeColorsPanel();
@@ -1012,6 +1069,7 @@ namespace OPEN_LRD.Visualizer
             RebuildClassColorsPanel();
         }
 
+        /// <summary>Populates the node-type color and visibility controls in the sidebar.</summary>
         private void RebuildNodeColorsPanel()
         {
             NodeColorsPanel.Children.Clear();
@@ -1056,6 +1114,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Populates the forward-link-type color and visibility controls in the sidebar.</summary>
         private void RebuildLinkColorsPanel()
         {
             LinkColorsPanel.Children.Clear();
@@ -1098,6 +1157,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Populates the link-class fallback color controls in the sidebar.</summary>
         private void RebuildClassColorsPanel()
         {
             ClassColorsPanel.Children.Clear();
@@ -1117,6 +1177,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Creates a single sidebar row with a color swatch, optional visibility checkbox, label, and palette selector.</summary>
         private UIElement CreateColorRow(
             string label,
             RgbColor currentColor,
@@ -1230,6 +1291,7 @@ namespace OPEN_LRD.Visualizer
             return row;
         }
 
+        /// <summary>Creates a frozen WPF solid-color brush from an RGB color value.</summary>
         private static SolidColorBrush ToSolidBrush(RgbColor color)
         {
             SolidColorBrush brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
@@ -1237,6 +1299,7 @@ namespace OPEN_LRD.Visualizer
             return brush;
         }
 
+        /// <summary>Resets all node-type color overrides and restores node-type visibility to defaults.</summary>
         private void ResetNodeColors_Click(object sender, RoutedEventArgs e)
         {
             colors.ClearNodeColors();
@@ -1257,6 +1320,7 @@ namespace OPEN_LRD.Visualizer
             SetStatus("Reset node colors and visibility to defaults.");
         }
 
+        /// <summary>Resets all link and class color overrides and restores link-type visibility to defaults.</summary>
         private void ResetLinkColors_Click(object sender, RoutedEventArgs e)
         {
             colors.ClearLinkColors();
@@ -1277,6 +1341,7 @@ namespace OPEN_LRD.Visualizer
             SetStatus("Reset link colors and visibility to defaults.");
         }
 
+        /// <summary>Restores default view options and queues a debounced layout replacement.</summary>
         private void ResetViewSettings_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -1305,6 +1370,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Updates horizontal mouse-look inversion from the sidebar checkbox.</summary>
         private void InvertMouseX_Click(object sender, RoutedEventArgs e)
         {
             options.InvertMouseX = InvertMouseXCheckBox.IsChecked == true;
@@ -1314,6 +1380,7 @@ namespace OPEN_LRD.Visualizer
             SetStatus(options.InvertMouseX ? "Horizontal mouse axis inverted." : "Horizontal mouse axis normal.");
         }
 
+        /// <summary>Updates vertical mouse-look inversion from the sidebar checkbox.</summary>
         private void InvertMouseY_Click(object sender, RoutedEventArgs e)
         {
             options.InvertMouseY = InvertMouseYCheckBox.IsChecked == true;
@@ -1323,6 +1390,7 @@ namespace OPEN_LRD.Visualizer
             SetStatus(options.InvertMouseY ? "Vertical mouse axis inverted." : "Vertical mouse axis normal.");
         }
 
+        /// <summary>Validates cap inputs, saves view settings, and queues a debounced layout replacement.</summary>
         private void ApplySettings_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -1342,6 +1410,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Updates the spread option and display label when the spread slider changes.</summary>
         private void SpreadSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (isInitializingControls)
@@ -1352,6 +1421,7 @@ namespace OPEN_LRD.Visualizer
                 SpreadValText.Text = options.Spread.ToString("F0", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>Updates the node cube size option and label overlay box size when the slider changes.</summary>
         private void CubeSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (isInitializingControls)
@@ -1364,6 +1434,7 @@ namespace OPEN_LRD.Visualizer
             LabelOverlay.NodeBoxSize = options.CubeSize;
         }
 
+        /// <summary>Updates the link ribbon width option when the line-width slider changes.</summary>
         private void LineWidthSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (isInitializingControls)
@@ -1374,6 +1445,7 @@ namespace OPEN_LRD.Visualizer
                 LineWidthValText.Text = options.LineWidth.ToString("F2", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>Updates the maximum visible label cap when the label-cap slider changes.</summary>
         private void MaxLabelsSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (isInitializingControls)
@@ -1386,6 +1458,7 @@ namespace OPEN_LRD.Visualizer
             LabelOverlay.MaxLabels = options.MaxLabels;
         }
 
+        /// <summary>Applies the selected label mode and updates label-cap slider availability.</summary>
         private void LabelModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (isInitializingControls)
@@ -1405,6 +1478,7 @@ namespace OPEN_LRD.Visualizer
                 : "All visible labels enabled (maximum 50).");
         }
 
+        /// <summary>Synchronizes the node-cap option and text box when the max-nodes slider changes.</summary>
         private void MaxNodesSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (isInitializingControls || MaxNodesInputBox is null)
@@ -1414,6 +1488,7 @@ namespace OPEN_LRD.Visualizer
             MaxNodesInputBox.Text = options.MaxNodes.ToString("N0", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>Synchronizes the link-cap option and text box when the max-links slider changes.</summary>
         private void MaxLinksSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (isInitializingControls || MaxLinksInputBox is null)
@@ -1423,16 +1498,19 @@ namespace OPEN_LRD.Visualizer
             MaxLinksInputBox.Text = options.MaxLinks.ToString("N0", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>Validates and applies the node-cap text box value when focus leaves the control.</summary>
         private void MaxNodesInputBox_LostFocus(object sender, RoutedEventArgs e)
         {
             TryApplyLimitInput(MaxNodesInputBox, isNodeLimit: true);
         }
 
+        /// <summary>Validates and applies the link-cap text box value when focus leaves the control.</summary>
         private void MaxLinksInputBox_LostFocus(object sender, RoutedEventArgs e)
         {
             TryApplyLimitInput(MaxLinksInputBox, isNodeLimit: false);
         }
 
+        /// <summary>Parses, validates, and synchronizes a node or link cap text input control.</summary>
         private bool TryApplyLimitInput(TextBox input, bool isNodeLimit)
         {
             int maximum = isNodeLimit ? VisualizerOptions.MaximumMaxNodes : VisualizerOptions.MaximumMaxLinks;
@@ -1473,6 +1551,7 @@ namespace OPEN_LRD.Visualizer
             return true;
         }
 
+        /// <summary>Updates the camera near clipping plane distance when the near-plane slider changes.</summary>
         private void NearPlaneSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (isInitializingControls || scene is null || options is null)

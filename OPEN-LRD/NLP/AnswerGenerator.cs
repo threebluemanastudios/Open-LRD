@@ -5,6 +5,7 @@ using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Pairs a question query variant with its evaluated reasoning result.</summary>
     internal sealed record QuestionEvaluation(
         QuestionVariant Variant,
         ReasoningResult Result);
@@ -95,6 +96,7 @@ namespace OPEN_LRD.NLP
         private const string temporaryCaveat = " (This fact is not yet verified.)";
         private const string sessionCaveat = " (This fact was provided in this session.)";
 
+        /// <summary>Generates a natural-language answer from an analyzed question and its evaluated query variants.</summary>
         public static NlpAnswer Generate(
             QuestionAnalysis? question,
             IReadOnlyList<QuestionEvaluation> evaluations,
@@ -124,6 +126,7 @@ namespace OPEN_LRD.NLP
                 : GenerateWh(question, evaluations, core, options, conversation);
         }
 
+        /// <summary>Builds an unsupported answer carrying the supplied question analysis and diagnostics.</summary>
         public static NlpAnswer Unsupported(
             QuestionAnalysis? question,
             IReadOnlyList<string> diagnostics)
@@ -150,6 +153,7 @@ namespace OPEN_LRD.NLP
                 messages);
         }
 
+        /// <summary>Builds an ambiguous answer when the question anchor matches multiple graph nodes.</summary>
         private static NlpAnswer CreateAmbiguousAnchorAnswer(
             QuestionAnalysis question,
             LRD_Core core,
@@ -173,6 +177,7 @@ namespace OPEN_LRD.NLP
                 new[] { "The question anchor matches multiple nodes." });
         }
 
+        /// <summary>Builds ranked candidate entries for an ambiguous question anchor.</summary>
         private static IReadOnlyList<AnswerCandidate> SeedAmbiguousAnchorCandidates(
             QuestionAnalysis question,
             LRD_Core core,
@@ -245,6 +250,7 @@ namespace OPEN_LRD.NLP
                 .ToArray();
         }
 
+        /// <summary>Generates a yes/no or ambiguous answer for a boolean question.</summary>
         private static NlpAnswer GenerateBoolean(
             QuestionAnalysis question,
             IReadOnlyList<QuestionEvaluation> evaluations,
@@ -373,6 +379,7 @@ namespace OPEN_LRD.NLP
                 usesSessionProvenance);
         }
 
+        /// <summary>Generates a ranked, synthesized, or quantity answer for a wh-question.</summary>
         private static NlpAnswer GenerateWh(
             QuestionAnalysis question,
             IReadOnlyList<QuestionEvaluation> evaluations,
@@ -699,6 +706,7 @@ namespace OPEN_LRD.NLP
                 usesSessionProvenance);
         }
 
+        /// <summary>Checks whether a question queries dictionary sense definitions via the has_sense relation.</summary>
         private static bool IsDictionarySenseQuestion(QuestionAnalysis question)
         {
             return question.Wh == WhKind.What
@@ -708,6 +716,7 @@ namespace OPEN_LRD.NLP
                     StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>Builds a definition or multi-sense answer for a dictionary lexeme query.</summary>
         private static NlpAnswer CreateDictionarySenseAnswer(
             QuestionAnalysis question,
             IReadOnlyList<AnswerCandidate> candidates,
@@ -771,6 +780,7 @@ namespace OPEN_LRD.NLP
                 Deduplicate(diagnostics));
         }
 
+        /// <summary>Extracts the dictionary headword for a lexeme definition question.</summary>
         private static string GetDictionaryHeadword(QuestionAnalysis question, LRD_Core core)
         {
             if (question.AnchorNodeID.HasValue
@@ -791,6 +801,7 @@ namespace OPEN_LRD.NLP
             return string.Join(" ", parts.Skip(start));
         }
 
+        /// <summary>Returns the leading article from a surface noun phrase when present.</summary>
         private static string GetDictionaryArticle(string? surfaceText)
         {
             if (string.IsNullOrWhiteSpace(surfaceText))
@@ -804,6 +815,7 @@ namespace OPEN_LRD.NLP
                 : string.Empty;
         }
 
+        /// <summary>Checks whether a word is an English definite or indefinite article.</summary>
         private static bool IsArticle(string value)
         {
             return value.Equals("a", StringComparison.OrdinalIgnoreCase)
@@ -811,6 +823,7 @@ namespace OPEN_LRD.NLP
                 || value.Equals("the", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>Appends a period to non-empty text that does not end with terminal punctuation.</summary>
         private static string EnsureSentenceEnding(string text)
         {
             string trimmed = text.Trim();
@@ -821,6 +834,7 @@ namespace OPEN_LRD.NLP
                 : trimmed + ".";
         }
 
+        /// <summary>Builds a quantity answer counting and listing matching answer candidates.</summary>
         private static NlpAnswer CreateQuantityAnswer(
             QuestionAnalysis question,
             IReadOnlyList<AnswerCandidate> candidates,
@@ -903,6 +917,7 @@ namespace OPEN_LRD.NLP
                 usesSessionProvenance);
         }
 
+        /// <summary>Extracts the quantified noun phrase following how many or how much.</summary>
         private static string GetQuantifiedNoun(QuestionAnalysis question)
         {
             string surface = question.WhSurface ?? question.WhArgument?.SurfaceText ?? string.Empty;
@@ -917,12 +932,14 @@ namespace OPEN_LRD.NLP
             return string.IsNullOrWhiteSpace(noun) ? "items" : noun;
         }
 
+        /// <summary>Checks whether a noun already has a plural form.</summary>
         private static bool EndsInPlural(string noun)
         {
             return noun.EndsWith("s", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(noun, "people", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>Inflects a predicate lemma into a plural verb phrase for the specified tense.</summary>
         private static string PluralVerbPhrase(string? predicate, Tense tense)
         {
             if (string.IsNullOrWhiteSpace(predicate))
@@ -944,6 +961,7 @@ namespace OPEN_LRD.NLP
             return baseVerb;
         }
 
+        /// <summary>Generates a descriptive answer summarizing known facts connected to an explored entity.</summary>
         public static NlpAnswer GenerateExploration(
             QuestionAnalysis question,
             LRD_Core core,
@@ -1089,6 +1107,7 @@ namespace OPEN_LRD.NLP
                 usesSessionProvenance);
         }
 
+        /// <summary>Generates a time answer describing the recorded window and variance for a single event node.</summary>
         public static NlpAnswer GenerateEventTimeAnswer(
             QuestionAnalysis question,
             Web_Node eventNode,
@@ -1140,6 +1159,7 @@ namespace OPEN_LRD.NLP
                 Array.Empty<string>());
         }
 
+        /// <summary>Generates a time answer summarizing one or more matching timed event nodes.</summary>
         public static NlpAnswer GenerateEventTimeAnswers(
             QuestionAnalysis question,
             IReadOnlyList<Web_Node> eventNodes,
@@ -1188,6 +1208,7 @@ namespace OPEN_LRD.NLP
                 Array.Empty<string>());
         }
 
+        /// <summary>Generates a description or count answer for events overlapping a queried time range.</summary>
         public static NlpAnswer GenerateTemporalRangeAnswer(
             TemporalRangeQuery query,
             LRD_Core core,
@@ -1260,6 +1281,7 @@ namespace OPEN_LRD.NLP
                 Array.Empty<string>());
         }
 
+        /// <summary>Creates an answer candidate representing a timed event node.</summary>
         private static AnswerCandidate EventCandidate(Web_Node eventNode, LRD_Core core)
         {
             int temporalRelation = RelationRegistry.GetOrRegister("has_time").Forward.Id;
@@ -1277,6 +1299,7 @@ namespace OPEN_LRD.NLP
                 eventNode.IsTemporary);
         }
 
+        /// <summary>Returns the temporal evidence path connecting an event node to its time node when present.</summary>
         private static IReadOnlyList<GraphPath> EventEvidencePaths(Web_Node eventNode, LRD_Core core)
         {
             Link? timeLink = core.GetLinks(eventNode.ID)
@@ -1296,6 +1319,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Builds a human-readable description of an event from its linked role nodes and temporal status.</summary>
         private static string BuildEventDescription(
             Web_Node eventNode,
             LRD_Core core,
@@ -1334,6 +1358,7 @@ namespace OPEN_LRD.NLP
             return string.IsNullOrWhiteSpace(name) ? description : name + ": " + description;
         }
 
+        /// <summary>Returns the display label of a node linked from an event by the specified role relation.</summary>
         private static string? EventRoleLabel(Web_Node eventNode, LRD_Core core, string relationName)
         {
             Link? link = core.GetLinks(eventNode.ID).FirstOrDefault(candidate =>
@@ -1345,6 +1370,7 @@ namespace OPEN_LRD.NLP
             return ResolveLabel(target);
         }
 
+        /// <summary>Formats an event's start and end timestamps into a concise natural-language phrase.</summary>
         private static string FormatEventWindow(DateTimeOffset? start, DateTimeOffset? end)
         {
             if (start.HasValue && end.HasValue)
@@ -1373,6 +1399,7 @@ namespace OPEN_LRD.NLP
             return "at an unknown time";
         }
 
+        /// <summary>Formats a complete sentence stating when an event occurred, is ongoing, or will occur.</summary>
         private static string FormatEventTimeStatement(
             string name,
             string window,
@@ -1387,6 +1414,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Removes a leading ongoing prefix and outer parentheses from variance text.</summary>
         private static string StripOngoingPrefix(string text)
         {
             const string prefix = "ongoing ";
@@ -1395,6 +1423,7 @@ namespace OPEN_LRD.NLP
                 : text;
         }
 
+        /// <summary>Formats a temporal range query expression as a capitalized sentence heading.</summary>
         private static string FormatRangeHeading(TemporalRangeQuery query)
         {
             foreach (string preposition in new[] { "on ", "in ", "at " })
@@ -1415,6 +1444,7 @@ namespace OPEN_LRD.NLP
                 : char.ToUpperInvariant(expression[0]) + expression[1..];
         }
 
+        /// <summary>Checks whether a node type should be excluded from entity exploration summaries.</summary>
         private static bool IsBlockedExplorationType(NodeTypes type)
         {
             return type == NodeTypes.Empties
@@ -1422,6 +1452,7 @@ namespace OPEN_LRD.NLP
                 || type == NodeTypes.Sources;
         }
 
+        /// <summary>Builds a natural-language no-match message tailored to the analyzed question.</summary>
         private static string BuildNoMatchText(QuestionAnalysis question)
         {
             string subject = question.Subject?.SurfaceText
@@ -1451,6 +1482,7 @@ namespace OPEN_LRD.NLP
             return $"I don't have a matching fact about {subject} yet.";
         }
 
+        /// <summary>Combines multiple distinct top-scoring answer candidates into a single synthesized answer.</summary>
         private static NlpAnswer CreateSynthesizedAnswer(
             QuestionAnalysis question,
             IReadOnlyList<QuestionEvaluation> evaluations,
@@ -1506,6 +1538,7 @@ namespace OPEN_LRD.NLP
                 usesSessionProvenance);
         }
 
+        /// <summary>Attempts to merge parallel evidence sentences into a single conjoined sentence.</summary>
         private static string? TrySynthesizeEvidence(
             IReadOnlyList<AnswerCandidate> candidates,
             IReadOnlyList<string> sentences)
@@ -1542,6 +1575,7 @@ namespace OPEN_LRD.NLP
                 + suffix;
         }
 
+        /// <summary>Converts a singular predicate suffix to agree with a conjoined plural subject.</summary>
         private static string PluralizePredicate(string suffix)
         {
             foreach (string article in new[] { " is a ", " is an " })
@@ -1595,6 +1629,7 @@ namespace OPEN_LRD.NLP
             return suffix;
         }
 
+        /// <summary>Inflects a singular English noun into its plural form.</summary>
         private static string PluralizeNoun(string noun)
         {
             if (string.Equals(noun, "person", StringComparison.OrdinalIgnoreCase))
@@ -1618,6 +1653,7 @@ namespace OPEN_LRD.NLP
             return noun + "s";
         }
 
+        /// <summary>Formats a list of strings as a natural-language conjunction.</summary>
         private static string FormatConjunction(IReadOnlyList<string> values)
         {
             string[] distinct = values
@@ -1634,6 +1670,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Checks whether an evidence path is backed by provenance recorded in the current session.</summary>
         private static bool UsesSessionProvenance(
             GraphPath? path,
             ConversationContext? conversation,
@@ -1645,6 +1682,7 @@ namespace OPEN_LRD.NLP
                 && conversation.FindProvenance(path).Count > 0;
         }
 
+        /// <summary>Appends the session-provenance caveat while respecting the maximum answer text length.</summary>
         private static string AppendSessionCaveat(
             string baseText,
             NlpOptions options,
@@ -1654,6 +1692,7 @@ namespace OPEN_LRD.NLP
             return TrimText(baseText, baseLimit, diagnostics) + sessionCaveat;
         }
 
+        /// <summary>Locates or reconstructs the graph evidence path supporting a selected answer candidate.</summary>
         private static GraphPath? FindEvidencePath(
             AnswerCandidate selected,
             IReadOnlyList<QuestionEvaluation> evaluations,
@@ -1698,6 +1737,7 @@ namespace OPEN_LRD.NLP
                 selected.Depth);
         }
 
+        /// <summary>Collects distinct supporting evidence paths for a set of answer candidates.</summary>
         private static IReadOnlyList<GraphPath> EvidencePathsFor(
             IReadOnlyList<AnswerCandidate> candidates,
             IReadOnlyList<QuestionEvaluation> evaluations,
@@ -1721,6 +1761,7 @@ namespace OPEN_LRD.NLP
             return paths;
         }
 
+        /// <summary>Extracts immediate and deeper answer candidates from an evaluated question variant.</summary>
         private static void ExtractCandidates(
             QuestionAnalysis question,
             QuestionEvaluation evaluation,
@@ -1823,6 +1864,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Checks whether a response edge matches the relation or link class expected by a query variant.</summary>
         private static bool TryMatchRelation(
             QuestionAnalysis question,
             QuestionVariant variant,
@@ -1865,6 +1907,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Attempts to score and construct an answer candidate from a node on a response path.</summary>
         private static bool TryCreateCandidate(
             QuestionAnalysis question,
             QuestionVariant variant,
@@ -1953,6 +1996,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Checks whether a node type is disallowed as an answer candidate for the given variant.</summary>
         private static bool IsBlockedType(NodeTypes type, QuestionVariant variant)
         {
             if (type == NodeTypes.Empties || type == NodeTypes.Dictionaries || type == NodeTypes.Sources)
@@ -1961,6 +2005,7 @@ namespace OPEN_LRD.NLP
             return type == NodeTypes.Basics && variant.ExpectedAnswerType != NodeTypes.Basics;
         }
 
+        /// <summary>Checks whether every node on a graph path is temporary.</summary>
         private static bool PathIsTemporary(GraphPath path, LRD_Core core)
         {
             if (path.NodeIDs.Count == 0)
@@ -1975,6 +2020,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Resolves the display label for a graph node using its event name, label, or first alias.</summary>
         private static string ResolveLabel(Web_Node node)
         {
             if (node.Get_NodeType() == NodeTypes.Events)
@@ -1987,6 +2033,7 @@ namespace OPEN_LRD.NLP
             return alias ?? string.Empty;
         }
 
+        /// <summary>Builds an ambiguous answer listing top competing answer candidates.</summary>
         private static NlpAnswer CreateAmbiguousAnswer(
             QuestionAnalysis question,
             IReadOnlyList<QuestionEvaluation> evaluations,
@@ -2023,6 +2070,7 @@ namespace OPEN_LRD.NLP
                 Deduplicate(diagnostics));
         }
 
+        /// <summary>Determines the semantic answer kind from the question analysis and selected candidate.</summary>
         private static AnswerKind DetermineAnswerKind(
             QuestionAnalysis question,
             AnswerCandidate candidate)
@@ -2040,6 +2088,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Maps a graph node type to its default semantic answer kind.</summary>
         private static AnswerKind DetermineKindFromType(NodeTypes type)
         {
             if (type == NodeTypes.Entities || type == NodeTypes.Names || type == NodeTypes.Objects)
@@ -2054,6 +2103,7 @@ namespace OPEN_LRD.NLP
             return AnswerKind.Description;
         }
 
+        /// <summary>Checks whether a boolean question evaluation matched the expected forward or inverse relation.</summary>
         private static bool IsBooleanVerified(QuestionEvaluation evaluation)
         {
             if (evaluation.Result.Status != ReasoningStatus.Answered
@@ -2067,6 +2117,7 @@ namespace OPEN_LRD.NLP
                 || link.InverseLink.Id == evaluation.Variant.InverseLinkTypeId);
         }
 
+        /// <summary>Renders the first edge of a graph evidence path as a natural-language sentence.</summary>
         private static string? BuildEvidenceSentence(
             GraphPath? path,
             LRD_Core core,
@@ -2124,6 +2175,7 @@ namespace OPEN_LRD.NLP
             return $"{source} {verbPhrase} {destination}.";
         }
 
+        /// <summary>Converts an underscore-separated relation name into an inflected verb phrase.</summary>
         private static string BuildVerbPhrase(string relation, Tense tense)
         {
             string[] segments = relation.Split(
@@ -2150,6 +2202,7 @@ namespace OPEN_LRD.NLP
             return ThirdPerson(baseVerb) + particles;
         }
 
+        /// <summary>Selects the English indefinite article a or an for a noun phrase.</summary>
         private static string IndefiniteArticle(string phrase)
         {
             string firstWord = phrase
@@ -2180,6 +2233,7 @@ namespace OPEN_LRD.NLP
                 : "a";
         }
 
+        /// <summary>Inflects a base verb into its third-person singular present form.</summary>
         private static string ThirdPerson(string verb)
         {
             if (verb == "have")
@@ -2210,6 +2264,7 @@ namespace OPEN_LRD.NLP
             return verb + "s";
         }
 
+        /// <summary>Inflects a base verb into its simple past-tense form.</summary>
         private static string PastTense(string verb)
         {
             if (irregularPast.TryGetValue(verb, out string? irregular))
@@ -2228,6 +2283,7 @@ namespace OPEN_LRD.NLP
             return verb + "ed";
         }
 
+        /// <summary>Truncates answer text to the configured maximum character length when necessary.</summary>
         private static string TrimText(
             string text,
             int maxLength,
@@ -2246,6 +2302,7 @@ namespace OPEN_LRD.NLP
             return text[..(limit - 3)] + "...";
         }
 
+        /// <summary>Returns distinct non-empty diagnostic messages in their original order.</summary>
         private static IReadOnlyList<string> Deduplicate(List<string> diagnostics)
         {
             HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);

@@ -17,6 +17,7 @@ namespace OPEN_LRD.Visualization
     /// <summary>Contains prepared mesh batches and layout positions for viewport rendering.</summary>
     internal sealed class SceneGeometry
     {
+        /// <summary>Creates a scene geometry container from a snapshot, layout, and mesh batches.</summary>
         public SceneGeometry(
             GraphSnapshot snapshot,
             LayoutResult layout,
@@ -80,6 +81,7 @@ namespace OPEN_LRD.Visualization
     /// <summary>Builds bounded, batched scene geometry from a graph snapshot and layout.</summary>
     internal static class VisualizerSceneBuilder
     {
+        /// <summary>Builds node and link mesh batches for the specified graph snapshot and layout.</summary>
         public static SceneGeometry Build(
             GraphSnapshot snapshot,
             LayoutResult layout,

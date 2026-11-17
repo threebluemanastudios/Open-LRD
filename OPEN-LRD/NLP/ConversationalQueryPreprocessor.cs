@@ -38,6 +38,7 @@ namespace OPEN_LRD.NLP
             @"^(?<subject>.+?)\s+(?<aux>am|is|are|was|were|has|have|had|can|could|will|would|should|may|might|must|do|does|did)\s+(?<rest>.+)$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+        /// <summary>Rewrites conversational preambles, follow-ups, and embedded boolean queries into canonical question text.</summary>
         public static ConversationalQuery Process(
             string text,
             bool enablePreambles,
@@ -129,11 +130,13 @@ namespace OPEN_LRD.NLP
             return new ConversationalQuery(query, explorationEntity, diagnostics);
         }
 
+        /// <summary>Trims trailing sentence punctuation and whitespace from a query string.</summary>
         private static string StripTrailingPunctuation(string text)
         {
             return text.Trim().TrimEnd('.', '!', '?', ',', ';', ':').TrimEnd();
         }
 
+        /// <summary>Rewrites an embedded declarative clause into an inverted yes/no question.</summary>
         private static string NormalizeBooleanQuestion(string text)
         {
             Match match = declarativeBooleanAuxiliary.Match(text.Trim());
@@ -168,6 +171,7 @@ namespace OPEN_LRD.NLP
             return text;
         }
 
+        /// <summary>Attempts to lemmatize a finite verb and determine whether it is in past tense.</summary>
         private static bool TryLemmatizePredicate(string value, out string lemma, out bool past)
         {
             lemma = value;
@@ -206,6 +210,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Checks whether text begins with a wh-word or inverted auxiliary question pattern.</summary>
         private static bool IsQuestionLike(string text)
         {
             if (string.IsNullOrWhiteSpace(text))

@@ -27,8 +27,10 @@ namespace OPEN_LRD.Maintenance
         public TimeSpan Elapsed { get; private set; }
         public IReadOnlyList<string> Diagnostics => diagnostics;
 
+        /// <summary>Appends a diagnostic message to the maintenance report.</summary>
         internal void AddDiagnostic(string message) => diagnostics.Add(message);
 
+        /// <summary>Records the total elapsed time for the maintenance run.</summary>
         internal void Complete() => Elapsed = stopwatch.Elapsed;
     }
 }

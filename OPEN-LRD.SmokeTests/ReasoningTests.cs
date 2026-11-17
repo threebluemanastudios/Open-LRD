@@ -97,6 +97,7 @@ namespace OPEN_LRD.SmokeTests
             return chain;
         }
 
+        /// <summary>Asserts that two floating-point values are equal within a tight tolerance.</summary>
         private static void AssertClose(double actual, double expected, string message)
         {
             if (Math.Abs(actual - expected) > 0.000001)

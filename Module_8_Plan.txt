@@ -2,8 +2,8 @@ OPEN-LRD
 MODULE 8: GCIDE ASK, TOOLS UI, VISUALIZER, AND DATA FILE INGESTION
 IMPLEMENTATION PLAN
 
-Status: Phases 1-4 complete; Phase 5 implementation in progress; Phase 6 large-graph candidate retrieval complete.
-Current verification: 188 smoke tests and 417 WPF UI checks pass; application
+Status: Phases 1-6 complete.
+Current verification: 194 smoke tests and 417 WPF UI checks pass; application
 and test builds complete with zero warnings and zero errors.
 Phase 4 Visualizer label/orbit work is implemented and verified. Phase 5 adopted
 design is in Section 8.3 and resolved decisions are listed in Section 8.4.
@@ -798,7 +798,7 @@ Status: Implemented and verified.
   dictionary senses, sets the generic candidate window to 10, asks the query, and
   verifies the Workbench displays 10 linked candidates. Existing ambiguity and
   contradiction checks remain passing.
-- Phase 6 verification: 188 smoke tests and 417 WPF UI checks pass; Release
+- Phase 6 verification: 194 smoke tests and 417 WPF UI checks pass; Release
   solution and Manual UI builds complete with zero warnings and zero errors.
 
 ================================================================================
@@ -809,8 +809,8 @@ Build and regression:
 - Build the application, smoke tests, and Manual UI tests with zero warnings
   and zero errors.
 - Run smoke and UI suites after each phase and record the aggregate counts.
-  Phase 5 currently passes 188 smoke tests and 417 WPF UI checks; application
-  and test builds complete with zero warnings and zero errors.
+  Phase 5 and Phase 6 currently pass 194 smoke tests and 417 WPF UI checks;
+  application and test builds complete with zero warnings and zero errors.
 - Preserve existing checks for log import/export, text import, ontology,
   maintenance, Visualizer rendering, selection, and settings persistence.
 
@@ -825,11 +825,10 @@ Phase verification:
 - Phase 4 (complete): Focused/All Visible labels, 50-label cap, spatial BVH and
   250-projection candidate budget, indexed ray picking, no-label early exit,
   persistence/reset, inverse relative orbit, and Alt+E/Q roll passed verification.
-- Phase 5 (in progress): importer, Data Files UI, CSV/JSON/XML structured and
-  NLP paths, checksum/trust behavior, dry-run, cancellation, re-import, and core
-  UI flows are implemented and verified. Manual file-import UI workflows and
-  WPF verification are complete; broader schema/limit/revision fixtures and the
-  complete acceptance review remain.
+- Phase 5 (complete): importer, Data Files UI, CSV/JSON/XML structured and
+  NLP paths, checksum/trust behavior, dry-run, cancellation, re-import, schema,
+  resource-limit, duplicate, revision-reconciliation, maintenance merge, and
+  persistence fixtures are implemented and verified.
 - Phase 5 manual UI verification (complete): file-format detection and override,
   text-mode restriction, structured CSV dry-run/import/re-import, Topic behavior,
   and Source/checksum reporting pass in the WPF runner.

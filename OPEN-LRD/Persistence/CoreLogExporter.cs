@@ -17,6 +17,7 @@ namespace OPEN_LRD.Persistence
             WriteIndented = false
         };
 
+        /// <summary>Exports core graph, conversation, and optional transient state to log files.</summary>
         public static CoreLogExportResult Export(
             LRD_Core core,
             string path,
@@ -26,6 +27,7 @@ namespace OPEN_LRD.Persistence
             return ExportCore(core, path, includeTransient, exportedAtUtc, MaxPartBytes);
         }
 
+        /// <summary>Exports logs using a caller-specified maximum byte size per segmented part.</summary>
         internal static CoreLogExportResult ExportWithPartLimit(
             LRD_Core core,
             string path,
@@ -38,6 +40,7 @@ namespace OPEN_LRD.Persistence
             return ExportCore(core, path, includeTransient, exportedAtUtc, partLimitBytes);
         }
 
+        /// <summary>Serializes core and optional transient state into single-file or segmented log outputs.</summary>
         private static CoreLogExportResult ExportCore(
             LRD_Core core,
             string path,
@@ -233,6 +236,7 @@ namespace OPEN_LRD.Persistence
             };
         }
 
+        /// <summary>Writes an unsegmented core log JSON document and returns the serialized link count.</summary>
         private static int WriteCoreLog(
             Stream output,
             DateTimeOffset exportedAtUtc,
@@ -281,6 +285,7 @@ namespace OPEN_LRD.Persistence
             return linkCount;
         }
 
+        /// <summary>Attempts to write a single-file core log within the configured byte budget.</summary>
         private static bool TryWriteLegacyCoreLog(
             string path,
             DateTimeOffset exportedAtUtc,
@@ -315,6 +320,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Attempts to write a single-file transient log within the configured byte budget.</summary>
         private static bool TryWriteLegacyTransientLog(
             string path,
             DateTimeOffset exportedAtUtc,
@@ -338,6 +344,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Writes segmented node, link, and conversation log parts and returns their manifest entries.</summary>
         private static List<LogPartDefinition> WriteCoreParts(
             string directory,
             string fileNamePrefix,
@@ -398,6 +405,7 @@ namespace OPEN_LRD.Persistence
             return parts.Complete();
         }
 
+        /// <summary>Writes segmented query and response chain parts and returns their manifest entries.</summary>
         private static List<LogPartDefinition> WriteTransientParts(
             string directory,
             string fileNamePrefix,
@@ -418,6 +426,7 @@ namespace OPEN_LRD.Persistence
             return parts.Complete();
         }
 
+        /// <summary>Writes ordered chain-node records for one transient chain into segmented part files.</summary>
         private static void WriteTransientChainParts(
             SegmentedPartWriter parts,
             Guid exportId,
@@ -445,6 +454,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Returns the outgoing links owned by a source node in deterministic export order.</summary>
         private static List<Link> GetOrderedSourceLinks(Web_Node source, LRD_Core core)
         {
             return core.GetStoredLinks(source.ID)
@@ -456,6 +466,7 @@ namespace OPEN_LRD.Persistence
                 .ToList();
         }
 
+        /// <summary>Serializes a core or transient export manifest within the maximum part size limit.</summary>
         private static void WriteManifest<T>(string path, T manifest)
         {
             using FileStream stream = CreateOutputStream(path);
@@ -468,6 +479,7 @@ namespace OPEN_LRD.Persistence
                 throw new OutputLimitExceededException();
         }
 
+        /// <summary>Prefixes part file names with their published generation directory.</summary>
         private static void SetPartPaths(List<LogPartDefinition> parts, string generationDirectoryName)
         {
             foreach (LogPartDefinition part in parts)
@@ -477,6 +489,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Reads existing part directories referenced by a previous manifest for post-publish cleanup.</summary>
         private static HashSet<string> ReadManifestPartDirectories(string manifestPath, string expectedFormat)
         {
             HashSet<string> directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -538,6 +551,7 @@ namespace OPEN_LRD.Persistence
             return directories;
         }
 
+        /// <summary>Reads the initial JSON format property from a log file header.</summary>
         private static string? ReadFormatHeader(string path)
         {
             using FileStream stream = File.OpenRead(path);
@@ -564,6 +578,7 @@ namespace OPEN_LRD.Persistence
             return reader.GetString();
         }
 
+        /// <summary>Deletes superseded segmented part directories on a best-effort basis.</summary>
         private static void CleanupPartDirectories(IEnumerable<string> directories)
         {
             foreach (string directory in directories)
@@ -583,12 +598,14 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Recursively deletes a directory when it exists.</summary>
         private static void DeleteDirectoryIfExists(string path)
         {
             if (Directory.Exists(path))
                 Directory.Delete(path, recursive: true);
         }
 
+        /// <summary>Computes the lowercase SHA-256 hex digest of a file.</summary>
         private static string ComputeSha256(string path)
         {
             using FileStream stream = File.OpenRead(path);
@@ -613,6 +630,7 @@ namespace OPEN_LRD.Persistence
             private int nextIndex = 1;
             private bool completed;
 
+            /// <summary>Creates a segmented part writer for the specified export directory and byte limit.</summary>
             public SegmentedPartWriter(
                 string directory,
                 string fileNamePrefix,
@@ -628,6 +646,7 @@ namespace OPEN_LRD.Persistence
                 Directory.CreateDirectory(directory);
             }
 
+            /// <summary>Writes one typed record, starting a new part when kind or byte limits require it.</summary>
             public void Write(string kind, object record, Type recordType, string description)
             {
                 if (writer is null || !string.Equals(currentKind, kind, StringComparison.Ordinal))
@@ -665,6 +684,7 @@ namespace OPEN_LRD.Persistence
                 currentRecordCount++;
             }
 
+            /// <summary>Finalizes the active part and returns all written part definitions.</summary>
             public List<LogPartDefinition> Complete()
             {
                 FinishCurrentPart();
@@ -672,6 +692,7 @@ namespace OPEN_LRD.Persistence
                 return parts;
             }
 
+            /// <summary>Closes any active part stream and removes incomplete part output.</summary>
             public void Dispose()
             {
                 FinishCurrentPart();
@@ -679,6 +700,7 @@ namespace OPEN_LRD.Persistence
                     DeleteDirectoryIfExists(directory);
             }
 
+            /// <summary>Opens a new numbered part file and writes its header record.</summary>
             private void StartPart(string kind)
             {
                 if (nextIndex > MaxPartsPerExport)
@@ -717,6 +739,7 @@ namespace OPEN_LRD.Persistence
                 writer.Flush();
             }
 
+            /// <summary>Flushes and closes the current part file and records its manifest metadata.</summary>
             private void FinishCurrentPart()
             {
                 if (writer is null || fileStream is null || cappedStream is null)
@@ -752,6 +775,7 @@ namespace OPEN_LRD.Persistence
                 currentRecordCount = 0;
             }
 
+            /// <summary>Measures the compact UTF-8 JSON byte length of a single part record.</summary>
             private long MeasureRecord(object record, Type recordType)
             {
                 using CappedWriteStream counting = new CappedWriteStream(Stream.Null, maxPartBytes, leaveOpen: true);
@@ -769,6 +793,7 @@ namespace OPEN_LRD.Persistence
             private readonly long maximumBytes;
             private readonly bool leaveOpen;
 
+            /// <summary>Creates a write stream capped at the specified maximum byte count.</summary>
             public CappedWriteStream(Stream inner, long maximumBytes, bool leaveOpen)
             {
                 this.inner = inner;
@@ -782,11 +807,16 @@ namespace OPEN_LRD.Persistence
             public override bool CanWrite => true;
             public override long Length => BytesWritten;
             public override long Position { get => BytesWritten; set => throw new NotSupportedException(); }
+            /// <summary>Flushes buffered bytes to the underlying stream.</summary>
             public override void Flush() => inner.Flush();
+            /// <summary>Rejects read operations on the write-only capped stream.</summary>
             public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            /// <summary>Rejects seek operations on the forward-only capped stream.</summary>
             public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            /// <summary>Rejects length changes on the forward-only capped stream.</summary>
             public override void SetLength(long value) => throw new NotSupportedException();
 
+            /// <summary>Writes a byte array slice after verifying the remaining byte budget.</summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
                 EnsureCapacity(count);
@@ -794,6 +824,7 @@ namespace OPEN_LRD.Persistence
                 BytesWritten += count;
             }
 
+            /// <summary>Writes a byte span after verifying the remaining byte budget.</summary>
             public override void Write(ReadOnlySpan<byte> buffer)
             {
                 EnsureCapacity(buffer.Length);
@@ -801,6 +832,7 @@ namespace OPEN_LRD.Persistence
                 BytesWritten += buffer.Length;
             }
 
+            /// <summary>Writes one byte after verifying the remaining byte budget.</summary>
             public override void WriteByte(byte value)
             {
                 EnsureCapacity(1);
@@ -808,6 +840,7 @@ namespace OPEN_LRD.Persistence
                 BytesWritten++;
             }
 
+            /// <summary>Disposes the wrapped stream unless configured to leave it open.</summary>
             protected override void Dispose(bool disposing)
             {
                 if (disposing && !leaveOpen)
@@ -815,6 +848,7 @@ namespace OPEN_LRD.Persistence
                 base.Dispose(disposing);
             }
 
+            /// <summary>Throws when writing the requested byte count would exceed the stream cap.</summary>
             private void EnsureCapacity(int count)
             {
                 if (count < 0 || BytesWritten + count > maximumBytes)
@@ -834,6 +868,7 @@ namespace OPEN_LRD.Persistence
             public OversizedLogRecordException(string message) : base(message) { }
         }
 
+        /// <summary>Serializes all outgoing graph links in deterministic node and link order.</summary>
         private static int WriteLinks(
             Utf8JsonWriter writer,
             IReadOnlyList<Web_Node> orderedNodes,
@@ -863,6 +898,7 @@ namespace OPEN_LRD.Persistence
             return count;
         }
 
+        /// <summary>Writes an unsegmented transient query/response log JSON document.</summary>
         private static void WriteTransientLog(
             Stream output,
             DateTimeOffset exportedAtUtc,
@@ -891,6 +927,7 @@ namespace OPEN_LRD.Persistence
             writer.Flush();
         }
 
+        /// <summary>Writes a JSON array containing a single serialized transient chain when present.</summary>
         private static void WriteChainArray(Utf8JsonWriter writer, LinkedList<Chain_Node>? chain)
         {
             writer.WriteStartArray();
@@ -917,6 +954,7 @@ namespace OPEN_LRD.Persistence
             writer.WriteEndArray();
         }
 
+        /// <summary>Creates an exclusive sequential file stream for a new export artifact.</summary>
         private static FileStream CreateOutputStream(string path)
         {
             return new FileStream(
@@ -928,17 +966,20 @@ namespace OPEN_LRD.Persistence
                 FileOptions.SequentialScan);
         }
 
+        /// <summary>Builds a unique temporary file path adjacent to the target export path.</summary>
         private static string CreateTempPath(string targetPath)
         {
             return targetPath + ".tmp-" + Guid.NewGuid().ToString("N");
         }
 
+        /// <summary>Deletes a file if it exists.</summary>
         private static void DeleteIfExists(string path)
         {
             if (File.Exists(path))
                 File.Delete(path);
         }
 
+        /// <summary>Derives the companion transient log path from a core log file path.</summary>
         internal static string BuildTransientPath(string corePath)
         {
             string fullPath = Path.GetFullPath(corePath);
@@ -948,6 +989,7 @@ namespace OPEN_LRD.Persistence
             return Path.Combine(directory, fileName + "_trans" + extension);
         }
 
+        /// <summary>Snapshots all registered node, link-class, link-type, and relation definitions.</summary>
         private static TypeDefinitionLog BuildTypeDefinitions()
         {
             return new TypeDefinitionLog
@@ -980,6 +1022,7 @@ namespace OPEN_LRD.Persistence
             };
         }
 
+        /// <summary>Converts a runtime conversation context into its persisted log representation.</summary>
         private static ConversationLog ToConversationLog(ConversationContext conversation)
         {
             return new ConversationLog
@@ -1005,6 +1048,7 @@ namespace OPEN_LRD.Persistence
             };
         }
 
+        /// <summary>Converts a conversation mention into its persisted log representation.</summary>
         private static MentionLog ToMentionLog(ConversationMention mention)
         {
             return new MentionLog
@@ -1021,6 +1065,7 @@ namespace OPEN_LRD.Persistence
             };
         }
 
+        /// <summary>Converts a session provenance entry into its persisted log representation.</summary>
         private static ProvenanceLog ToProvenanceLog(SessionProvenanceEntry entry)
         {
             return new ProvenanceLog
@@ -1051,6 +1096,7 @@ namespace OPEN_LRD.Persistence
             };
         }
 
+        /// <summary>Converts a graph or chain node into its persisted log representation.</summary>
         private static NodeLog ToNodeLog(Node node)
         {
             DataPointer? pointer = node.Get_DataPointer();
@@ -1079,6 +1125,7 @@ namespace OPEN_LRD.Persistence
             };
         }
 
+        /// <summary>Converts a directed link into its persisted log representation.</summary>
         private static LinkLog ToLinkLog(Link link)
         {
             return new LinkLog

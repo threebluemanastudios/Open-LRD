@@ -5,6 +5,7 @@ namespace OPEN_LRD.NLP
     /// <summary>Normalizes Unicode, punctuation, whitespace, and sentence text for NLP processing.</summary>
     internal static class TextNormalizer
     {
+        /// <summary>Normalizes Unicode form, smart punctuation, line breaks, and whitespace in input text.</summary>
         public static string Normalize(string? text)
         {
             if (string.IsNullOrWhiteSpace(text))
@@ -49,6 +50,7 @@ namespace OPEN_LRD.NLP
             return builder.ToString().Trim();
         }
 
+        /// <summary>Maps Unicode typographic quotes, dashes, spaces, and zero-width characters to ASCII equivalents.</summary>
         private static char MapCharacter(char value)
         {
             return value switch

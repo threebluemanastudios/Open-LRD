@@ -5,6 +5,7 @@ namespace OPEN_LRD.Reasoning
     /// <summary>Applies trust and link-class policies to proposed contradictions.</summary>
     internal static class ContradictionResolver
     {
+        /// <summary>Resolves functional-link contradictions between a proposed link and existing outgoing links.</summary>
         public static ContradictionResolution Resolve(
             Link proposedLink,
             LinkClass classification,

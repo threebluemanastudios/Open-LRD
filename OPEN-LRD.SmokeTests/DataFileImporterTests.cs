@@ -1,6 +1,10 @@
 using System.IO;
+using System.Text;
 using OPEN_LRD.NLP;
 using OPEN_LRD.Nodes;
+using OPEN_LRD.Nodes.Links;
+using OPEN_LRD.Ontology;
+using OPEN_LRD.Persistence;
 using static OPEN_LRD.SmokeTests.Program;
 
 namespace OPEN_LRD.SmokeTests
@@ -25,6 +29,11 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Data-file cancellation preserves only completed records", TestStructuredCancellation);
             Program.Run("Data-file size and JSON depth limits", TestFileAndDepthLimits);
             Program.Run("Data-file JSON scalar and namespaced XML roots", TestJsonScalarAndNamespacedXml);
+            Program.Run("Data-file empty files warn and create no Source or data nodes", TestEmptyFilesCreateNoNodes);
+            Program.Run("Data-file record, column, value, and diagnostic limits", TestRecordColumnValueAndDiagnosticLimits);
+            Program.Run("Data-file JSON and XML schemas, value aliases, and persistence", TestJsonAndXmlSchemasAndPersistence);
+            Program.Run("Data-file NLP fallback extraction and semantic duplicate weights", TestNlpFallbacksAndSemanticDuplicates);
+            Program.Run("Data-file re-import at or below 80% trust, moved files, and retry", TestLowTrustReimportMovedFileAndRetry);
         }
 
         /// <summary>Verifies successful CSV ingestion and unchanged high-trust checksum skipping.</summary>
@@ -517,6 +526,372 @@ namespace OPEN_LRD.SmokeTests
             {
                 File.Delete(jsonPath);
                 File.Delete(xmlPath);
+            }
+        }
+
+        /// <summary>Verifies zero-byte and whitespace-only files emit diagnostics without creating Source or data nodes.</summary>
+        private static void TestEmptyFilesCreateNoNodes()
+        {
+            string emptyCsv = CreateTempFile(".csv", string.Empty);
+            string blankCsv = CreateTempFile(".csv", "   \r\n\n  ");
+            string emptyJsonArray = CreateTempFile(".json", "[]");
+            string whitespaceJson = CreateTempFile(".json", "   \t\r\n");
+            try
+            {
+                LRD_Core core = NewCore();
+
+                DataFileImportResult zeroByteResult = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = emptyCsv,
+                    Format = DataFileFormat.Csv
+                });
+                Assert(zeroByteResult.Empty && zeroByteResult.SourceNodeID is null && zeroByteResult.Diagnostics.Count > 0,
+                    "a zero-byte file should be marked empty with a diagnostic and no Source node");
+                Assert(core.GetDictionary()!.Count == 0,
+                    "a zero-byte file must not create any graph nodes");
+
+                DataFileImportResult blankCsvResult = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = blankCsv,
+                    Format = DataFileFormat.Csv
+                });
+                Assert(blankCsvResult.Empty && blankCsvResult.SourceNodeID is null && core.GetDictionary()!.Count == 0,
+                    "a whitespace-only CSV file must not create a Source or table node");
+
+                DataFileImportResult emptyJsonResult = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = emptyJsonArray,
+                    Format = DataFileFormat.Json
+                });
+                Assert(emptyJsonResult.Empty && emptyJsonResult.SourceNodeID is null && core.GetDictionary()!.Count == 0,
+                    "an empty JSON root array must not create a Source or root node");
+
+                DataFileImportResult whitespaceJsonResult = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = whitespaceJson,
+                    Format = DataFileFormat.Json
+                });
+                Assert(whitespaceJsonResult.Empty && whitespaceJsonResult.SourceNodeID is null && core.GetDictionary()!.Count == 0,
+                    "a whitespace-only JSON file must not create any graph nodes");
+            }
+            finally
+            {
+                File.Delete(emptyCsv);
+                File.Delete(blankCsv);
+                File.Delete(emptyJsonArray);
+                File.Delete(whitespaceJson);
+            }
+        }
+
+        /// <summary>Verifies record, column, value-character, XML-depth, and diagnostic-truncation caps.</summary>
+        private static void TestRecordColumnValueAndDiagnosticLimits()
+        {
+            string csvPath = CreateTempFile(".csv", "a,b\n1,2\n3,4\n5,6\n");
+            string wideAndLongCsvPath = CreateTempFile(
+                ".csv",
+                "a,b\n1,2,3\nlongvalue,ok\ngood,row\n");
+            string deepXmlPath = CreateTempFile(".xml", "<root><a><b><c>deep</c></b></a></root>");
+            StringBuilder manyBadRows = new StringBuilder("a,b\n");
+            for (int index = 0; index < 8; index++)
+                manyBadRows.Append("1,2,3\n");
+            string diagCsvPath = CreateTempFile(".csv", manyBadRows.ToString());
+
+            try
+            {
+                DataFileImportOptions defaults = new DataFileImportOptions { FilePath = csvPath };
+                Assert(defaults.MaxFileBytes == 500L * 1024 * 1024
+                    && defaults.MaxRecords == 10000
+                    && defaults.MaxColumns == 1000
+                    && defaults.MaxDepth == 32
+                    && defaults.MaxValueCharacters == 15000
+                    && defaults.MaxDiagnostics == 100,
+                    "default DataFileImportOptions should expose the confirmed Module 8 Phase 5 safety bounds");
+
+                LRD_Core core = NewCore();
+                DataFileImportResult recordCapped = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = csvPath,
+                    Format = DataFileFormat.Csv,
+                    MaxRecords = 2
+                });
+                Assert(recordCapped.Truncated && recordCapped.RecordsProcessed == 2 && recordCapped.RecordsSucceeded == 2,
+                    "reaching MaxRecords should truncate the import after the allowed records");
+                Assert(recordCapped.SourceNodeID.HasValue
+                    && core.TryGetNode(recordCapped.SourceNodeID.Value, out Web_Node? truncatedSource)
+                    && truncatedSource?.Get_DataPointer()?.Checksum is null,
+                    "a truncated import must not commit the completed file checksum");
+
+                LRD_Core limitsCore = NewCore();
+                DataFileImportResult columnAndValueResult = DataFileImporter.Import(limitsCore, new DataFileImportOptions
+                {
+                    FilePath = wideAndLongCsvPath,
+                    Format = DataFileFormat.Csv,
+                    MaxColumns = 2,
+                    MaxValueCharacters = 5
+                });
+                Assert(columnAndValueResult.RecordsProcessed == 3
+                    && columnAndValueResult.RecordsFailed == 2
+                    && columnAndValueResult.RecordsSucceeded == 1,
+                    "rows exceeding MaxColumns or MaxValueCharacters should fail recoverably while valid rows succeed");
+
+                LRD_Core xmlCore = NewCore();
+                DataFileImportResult deepXml = DataFileImporter.Import(xmlCore, new DataFileImportOptions
+                {
+                    FilePath = deepXmlPath,
+                    Format = DataFileFormat.Xml,
+                    MaxDepth = 2
+                });
+                Assert(deepXml.RecordsProcessed == 1 && deepXml.RecordsFailed == 1 && deepXml.RecordsSucceeded == 0,
+                    "XML elements nested beyond MaxDepth should fail the record");
+                Assert(Math.Abs((deepXml.SourceTrustRating ?? 0d) - 0.30d) < 1e-9,
+                    "an import where all processed records fail should receive the 30% trust floor");
+
+                LRD_Core diagCore = NewCore();
+                DataFileImportResult diagResult = DataFileImporter.Import(diagCore, new DataFileImportOptions
+                {
+                    FilePath = diagCsvPath,
+                    Format = DataFileFormat.Csv,
+                    MaxDiagnostics = 3
+                });
+                Assert(diagResult.RecordsFailed == 8
+                    && diagResult.Diagnostics.Count == 3
+                    && diagResult.Diagnostics[^1] == "Additional diagnostics were omitted.",
+                    "diagnostics beyond MaxDiagnostics should be capped and end with the omission notice");
+            }
+            finally
+            {
+                File.Delete(csvPath);
+                File.Delete(wideAndLongCsvPath);
+                File.Delete(deepXmlPath);
+                File.Delete(diagCsvPath);
+            }
+        }
+
+        /// <summary>Verifies JSON/XML structural schemas, typed value aliases, fixed relation IDs, and log persistence.</summary>
+        private static void TestJsonAndXmlSchemasAndPersistence()
+        {
+            string jsonPath = CreateTempFile(
+                ".json",
+                "{\"title\":\"\",\"count\":12,\"flag\":false,\"nothing\":null,\"site\":\"https://example.com/doc\",\"nested\":{\"items\":[7]}}");
+            string xmlPath = CreateTempFile(
+                ".xml",
+                "<root><mixed attr=\"true\">First<empty/>Second</mixed></root>");
+            string logPath = Path.Combine(Path.GetTempPath(), "open-lrd-phase5-" + Guid.NewGuid().ToString("N") + ".lrdlog");
+
+            try
+            {
+                OntologyRelations.EnsureRegistered();
+                Assert(OntologyRelations.HasRecord == 20
+                    && OntologyRelations.HasTable == 21
+                    && OntologyRelations.HasRow == 22
+                    && OntologyRelations.HasCell == 23
+                    && OntologyRelations.HasChild == 24
+                    && OntologyRelations.HasItem == 25
+                    && OntologyRelations.HasAttribute == 26
+                    && OntologyRelations.HasValue == 27
+                    && OntologyRelations.HasProperty == 4,
+                    "structural relations should keep their reserved ontology IDs");
+
+                LRD_Core core = NewCore();
+                DataFileImportResult jsonResult = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = jsonPath,
+                    Format = DataFileFormat.Json
+                });
+                Assert(jsonResult.RecordsSucceeded == 1, "complex JSON object root should import");
+
+                IEnumerable<Web_Node> nodes = core.GetDictionary()!.Values;
+                Assert(nodes.Any(node => node.Get_NodeType().Id == OntologyTypes.MetadataValues.Id
+                    && node.Label is null && node.Aliases.Contains("stringValue")),
+                    "an empty JSON string should produce a MetadataValues node with alias stringValue");
+                Assert(nodes.Any(node => node.Label == "12" && node.Aliases.Contains("numberValue"))
+                    && nodes.Any(node => node.Label == "false" && node.Aliases.Contains("booleanValue"))
+                    && nodes.Any(node => node.Label == "null" && node.Aliases.Contains("nullValue"))
+                    && nodes.Any(node => node.Label == "https://example.com/doc" && node.Aliases.Contains("pathValue")),
+                    "JSON values should carry numberValue, booleanValue, nullValue, and pathValue aliases");
+                Assert(nodes.Any(node => node.Label == "item" && node.Aliases.Contains("array_0")),
+                    "nested JSON arrays should create indexed array_N item nodes");
+
+                DataFileImportResult xmlResult = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = xmlPath,
+                    Format = DataFileFormat.Xml
+                });
+                Assert(xmlResult.RecordsSucceeded == 1, "mixed-content XML record should import");
+                Assert(nodes.Any(node => node.Get_DataPointer()?.Location.Fragment.TrimStart('#') == "xml/root/mixed[0]/text_0"
+                        && node.Label == "First")
+                    && nodes.Any(node => node.Get_DataPointer()?.Location.Fragment.TrimStart('#') == "xml/root/mixed[0]/text_1"
+                        && node.Label == "Second")
+                    && nodes.Any(node => node.Get_DataPointer()?.Location.Fragment.TrimStart('#') == "xml/root/mixed[0]/empty[0]/text_0"
+                        && node.Label is null
+                        && node.Aliases.Contains("stringValue")),
+                    "XML mixed content and empty leaf elements should preserve ordered text positions");
+
+                CoreLogExporter.Export(core, logPath, includeTransient: false);
+                LRD_Core restored = NewCore();
+                PersistenceImportResult import = CoreLogImporter.ImportCore(restored, logPath, ImportMode.Replace);
+                Assert(import.Success, "persisted Phase 5 structural graph should import cleanly");
+                Web_Node restoredSource = restored.GetExistingNode(jsonResult.SourceNodeID!.Value)!;
+                Assert(Math.Abs((restoredSource.TrustRating ?? 0d) - 0.90d) < 1e-9
+                    && !string.IsNullOrEmpty(restoredSource.Get_DataPointer()?.Checksum),
+                    "Source trust rating and completed checksum should round-trip through .lrdlog persistence");
+            }
+            finally
+            {
+                File.Delete(jsonPath);
+                File.Delete(xmlPath);
+                if (File.Exists(logPath))
+                    File.Delete(logPath);
+            }
+        }
+
+        /// <summary>Verifies non-triple CSV NLP rows, JSON leaf-string fallback, and cross-source vs same-source WeightUp rules.</summary>
+        private static void TestNlpFallbacksAndSemanticDuplicates()
+        {
+            string ordinaryCsvPath = CreateTempFile(".csv", "person,company\nAlice,Acme\n");
+            string fallbackJsonPath = CreateTempFile(".json", "[{\"customField\":\"Alice works at Acme.\"}]");
+            string secondSourceJsonPath = CreateTempFile(".json", "[{\"text\":\"Alice works at Acme.\"}]");
+            string unsupportedJsonPath = CreateTempFile(".json", "[{\"text\":\"Qqq zzz.\"}]");
+
+            try
+            {
+                LRD_Core core = NewCore();
+
+                DataFileImportResult csvNlp = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = ordinaryCsvPath,
+                    Format = DataFileFormat.Csv,
+                    Mode = DataFileIngestionMode.ExtractTextForNlp
+                });
+                Assert(csvNlp.RecordsProcessed == 1 && csvNlp.RecordsSucceeded == 1 && csvNlp.ConversationID.HasValue,
+                    "ordinary non-triple CSV rows should be formatted as header: value text and processed through NLP");
+
+                DataFileImportResult firstJson = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = fallbackJsonPath,
+                    Format = DataFileFormat.Json,
+                    Mode = DataFileIngestionMode.ExtractTextForNlp
+                });
+                Assert(firstJson.RecordsProcessed == 1 && firstJson.RecordsSucceeded == 1,
+                    "JSON records without known prose keys should fall back to string leaf values");
+
+                Web_Node alice = core.FindByLabel("Alice", NodeTypes.Entities).Single();
+                float weightAfterFirstJson = alice.Get_WeightUp();
+
+                DataFileImportResult secondSource = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = secondSourceJsonPath,
+                    Format = DataFileFormat.Json,
+                    Mode = DataFileIngestionMode.ExtractTextForNlp
+                });
+                Assert(secondSource.RecordsSucceeded == 1, "second source NLP import should succeed");
+                float weightAfterSecondSource = alice.Get_WeightUp();
+                Assert(Math.Abs(weightAfterSecondSource - (weightAfterFirstJson + 1f)) < 1e-6f,
+                    "reusing a semantic entity from a new file source should increase its WeightUp by exactly 1");
+
+                File.WriteAllText(secondSourceJsonPath, "[{\"text\":\"Alice works at Acme.\"},{\"text\":\"Alice sees Bob.\"}]");
+                DataFileImportResult sameSourceReimport = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = secondSourceJsonPath,
+                    Format = DataFileFormat.Json,
+                    Mode = DataFileIngestionMode.ExtractTextForNlp
+                });
+                Assert(sameSourceReimport.RecordsSucceeded == 2, "revised same-source NLP import should process both records");
+                Assert(Math.Abs(alice.Get_WeightUp() - weightAfterSecondSource) < 1e-6f,
+                    "same-source re-import must not increase existing semantic nodes' WeightUp");
+
+                DataFileImportResult unsupportedResult = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = unsupportedJsonPath,
+                    Format = DataFileFormat.Json,
+                    Mode = DataFileIngestionMode.ExtractTextForNlp
+                });
+                Assert(unsupportedResult.RecordsProcessed == 1
+                    && unsupportedResult.RecordsSucceeded == 1
+                    && unsupportedResult.RecordsUnsupported == 1
+                    && Math.Abs((unsupportedResult.SourceTrustRating ?? 0d) - 0.90d) < 1e-9,
+                    "syntactically valid but unsupported NLP records should count as successful reads in trust calculation");
+            }
+            finally
+            {
+                File.Delete(ordinaryCsvPath);
+                File.Delete(fallbackJsonPath);
+                File.Delete(secondSourceJsonPath);
+                File.Delete(unsupportedJsonPath);
+            }
+        }
+
+        /// <summary>Verifies re-import at or below 80% trust, moved-file new-source identity, and retry after partial import.</summary>
+        private static void TestLowTrustReimportMovedFileAndRetry()
+        {
+            string path = CreateTempFile(".csv", "name\nAlice\n\"bad\"row\nCarol\n");
+            string movedPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".csv");
+
+            try
+            {
+                LRD_Core core = NewCore();
+                DataFileImportResult first = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = path,
+                    Format = DataFileFormat.Csv
+                });
+                Assert(!first.SkippedHighTrust
+                    && Math.Abs((first.SourceTrustRating ?? 0d) - 0.70d) < 1e-9,
+                    "initial import with 2 successes and 1 failure should receive 70% trust");
+
+                DataFileImportResult reimportAt70 = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = path,
+                    Format = DataFileFormat.Csv
+                });
+                Assert(!reimportAt70.SkippedHighTrust && reimportAt70.RecordsProcessed == 3,
+                    "unchanged files with source trust at or below 80% must be reprocessed rather than skipped");
+
+                File.WriteAllText(path, "name\nAlice\nBob\nCarol\n");
+                DataFileImportResult partial = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = path,
+                    Format = DataFileFormat.Csv,
+                    MaxRecords = 1
+                });
+                Assert(partial.Truncated && Math.Abs((partial.SourceTrustRating ?? 0d) - 0.70d) < 1e-9,
+                    "a partial/truncated import must not update the Source checksum or trust");
+
+                DataFileImportResult completedRetry = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = path,
+                    Format = DataFileFormat.Csv
+                });
+                Assert(!completedRetry.SkippedHighTrust
+                    && completedRetry.RecordsSucceeded == 3
+                    && Math.Abs((completedRetry.SourceTrustRating ?? 0d) - 0.90d) < 1e-9,
+                    "retrying after a partial import should process the file and raise Source trust to 90%");
+
+                File.WriteAllText(path, "name\nAlice\n\"bad\"row\nCarol\n");
+                DataFileImportResult lowerScoreReimport = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = path,
+                    Format = DataFileFormat.Csv
+                });
+                Assert(Math.Abs((lowerScoreReimport.SourceTrustRating ?? 0d) - 0.90d) < 1e-9,
+                    "a same-source re-import with a lower score must never lower existing Source trust");
+
+                File.Move(path, movedPath);
+                DataFileImportResult movedImport = DataFileImporter.Import(core, new DataFileImportOptions
+                {
+                    FilePath = movedPath,
+                    Format = DataFileFormat.Csv
+                });
+                Assert(movedImport.SourceNodeCreated
+                    && movedImport.SourceNodeID != first.SourceNodeID,
+                    "moving or renaming a file should create a distinct Source node");
+            }
+            finally
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+                if (File.Exists(movedPath))
+                    File.Delete(movedPath);
             }
         }
 

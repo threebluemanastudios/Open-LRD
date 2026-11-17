@@ -6,6 +6,7 @@ namespace OPEN_LRD.Reasoning
     /// <summary>Extracts bounded, ranked, cycle-safe answer paths from a graph snapshot.</summary>
     internal static class ResponseExtractor
     {
+        /// <summary>Extracts ranked graph paths starting from the terminal or anchor node of a subgraph match.</summary>
         public static IReadOnlyList<GraphPath> Extract(
             QueryGraph query,
             SubgraphMatch match,
@@ -49,6 +50,7 @@ namespace OPEN_LRD.Reasoning
                 options);
         }
 
+        /// <summary>Converts a scored graph path into an ordered chain of response nodes.</summary>
         public static LinkedList<Chain_Node>? ToResponseChain(GraphPath path, GraphSnapshot snapshot)
         {
             ArgumentNullException.ThrowIfNull(path);
@@ -92,6 +94,7 @@ namespace OPEN_LRD.Reasoning
             return chain;
         }
 
+        /// <summary>Traverses bounded cycle-free paths from a starting graph node and ranks the results.</summary>
         private static IReadOnlyList<GraphPath> ExtractFrom(
             Guid startGraphNodeID,
             QueryGraph query,
@@ -111,6 +114,7 @@ namespace OPEN_LRD.Reasoning
             int expandedNodes = 0;
             int maxDepth = Math.Max(0, options.MaxTraversalDepth);
 
+            // Recursively explores cycle-free incident paths within depth and expansion limits.
             void Walk(Guid currentNodeID)
             {
                 if (expandedNodes >= options.MaxExpandedNodes)
@@ -191,6 +195,7 @@ namespace OPEN_LRD.Reasoning
                 .ToList();
         }
 
+        /// <summary>Scores and packages a traversed sequence of nodes and links into a graph path.</summary>
         private static GraphPath CreatePath(
             IReadOnlyList<Guid> nodeIDs,
             IReadOnlyList<Link> links,
@@ -224,6 +229,7 @@ namespace OPEN_LRD.Reasoning
                 links.Count);
         }
 
+        /// <summary>Finds a terminal query node with no outgoing edges to anchor response extraction.</summary>
         private static Guid? FindTerminalQueryNode(QueryGraph query)
         {
             if (query.Edges.Count == 0)
@@ -247,6 +253,7 @@ namespace OPEN_LRD.Reasoning
             return terminals[0];
         }
 
+        /// <summary>Calculates the fraction of query edges matched by the links in a candidate path.</summary>
         private static double CalculateQueryOverlap(
             IReadOnlyList<Link> links,
             QueryGraph query)
@@ -270,6 +277,7 @@ namespace OPEN_LRD.Reasoning
             return Math.Clamp((double)matches / query.Edges.Count, 0.0, 1.0);
         }
 
+        /// <summary>Calculates the average trust or normalized usage weight across the nodes in a path.</summary>
         private static double CalculateTrustOrWeight(
             IReadOnlyList<Guid> nodeIDs,
             GraphSnapshot snapshot,
@@ -302,6 +310,7 @@ namespace OPEN_LRD.Reasoning
             return total / nodeIDs.Count;
         }
 
+        /// <summary>Calculates the average link-class priority score for the links in a path.</summary>
         private static double CalculateLinkPriority(
             IReadOnlyList<Link> links,
             ReasoningOptions options)
@@ -321,6 +330,7 @@ namespace OPEN_LRD.Reasoning
             return Math.Clamp(total / links.Count, 0.0, 1.0);
         }
 
+        /// <summary>Calculates the proportion of permanent nodes along a path.</summary>
         private static double CalculatePermanenceRatio(
             IReadOnlyList<Guid> nodeIDs,
             GraphSnapshot snapshot)
@@ -342,6 +352,7 @@ namespace OPEN_LRD.Reasoning
             return (double)permanentCount / nodeIDs.Count;
         }
 
+        /// <summary>Returns a link oriented in the direction of traversal at the specified path step.</summary>
         private static Link GetTraversalLink(GraphPath path, int index)
         {
             Guid currentID = path.NodeIDs[index];

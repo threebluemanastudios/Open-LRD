@@ -30,6 +30,7 @@ namespace OPEN_LRD.Visualization
     /// <summary>Captures a bounded, deduplicated graph view for rendering and picking.</summary>
     internal sealed class GraphSnapshot
     {
+        /// <summary>Creates an immutable graph snapshot from prepared node, link, and diagnostic collections.</summary>
         private GraphSnapshot(
             NodeRecord[] nodes,
             LinkRecord[] links,
@@ -88,6 +89,7 @@ namespace OPEN_LRD.Visualization
 
         public bool IsTruncated => TruncatedNodeCount > 0 || TruncatedLinkCount > 0;
 
+        /// <summary>Extracts a bounded, deduplicated graph snapshot from the initialized core.</summary>
         public static GraphSnapshot FromCore(LRD_Core core, VisualizerOptions? options = null)
         {
             ArgumentNullException.ThrowIfNull(core);
@@ -271,6 +273,7 @@ namespace OPEN_LRD.Visualization
                 truncatedLinkCount);
         }
 
+        /// <summary>Selects the highest-degree node indices up to the configured node cap in ascending order.</summary>
         private static int[] BuildKeptNodeIndices(
             IReadOnlyList<Web_Node> orderedNodes,
             IReadOnlyList<int> degrees,
@@ -289,6 +292,7 @@ namespace OPEN_LRD.Visualization
             return kept;
         }
 
+        /// <summary>Orders pending links deterministically by endpoint indices, forward type, and class.</summary>
         private static int CompareLinks(PendingLink left, PendingLink right)
         {
             int comparison = left.AIndex.CompareTo(right.AIndex);
@@ -309,6 +313,7 @@ namespace OPEN_LRD.Visualization
             return left.ClassId.CompareTo(right.ClassId);
         }
 
+        /// <summary>Resolves the display label for a node from its event name, label, alias, or short ID.</summary>
         private static string BuildDisplayLabel(Web_Node node, IReadOnlyList<string> aliases)
         {
             if (node.Get_NodeType() == NodeTypes.Events)
@@ -325,6 +330,7 @@ namespace OPEN_LRD.Visualization
             return node.ID.ToString("N")[..8];
         }
 
+        /// <summary>Builds human-readable warning messages for skipped, deduplicated, or truncated items.</summary>
         private static IReadOnlyList<string> BuildWarnings(
             int duplicateLinkCount,
             int danglingLinkCount,

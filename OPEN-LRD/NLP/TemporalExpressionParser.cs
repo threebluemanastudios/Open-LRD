@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Stores a parsed start and end window for a temporal event-range question.</summary>
     internal sealed record TemporalRangeQuery(
         DateTimeOffset Start,
         DateTimeOffset End,
@@ -136,6 +137,7 @@ namespace OPEN_LRD.NLP
             "h:mm tt", "hh:mm tt", "h:mm:ss tt", "hh:mm:ss tt"
         };
 
+        /// <summary>Attempts to parse a temporal event-inquiry question into a bounded time-range query.</summary>
         public static bool TryParseQuestionRange(
             string? text,
             DateTimeOffset? referenceTime,
@@ -208,6 +210,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Checks whether question text contains future-tense auxiliaries or cues.</summary>
         private static bool IsFutureQuestion(string text)
         {
             return Regex.IsMatch(
@@ -216,6 +219,7 @@ namespace OPEN_LRD.NLP
                 Options);
         }
 
+        /// <summary>Attempts to extract a start and end timestamp window from a statement's temporal expressions.</summary>
         public static bool TryParseEventWindow(
             string? text,
             DateTimeOffset? referenceTime,
@@ -356,6 +360,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Parses a start and end temporal expression pair into an ordered timestamp interval.</summary>
         public static bool TryParseRangeBounds(
             string startExpression,
             string endExpression,
@@ -390,6 +395,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Parses a weekday endpoint expression within an ISO week range.</summary>
         private static bool TryParseWeekdayRangeEndpoint(
             string expression,
             DateTimeOffset basis,
@@ -419,6 +425,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Parses a single date, clock, or relative point expression into a start and end window.</summary>
         public static bool TryParsePointWindow(
             string expression,
             DateTimeOffset? referenceTime,
@@ -475,6 +482,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Parses relative calendar, weekday, month, or offset expressions against a reference time.</summary>
         public static bool TryParseRelativeExpression(
             string text,
             DateTimeOffset referenceTime,
@@ -582,6 +590,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Computes the start and end window for last, this, or next week, month, or year.</summary>
         private static bool TryCalendarPeriod(
             string modifier,
             string unit,
@@ -646,6 +655,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Computes the full-day window for a named weekday relative to a reference timestamp.</summary>
         private static bool TryWeekdayWindow(
             string dayName,
             string modifier,
@@ -685,6 +695,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Parses a full or abbreviated English weekday name into a <see cref="DayOfWeek"/> value.</summary>
         private static bool TryParseDayOfWeek(string value, out DayOfWeek day)
         {
             if (Enum.TryParse(value, ignoreCase: true, out day))
@@ -705,6 +716,7 @@ namespace OPEN_LRD.NLP
             return Enum.IsDefined(day);
         }
 
+        /// <summary>Computes the full-month window for a named month and optional modifier or explicit year.</summary>
         private static bool TryNamedMonthWindow(
             string monthName,
             string modifier,
@@ -758,6 +770,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Computes a timestamp or day window for a relative duration offset such as two days ago.</summary>
         private static bool TryRelativeOffset(
             string amountText,
             string unitText,
@@ -813,6 +826,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Parses a positive integer or spelled-out number word into a numeric amount.</summary>
         private static bool TryParseAmount(string amountText, out int amount)
         {
             amount = 0;
@@ -837,16 +851,19 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Returns midnight at the start of the calendar day for a timestamp preserving its offset.</summary>
         private static DateTimeOffset StartOfDay(DateTimeOffset value)
         {
             return new DateTimeOffset(value.Year, value.Month, value.Day, 0, 0, 0, value.Offset);
         }
 
+        /// <summary>Trims leading and trailing sentence punctuation and whitespace from a string.</summary>
         private static string StripPunctuation(string value)
         {
             return value.Trim().TrimEnd('.', '!', '?', ',', ';', ':').Trim();
         }
 
+        /// <summary>Returns the Monday start of the ISO week containing the supplied timestamp.</summary>
         private static DateTimeOffset StartOfIsoWeek(DateTimeOffset value)
         {
             DateTimeOffset day = StartOfDay(value);
@@ -854,6 +871,7 @@ namespace OPEN_LRD.NLP
             return day.AddDays(-daysSinceMonday);
         }
 
+        /// <summary>Sets start and end timestamps to cover the full 24-hour calendar day.</summary>
         private static void SetDayWindow(
             DateTimeOffset day,
             out DateTimeOffset start,
@@ -863,6 +881,7 @@ namespace OPEN_LRD.NLP
             end = start.AddDays(1).AddTicks(-1);
         }
 
+        /// <summary>Parses a calendar date, month, year, or relative day word into a start and end window.</summary>
         private static bool TryParseDateWindow(
             string value,
             DateTimeOffset? referenceTime,
@@ -919,6 +938,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Parses a clock time string and combines it with the date and offset of the supplied day.</summary>
         private static bool TryParseClockOnDate(
             string value,
             DateTimeOffset date,

@@ -11,6 +11,7 @@ namespace OPEN_LRD.NLP
         private NlpWorkbenchState? state;
         private bool disposed;
 
+        /// <summary>Creates an NLP workbench bound to the supplied core graph and options.</summary>
         public NlpWorkbench(LRD_Core core, NlpOptions? options = null)
         {
             this.core = core ?? throw new ArgumentNullException(nameof(core));
@@ -28,6 +29,7 @@ namespace OPEN_LRD.NLP
 
         public NlpWorkbenchState? State => state;
 
+        /// <summary>Creates and attaches a new NLP pipeline conversation when the core graph is initialized.</summary>
         public bool StartNewConversation()
         {
             ThrowIfDisposed();
@@ -43,6 +45,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Attempts to attach the workbench to an existing conversation managed by the core graph.</summary>
         public bool TryAttachConversation(Guid conversationID, out string? error)
         {
             ThrowIfDisposed();
@@ -74,6 +77,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Clears turn, focus, mention, and provenance state on the active conversation.</summary>
         public bool ResetCurrentConversation()
         {
             ThrowIfDisposed();
@@ -91,6 +95,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Detaches and removes the active conversation from the core graph.</summary>
         public bool RemoveCurrentConversation()
         {
             ThrowIfDisposed();
@@ -109,6 +114,7 @@ namespace OPEN_LRD.NLP
             return removed;
         }
 
+        /// <summary>Removes all conversations from the core graph and detaches any active pipeline.</summary>
         public void ClearAllConversations()
         {
             ThrowIfDisposed();
@@ -119,6 +125,7 @@ namespace OPEN_LRD.NLP
             RefreshState();
         }
 
+        /// <summary>Ingests natural-language text through the active conversation pipeline and refreshes workbench state.</summary>
         public NlpResult Ingest(
             string? text,
             Guid? sourceNodeID = null,
@@ -132,6 +139,7 @@ namespace OPEN_LRD.NLP
             return result;
         }
 
+        /// <summary>Answers a natural-language question through the active conversation pipeline and refreshes workbench state.</summary>
         public NlpResult Ask(string? text)
         {
             ThrowIfDisposed();
@@ -142,6 +150,7 @@ namespace OPEN_LRD.NLP
             return result;
         }
 
+        /// <summary>Rebuilds and returns the current read-only snapshot of graph and conversation state.</summary>
         public NlpWorkbenchState RefreshState()
         {
             if (pipeline is not null && !IsPipelineLive(pipeline))
@@ -200,6 +209,7 @@ namespace OPEN_LRD.NLP
             return state;
         }
 
+        /// <summary>Disposes the active NLP pipeline and refreshes the workbench state.</summary>
         public void Dispose()
         {
             if (disposed)
@@ -211,6 +221,7 @@ namespace OPEN_LRD.NLP
             RefreshState();
         }
 
+        /// <summary>Returns the active live pipeline or throws when no conversation session is attached.</summary>
         private NlpPipeline RequireLivePipeline()
         {
             NlpPipeline? current = GetLivePipeline();
@@ -224,6 +235,7 @@ namespace OPEN_LRD.NLP
             return current;
         }
 
+        /// <summary>Returns the current pipeline when its conversation remains registered in the core graph.</summary>
         private NlpPipeline? GetLivePipeline()
         {
             if (pipeline is null)
@@ -239,6 +251,7 @@ namespace OPEN_LRD.NLP
             return pipeline;
         }
 
+        /// <summary>Checks whether a pipeline and its conversation are still active in the core graph.</summary>
         private bool IsPipelineLive(NlpPipeline candidate)
         {
             if (!core.initialized)
@@ -251,6 +264,7 @@ namespace OPEN_LRD.NLP
                 && core.TryGetConversation(conversationID, out _);
         }
 
+        /// <summary>Throws an <see cref="ObjectDisposedException"/> if this workbench has been disposed.</summary>
         private void ThrowIfDisposed()
         {
             if (disposed)

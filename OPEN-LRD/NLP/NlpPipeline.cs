@@ -197,6 +197,7 @@ namespace OPEN_LRD.NLP
             return AnswerAnalyzed(analysis, updateConversation: true) with { OriginalInput = text };
         }
 
+        /// <summary>Evaluates an entity-exploration follow-up request and updates conversational focus.</summary>
         private NlpResult AnswerEntityExploration(
             string entityText,
             IReadOnlyList<string> preprocessingDiagnostics,
@@ -237,6 +238,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Executes a recognized natural-language command or embedded command query.</summary>
         private NlpResult ExecuteCommand(NlpCommand command, NlpResult analysis)
         {
             List<string> diagnostics = analysis.Diagnostics
@@ -317,6 +319,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Evaluates an analyzed question against the graph and optionally updates conversation state.</summary>
         private NlpResult AnswerAnalyzed(NlpResult analysis, bool updateConversation)
         {
             EntityResolver resolver = new EntityResolver(core, conversation, options);
@@ -409,6 +412,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Creates an invalid-input Ask result with an explanatory answer message.</summary>
         private static NlpResult CreateInvalidAskResult(NlpResult analysis)
         {
             IReadOnlyList<string> invalidDiagnostics = Deduplicate(analysis.Diagnostics);
@@ -574,6 +578,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Finds timed event nodes matching a when-question's anchor or subject, action, object, and location.</summary>
         private IReadOnlyList<Web_Node> FindTemporalQuestionEvents(
             ParsedText parsed,
             QuestionAnalysis question,
@@ -608,6 +613,7 @@ namespace OPEN_LRD.NLP
                 locationID);
         }
 
+        /// <summary>Finds a non-temporal direct object mention in a when-question sentence.</summary>
         private static FrameArgument? FindTemporalQuestionObject(
             ParsedText parsed,
             QuestionAnalysis question)
@@ -643,6 +649,7 @@ namespace OPEN_LRD.NLP
             return ToFrameArgument(mention, FrameRole.Object, null);
         }
 
+        /// <summary>Finds a spatial location qualifier in a when-question sentence.</summary>
         private static FrameArgument? FindTemporalQuestionLocation(
             ParsedText parsed,
             QuestionAnalysis question)
@@ -677,6 +684,7 @@ namespace OPEN_LRD.NLP
                 : ToFrameArgument(location, FrameRole.Location, null);
         }
 
+        /// <summary>Resolves an optional event role argument to an unambiguous graph node ID.</summary>
         private static Guid? ResolveEventArgument(FrameArgument? argument, EntityResolver resolver)
         {
             if (argument is null)
@@ -686,6 +694,7 @@ namespace OPEN_LRD.NLP
             return resolution.IsAmbiguous ? null : resolution.ResolvedNodeID;
         }
 
+        /// <summary>Converts a recognized mention into a frame argument with the specified semantic role.</summary>
         private static FrameArgument ToFrameArgument(
             Mention mention,
             FrameRole role,
@@ -705,6 +714,7 @@ namespace OPEN_LRD.NLP
                 mention.Confidence);
         }
 
+        /// <summary>Creates timed event nodes from successfully ingested statements containing temporal expressions.</summary>
         private int ExtractTemporalEvents(
             ParsedText parsed,
             IReadOnlyList<LinkedList<Chain_Node>> chains,
@@ -818,6 +828,7 @@ namespace OPEN_LRD.NLP
             return created;
         }
 
+        /// <summary>Builds a concise display name for an extracted event from its subject, verb, object, and location.</summary>
         private static string BuildEventName(
             Sentence sentence,
             RelationFrame frame,
@@ -839,6 +850,7 @@ namespace OPEN_LRD.NLP
             return name.Trim();
         }
 
+        /// <summary>Checks whether a relation frame's target argument represents a spatial location.</summary>
         private static bool IsLocationTarget(RelationFrame frame, FrameArgument target)
         {
             if (target.Role is FrameRole.Location or FrameRole.Qualifier)
@@ -852,6 +864,7 @@ namespace OPEN_LRD.NLP
             return RelationExtractor.IsSpatialPreposition(finalRelationPart);
         }
 
+        /// <summary>Ensures a chain's anchor node exists in the graph and ingests the chain through reasoning.</summary>
         private ReasoningResult IngestChain(
             LinkedList<Chain_Node> chain,
             Guid? sourceNodeID,
@@ -882,6 +895,7 @@ namespace OPEN_LRD.NLP
             return reasoning.Ingest(chain, sourceNodeID, topicNodeID);
         }
 
+        /// <summary>Checks whether a pronoun-bearing relation frame can be ingested using conversation context.</summary>
         private bool IsContextPronounFrame(RelationFrame frame)
         {
             return options.EnableConversationContext
@@ -892,6 +906,7 @@ namespace OPEN_LRD.NLP
                 && frame.Arguments.Any(argument => argument.IsPronoun);
         }
 
+        /// <summary>Records session provenance entries for frames rejected due to discredited source trust.</summary>
         private List<SessionProvenanceEntry> RecordRejectedProvenance(
             IReadOnlyList<RelationFrame> frames,
             string sourceText,
@@ -936,6 +951,7 @@ namespace OPEN_LRD.NLP
             return entries;
         }
 
+        /// <summary>Builds a session provenance entry from an ingested chain, relation frame, and reasoning result.</summary>
         private SessionProvenanceEntry BuildProvenanceEntry(
             LinkedList<Chain_Node> chain,
             RelationFrame frame,
@@ -997,6 +1013,7 @@ namespace OPEN_LRD.NLP
                 frame.Negation);
         }
 
+        /// <summary>Records conversational mentions and focus for a successfully ingested fact chain.</summary>
         private void UpdateIngestionConversation(
             LinkedList<Chain_Node> chain,
             RelationFrame frame,
@@ -1039,6 +1056,7 @@ namespace OPEN_LRD.NLP
             conversation.SetFocus(focus, targetRole, false);
         }
 
+        /// <summary>Records conversational mentions and focus from an answered question and its selected node.</summary>
         private void UpdateAskConversation(
             QuestionAnalysis question,
             NlpAnswer answer)
@@ -1091,6 +1109,7 @@ namespace OPEN_LRD.NLP
                 conversation.SetFocus(focusNodeID, focusRole, fromAnswer);
         }
 
+        /// <summary>Appends a conversation mention for an ingested chain endpoint node.</summary>
         private void AddChainMention(
             List<ConversationMention> mentions,
             Guid nodeID,
@@ -1117,6 +1136,7 @@ namespace OPEN_LRD.NLP
                 false));
         }
 
+        /// <summary>Maps a transient chain node ID to its merged or matched graph node ID.</summary>
         private static Guid MapGraphNodeID(Guid chainNodeID, ReasoningResult result)
         {
             if (result.MergedNodeMap is not null
@@ -1136,6 +1156,7 @@ namespace OPEN_LRD.NLP
             return chainNodeID;
         }
 
+        /// <summary>Appends a conversation mention for a question anchor or answer node.</summary>
         private void AddQuestionMention(
             List<ConversationMention> mentions,
             Guid nodeID,
@@ -1162,6 +1183,7 @@ namespace OPEN_LRD.NLP
                 fromAnswer));
         }
 
+        /// <summary>Resolves the display label for a graph node ID or returns the supplied fallback.</summary>
         private string GetNodeLabel(Guid nodeID, string fallback)
         {
             if (!core.TryGetNode(nodeID, out Web_Node? node) || node is null)
@@ -1177,11 +1199,13 @@ namespace OPEN_LRD.NLP
             return alias ?? fallback;
         }
 
+        /// <summary>Checks whether a reasoning status represents a successful fact ingestion.</summary>
         private static bool IsSuccessfulIngestion(ReasoningStatus status)
         {
             return status is ReasoningStatus.Answered or ReasoningStatus.Contradiction;
         }
 
+        /// <summary>Maps a link classification to the semantic role of its target argument.</summary>
         private static FrameRole RoleForLinkClass(LinkClass linkClass)
         {
             if (linkClass == LinkClass.identities || linkClass == LinkClass.actions)
@@ -1196,6 +1220,7 @@ namespace OPEN_LRD.NLP
             return FrameRole.Qualifier;
         }
 
+        /// <summary>Maps an answer kind to its corresponding conversational frame role.</summary>
         private static FrameRole RoleForAnswerKind(AnswerKind kind)
         {
             return kind switch
@@ -1207,6 +1232,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Maps an answer status to its top-level NLP pipeline status.</summary>
         private static NlpStatus MapAnswerStatus(AnswerStatus status)
         {
             return status switch
@@ -1221,6 +1247,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Returns distinct non-empty diagnostic messages in their original order.</summary>
         private static IReadOnlyList<string> Deduplicate(IReadOnlyList<string> diagnostics)
         {
             HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
@@ -1235,6 +1262,7 @@ namespace OPEN_LRD.NLP
             return result;
         }
 
+        /// <summary>Aggregates per-chain reasoning outcomes into a single ingestion status.</summary>
         private static NlpStatus AggregateStatus(IReadOnlyList<ReasoningResult> results)
         {
             bool hasIngested = false;

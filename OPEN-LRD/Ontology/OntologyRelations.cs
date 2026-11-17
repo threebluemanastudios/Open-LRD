@@ -78,6 +78,7 @@ namespace OPEN_LRD.Ontology
 
         private static bool registered;
 
+        /// <summary>Ensures that all fixed ontology relationship types are registered.</summary>
         public static void EnsureRegistered()
         {
             if (registered)
@@ -97,6 +98,7 @@ namespace OPEN_LRD.Ontology
             registered = true;
         }
 
+        /// <summary>Returns the semantic link class associated with the specified ontology relation name.</summary>
         public static LinkClass LinkClassFor(string relationName)
         {
             foreach (OntologyRelation relation in All)
@@ -108,6 +110,7 @@ namespace OPEN_LRD.Ontology
             return OntologyTypes.ontology;
         }
 
+        /// <summary>Resolves a link-class name to its corresponding ontology link class instance.</summary>
         private static LinkClass ResolveLinkClass(string name)
         {
             return name switch

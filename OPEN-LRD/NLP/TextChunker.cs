@@ -230,6 +230,7 @@ namespace OPEN_LRD.NLP
             int chunkEnd = -1;
             int chunkSentences = 0;
 
+            // Flushes the accumulated sentence span into the chunk collector.
             void Flush()
             {
                 if (chunkStart >= 0 && chunkEnd > chunkStart)
@@ -480,6 +481,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Collects bounded text chunks while tracking whether the chunk limit was reached.</summary>
         private sealed class ChunkCollector
         {
             private readonly TextChunkOptions options;

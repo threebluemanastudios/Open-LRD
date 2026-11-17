@@ -11,9 +11,8 @@ candidate/evidence and GCIDE dictionary answers, and 3D Visualizer workflows.
 Automated coverage is in the SmokeTests project; this checklist exercises WPF
 controls and workflows through the STA UI runner.
 
-Project status: Module 8 Phases 1-4 are complete. Phase 5 file ingestion is in
-progress; the adopted contracts and resolved decisions are in Module_8_Plan.txt
-Sections 8.3-8.4.
+Project status: Module 8 Phases 1-6 are complete; the adopted Phase 5 contracts
+and resolved decisions are in Module_8_Plan.txt Sections 8.3-8.4.
 1.0 release gates and the current verification baseline are tracked in
 RELEASE_READINESS.md; the project has not yet been declared release-ready.
 
@@ -29,7 +28,7 @@ Status key: [ ] not run   [x] pass   [!] fail (describe below)
        dotnet build OPEN-LRD.SmokeTests\OPEN-LRD.SmokeTests.csproj --nologo
        dotnet build OPEN-LRD.ManualUiTests\OPEN-LRD.ManualUiTests.csproj --nologo
 [x] Phase 5 application and Manual UI test projects build with zero warnings.
-[x] Phase 5 smoke suite: 188 checks pass.
+[x] Phase 5 smoke suite: 194 checks pass.
 [x] Phase 5 WPF UI suite: 417 checks pass.
 [x] Manual file-import UI testing and verification are complete.
 [x] Create the test fixtures below in %TEMP%\open-lrd-manual\.
@@ -452,7 +451,7 @@ Recommended fixture script (PowerShell):
 15. SIGN-OFF
 ================================================================================
 
-Automated verification: 188 passed, 0 failed (smoke suite); 417 passed, 0 failed (WPF STA UI test suite).
+Automated verification: 194 passed, 0 failed (smoke suite); 417 passed, 0 failed (WPF STA UI test suite).
 Sections run: Sections 0 through 14 (Tools import, direct text ingestion, NLP Workbench, GCIDE Ask, temporal events, and 3D Visualizer).
 Passed: All (417/417)  Failed: 0
 

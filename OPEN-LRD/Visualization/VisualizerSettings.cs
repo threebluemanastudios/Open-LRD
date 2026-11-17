@@ -35,6 +35,7 @@ namespace OPEN_LRD.Visualization
         [JsonPropertyName("view")]
         public VisualizerViewSettings View { get; set; } = new VisualizerViewSettings();
 
+        /// <summary>Returns the default user-local file path for visualizer settings persistence.</summary>
         public static string GetDefaultPath()
         {
             string root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -45,11 +46,13 @@ namespace OPEN_LRD.Visualization
             return Path.Combine(root, "OPEN-LRD", "visualizer-settings.json");
         }
 
+        /// <summary>Creates a new visualizer settings instance initialized with default values.</summary>
         public static VisualizerSettings CreateDefault()
         {
             return new VisualizerSettings();
         }
 
+        /// <summary>Captures the current color overrides and view options into a serializable settings object.</summary>
         public static VisualizerSettings From(GraphColorMap colors, VisualizerOptions options)
         {
             ArgumentNullException.ThrowIfNull(colors);
@@ -79,6 +82,7 @@ namespace OPEN_LRD.Visualization
             return settings;
         }
 
+        /// <summary>Applies the stored color overrides and view settings to a color map and options instance.</summary>
         public void ApplyTo(GraphColorMap colors, VisualizerOptions options)
         {
             ArgumentNullException.ThrowIfNull(colors);
@@ -92,11 +96,13 @@ namespace OPEN_LRD.Visualization
             View.ApplyTo(options);
         }
 
+        /// <summary>Loads visualizer settings from the specified path or returns defaults on failure.</summary>
         public static VisualizerSettings Load(string path)
         {
             return Load(path, out _);
         }
 
+        /// <summary>Loads visualizer settings from the specified path and outputs any fallback warning.</summary>
         public static VisualizerSettings Load(string path, out string? warning)
         {
             ValidatePath(path);
@@ -140,6 +146,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Atomically writes the visualizer settings as UTF-8 JSON to the specified path.</summary>
         public void Save(string path)
         {
             ValidatePath(path);
@@ -176,6 +183,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Resolves persisted palette color names to RGB color values.</summary>
         private static Dictionary<int, RgbColor> ResolveColors(
             IReadOnlyDictionary<int, string>? source)
         {
@@ -193,6 +201,7 @@ namespace OPEN_LRD.Visualization
             return colors;
         }
 
+        /// <summary>Throws when the specified settings file path is null or whitespace.</summary>
         private static void ValidatePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -236,6 +245,7 @@ namespace OPEN_LRD.Visualization
         [JsonPropertyName("nearPlaneDistance")]
         public double NearPlaneDistance { get; set; } = VisualizerOptions.DefaultNearPlaneDistance;
 
+        /// <summary>Copies view-related properties from the specified visualizer options.</summary>
         public void FromOptions(VisualizerOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -258,6 +268,7 @@ namespace OPEN_LRD.Visualization
             NearPlaneDistance = options.NearPlaneDistance;
         }
 
+        /// <summary>Applies the stored view settings to the specified visualizer options with bounds clamping.</summary>
         public void ApplyTo(VisualizerOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -290,6 +301,7 @@ namespace OPEN_LRD.Visualization
                 : VisualizerOptions.DefaultNearPlaneDistance;
         }
 
+        /// <summary>Determines whether a floating-point value is finite and greater than zero.</summary>
         private static bool IsPositiveFinite(double value)
         {
             return double.IsFinite(value) && value > 0d;

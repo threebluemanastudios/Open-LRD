@@ -8,6 +8,7 @@ namespace OPEN_LRD.Visualization
     {
         private const float MinimumDirectionLength = 1e-6f;
 
+        /// <summary>Creates a camera view from position, basis vectors, viewport dimensions, and clip planes.</summary>
         public CameraView(
             Vector3 position,
             Vector3 lookDirection,
@@ -84,6 +85,7 @@ namespace OPEN_LRD.Visualization
 
         public double AspectRatio => ViewportWidth / ViewportHeight;
 
+        /// <summary>Determines whether a world-space point lies inside the camera frustum and depth limit.</summary>
         public bool IsPointInsideFrustum(Vector3 world, double maximumDepth = double.PositiveInfinity)
         {
             if (!TryGetCameraCoordinates(world, out double horizontal, out double vertical, out double depth))
@@ -98,6 +100,7 @@ namespace OPEN_LRD.Visualization
                 && Math.Abs(vertical) <= depth * tanHalfVertical;
         }
 
+        /// <summary>Determines whether an axis-aligned bounding box intersects the camera frustum.</summary>
         public bool IntersectsFrustum(Vector3 minimum, Vector3 maximum, double maximumDepth = double.PositiveInfinity)
         {
             if (minimum.X > maximum.X || minimum.Y > maximum.Y || minimum.Z > maximum.Z)
@@ -138,6 +141,7 @@ namespace OPEN_LRD.Visualization
                 && Math.Abs(vertical) - verticalRadius <= frustumDepth * tanHalfVertical;
         }
 
+        /// <summary>Computes the nearest camera-space depth of an axis-aligned bounding box.</summary>
         public double GetAabbNearDepth(Vector3 minimum, Vector3 maximum)
         {
             Vector3 center = (minimum + maximum) * 0.5f;
@@ -150,6 +154,7 @@ namespace OPEN_LRD.Visualization
             return centerDepth - depthRadius;
         }
 
+        /// <summary>Projects a world-space point into viewport screen coordinates and camera depth.</summary>
         public bool TryProject(Vector3 world, out Vector2 screen, out double depth)
         {
             TryGetCameraCoordinates(world, out double horizontal, out double vertical, out depth);
@@ -180,6 +185,7 @@ namespace OPEN_LRD.Visualization
             return true;
         }
 
+        /// <summary>Computes the camera-space horizontal, vertical, and depth coordinates of a world point.</summary>
         private bool TryGetCameraCoordinates(
             Vector3 world,
             out double horizontal,
@@ -193,6 +199,7 @@ namespace OPEN_LRD.Visualization
             return double.IsFinite(depth) && double.IsFinite(horizontal) && double.IsFinite(vertical);
         }
 
+        /// <summary>Projects an axis-aligned cube into screen bounds when all eight corners are inside the viewport.</summary>
         public bool TryProjectCompleteBox(
             Vector3 center,
             float halfExtent,
@@ -258,12 +265,14 @@ namespace OPEN_LRD.Visualization
             return true;
         }
 
+        /// <summary>Creates a world-space picking ray from a screen point or throws when invalid.</summary>
         public void CreateRay(Vector2 screen, out Vector3 origin, out Vector3 direction)
         {
             if (!TryCreateRay(screen, out origin, out direction))
                 throw new ArgumentOutOfRangeException(nameof(screen), "Screen point must be finite.");
         }
 
+        /// <summary>Attempts to construct a normalized world-space ray from a viewport screen coordinate.</summary>
         public bool TryCreateRay(Vector2 screen, out Vector3 origin, out Vector3 direction)
         {
             origin = Position;
@@ -293,6 +302,7 @@ namespace OPEN_LRD.Visualization
             return true;
         }
 
+        /// <summary>Throws when any component of the specified vector is not finite.</summary>
         private static void ValidateVector(Vector3 value, string parameterName)
         {
             if (!float.IsFinite(value.X) || !float.IsFinite(value.Y) || !float.IsFinite(value.Z))
@@ -303,6 +313,7 @@ namespace OPEN_LRD.Visualization
     /// <summary>Provides projection, frustum, ray, and bounds calculations for the visualizer.</summary>
     internal static class ProjectionMath
     {
+        /// <summary>Returns a camera view positioned to frame the specified bounding sphere.</summary>
         public static CameraView FrameBounds(
             CameraView camera,
             Vector3 center,
@@ -340,6 +351,7 @@ namespace OPEN_LRD.Visualization
                 far);
         }
 
+        /// <summary>Tests whether a ray intersects an axis-aligned bounding box and returns the entry distance.</summary>
         public static bool TryIntersectRayAabb(
             Vector3 origin,
             Vector3 direction,
@@ -372,6 +384,7 @@ namespace OPEN_LRD.Visualization
             return true;
         }
 
+        /// <summary>Updates the ray intersection interval for a single axis-aligned slab.</summary>
         private static bool UpdateSlab(
             float origin,
             float direction,

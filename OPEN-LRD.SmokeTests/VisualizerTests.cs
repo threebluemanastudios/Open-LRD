@@ -50,6 +50,7 @@ namespace OPEN_LRD.SmokeTests
             Run("Visualizer scene geometry validation", TestSceneGeometryValidation);
         }
 
+        /// <summary>Initializes and returns the singleton graph core.</summary>
         private static LRD_Core NewCore()
         {
             LRD_Core core = LRD_Core.Instance;
@@ -57,16 +58,19 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Allocates a unique runtime type ID for visualizer tests.</summary>
         private static int NextTypeId()
         {
             return Interlocked.Increment(ref nextTypeId);
         }
 
+        /// <summary>Builds a deterministic GUID from an integer suffix.</summary>
         private static Guid NodeId(int value)
         {
             return Guid.Parse($"00000000-0000-0000-0000-{value:D12}");
         }
 
+        /// <summary>Creates and adds a graph node fixture with optional label and aliases.</summary>
         private static Web_Node AddNode(
             LRD_Core core,
             Guid id,
@@ -86,6 +90,7 @@ namespace OPEN_LRD.SmokeTests
             return node;
         }
 
+        /// <summary>Creates and returns a unique temporary directory for visualizer settings tests.</summary>
         private static string NewTempDirectory()
         {
             string directory = Path.Combine(
@@ -95,18 +100,21 @@ namespace OPEN_LRD.SmokeTests
             return directory;
         }
 
+        /// <summary>Deletes a temporary test directory if it exists.</summary>
         private static void DeleteDirectory(string directory)
         {
             if (Directory.Exists(directory))
                 Directory.Delete(directory, recursive: true);
         }
 
+        /// <summary>Resolves a required named color from the built-in graph palette.</summary>
         private static ColorChoice Color(string name)
         {
             Assert(GraphColorPalette.TryGet(name, out ColorChoice choice), $"palette color '{name}' should exist");
             return choice;
         }
 
+        /// <summary>Verifies deterministic GUID ordering and display-label fallback in graph snapshots.</summary>
         private static void TestSnapshotOrderingAndLabels()
         {
             LRD_Core core = NewCore();
@@ -135,6 +143,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(!snapshot.IsTruncated && snapshot.Warnings.Count == 0, "a complete snapshot should have no warnings");
         }
 
+        /// <summary>Verifies that reciprocal link pairs collapse to a single deduplicated snapshot link.</summary>
         private static void TestSnapshotReciprocalDeduplication()
         {
             LRD_Core core = NewCore();
@@ -157,6 +166,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(snapshot.Warnings.Count == 1, "deduplication should be reported as a warning");
         }
 
+        /// <summary>Verifies that self-links and dangling links are skipped and reported in snapshot warnings.</summary>
         private static void TestSnapshotSkippedLinks()
         {
             LRD_Core core = NewCore();
@@ -177,6 +187,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(snapshot.Warnings.Count == 2, "both skip reasons should be reported");
         }
 
+        /// <summary>Verifies that links with distinct forward types between the same nodes remain separate.</summary>
         private static void TestSnapshotDistinctForwardTypes()
         {
             LRD_Core core = NewCore();
@@ -218,6 +229,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies degree-prioritized node truncation when the graph exceeds MaxNodes.</summary>
         private static void TestSnapshotNodeCap()
         {
             LRD_Core core = NewCore();
@@ -246,6 +258,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(snapshot.IsTruncated, "the snapshot should report truncation");
         }
 
+        /// <summary>Verifies deterministic link truncation when the induced link count exceeds MaxLinks.</summary>
         private static void TestSnapshotLinkCap()
         {
             LRD_Core core = NewCore();
@@ -272,6 +285,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(snapshot.Nodes[0].Degree == 2, "degree should reflect the capped link set");
         }
 
+        /// <summary>Verifies deterministic default color assignments and name lookups in the palette.</summary>
         private static void TestPaletteDefaults()
         {
             Assert(GraphColorPalette.Palette.Count == 24, "the palette should contain 24 named colors");
@@ -298,6 +312,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(!GraphColorPalette.TryGet("not-a-color", out _), "unknown color names should be rejected");
         }
 
+        /// <summary>Verifies override precedence and change notifications on the graph color map.</summary>
         private static void TestColorMapPrecedence()
         {
             GraphColorMap map = new GraphColorMap();
@@ -339,6 +354,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(map.NodeColors.Count == 0 && map.LinkColors.Count == 0 && map.ClassColors.Count == 0, "reset should clear all overrides");
         }
 
+        /// <summary>Verifies JSON serialization and restoration of visualizer colors and view options.</summary>
         private static void TestSettingsRoundTrip()
         {
             string directory = NewTempDirectory();
@@ -404,6 +420,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies fallback to default settings when files are missing, corrupt, or out of range.</summary>
         private static void TestSettingsFallback()
         {
             string directory = NewTempDirectory();
@@ -480,6 +497,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies range and finiteness validation on visualizer options.</summary>
         private static void TestOptionsValidation()
         {
             VisualizerOptions valid = new VisualizerOptions
@@ -563,6 +581,7 @@ namespace OPEN_LRD.SmokeTests
                 "negative gravity should be rejected");
         }
 
+        /// <summary>Verifies screen-quadrant projection of camera-relative 3D points.</summary>
         private static void TestProjectionQuadrants()
         {
             CameraView camera = CreateTestCamera();
@@ -584,6 +603,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(left.X < center.X, "camera-left points should project to the left half");
         }
 
+        /// <summary>Verifies that points behind the camera or outside the clip planes fail projection.</summary>
         private static void TestProjectionDepthRejection()
         {
             CameraView camera = CreateTestCamera();
@@ -593,6 +613,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(!camera.TryProject(camera.LookDirection * 1000f, out _, out _), "points beyond the far plane should be rejected");
         }
 
+        /// <summary>Verifies that a projected screen coordinate reconstructs a ray passing through the world point.</summary>
         private static void TestProjectionRayRoundTrip()
         {
             CameraView camera = CreateTestCamera();
@@ -610,6 +631,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(Vector3.Distance(world, closest) < 1e-3f, "the projected point should lie on the reconstructed ray");
         }
 
+        /// <summary>Verifies that FrameBounds centers the target sphere within the camera frustum.</summary>
         private static void TestFrameBounds()
         {
             CameraView camera = CreateTestCamera();
@@ -625,6 +647,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(depth > framed.NearPlaneDistance && depth < framed.FarPlaneDistance, "framed depth should be within the clip planes");
         }
 
+        /// <summary>Verifies fly-camera translation, pitch clamping, yaw wrapping, orbiting, and roll.</summary>
         private static void TestFlyCameraMovement()
         {
             FlyCamera camera = new FlyCamera(Vector3.Zero, 0d, 0d);
@@ -728,11 +751,13 @@ namespace OPEN_LRD.SmokeTests
                 "opposite forward-axis roll should restore the original camera up direction");
         }
 
+        /// <summary>Determines whether two quaternions represent the same 3D rotation.</summary>
         private static bool QuaternionEquivalent(Quaternion left, Quaternion right)
         {
             return Math.Abs(Quaternion.Dot(Quaternion.Normalize(left), Quaternion.Normalize(right))) > 0.99999f;
         }
 
+        /// <summary>Verifies ray-AABB hit detection, entry distance ordering, and bounds validation.</summary>
         private static void TestRayAabbPicking()
         {
             Vector3 origin = new Vector3(0f, 0f, -10f);
@@ -764,6 +789,7 @@ namespace OPEN_LRD.SmokeTests
                 "invalid bounds should be rejected");
         }
 
+        /// <summary>Verifies BVH frustum candidate collection, visibility filtering, and ray picking.</summary>
         private static void TestSpatialNodeIndex()
         {
             Vector3[] positions = new Vector3[20000];
@@ -824,6 +850,7 @@ namespace OPEN_LRD.SmokeTests
                 "indexed ray picking should report misses");
         }
 
+        /// <summary>Verifies vertex, normal, and triangle counts for cube and highlight meshes.</summary>
         private static void TestCubeMesh()
         {
             MeshData cube = GraphMeshBuilder.CreateCube(new Vector3(2f, 3f, 4f), 2d);
@@ -860,6 +887,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(highlight.VertexCount == 24, "the highlight cube should use the same mesh layout");
         }
 
+        /// <summary>Verifies combined and per-type node cube mesh construction.</summary>
         private static void TestMergedNodeMeshes()
         {
             LRD_Core core = NewCore();
@@ -890,6 +918,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(missing.IsEmpty, "an absent type should produce an empty mesh");
         }
 
+        /// <summary>Verifies crossed-ribbon link mesh construction and parallel-edge offsets.</summary>
         private static void TestLinkMeshes()
         {
             LRD_Core core = NewCore();
@@ -936,6 +965,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(custom.VertexCount == 8 && custom.IndexCount == 12, "the custom link type should produce its own mesh");
         }
 
+        /// <summary>Verifies that an empty graph snapshot produces empty node and link meshes.</summary>
         private static void TestEmptySnapshotMeshes()
         {
             LRD_Core core = NewCore();
@@ -951,6 +981,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(GraphMeshBuilder.BuildLinkLines(snapshot, positions, 0.2d, 1d).IsEmpty, "empty link mesh should be empty");
         }
 
+        /// <summary>Verifies that laying out an empty graph snapshot completes with zero bounds and no warnings.</summary>
         private static void TestLayoutEmptySnapshot()
         {
             GraphSnapshot snapshot = GraphSnapshot.FromCore(NewCore());
@@ -965,6 +996,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(result.Warnings.Count == 0, "empty layout should not warn");
         }
 
+        /// <summary>Verifies that repeated layouts of the same snapshot produce identical node coordinates.</summary>
         private static void TestLayoutDeterminism()
         {
             LRD_Core core = BuildChainCore(5);
@@ -989,6 +1021,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that relaxed link lengths converge near their target semantic rest distances.</summary>
         private static void TestLayoutDistanceFidelity()
         {
             LRD_Core core = BuildChainCore(5);
@@ -1012,6 +1045,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that isolated nodes are separated by at least the minimum spacing distance.</summary>
         private static void TestLayoutCollisionSpacing()
         {
             LRD_Core core = NewCore();
@@ -1038,6 +1072,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that disconnected graph components pack apart without stretching internal links.</summary>
         private static void TestLayoutComponentPacking()
         {
             LRD_Core core = NewCore();
@@ -1066,6 +1101,7 @@ namespace OPEN_LRD.SmokeTests
                 "packing should translate whole components without stretching their links");
         }
 
+        /// <summary>Verifies 3D spherical distribution of disconnected components and isolated node clouds.</summary>
         private static void TestLayoutSphericalCloudDistribution()
         {
             LRD_Core core = NewCore();
@@ -1129,6 +1165,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that completed layouts are centered at the origin and report accurate bounds.</summary>
         private static void TestLayoutCenterAndBounds()
         {
             GraphSnapshot snapshot = GraphSnapshot.FromCore(BuildChainCore(6));
@@ -1151,6 +1188,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(Math.Abs(result.Radius - maximumRadius) < 1e-4f, "radius should match the farthest node");
         }
 
+        /// <summary>Verifies that a pre-cancelled token stops layout computation before running iterations.</summary>
         private static void TestLayoutCancellation()
         {
             GraphSnapshot snapshot = GraphSnapshot.FromCore(BuildChainCore(3));
@@ -1168,6 +1206,7 @@ namespace OPEN_LRD.SmokeTests
                 Assert(position == Vector3.Zero, "a pre-cancelled layout should leave zeroed positions");
         }
 
+        /// <summary>Verifies monotonic progress reporting across initialization, relaxation, packing, and completion.</summary>
         private static void TestLayoutProgress()
         {
             GraphSnapshot snapshot = GraphSnapshot.FromCore(BuildChainCore(6));
@@ -1208,6 +1247,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(sawPacking, "layout should report packing progress");
         }
 
+        /// <summary>Verifies that a 400-node chain lays out with finite coordinates within the time budget.</summary>
         private static void TestLayoutPerformance()
         {
             const int nodeCount = 400;
@@ -1222,6 +1262,7 @@ namespace OPEN_LRD.SmokeTests
                 Assert(IsFinite(position), "large-layout positions should stay finite");
         }
 
+        /// <summary>Verifies that scene geometry batches group meshes by node type and forward link type.</summary>
         private static void TestSceneGeometryBatches()
         {
             LRD_Core core = NewCore();
@@ -1287,6 +1328,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(geometry.HasNodeGeometry, "a populated graph should report node geometry");
         }
 
+        /// <summary>Verifies argument validation on SceneGeometry and VisualizerSceneBuilder.</summary>
         private static void TestSceneGeometryValidation()
         {
             GraphSnapshot snapshot = GraphSnapshot.FromCore(BuildChainCore(3));
@@ -1337,6 +1379,7 @@ namespace OPEN_LRD.SmokeTests
                 "an empty scene radius should fall back to the cube size");
         }
 
+        /// <summary>Builds a linear chain graph with the specified number of connected nodes.</summary>
         private static LRD_Core BuildChainCore(int count)
         {
             LRD_Core core = NewCore();
@@ -1354,6 +1397,7 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Creates a standard perspective camera view fixture for projection tests.</summary>
         private static CameraView CreateTestCamera()
         {
             return new CameraView(
@@ -1367,6 +1411,7 @@ namespace OPEN_LRD.SmokeTests
                 1000d);
         }
 
+        /// <summary>Reads a 3D vertex coordinate from a mesh position array by vertex index.</summary>
         private static Vector3 ReadVertex(MeshData mesh, int vertexIndex)
         {
             int offset = vertexIndex * 3;
@@ -1376,20 +1421,24 @@ namespace OPEN_LRD.SmokeTests
                 mesh.Positions[offset + 2]);
         }
 
+        /// <summary>Determines whether two floating-point values are equal within a tolerance.</summary>
         private static bool Near(float actual, float expected, float tolerance = 1e-3f)
         {
             return Math.Abs(actual - expected) <= tolerance;
         }
 
+        /// <summary>Determines whether all components of a 3D vector are finite numbers.</summary>
         private static bool IsFinite(Vector3 value)
         {
             return float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
         }
 
+        /// <summary>Captures layout progress reports in order for test assertions.</summary>
         private sealed class RecordingProgress : IProgress<LayoutProgress>
         {
             public List<LayoutProgress> Reports { get; } = new List<LayoutProgress>();
 
+            /// <summary>Appends a layout progress update to the recorded list.</summary>
             public void Report(LayoutProgress value)
             {
                 Reports.Add(value);

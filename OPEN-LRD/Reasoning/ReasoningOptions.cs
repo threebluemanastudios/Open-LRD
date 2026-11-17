@@ -71,6 +71,7 @@ namespace OPEN_LRD.Reasoning
 
         public int TemporaryNodeTimeToLive { get; init; } = Node.DefaultTimeToLive;
 
+        /// <summary>Determines whether the specified link classification is configured as functional.</summary>
         public bool IsFunctional(LinkClass classification)
         {
             return FunctionalLinkClasses.Contains(classification);

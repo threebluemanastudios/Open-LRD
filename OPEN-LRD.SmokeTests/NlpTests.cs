@@ -63,6 +63,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP workbench state and stale sessions", TestNlpWorkbenchStateAndStaleSessions);
         }
 
+        /// <summary>Initializes and returns the singleton graph core.</summary>
         private static LRD_Core NewCore()
         {
             LRD_Core core = LRD_Core.Instance;
@@ -70,6 +71,7 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Analyzes the specified text and returns its parsed syntactic structure.</summary>
         private static ParsedText Parse(NlpPipeline pipeline, string text)
         {
             NlpResult result = pipeline.Analyze(text);
@@ -80,6 +82,7 @@ namespace OPEN_LRD.SmokeTests
             return result.Parsed!;
         }
 
+        /// <summary>Verifies input validation, sentence classification, token offsets, and POS tagging in the NLP pipeline.</summary>
         private static void TestNlpPipelineParsing()
         {
             LRD_Core core = NewCore();
@@ -138,6 +141,7 @@ namespace OPEN_LRD.SmokeTests
                 "a null core should be rejected");
         }
 
+        /// <summary>Verifies Unicode whitespace/quote normalization and deterministic parse output.</summary>
         private static void TestNlpNormalizationAndDeterminism()
         {
             LRD_Core core = NewCore();
@@ -155,6 +159,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(Signature(first) == Signature(second), "the same input should produce deterministic parses");
         }
 
+        /// <summary>Verifies sentence and token segmentation across abbreviations, decimals, newlines, and contractions.</summary>
         private static void TestNlpSentenceAndTokenBoundaries()
         {
             LRD_Core core = NewCore();
@@ -183,6 +188,7 @@ namespace OPEN_LRD.SmokeTests
             AssertToken(possessive, 1, "dog", PartOfSpeech.Noun, "dog");
         }
 
+        /// <summary>Verifies part-of-speech tagging and lemmatization for irregular and inflected words.</summary>
         private static void TestNlpPartOfSpeechAndLemmas()
         {
             LRD_Core core = NewCore();
@@ -210,6 +216,7 @@ namespace OPEN_LRD.SmokeTests
             AssertToken(comparative, 3, "ran", PartOfSpeech.Verb, "run");
         }
 
+        /// <summary>Verifies phrase chunking, clause role assignment, and coordinated clause splitting.</summary>
         private static void TestNlpShallowParsing()
         {
             LRD_Core core = NewCore();
@@ -250,6 +257,7 @@ namespace OPEN_LRD.SmokeTests
             AssertArgument(coordinated.Sentences[0].Clauses[1], ClauseRole.Subject, 3, 3, "second clause should keep Bob as subject");
         }
 
+        /// <summary>Verifies named entity recognition for people, organizations, locations, dates, events, and quantities.</summary>
         private static void TestNlpNamedEntityRecognition()
         {
             LRD_Core core = NewCore();
@@ -275,6 +283,7 @@ namespace OPEN_LRD.SmokeTests
             AssertMention(quantity, "42", "42", NodeTypes.RawData, MentionKind.Quantity);
         }
 
+        /// <summary>Returns the single clause from the first sentence of a parsed text.</summary>
         private static Clause SingleClause(ParsedText parsed)
         {
             Assert(parsed.Sentences.Count > 0, "expected at least one sentence");
@@ -282,6 +291,7 @@ namespace OPEN_LRD.SmokeTests
             return parsed.Sentences[0].Clauses[0];
         }
 
+        /// <summary>Asserts that a clause contains a syntactic chunk with the expected kind and token span.</summary>
         private static void AssertChunk(
             Clause clause,
             ChunkKind kind,
@@ -297,6 +307,7 @@ namespace OPEN_LRD.SmokeTests
                 message);
         }
 
+        /// <summary>Asserts that a clause contains an argument with the expected role and token span.</summary>
         private static void AssertArgument(
             Clause clause,
             ClauseRole role,
@@ -312,6 +323,7 @@ namespace OPEN_LRD.SmokeTests
                 message);
         }
 
+        /// <summary>Asserts that a parsed text contains a mention with the expected surface text, lemma, node type, and kind.</summary>
         private static void AssertMention(
             ParsedText parsed,
             string surfaceText,
@@ -332,6 +344,7 @@ namespace OPEN_LRD.SmokeTests
                 $"mention '{surfaceText}' should have kind {kind} but was {mention.Kind}");
         }
 
+        /// <summary>Verifies sentence, token, character, and punctuation-only input limits.</summary>
         private static void TestNlpInputLimits()
         {
             LRD_Core core = NewCore();
@@ -361,6 +374,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(punctuation.Status == NlpStatus.InvalidInput, "punctuation-only input should be rejected");
         }
 
+        /// <summary>Verifies predicate relation normalization, registration, and ID range reservation.</summary>
         private static void TestNlpRelationRegistry()
         {
             RelationLinkType copula = RelationRegistry.GetOrRegister("is");
@@ -393,6 +407,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(antonym.Id == RelationRegistry.AntonymLinkTypeId, "the antonym relation should keep its reserved ID");
         }
 
+        /// <summary>Verifies relation frame extraction for transitive, prepositional, copula, possession, and passive clauses.</summary>
         private static void TestNlpRelationExtractionPatterns()
         {
             LRD_Core core = NewCore();
@@ -458,6 +473,7 @@ namespace OPEN_LRD.SmokeTests
                 "the passive agent should not also be a location qualifier");
         }
 
+        /// <summary>Verifies indefinite predicate-nominal classification and adjective property links.</summary>
         private static void TestPredicateNominalClassificationAndProperties()
         {
             OntologyTypes.EnsureRegistered();
@@ -533,6 +549,7 @@ namespace OPEN_LRD.SmokeTests
                 "has_property evidence should be phrased as a copula");
         }
 
+        /// <summary>Verifies that social greetings, thanks, and help prompts return read-only conversational answers.</summary>
         private static void TestNlpSocialDialogue()
         {
             LRD_Core core = NewCore();
@@ -574,6 +591,7 @@ namespace OPEN_LRD.SmokeTests
                 "social dialogue should be configurable off");
         }
 
+        /// <summary>Verifies conversational preamble unwrapping, unpunctuated questions, entity exploration, and elliptical follow-ups.</summary>
         private static void TestNlpConversationalInput()
         {
             LRD_Core core = NewCore();
@@ -680,6 +698,7 @@ namespace OPEN_LRD.SmokeTests
                 "punctuation-tolerant question detection must preserve unpunctuated imperatives");
         }
 
+        /// <summary>Verifies multi-answer synthesis and plural agreement for questions with multiple distinct matches.</summary>
         private static void TestNlpMultiAnswerSynthesis()
         {
             LRD_Core core = NewCore();
@@ -744,6 +763,7 @@ namespace OPEN_LRD.SmokeTests
                 "multi-answer synthesis should be configurable off");
         }
 
+        /// <summary>Verifies numeric quantity answers for how-many questions and Count commands.</summary>
         private static void TestNlpQuantityQueries()
         {
             LRD_Core core = NewCore();
@@ -823,6 +843,7 @@ namespace OPEN_LRD.SmokeTests
                 "fixed Count events command should count Event nodes");
         }
 
+        /// <summary>Verifies temporal event creation, time-window encoding, variance calculation, and temporal Ask queries.</summary>
         private static void TestNlpTemporalEvents()
         {
             DateTimeOffset start = new DateTimeOffset(2026, 5, 12, 14, 0, 0, TimeSpan.Zero);
@@ -980,10 +1001,12 @@ namespace OPEN_LRD.SmokeTests
                 $"When question should correlate with an intransitive located event: {whenArrival.Answer?.Text}; {string.Join("; ", whenArrival.Diagnostics)}");
         }
 
+        /// <summary>Verifies relative temporal expression parsing and ReferenceTime resolution across Ingest and Ask.</summary>
         private static void TestNlpRelativeTemporalExpressions()
         {
             DateTimeOffset reference = new DateTimeOffset(2026, 5, 13, 14, 0, 0, TimeSpan.Zero);
 
+            // Asserts that a relative expression resolves to the full UTC day for the expected date.
             void AssertDay(string expression, DateTime date, bool futureTense = false)
             {
                 Assert(TemporalExpressionParser.TryParseRelativeExpression(
@@ -998,6 +1021,7 @@ namespace OPEN_LRD.SmokeTests
                     $"'{expression}' should resolve to {expectedStart:d}; got {start:o} to {end:o}");
             }
 
+            // Asserts that a relative calendar period resolves to the expected inclusive UTC date span.
             void AssertPeriod(string expression, DateTime startDate, DateTime endDate)
             {
                 Assert(TemporalExpressionParser.TryParseRelativeExpression(
@@ -1107,6 +1131,7 @@ namespace OPEN_LRD.SmokeTests
                 "Ask should resolve named months to their calendar window");
         }
 
+        /// <summary>Verifies that negated verbs, modals, unresolved pronouns, questions, and imperatives are excluded from ingestion.</summary>
         private static void TestNlpRelationExtractionExclusions()
         {
             LRD_Core core = NewCore();
@@ -1142,6 +1167,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(imperative.Frames.Count == 0, "imperative input should not be ingested as assertions");
         }
 
+        /// <summary>Verifies subject/verb/object coordination, disjunctions, and complement vs. predicate negation.</summary>
         private static void TestNlpCoordinationAndNegation()
         {
             LRD_Core core = NewCore();
@@ -1217,6 +1243,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(!negatedVerb.Frames[0].Ingestible, "negated verbs should not be ingested");
         }
 
+        /// <summary>Verifies main-relation and qualifier chain construction from extracted frames.</summary>
         private static void TestNlpChainBuilding()
         {
             LRD_Core core = NewCore();
@@ -1246,6 +1273,7 @@ namespace OPEN_LRD.SmokeTests
                 "chain links must not be self-loops");
         }
 
+        /// <summary>Verifies that NLP ingestion resolves existing entities and merges new relation links into the graph.</summary>
         private static void TestNlpReasoningIngestion()
         {
             LRD_Core core = NewCore();
@@ -1269,6 +1297,7 @@ namespace OPEN_LRD.SmokeTests
                 "the relation link should be added to the graph");
         }
 
+        /// <summary>Verifies trust rejection, trusted node promotion, and ambiguity protection during NLP ingestion.</summary>
         private static void TestNlpIngestionSafety()
         {
             LRD_Core core = NewCore();
@@ -1318,6 +1347,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(pronounCore.FindByLabel("Bob").Count == 0, "pronoun ingestion should not create nodes");
         }
 
+        /// <summary>Verifies that ingesting the same statement twice does not duplicate nodes or links.</summary>
         private static void TestNlpIngestionIdempotence()
         {
             LRD_Core core = NewCore();
@@ -1341,6 +1371,7 @@ namespace OPEN_LRD.SmokeTests
                 "repeated ingestion should not duplicate links");
         }
 
+        /// <summary>Parses a question string and builds its question analysis variants.</summary>
         private static QuestionAnalysis AnalyzeQuestion(
             NlpPipeline pipeline,
             LRD_Core core,
@@ -1350,6 +1381,7 @@ namespace OPEN_LRD.SmokeTests
             return QuestionAnalyzer.Analyze(parsed, new EntityResolver(core));
         }
 
+        /// <summary>Verifies question classification, anchor selection, and query-chain variants.</summary>
         private static void TestNlpQuestionAnalysis()
         {
             LRD_Core core = NewCore();
@@ -1462,6 +1494,7 @@ namespace OPEN_LRD.SmokeTests
                 "the stranded-preposition anchor should be Alice");
         }
 
+        /// <summary>Verifies answer generation across wh-subject, wh-object, wh-qualifier, copula, and passive questions.</summary>
         private static void TestNlpAnswerGeneration()
         {
             LRD_Core core = NewCore();
@@ -1558,6 +1591,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(passive.Answer?.ShortAnswer == "Bob", $"expected Bob but got {passive.Answer?.ShortAnswer}");
         }
 
+        /// <summary>Verifies single-sense, article-preserved, and multi-sense GCIDE dictionary definition answers.</summary>
         private static void TestNlpGcideDictionaryDefinitions()
         {
             OntologyTypes.EnsureRegistered();
@@ -1805,6 +1839,7 @@ namespace OPEN_LRD.SmokeTests
                 "each displayed Sense candidate should retain a Lexeme-to-Sense evidence path");
         }
 
+        /// <summary>Verifies positive and negative boolean answers for copula, verb-preposition, and possession questions.</summary>
         private static void TestNlpYesNoAnswers()
         {
             LRD_Core core = NewCore();
@@ -1846,6 +1881,7 @@ namespace OPEN_LRD.SmokeTests
                 $"expected Yes but got {dog.Answer?.Status}: {string.Join("; ", dog.Diagnostics)}");
         }
 
+        /// <summary>Verifies ambiguous and no-match answer reporting when multiple same-label or missing facts exist.</summary>
         private static void TestNlpAnswerAmbiguityAndNoMatch()
         {
             LRD_Core ambiguousCore = NewCore();
@@ -1888,6 +1924,7 @@ namespace OPEN_LRD.SmokeTests
                 $"expected NoMatch but got {unknownAnchor.Answer?.Status}: {string.Join("; ", unknownAnchor.Diagnostics)}");
         }
 
+        /// <summary>Verifies that duplicate anchor labels populate candidate rows for disambiguation in the Workbench.</summary>
         private static void TestNlpAmbiguousAnchorCandidates()
         {
             LRD_Core core = NewCore();
@@ -1920,6 +1957,7 @@ namespace OPEN_LRD.SmokeTests
                 "ambiguous answer should flag temporary evidence when a candidate is temporary");
         }
 
+        /// <summary>Verifies diagnostic messages for supported answers and unsupported or invalid Ask inputs.</summary>
         private static void TestNlpAnswerDiagnostics()
         {
             LRD_Core core = NewCore();
@@ -1981,6 +2019,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(punctuation.Status == NlpStatus.InvalidInput, $"expected InvalidInput but got {punctuation.Status}");
         }
 
+        /// <summary>Verifies that Ask queries never insert query-only nodes or mutate graph links.</summary>
         private static void TestNlpQuestionReadOnly()
         {
             LRD_Core core = NewCore();
@@ -2010,6 +2049,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that repeating the same Ask question produces identical answer output.</summary>
         private static void TestNlpQuestionDeterminism()
         {
             LRD_Core core = NewCore();
@@ -2027,6 +2067,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(first.Answer?.Text == second.Answer?.Text, "repeated questions should return the same text");
         }
 
+        /// <summary>Verifies that answers backed by temporary nodes include a verification caveat.</summary>
         private static void TestNlpTemporaryEvidence()
         {
             LRD_Core core = NewCore();
@@ -2058,6 +2099,7 @@ namespace OPEN_LRD.SmokeTests
                 "permanent evidence should not add the temporary caveat");
         }
 
+        /// <summary>Verifies pronoun antecedent resolution during multi-turn conversation ingestion.</summary>
         private static void TestNlpConversationPronounIngestion()
         {
             LRD_Core core = NewCore();
@@ -2125,6 +2167,7 @@ namespace OPEN_LRD.SmokeTests
                 "an indefinite statement must not mutate the graph");
         }
 
+        /// <summary>Verifies pronoun antecedent resolution during follow-up Ask questions.</summary>
         private static void TestNlpConversationFollowUpQuestions()
         {
             LRD_Core core = NewCore();
@@ -2175,6 +2218,7 @@ namespace OPEN_LRD.SmokeTests
                 "second-person pronouns should be rejected with an explicit diagnostic");
         }
 
+        /// <summary>Verifies pronoun ambiguity handling and session isolation or sharing across pipelines.</summary>
         private static void TestNlpConversationAmbiguityAndSharing()
         {
             LRD_Core ambiguousCore = NewCore();
@@ -2247,6 +2291,7 @@ namespace OPEN_LRD.SmokeTests
                 "a reset shared conversation should have no antecedents");
         }
 
+        /// <summary>Verifies conversation registration, attachment, removal, and pipeline disposal in the core.</summary>
         private static void TestNlpConversationRegistry()
         {
             LRD_Core core = NewCore();
@@ -2300,6 +2345,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.TryGetConversation(readOnlyID, out _), "dispose should not delete the shared conversation");
         }
 
+        /// <summary>Verifies conversation focus tracking across ingestion, wh-answers, yes/no answers, and failed turns.</summary>
         private static void TestNlpConversationFocus()
         {
             LRD_Core core = NewCore();
@@ -2344,6 +2390,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(pipeline.Conversation.Mentions.Count == mentionCount, "failed ingestion should not add mentions");
         }
 
+        /// <summary>Verifies session provenance recording, eviction bounds, and trust-rejection metadata.</summary>
         private static void TestNlpSessionProvenance()
         {
             LRD_Core core = NewCore();
@@ -2413,6 +2460,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(pipelineA.Provenance.Count == 0, "reset should clear shared provenance");
         }
 
+        /// <summary>Verifies session-provenance caveats and their precedence over temporary-evidence caveats.</summary>
         private static void TestNlpSessionProvenanceCaveats()
         {
             LRD_Core core = NewCore();
@@ -2501,6 +2549,7 @@ namespace OPEN_LRD.SmokeTests
                 "failed answers should not include the session caveat");
         }
 
+        /// <summary>Verifies read-only graph invariants and deterministic output for conversational follow-up queries.</summary>
         private static void TestNlpConversationReadOnlyAndDeterminism()
         {
             LRD_Core core = NewCore();
@@ -2551,6 +2600,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(isolated.Conversation.Provenance.Count == 0, "a new conversation should start with no provenance");
         }
 
+        /// <summary>Verifies first-person pronoun mapping to the configured speaker entity node.</summary>
         private static void TestNlpFirstPersonSpeakerIdentity()
         {
             LRD_Core core = NewCore();
@@ -2631,6 +2681,7 @@ namespace OPEN_LRD.SmokeTests
                 "an ambiguous speaker identity must not mutate the graph");
         }
 
+        /// <summary>Verifies imperative inspection commands for queries, facts, graph summaries, conversations, and nodes.</summary>
         private static void TestNlpCommandRecognition()
         {
             LRD_Core core = NewCore();
@@ -2692,6 +2743,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(ingestCommand.Status == NlpStatus.Unsupported, $"expected Unsupported but got {ingestCommand.Status}");
         }
 
+        /// <summary>Verifies clarification prompts for incomplete commands and read-only command execution.</summary>
         private static void TestNlpCommandClarificationAndReadOnly()
         {
             LRD_Core core = NewCore();
@@ -2759,6 +2811,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(pipeline.Conversation.LastAnswerNodeID == lastAnswer, "commands must not change the last answer");
         }
 
+        /// <summary>Verifies NLP Workbench session creation, attachment, removal, clearing, and disposal.</summary>
         private static void TestNlpWorkbenchLifecycle()
         {
             LRD_Core uninitializedCore = LRD_Core.Instance;
@@ -2843,6 +2896,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies Ingest, Ask, reset, and shared-session operations through the NLP Workbench facade.</summary>
         private static void TestNlpWorkbenchOperations()
         {
             LRD_Core core = NewCore();
@@ -3027,6 +3081,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies state snapshots, stale-session invalidation, and determinism in the NLP Workbench.</summary>
         private static void TestNlpWorkbenchStateAndStaleSessions()
         {
             LRD_Core core = NewCore();
@@ -3128,11 +3183,13 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Returns the number of nodes currently stored in the core dictionary.</summary>
         private static int CountNodes(LRD_Core core)
         {
             return core.GetDictionary()?.Count ?? 0;
         }
 
+        /// <summary>Returns the total number of active directed links across all nodes in the core.</summary>
         private static int CountLinks(LRD_Core core)
         {
             IReadOnlyDictionary<Guid, Web_Node>? nodes = core.GetDictionary();
@@ -3143,6 +3200,7 @@ namespace OPEN_LRD.SmokeTests
             return nodes.Values.Sum(node => core.GetLinks(node.ID).Count);
         }
 
+        /// <summary>Asserts that a relation frame contains an argument with the expected role and surface text.</summary>
         private static void AssertArgument(RelationFrame frame, FrameRole role, string surfaceText)
         {
             Assert(
@@ -3152,6 +3210,7 @@ namespace OPEN_LRD.SmokeTests
                 $"missing {role} argument '{surfaceText}' in relation '{frame.RelationName}'");
         }
 
+        /// <summary>Creates and adds a graph node fixture with optional label, lifetime, and aliases.</summary>
         private static Guid AddNode(
             LRD_Core core,
             NodeTypes type,
@@ -3170,6 +3229,7 @@ namespace OPEN_LRD.SmokeTests
             return nodeID;
         }
 
+        /// <summary>Asserts that the token at the specified index matches the expected surface text, POS tag, and lemma.</summary>
         private static void AssertToken(
             ParsedText parsed,
             int index,
@@ -3187,6 +3247,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(token.Lemma == lemma, $"token '{token.Text}' should have lemma '{lemma}' but was '{token.Lemma}'");
         }
 
+        /// <summary>Builds a deterministic signature string from the tokens of a parsed text.</summary>
         private static string Signature(ParsedText parsed)
         {
             return string.Join(

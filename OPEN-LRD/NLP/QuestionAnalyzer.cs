@@ -41,6 +41,7 @@ namespace OPEN_LRD.NLP
                 ["how"] = WhKind.How
             };
 
+        /// <summary>Analyzes a parsed question and builds bounded graph-query variants for reasoning.</summary>
         public static QuestionAnalysis Analyze(
             ParsedText parsed,
             EntityResolver resolver,
@@ -784,6 +785,7 @@ namespace OPEN_LRD.NLP
                 whEnd);
         }
 
+        /// <summary>Determines the structural question type from sentence form, wh-word, voice, and inversion.</summary>
         private static QuestionType DetermineQuestionType(
             SentenceType sentenceType,
             WhKind wh,
@@ -832,6 +834,7 @@ namespace OPEN_LRD.NLP
             return QuestionType.Unknown;
         }
 
+        /// <summary>Determines whether a quantity question counts the subject or object role.</summary>
         private static FrameRole DetermineQuantityAnswerRole(
             ParsedText parsed,
             Sentence sentence,
@@ -850,6 +853,7 @@ namespace OPEN_LRD.NLP
             return hasKnownSubjectAfterQuantity ? FrameRole.Object : FrameRole.Subject;
         }
 
+        /// <summary>Determines the expected semantic answer kind for a question type and wh-word.</summary>
         private static AnswerKind DetermineAnswerKind(QuestionType questionType, WhKind wh)
         {
             if (questionType == QuestionType.YesNo)
@@ -867,6 +871,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Determines the candidate graph node types expected for a question's answer.</summary>
         private static List<NodeTypes> DetermineExpectedTypes(
             QuestionType questionType,
             WhKind wh,
@@ -917,6 +922,7 @@ namespace OPEN_LRD.NLP
             return types;
         }
 
+        /// <summary>Infers expected answer node types from the quantified head noun in a how-many question.</summary>
         private static List<NodeTypes> DetermineQuantityTypes(
             IReadOnlyList<Token> tokens,
             int whIndex,
@@ -953,6 +959,7 @@ namespace OPEN_LRD.NLP
             return new List<NodeTypes> { NodeTypes.Entities, NodeTypes.Concepts, NodeTypes.Objects };
         }
 
+        /// <summary>Maps a question type to the semantic role occupied by its wh-phrase.</summary>
         private static FrameRole WhQuestionRole(QuestionType questionType)
         {
             return questionType switch
@@ -963,6 +970,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Maps a question type to the default semantic role of its answer.</summary>
         private static FrameRole AnswerRoleFor(QuestionType questionType)
         {
             return questionType switch
@@ -974,6 +982,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Selects the governing preposition for a wh-argument from fronted or stranded positions.</summary>
         private static string? GetWhPreposition(
             QuestionType questionType,
             string? leadingPreposition,
@@ -985,12 +994,14 @@ namespace OPEN_LRD.NLP
             return leadingPreposition;
         }
 
+        /// <summary>Builds a diagnostic label identifying a question variant's wh-kind, node type, and relation.</summary>
         private static string BuildVariantName(WhKind wh, NodeTypes type, string relationName)
         {
             string whName = wh == WhKind.None ? "yesno" : wh.ToString().ToLowerInvariant();
             return whName + "+" + type.Name.Replace(" ", string.Empty) + "+" + relationName;
         }
 
+        /// <summary>Maps a normalized interrogative token to its wh-word classification.</summary>
         private static WhKind MapWhKind(string normalized)
         {
             return whKinds.TryGetValue(normalized, out WhKind kind)
@@ -998,6 +1009,7 @@ namespace OPEN_LRD.NLP
                 : WhKind.None;
         }
 
+        /// <summary>Extends a wh-word token index to include following determiner, modifier, or head noun tokens.</summary>
         private static int ExtendWhSpan(
             IReadOnlyList<Token> tokens,
             int whIndex,
@@ -1043,6 +1055,7 @@ namespace OPEN_LRD.NLP
             return whIndex;
         }
 
+        /// <summary>Joins the surface text of tokens within a wh-phrase span.</summary>
         private static string? WhSurface(IReadOnlyList<Token> tokens, int start, int end)
         {
             if (start < 0 || start > end || start >= tokens.Count)
@@ -1052,6 +1065,7 @@ namespace OPEN_LRD.NLP
             return string.Join(" ", tokens.Skip(start).Take(safeEnd - start + 1).Select(token => token.Text));
         }
 
+        /// <summary>Returns the last non-punctuation token index in a sentence.</summary>
         private static int TrimTrailingPunctuation(IReadOnlyList<Token> tokens)
         {
             int end = tokens.Count - 1;
@@ -1062,6 +1076,7 @@ namespace OPEN_LRD.NLP
             return end;
         }
 
+        /// <summary>Returns distinct prepositional phrase chunks in token order for a sentence.</summary>
         private static List<Chunk> GetPrepositionalPhrases(Sentence sentence)
         {
             return sentence.Clauses
@@ -1073,6 +1088,7 @@ namespace OPEN_LRD.NLP
                 .ToList();
         }
 
+        /// <summary>Extracts prepositional qualifier phrases occurring after a predicate token.</summary>
         private static List<QualifierPhrase> FindQualifiersAfter(
             ParsedText parsed,
             Sentence sentence,
@@ -1116,6 +1132,7 @@ namespace OPEN_LRD.NLP
             return qualifiers;
         }
 
+        /// <summary>Finds a trailing preposition after the predicate when a question uses preposition stranding.</summary>
         private static string? FindStrandedPreposition(
             IReadOnlyList<Token> tokens,
             int afterToken,
@@ -1133,6 +1150,7 @@ namespace OPEN_LRD.NLP
             return null;
         }
 
+        /// <summary>Finds the subject argument following an inverted auxiliary or copula in a question.</summary>
         private static FrameArgument? FindInvertedSubject(
             ParsedText parsed,
             Sentence sentence,
@@ -1187,6 +1205,7 @@ namespace OPEN_LRD.NLP
                 FrameRole.Subject);
         }
 
+        /// <summary>Finds the nominal subject span immediately following a copula predicate in a question.</summary>
         private static FrameArgument? FindCopulaSubject(
             ParsedText parsed,
             Sentence sentence,
@@ -1254,6 +1273,7 @@ namespace OPEN_LRD.NLP
             return CreateCopulaArgument(sentence, parsed, tokens, start, spanEnd);
         }
 
+        /// <summary>Builds a subject frame argument for a copula nominal span preserving exact token boundaries.</summary>
         private static FrameArgument? CreateCopulaArgument(
             Sentence sentence,
             ParsedText parsed,
@@ -1283,6 +1303,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Finds the direct object argument occurring after the main verb outside prepositional phrases.</summary>
         private static FrameArgument? FindDirectObject(
             ParsedText parsed,
             Sentence sentence,
@@ -1309,6 +1330,7 @@ namespace OPEN_LRD.NLP
                     prepositionalPhrases);
         }
 
+        /// <summary>Finds the first subject argument preceding a predicate token.</summary>
         private static FrameArgument? FindFirstArgumentBefore(
             ParsedText parsed,
             Sentence sentence,
@@ -1340,6 +1362,7 @@ namespace OPEN_LRD.NLP
                 FrameRole.Subject);
         }
 
+        /// <summary>Finds the first object mention occurring after a specified token index.</summary>
         private static FrameArgument? FindFirstMentionAfter(
             ParsedText parsed,
             Sentence sentence,
@@ -1360,6 +1383,7 @@ namespace OPEN_LRD.NLP
                 preferShortest);
         }
 
+        /// <summary>Finds the first recognized mention within a token range and converts it to a frame argument.</summary>
         private static FrameArgument? FindFirstMentionInRange(
             ParsedText parsed,
             Sentence sentence,
@@ -1395,6 +1419,7 @@ namespace OPEN_LRD.NLP
                 null);
         }
 
+        /// <summary>Scans a token range for a pronoun or nominal span and converts it to a frame argument.</summary>
         private static FrameArgument? FindTokenArgumentSpan(
             ParsedText parsed,
             Sentence sentence,
@@ -1449,6 +1474,7 @@ namespace OPEN_LRD.NLP
             return null;
         }
 
+        /// <summary>Creates a frame argument from a sentence token span using relation-extractor rules.</summary>
         private static FrameArgument? CreateArgument(
             Sentence sentence,
             ParsedText parsed,
@@ -1466,6 +1492,7 @@ namespace OPEN_LRD.NLP
                 preposition);
         }
 
+        /// <summary>Checks whether a mention lies completely within a prepositional phrase chunk.</summary>
         private static bool IsInsidePrepositionalPhrase(
             Mention mention,
             IReadOnlyList<Chunk> prepositionalPhrases)
@@ -1476,6 +1503,7 @@ namespace OPEN_LRD.NLP
                 prepositionalPhrases);
         }
 
+        /// <summary>Checks whether a token span lies completely within a prepositional phrase chunk.</summary>
         private static bool IsInsidePrepositionalPhrase(
             int start,
             int end,
@@ -1485,6 +1513,7 @@ namespace OPEN_LRD.NLP
                 phrase.StartToken <= start && end <= phrase.EndToken);
         }
 
+        /// <summary>Finds the main lexical verb token in a question, accounting for do-support inversion.</summary>
         private static Token? FindMainVerbToken(
             IReadOnlyList<Token> tokens,
             ParsedText parsed,
@@ -1555,6 +1584,7 @@ namespace OPEN_LRD.NLP
             return null;
         }
 
+        /// <summary>Checks whether a normalized token is a third-person singular form of a known verb.</summary>
         private static bool IsThirdPersonForm(string normalized)
         {
             if (!normalized.EndsWith("s", StringComparison.Ordinal)
@@ -1575,6 +1605,7 @@ namespace OPEN_LRD.NLP
                 && Lexicon.IsKnownVerb(stem[..^1]);
         }
 
+        /// <summary>Finds an auxiliary have or be token that serves as the main predicate when no lexical verb is present.</summary>
         private static Token? FindAuxiliaryPredicate(
             IReadOnlyList<Token> tokens,
             int auxIndex,
@@ -1600,6 +1631,7 @@ namespace OPEN_LRD.NLP
             return have ?? be;
         }
 
+        /// <summary>Builds ordered relation candidates for a question from its predicate, voice, and prepositions.</summary>
         private static List<RelationCandidate> BuildRelationCandidates(
             string predicateLemma,
             bool copula,
@@ -1681,6 +1713,7 @@ namespace OPEN_LRD.NLP
             return candidates;
         }
 
+        /// <summary>Adds a relation candidate if its name is non-empty and not already present.</summary>
         private static void AddRelation(
             List<RelationCandidate> candidates,
             string name,
@@ -1698,6 +1731,7 @@ namespace OPEN_LRD.NLP
             candidates.Add(new RelationCandidate(name, linkClass));
         }
 
+        /// <summary>Checks whether a copula complement argument consists of an adjective without a nominal head.</summary>
         private static bool IsAdjectiveComplement(
             IReadOnlyList<Token> tokens,
             FrameArgument? argument)
@@ -1721,6 +1755,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Maps a preposition to its spatial, temporal, or basic link class for qualifier queries.</summary>
         private static LinkClass ClassifyPrepositionLinkClass(
             string preposition,
             QuestionType questionType)
@@ -1739,6 +1774,7 @@ namespace OPEN_LRD.NLP
             return LinkClass.basic;
         }
 
+        /// <summary>Creates a temporary chain node initialized with the resolved anchor label and aliases.</summary>
         private static Chain_Node CreateNode(
             Guid nodeID,
             EntityResolution resolution,
@@ -1756,6 +1792,7 @@ namespace OPEN_LRD.NLP
             return node;
         }
 
+        /// <summary>Returns a token's lemma when non-empty or falls back to its normalized form.</summary>
         private static string LemmaOrNormalized(Token token)
         {
             return string.IsNullOrWhiteSpace(token.Lemma)
@@ -1763,6 +1800,7 @@ namespace OPEN_LRD.NLP
                 : token.Lemma;
         }
 
+        /// <summary>Creates an unsupported question analysis record carrying the supplied diagnostics.</summary>
         private static QuestionAnalysis CreateUnsupportedQuestion(
             IReadOnlyList<string> diagnostics,
             int sentenceIndex = -1,
@@ -1803,15 +1841,18 @@ namespace OPEN_LRD.NLP
                 whEnd);
         }
 
+        /// <summary>Stores a preposition and the token span of its governed noun phrase.</summary>
         private sealed record QualifierPhrase(
             string Preposition,
             int StartToken,
             int EndToken);
 
+        /// <summary>Stores a candidate relation name and its associated link classification.</summary>
         private sealed record RelationCandidate(
             string Name,
             LinkClass LinkClass);
 
+        /// <summary>Stores the primary relation name and link classification selected for a question.</summary>
         private sealed record RelayLink(
             string Name,
             LinkClass LinkClass);

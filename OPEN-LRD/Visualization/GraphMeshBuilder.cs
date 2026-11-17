@@ -52,6 +52,7 @@ namespace OPEN_LRD.Visualization
                 new Vector3(0.5f, 0.5f, -0.5f))
         };
 
+        /// <summary>Creates a single axis-aligned cube mesh centered at the specified position.</summary>
         public static MeshData CreateCube(Vector3 center, double size)
         {
             ValidatePositiveFinite(size, nameof(size));
@@ -72,12 +73,14 @@ namespace OPEN_LRD.Visualization
             return new MeshData(positions, normals, indices);
         }
 
+        /// <summary>Creates an enlarged highlight cube mesh around the specified node center.</summary>
         public static MeshData BuildHighlightCube(Vector3 center, double cubeSize)
         {
             ValidatePositiveFinite(cubeSize, nameof(cubeSize));
             return CreateCube(center, cubeSize * 1.15);
         }
 
+        /// <summary>Builds a combined cube mesh for all nodes in the snapshot.</summary>
         public static MeshData BuildNodeCubes(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
@@ -86,6 +89,7 @@ namespace OPEN_LRD.Visualization
             return BuildNodeCubesCore(snapshot, positions, cubeSize, nodeTypeId: null);
         }
 
+        /// <summary>Builds a combined cube mesh for snapshot nodes matching the specified node type ID.</summary>
         public static MeshData BuildNodeCubesForType(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
@@ -95,6 +99,7 @@ namespace OPEN_LRD.Visualization
             return BuildNodeCubesCore(snapshot, positions, cubeSize, nodeTypeId);
         }
 
+        /// <summary>Builds a dictionary of combined node cube meshes grouped by node type ID.</summary>
         public static Dictionary<int, MeshData> BuildNodeCubesByType(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
@@ -126,6 +131,7 @@ namespace OPEN_LRD.Visualization
             return meshes;
         }
 
+        /// <summary>Builds a combined ribbon mesh for all links in the snapshot.</summary>
         public static MeshData BuildLinkLines(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
@@ -137,6 +143,7 @@ namespace OPEN_LRD.Visualization
             return BuildLinkLinesCore(snapshot.Links, positions, lineWidth, cubeSize, pairCounts);
         }
 
+        /// <summary>Builds a combined ribbon mesh for snapshot links matching the specified forward type ID.</summary>
         public static MeshData BuildLinkLinesForType(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
@@ -155,6 +162,7 @@ namespace OPEN_LRD.Visualization
             return BuildLinkLinesCore(matching, positions, lineWidth, cubeSize, BuildPairCounts(snapshot));
         }
 
+        /// <summary>Builds a dictionary of combined link ribbon meshes grouped by forward type ID.</summary>
         public static Dictionary<int, MeshData> BuildLinkLinesByType(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
@@ -182,6 +190,7 @@ namespace OPEN_LRD.Visualization
             return meshes;
         }
 
+        /// <summary>Builds a combined node cube mesh optionally filtered by node type ID.</summary>
         private static MeshData BuildNodeCubesCore(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
@@ -233,6 +242,7 @@ namespace OPEN_LRD.Visualization
             return new MeshData(cubePositions, cubeNormals, cubeIndices);
         }
 
+        /// <summary>Builds a combined node cube mesh for a pre-grouped list of node indices.</summary>
         private static MeshData BuildNodeCubesForIndices(
             IReadOnlyList<int> nodeIndices,
             IReadOnlyList<Vector3> positions,
@@ -264,6 +274,7 @@ namespace OPEN_LRD.Visualization
             return new MeshData(cubePositions, cubeNormals, cubeIndices);
         }
 
+        /// <summary>Builds crossed-ribbon link geometry with parallel-edge offsets for the specified links.</summary>
         private static MeshData BuildLinkLinesCore(
             IReadOnlyList<LinkRecord> links,
             IReadOnlyList<Vector3> positions,
@@ -344,6 +355,7 @@ namespace OPEN_LRD.Visualization
             return new MeshData(linkPositions, linkNormals, linkIndices);
         }
 
+        /// <summary>Validates arguments shared by the link-mesh builder methods.</summary>
         private static void ValidateLinkArguments(
             GraphSnapshot snapshot,
             IReadOnlyList<Vector3> positions,
@@ -359,6 +371,7 @@ namespace OPEN_LRD.Visualization
                 throw new ArgumentException("Every snapshot node must have a position.", nameof(positions));
         }
 
+        /// <summary>Counts how many links connect each unordered node index pair.</summary>
         private static Dictionary<LinkPair, int> BuildPairCounts(GraphSnapshot snapshot)
         {
             Dictionary<LinkPair, int> counts = new Dictionary<LinkPair, int>();
@@ -372,6 +385,7 @@ namespace OPEN_LRD.Visualization
             return counts;
         }
 
+        /// <summary>Writes the 24 vertices and 36 triangle indices for one cube into the target arrays.</summary>
         private static void WriteCube(
             float[] positions,
             float[] normals,
@@ -401,6 +415,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Writes a single cube vertex position and normal into the target arrays.</summary>
         private static void WriteCubeVertex(
             float[] positions,
             float[] normals,
@@ -419,6 +434,7 @@ namespace OPEN_LRD.Visualization
             normals[positionIndex + 2] = normal.Z;
         }
 
+        /// <summary>Writes a single link-ribbon vertex position and normal into the target arrays.</summary>
         private static void WriteLinkVertex(
             float[] positions,
             float[] normals,
@@ -435,6 +451,7 @@ namespace OPEN_LRD.Visualization
             normals[positionIndex + 2] = normal.Z;
         }
 
+        /// <summary>Throws when a floating-point dimension is not finite and greater than zero.</summary>
         private static void ValidatePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0d)

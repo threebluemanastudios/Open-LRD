@@ -245,6 +245,7 @@
             return aliases.Exists(existing => string.Equals(existing, value, comparison));
         }
 
+        /// <summary>Trims a label or alias value and returns null when it is blank.</summary>
         private static string? NormalizeLabel(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -345,6 +346,7 @@
             lifetime = NodeLifetime.Permanent;
         }
 
+        /// <summary>Merges compatible labels, aliases, trust, weights, lifetime, and data pointers from another node.</summary>
         internal bool MergeMetadataFrom(Node other)
         {
             ArgumentNullException.ThrowIfNull(other);

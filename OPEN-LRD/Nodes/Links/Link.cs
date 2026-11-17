@@ -23,6 +23,7 @@ namespace OPEN_LRD.Nodes.Links
         /// <summary>Gets the sentinel empty link value.</summary>
         public static Link Empty { get; } = new Link();
 
+        /// <summary>Creates the sentinel empty link instance.</summary>
         private Link()
         {
             Classification = LinkClass.empty;
@@ -97,6 +98,7 @@ namespace OPEN_LRD.Nodes.Links
         {
         }
 
+        /// <summary>Validates endpoints and initializes a link with the supplied types, classification, and origin.</summary>
         private Link(Guid sourceID, Guid destinationID, LinkClass classification, ForwardLinkTypes forwardLink,
             InverseLinkTypes inverseLink, LinkOrigin origin)
         {
@@ -114,6 +116,7 @@ namespace OPEN_LRD.Nodes.Links
             Origins = origin;
         }
 
+        /// <summary>Resolves a registered forward link type by identifier or throws when it is unknown.</summary>
         private static ForwardLinkTypes FromForwardId(int id)
         {
             if (!ForwardLinkTypes.TryFromId(id, out ForwardLinkTypes value))
@@ -122,6 +125,7 @@ namespace OPEN_LRD.Nodes.Links
             return value;
         }
 
+        /// <summary>Resolves a registered inverse link type by identifier or throws when it is unknown.</summary>
         private static InverseLinkTypes FromInverseId(int id)
         {
             if (!InverseLinkTypes.TryFromId(id, out InverseLinkTypes value))
@@ -148,11 +152,13 @@ namespace OPEN_LRD.Nodes.Links
             IsActive = true;
         }
 
+        /// <summary>Adds one or more origin flags to this link.</summary>
         internal void AddOrigin(LinkOrigin origin)
         {
             Origins |= origin;
         }
 
+        /// <summary>Removes one or more origin flags from this link and returns the remaining origins.</summary>
         internal LinkOrigin RemoveOrigin(LinkOrigin origin)
         {
             Origins &= ~origin;

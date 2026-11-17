@@ -63,6 +63,7 @@ namespace OPEN_LRD.Visualizer
         internal int LastProjectedLabelCount { get; private set; }
         internal int LastDrawnLabelCount { get; private set; }
 
+        /// <summary>Creates a non-interactive label overlay element.</summary>
         public GraphLabelOverlay()
         {
             IsHitTestVisible = false;
@@ -139,6 +140,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Assigns the graph snapshot, node positions, and label truncation limit.</summary>
         public void SetGraph(
             GraphSnapshot? newSnapshot,
             IReadOnlyList<Vector3>? newPositions,
@@ -151,18 +153,21 @@ namespace OPEN_LRD.Visualizer
             InvalidateVisual();
         }
 
+        /// <summary>Assigns the spatial node index used for bounded frustum candidate queries.</summary>
         public void SetSpatialIndex(SpatialNodeIndex? index)
         {
             spatialIndex = index;
             InvalidateVisual();
         }
 
+        /// <summary>Updates the active camera projection view and schedules a label redraw.</summary>
         public void UpdateCamera(CameraView camera)
         {
             currentCamera = camera;
             InvalidateVisual();
         }
 
+        /// <summary>Clears all cached graph, spatial, and selection state from the overlay.</summary>
         public void Clear()
         {
             snapshot = null;
@@ -174,12 +179,14 @@ namespace OPEN_LRD.Visualizer
             InvalidateVisual();
         }
 
+        /// <summary>Invokes the overlay render pass against a test drawing context.</summary>
         internal void RenderForTesting(DrawingContext drawingContext)
         {
             ArgumentNullException.ThrowIfNull(drawingContext);
             OnRender(drawingContext);
         }
 
+        /// <summary>Projects, declutters, and draws visible and priority node labels.</summary>
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);
@@ -371,6 +378,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Projects a selected or hovered node into screen space and adds it to the candidate list.</summary>
         private ProjectedLabel? AddPriorityLabel(
             int? index,
             double width,
@@ -404,6 +412,7 @@ namespace OPEN_LRD.Visualizer
             return projected;
         }
 
+        /// <summary>Reserves badge and box screen rectangles for a priority label before background decluttering.</summary>
         private void AddPriorityForDecluttering(ProjectedLabel? label, bool isSelected)
         {
             if (!label.HasValue)
@@ -415,6 +424,7 @@ namespace OPEN_LRD.Visualizer
             foregroundBoxRects.Add(projected.BoxScreenRect);
         }
 
+        /// <summary>Draws the hovered and selected priority labels when no background candidates are present.</summary>
         private void DrawPriorityLabels(
             DrawingContext dc,
             ProjectedLabel? hoveredLabel,
@@ -426,6 +436,7 @@ namespace OPEN_LRD.Visualizer
                 DrawLabel(dc, selectedLabel.Value.Index, selectedLabel.Value.ScreenPosition, isSelected: true, isHovered: false);
         }
 
+        /// <summary>Estimates the screen rectangle occupied by a node label badge.</summary>
         private Rect GetBadgeRect(int nodeIndex, Vector2 screenPos, bool isSelected)
         {
             if (nodeIndex >= cachedLabels.Count)
@@ -445,6 +456,7 @@ namespace OPEN_LRD.Visualizer
             return new Rect(left, top, badgeWidth, badgeHeight);
         }
 
+        /// <summary>Draws a single rounded label badge above the projected node position.</summary>
         private void DrawLabel(
             DrawingContext dc,
             int nodeIndex,
@@ -475,6 +487,7 @@ namespace OPEN_LRD.Visualizer
             LastDrawnLabelCount++;
         }
 
+        /// <summary>Rebuilds the truncated display-label cache from the current graph snapshot.</summary>
         private void RebuildLabelCache()
         {
             cachedLabels.Clear();
@@ -492,6 +505,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Creates a frozen solid-color brush from a WPF color.</summary>
         private static SolidColorBrush CreateFrozenBrush(Color color)
         {
             SolidColorBrush brush = new SolidColorBrush(color);
@@ -499,6 +513,7 @@ namespace OPEN_LRD.Visualizer
             return brush;
         }
 
+        /// <summary>Creates a frozen border pen with the specified color and stroke thickness.</summary>
         private static Pen CreateFrozenPen(Color color, double thickness)
         {
             Pen pen = new Pen(new SolidColorBrush(color), thickness);
@@ -509,12 +524,14 @@ namespace OPEN_LRD.Visualizer
         /// <summary>Caches formatted text and WPF drawing data for one node label.</summary>
         private sealed class CachedLabel
         {
+            /// <summary>Creates a cached label entry for the specified display text.</summary>
             public CachedLabel(string text) => Text = text;
 
             public string Text { get; }
             private FormattedText? normalText;
             private FormattedText? selectedText;
 
+            /// <summary>Returns the cached normal or selected formatted text for the current DPI scale.</summary>
             public FormattedText GetFormattedText(bool isSelected, double pixelsPerDip)
             {
                 if (isSelected)

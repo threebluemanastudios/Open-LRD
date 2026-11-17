@@ -25,6 +25,7 @@ namespace OPEN_LRD.Persistence
             int InverseTypeID,
             int LinkClassID);
 
+        /// <summary>Validates and imports a core graph and conversation log using merge or replace semantics.</summary>
         public static PersistenceImportResult ImportCore(
             LRD_Core core,
             string path,
@@ -105,6 +106,7 @@ namespace OPEN_LRD.Persistence
             return CommitCorePlan(core, mode, result, nodePlan, acceptedLinks, conversations);
         }
 
+        /// <summary>Commits validated nodes, links, and conversations into the core graph.</summary>
         private static PersistenceImportResult CommitCorePlan(
             LRD_Core core,
             ImportMode mode,
@@ -175,6 +177,7 @@ namespace OPEN_LRD.Persistence
             return result;
         }
 
+        /// <summary>Commits validated query and response chains into the core transient state.</summary>
         private static PersistenceImportResult CommitTransientPlan(
             LRD_Core core,
             ImportMode mode,
@@ -231,6 +234,7 @@ namespace OPEN_LRD.Persistence
             return result;
         }
 
+        /// <summary>Validates and imports a segmented core manifest and its part files.</summary>
         private static PersistenceImportResult ImportCoreManifest(
             LRD_Core core,
             string path,
@@ -337,6 +341,7 @@ namespace OPEN_LRD.Persistence
                 linkContext.Accepted, conversationContext.Accepted);
         }
 
+        /// <summary>Validates core manifest metadata, limits, part ordering, and part file integrity.</summary>
         private static bool ValidateCoreManifest(
             string manifestPath,
             CoreLogManifest manifest,
@@ -394,6 +399,7 @@ namespace OPEN_LRD.Persistence
             return result.Errors.Count == 0;
         }
 
+        /// <summary>Verifies that a manifest part file exists, matches its declared size, and passes SHA-256 verification.</summary>
         private static bool TryValidatePartFile(
             string manifestPath,
             LogPartDefinition part,
@@ -431,6 +437,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Resolves a relative part path and rejects paths that escape the manifest directory.</summary>
         private static string ResolvePartPath(string manifestPath, string relativePath)
         {
             if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
@@ -447,6 +454,7 @@ namespace OPEN_LRD.Persistence
             return fullPath;
         }
 
+        /// <summary>Streams and validates a core part file, passing each non-header record to the consumer.</summary>
         private static bool ReadCorePart(
             string path,
             Guid exportId,
@@ -485,6 +493,7 @@ namespace OPEN_LRD.Persistence
             return result.Errors.Count == 0;
         }
 
+        /// <summary>Streams a JSON array file element by element and invokes a callback for each record.</summary>
         private static bool ReadJsonArray<T>(string path, Action<T> consume, PersistenceImportResult result)
             where T : class
         {
@@ -523,12 +532,14 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Computes the lowercase SHA-256 hex digest of a file.</summary>
         private static string ComputeSha256(string path)
         {
             using FileStream stream = File.OpenRead(path);
             return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
         }
 
+        /// <summary>Validates and imports a segmented transient manifest and its part files.</summary>
         private static PersistenceImportResult ImportTransientManifest(
             LRD_Core core,
             string path,
@@ -594,6 +605,7 @@ namespace OPEN_LRD.Persistence
             return CommitTransientPlan(core, mode, result, queryChains, responseChains);
         }
 
+        /// <summary>Validates transient manifest metadata, limits, part ordering, and part file integrity.</summary>
         private static bool ValidateTransientManifest(
             string manifestPath,
             TransientLogManifest manifest,
@@ -651,6 +663,7 @@ namespace OPEN_LRD.Persistence
             return result.Errors.Count == 0;
         }
 
+        /// <summary>Checks whether a path string is a simple file name without directory segments.</summary>
         private static bool IsSimpleFileName(string value)
         {
             return !string.IsNullOrWhiteSpace(value)
@@ -660,6 +673,7 @@ namespace OPEN_LRD.Persistence
                 && !value.Contains(Path.DirectorySeparatorChar);
         }
 
+        /// <summary>Streams and validates a transient part file and appends records to chain builders.</summary>
         private static bool ReadTransientPart(
             string path,
             Guid exportId,
@@ -713,6 +727,7 @@ namespace OPEN_LRD.Persistence
             return result.Errors.Count == 0;
         }
 
+        /// <summary>Finalizes and validates reconstructed transient chains against manifest counts.</summary>
         private static bool CompleteTransientChains(
             IReadOnlyDictionary<int, TransientChainBuilder> builders,
             int expectedChainCount,
@@ -742,6 +757,7 @@ namespace OPEN_LRD.Persistence
             return true;
         }
 
+        /// <summary>Validates and imports a transient query/response log using merge or replace semantics.</summary>
         public static PersistenceImportResult ImportTransient(
             LRD_Core core,
             string path,
@@ -848,6 +864,7 @@ namespace OPEN_LRD.Persistence
             return result;
         }
 
+        /// <summary>Reads and validates the leading JSON format header from a log file.</summary>
         private static string? ReadFormatHeader(string path, PersistenceImportResult result)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -928,6 +945,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Deserializes a log or manifest document and verifies its format and schema version.</summary>
         private static T? ReadDocument<T>(
             string path,
             string expectedFormat,
@@ -1017,6 +1035,7 @@ namespace OPEN_LRD.Persistence
             return document;
         }
 
+        /// <summary>Replaces null collections and strings in a core log document with non-null defaults.</summary>
         private static void Normalize(CoreLogDocument document)
         {
             document.TypeDefinitions ??= new TypeDefinitionLog();
@@ -1063,6 +1082,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Replaces null collections and strings in a core manifest with non-null defaults.</summary>
         private static void Normalize(CoreLogManifest manifest)
         {
             manifest.TypeDefinitions ??= new TypeDefinitionLog();
@@ -1076,6 +1096,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Replaces null collections and strings in a transient manifest with non-null defaults.</summary>
         private static void Normalize(TransientLogManifest manifest)
         {
             manifest.TypeDefinitions ??= new TypeDefinitionLog();
@@ -1089,12 +1110,14 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Replaces null strings and collections in a persisted node record with non-null defaults.</summary>
         private static void Normalize(NodeLog node)
         {
             node.NodeTypeName ??= string.Empty;
             node.Aliases ??= new List<string>();
         }
 
+        /// <summary>Replaces null type and class names in a persisted link record with empty strings.</summary>
         private static void Normalize(LinkLog link)
         {
             link.ForwardTypeName ??= string.Empty;
@@ -1102,6 +1125,7 @@ namespace OPEN_LRD.Persistence
             link.LinkClassName ??= string.Empty;
         }
 
+        /// <summary>Replaces null collections and strings in a persisted conversation record with non-null defaults.</summary>
         private static void Normalize(ConversationLog conversation)
         {
             conversation.Options ??= new NlpOptionsLog();
@@ -1124,6 +1148,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Replaces null collections and strings in a transient log document with non-null defaults.</summary>
         private static void Normalize(TransientLogDocument document)
         {
             document.TypeDefinitions ??= new TypeDefinitionLog();
@@ -1151,6 +1176,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Replaces null collections and strings in persisted type definitions with non-null defaults.</summary>
         private static void Normalize(TypeDefinitionLog definitions)
         {
             definitions.NodeTypes ??= new List<TypeNameLog>();
@@ -1174,6 +1200,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Validates persisted node-type, link-class, link-type, and relation definitions.</summary>
         private static bool ValidateTypeDefinitions(
             TypeDefinitionLog definitions,
             PersistenceImportResult result)
@@ -1210,6 +1237,7 @@ namespace OPEN_LRD.Persistence
             return result.Errors.Count == 0;
         }
 
+        /// <summary>Validates that a list of persisted type entries has non-empty names and unique valid IDs.</summary>
         private static void ValidateTypeList(
             IReadOnlyList<TypeNameLog> types,
             string label,
@@ -1231,6 +1259,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Restores imported node, link-class, link-type, and relation definitions into runtime registries.</summary>
         private static void ApplyTypeDefinitions(
             TypeDefinitionLog definitions,
             PersistenceImportResult result)
@@ -1290,6 +1319,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Registers imported type names that do not conflict with existing IDs or names.</summary>
         private static void ApplyTypeNames<T>(
             IReadOnlyList<TypeNameLog> imported,
             IList<T> existing,
@@ -1333,6 +1363,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Validates and stages all imported node records for merge or replacement.</summary>
         private static NodePlan PlanNodes(
             LRD_Core core,
             List<NodeLog> nodes,
@@ -1351,6 +1382,7 @@ namespace OPEN_LRD.Persistence
             return context.Plan;
         }
 
+        /// <summary>Creates a node planning context seeded with existing linkable node IDs in merge mode.</summary>
         private static NodePlanningContext CreateNodePlanningContext(LRD_Core core, ImportMode mode)
         {
             NodePlanningContext context = new NodePlanningContext(core.GetDictionary());
@@ -1362,6 +1394,7 @@ namespace OPEN_LRD.Persistence
             return context;
         }
 
+        /// <summary>Validates one persisted node record and adds it to the staged import plan.</summary>
         private static void PlanNodeRecord(
             NodeLog log,
             NodePlanningContext context,
@@ -1421,6 +1454,7 @@ namespace OPEN_LRD.Persistence
             plan.LinkableNodeIds.Add(log.Id);
         }
 
+        /// <summary>Attempts to construct a validated graph node from a persisted node record.</summary>
         private static bool TryCreateNode(
             NodeLog log,
             NodeTypes nodeType,
@@ -1510,6 +1544,7 @@ namespace OPEN_LRD.Persistence
             return true;
         }
 
+        /// <summary>Attempts to construct a validated data pointer from a persisted pointer record.</summary>
         private static bool TryCreateDataPointer(
             DataPointerLog log,
             out DataPointer? pointer,
@@ -1534,6 +1569,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Checks whether an existing graph node has the same persisted fields as an imported node.</summary>
         private static bool NodeMatches(Web_Node existing, Web_Node imported)
         {
             DataPointer? existingPointer = existing.Get_DataPointer();
@@ -1554,6 +1590,7 @@ namespace OPEN_LRD.Persistence
                 && Equals(existingPointer, importedPointer);
         }
 
+        /// <summary>Validates and stages all imported link records against the planned node set.</summary>
         private static List<Link> PlanLinks(
             LRD_Core core,
             List<LinkLog> links,
@@ -1573,6 +1610,7 @@ namespace OPEN_LRD.Persistence
             return context.Accepted;
         }
 
+        /// <summary>Validates one persisted link record and adds it to the accepted link list when valid.</summary>
         private static void PlanLinkRecord(LinkLog log, LinkPlanningContext context, PersistenceImportResult result)
         {
             NodePlan nodePlan = context.NodePlan;
@@ -1640,6 +1678,7 @@ namespace OPEN_LRD.Persistence
             context.Accepted.Add(link!);
         }
 
+        /// <summary>Attempts to construct a directed link from a persisted link record.</summary>
         private static bool TryCreateLink(
             LinkLog log,
             out Link? link,
@@ -1678,6 +1717,7 @@ namespace OPEN_LRD.Persistence
             return true;
         }
 
+        /// <summary>Validates and stages all imported conversation records.</summary>
         private static Dictionary<Guid, ConversationContext> PlanConversations(
             LRD_Core core,
             List<ConversationLog> conversations,
@@ -1697,6 +1737,7 @@ namespace OPEN_LRD.Persistence
             return context.Accepted;
         }
 
+        /// <summary>Validates one persisted conversation record and adds it to the accepted conversation set.</summary>
         private static void PlanConversationRecord(
             ConversationLog log,
             ConversationPlanningContext context,
@@ -1733,6 +1774,7 @@ namespace OPEN_LRD.Persistence
             context.Accepted[log.Id] = conversation;
         }
 
+        /// <summary>Adds a warning when a restored conversation references node IDs absent from the graph.</summary>
         private static void WarnMissingConversationNodes(
             ConversationContext conversation,
             IReadOnlySet<Guid> knownNodeIds,
@@ -1779,12 +1821,14 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Adds a non-null node ID to a referenced-node set.</summary>
         private static void AddIfPresent(HashSet<Guid> nodeIds, Guid? nodeID)
         {
             if (nodeID.HasValue)
                 nodeIds.Add(nodeID.Value);
         }
 
+        /// <summary>Reconstructs and validates a conversation context from a persisted conversation record.</summary>
         private static ConversationContext? BuildConversation(
             ConversationLog log,
             PersistenceImportResult result)
@@ -1917,6 +1961,7 @@ namespace OPEN_LRD.Persistence
             return conversation;
         }
 
+        /// <summary>Checks whether persisted NLP options have valid numeric bounds and finite margins.</summary>
         private static bool ValidateNlpOptions(NlpOptionsLog options)
         {
             return options.MaxCharacters > 0
@@ -1937,6 +1982,7 @@ namespace OPEN_LRD.Persistence
                 && double.IsFinite(options.PronounAmbiguityMargin);
         }
 
+        /// <summary>Builds and validates linked-list transient chains from persisted chain records.</summary>
         private static List<(ChainLog Log, LinkedList<Chain_Node> Chain)> BuildChains(
             IReadOnlyList<ChainLog> logs,
             PersistenceImportResult result)
@@ -1955,6 +2001,7 @@ namespace OPEN_LRD.Persistence
             return chains;
         }
 
+        /// <summary>Reconstructs and validates a single transient chain from its persisted nodes and links.</summary>
         private static LinkedList<Chain_Node>? BuildChain(
             ChainLog log,
             PersistenceImportResult result)
@@ -2044,6 +2091,7 @@ namespace OPEN_LRD.Persistence
             return chain;
         }
 
+        /// <summary>Attempts to construct a validated chain node from a persisted node record.</summary>
         private static bool TryCreateChainNode(
             NodeLog log,
             NodeTypes nodeType,
@@ -2079,6 +2127,7 @@ namespace OPEN_LRD.Persistence
             return true;
         }
 
+        /// <summary>Concatenates multiple transient chains into a single linked list in order.</summary>
         private static LinkedList<Chain_Node> CombineChains(
             IReadOnlyList<(ChainLog Log, LinkedList<Chain_Node> Chain)> chains)
         {
@@ -2093,6 +2142,7 @@ namespace OPEN_LRD.Persistence
             return combined;
         }
 
+        /// <summary>Yields a non-empty transient chain as a single-item sequence.</summary>
         private static IEnumerable<LinkedList<Chain_Node>> EnumerateChains(
             LinkedList<Chain_Node>? chain)
         {
@@ -2100,6 +2150,7 @@ namespace OPEN_LRD.Persistence
                 yield return chain;
         }
 
+        /// <summary>Checks whether a candidate chain already exists in current or newly added transient chains.</summary>
         private static bool IsDuplicateChain(
             LinkedList<Chain_Node> chain,
             IReadOnlyList<LinkedList<Chain_Node>> existingChains,
@@ -2109,6 +2160,7 @@ namespace OPEN_LRD.Persistence
                 || addedChains.Any(added => ContainsChain(added, chain));
         }
 
+        /// <summary>Checks whether an existing chain contains a candidate chain as a contiguous subchain.</summary>
         private static bool ContainsChain(
             LinkedList<Chain_Node> existing,
             LinkedList<Chain_Node> candidate)
@@ -2143,6 +2195,7 @@ namespace OPEN_LRD.Persistence
             return false;
         }
 
+        /// <summary>Checks whether two optional chain links have identical endpoint and type identities.</summary>
         private static bool LinksMatch(Link? existing, Link? candidate)
         {
             if (existing is null || candidate is null)
@@ -2151,6 +2204,7 @@ namespace OPEN_LRD.Persistence
             return BuildLinkKey(existing) == BuildLinkKey(candidate);
         }
 
+        /// <summary>Creates a stable link identity key from a persisted link record.</summary>
         private static LinkIdentity BuildLinkKey(LinkLog link)
         {
             return new LinkIdentity(
@@ -2161,6 +2215,7 @@ namespace OPEN_LRD.Persistence
                 link.LinkClassId);
         }
 
+        /// <summary>Creates a stable link identity key from a runtime link.</summary>
         private static LinkIdentity BuildLinkKey(Link link)
         {
             return new LinkIdentity(
@@ -2171,6 +2226,7 @@ namespace OPEN_LRD.Persistence
                 link.Classification.Id);
         }
 
+        /// <summary>Resolves a registered node type by matching ID and name or falling back to name.</summary>
         private static NodeTypes? ResolveNodeType(int id, string name)
         {
             NodeTypes[] all = NodeTypes.GetAll().ToArray();
@@ -2185,6 +2241,7 @@ namespace OPEN_LRD.Persistence
                 type => string.Equals(type.Name, name, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>Resolves a registered link class by matching ID and name or falling back to name.</summary>
         private static LinkClass? ResolveLinkClass(int id, string name)
         {
             LinkClass[] all = LinkClass.GetAll().ToArray();
@@ -2199,6 +2256,7 @@ namespace OPEN_LRD.Persistence
                 linkClass => string.Equals(linkClass.Name, name, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>Resolves a registered forward link type by matching ID and name or falling back to name.</summary>
         private static ForwardLinkTypes? ResolveForwardType(int id, string name)
         {
             ForwardLinkTypes[] all = ForwardLinkTypes.GetAll().ToArray();
@@ -2213,6 +2271,7 @@ namespace OPEN_LRD.Persistence
                 linkType => string.Equals(linkType.Name, name, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>Resolves a registered inverse link type by matching ID and name or falling back to name.</summary>
         private static InverseLinkTypes? ResolveInverseType(int id, string name)
         {
             InverseLinkTypes[] all = InverseLinkTypes.GetAll().ToArray();
@@ -2240,6 +2299,7 @@ namespace OPEN_LRD.Persistence
         /// <summary>Tracks source and destination node validation while planning a core import.</summary>
         private sealed class NodePlanningContext
         {
+            /// <summary>Creates a node planning context for the supplied existing graph snapshot.</summary>
             public NodePlanningContext(IReadOnlyDictionary<Guid, Web_Node>? existingGraph)
             {
                 ExistingGraph = existingGraph;
@@ -2253,6 +2313,7 @@ namespace OPEN_LRD.Persistence
         /// <summary>Tracks duplicate and endpoint validation while planning imported links.</summary>
         private sealed class LinkPlanningContext
         {
+            /// <summary>Creates a link planning context for the supplied core graph, node plan, and import mode.</summary>
             public LinkPlanningContext(LRD_Core core, NodePlan nodePlan, ImportMode mode)
             {
                 NodePlan = nodePlan;
@@ -2270,6 +2331,7 @@ namespace OPEN_LRD.Persistence
         /// <summary>Tracks duplicate and accepted conversation IDs while planning an import.</summary>
         private sealed class ConversationPlanningContext
         {
+            /// <summary>Creates a conversation planning context for the supplied core state and import mode.</summary>
             public ConversationPlanningContext(LRD_Core core, ImportMode mode)
             {
                 Mode = mode;
@@ -2291,6 +2353,7 @@ namespace OPEN_LRD.Persistence
             private Chain_Node? previousNode;
             private Link? previousNextLink;
 
+            /// <summary>Creates a builder for the transient chain at the specified manifest index.</summary>
             public TransientChainBuilder(int chainIndex)
             {
                 ChainIndex = chainIndex;
@@ -2299,6 +2362,7 @@ namespace OPEN_LRD.Persistence
             public int ChainIndex { get; }
             public LinkedList<Chain_Node> Chain { get; } = new LinkedList<Chain_Node>();
 
+            /// <summary>Appends and validates one positioned chain-node record from a transient part.</summary>
             public void Add(TransientLogPartRecord record, PersistenceImportResult result)
             {
                 NodeLog? nodeLog = record.Node;
@@ -2374,6 +2438,7 @@ namespace OPEN_LRD.Persistence
                 previousNextLink = nextLink;
             }
 
+            /// <summary>Verifies that the reconstructed transient chain is non-empty and has no dangling link.</summary>
             public bool Complete(PersistenceImportResult result, string kind)
             {
                 if (Chain.Count == 0)

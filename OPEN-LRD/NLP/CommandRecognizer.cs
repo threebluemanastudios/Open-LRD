@@ -43,6 +43,7 @@ namespace OPEN_LRD.NLP
             new[] { "with", "to", "about" },
             StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Attempts to recognize a natural-language command and its target from parsed text.</summary>
         public static bool TryRecognize(ParsedText? parsed, out NlpCommand command)
         {
             command = null!;
@@ -200,6 +201,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Advances a token index past any punctuation tokens.</summary>
         private static int SkipPunctuation(IReadOnlyList<Token> tokens, int index)
         {
             while (index < tokens.Count
@@ -211,6 +213,7 @@ namespace OPEN_LRD.NLP
             return index;
         }
 
+        /// <summary>Extracts the original source substring covered by a command's target tokens.</summary>
         private static string BuildTargetText(ParsedText parsed, IReadOnlyList<Token> targetTokens)
         {
             if (targetTokens.Count == 0)
@@ -226,6 +229,7 @@ namespace OPEN_LRD.NLP
             return parsed.OriginalText.Substring(start, end - start).Trim();
         }
 
+        /// <summary>Builds a question-terminated query string from command target tokens.</summary>
         private static string BuildQueryText(ParsedText parsed, IReadOnlyList<Token> targetTokens)
         {
             string query = BuildTargetText(parsed, targetTokens).Trim();
@@ -242,6 +246,7 @@ namespace OPEN_LRD.NLP
             return query;
         }
 
+        /// <summary>Converts a count command target phrase into a how-many question string.</summary>
         private static string BuildCountQueryText(string targetText, string normalizedTarget)
         {
             string query = targetText.Trim();
@@ -261,6 +266,7 @@ namespace OPEN_LRD.NLP
             return EnsureQuestionMark("How many " + query);
         }
 
+        /// <summary>Replaces trailing terminal punctuation with a question mark.</summary>
         private static string EnsureQuestionMark(string query)
         {
             while (query.Length > 0 && query[^1] is '.' or '!' or ';' or ',')
@@ -268,6 +274,7 @@ namespace OPEN_LRD.NLP
             return query.EndsWith('?') ? query : query + "?";
         }
 
+        /// <summary>Creates a resolved command that does not require clarification.</summary>
         private static NlpCommand CreateSuccess(
             string verb,
             CommandTargetKind targetKind,
@@ -283,6 +290,7 @@ namespace OPEN_LRD.NLP
                 Array.Empty<string>());
         }
 
+        /// <summary>Creates an incomplete command carrying a clarification prompt.</summary>
         private static NlpCommand CreateClarification(
             string verb,
             string targetText,

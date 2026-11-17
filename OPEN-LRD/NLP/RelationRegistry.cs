@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Stores a registered relation ID, forward and inverse names, and paired link-type descriptors.</summary>
     internal sealed record RelationLinkType(
         int Id,
         string Name,
@@ -24,6 +25,7 @@ namespace OPEN_LRD.NLP
             new Dictionary<int, RelationLinkType>();
         private static long nextId = FirstPredicateLinkTypeId;
 
+        /// <summary>Registers core default predicate, preposition, and antonym relation types.</summary>
         static RelationRegistry()
         {
             foreach (string name in new[]
@@ -39,6 +41,7 @@ namespace OPEN_LRD.NLP
             TryRestore(AntonymLinkTypeId, AntonymRelationName, "inverse_antonym", out _);
         }
 
+        /// <summary>Returns the existing relation type for a normalized name or registers a new one.</summary>
         public static RelationLinkType GetOrRegister(string relationName)
         {
             string name = NormalizeRelationName(relationName);
@@ -49,6 +52,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Attempts to look up a registered relation type by its normalized name.</summary>
         public static bool TryGet(string relationName, out RelationLinkType relation)
         {
             relation = null!;
@@ -64,6 +68,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Attempts to look up a registered relation type by its numeric identifier.</summary>
         public static bool TryGetById(int id, out RelationLinkType relation)
         {
             lock (sync)
@@ -72,6 +77,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Returns all registered relation types ordered by numeric identifier.</summary>
         internal static IReadOnlyList<RelationLinkType> GetAll()
         {
             lock (sync)
@@ -82,6 +88,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Attempts to restore a persisted relation definition without conflicting with existing entries.</summary>
         internal static bool TryRestore(
             int id,
             string name,
@@ -168,6 +175,7 @@ namespace OPEN_LRD.NLP
         // Registers a fixed structural relation from the reserved ontology range
         // (IDs 1-999). Unlike predicate registration, this deliberately permits
         // IDs at or below LastReservedOntologyId.
+        /// <summary>Registers a structural ontology relation within the reserved 1-999 identifier range.</summary>
         internal static bool RegisterOntologyRelation(
             int id,
             string name,
@@ -223,6 +231,7 @@ namespace OPEN_LRD.NLP
 
         // Returns true when the supplied ID names an already-registered ontology
         // relation, either in this registry or in the forward/inverse registries.
+        /// <summary>Checks whether a reserved ontology relation ID is already registered with matching names.</summary>
         internal static bool IsOntologyRelationRegistered(int id, string? name, string? inverseName)
         {
             if (id <= 0 || id > LastReservedOntologyId)
@@ -246,6 +255,7 @@ namespace OPEN_LRD.NLP
                 && string.Equals(inverseType.Name, inverse, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>Normalizes a predicate lemma and optional particle into a canonical snake-case relation name.</summary>
         public static string Normalize(string lemma, string? particle = null)
         {
             if (string.IsNullOrWhiteSpace(lemma))
@@ -264,6 +274,7 @@ namespace OPEN_LRD.NLP
             return canonical.Length == 0 ? "unknown_relation" : canonical;
         }
 
+        /// <summary>Looks up or registers a normalized relation name while holding the registry lock.</summary>
         private static RelationLinkType GetOrRegisterLocked(string name)
         {
             if (byName.TryGetValue(name, out RelationLinkType? existing))
@@ -280,6 +291,7 @@ namespace OPEN_LRD.NLP
             return relation;
         }
 
+        /// <summary>Allocates the next unused non-reserved numeric link-type identifier.</summary>
         private static int AllocateIdLocked()
         {
             while (nextId <= int.MaxValue)
@@ -303,6 +315,7 @@ namespace OPEN_LRD.NLP
                 "The relation registry exhausted its available link-type ID range.");
         }
 
+        /// <summary>Validates and normalizes a raw relation name into a non-empty snake-case identifier.</summary>
         private static string NormalizeRelationName(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -312,6 +325,7 @@ namespace OPEN_LRD.NLP
             return normalized.Length == 0 ? "unknown_relation" : normalized;
         }
 
+        /// <summary>Normalizes a string into lowercase alphanumeric characters separated by single underscores.</summary>
         private static string NormalizeToken(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -338,6 +352,7 @@ namespace OPEN_LRD.NLP
             return builder.ToString().Trim('_');
         }
 
+        /// <summary>Maps forms of be, have, and do to their canonical relation verb names.</summary>
         private static string CanonicalVerb(string value)
         {
             return value switch

@@ -10,6 +10,7 @@ namespace OPEN_LRD.Visualization
             Array.Empty<float>(),
             Array.Empty<int>());
 
+        /// <summary>Creates a validated mesh from position, normal, and triangle index arrays.</summary>
         public MeshData(float[] positions, float[] normals, int[] indices)
         {
             ArgumentNullException.ThrowIfNull(positions);

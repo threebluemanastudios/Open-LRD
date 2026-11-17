@@ -22,12 +22,14 @@ namespace OPEN_LRD.Visualization
         };
         private static readonly Dictionary<int, double> forwardOverrides = new();
 
+        /// <summary>Returns the configured rest distance for the specified link.</summary>
         public static double GetDistance(Link link)
         {
             ArgumentNullException.ThrowIfNull(link);
             return GetDistance(link.Classification, link.ForwardLink);
         }
 
+        /// <summary>Returns the rest distance for a link class and optional forward link type override.</summary>
         public static double GetDistance(
             LinkClass linkClass,
             ForwardLinkTypes? forwardLinkType = null)
@@ -48,6 +50,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Returns the default rest distance for a link class.</summary>
         public static double GetClassDefault(LinkClass linkClass)
         {
             ArgumentNullException.ThrowIfNull(linkClass);
@@ -60,6 +63,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Attempts to retrieve an explicit rest-distance override for a forward link type.</summary>
         public static bool TryGetForwardOverride(
             ForwardLinkTypes forwardLinkType,
             out double distance)
@@ -70,6 +74,7 @@ namespace OPEN_LRD.Visualization
                 return forwardOverrides.TryGetValue(forwardLinkType.Id, out distance);
         }
 
+        /// <summary>Sets the default rest distance for a link class.</summary>
         public static void SetClassDefault(LinkClass linkClass, double distance)
         {
             ArgumentNullException.ThrowIfNull(linkClass);
@@ -79,6 +84,7 @@ namespace OPEN_LRD.Visualization
                 classDefaults[linkClass.Id] = distance;
         }
 
+        /// <summary>Attempts to set the default rest distance for a link class when valid.</summary>
         public static bool TrySetClassDefault(LinkClass linkClass, double distance)
         {
             if (linkClass is null || !IsValidDistance(distance))
@@ -90,6 +96,7 @@ namespace OPEN_LRD.Visualization
             return true;
         }
 
+        /// <summary>Sets a rest-distance override for a forward link type.</summary>
         public static void SetForwardOverride(ForwardLinkTypes forwardLinkType, double distance)
         {
             ArgumentNullException.ThrowIfNull(forwardLinkType);
@@ -99,6 +106,7 @@ namespace OPEN_LRD.Visualization
                 forwardOverrides[forwardLinkType.Id] = distance;
         }
 
+        /// <summary>Attempts to set a rest-distance override for a forward link type when valid.</summary>
         public static bool TrySetForwardOverride(ForwardLinkTypes forwardLinkType, double distance)
         {
             if (forwardLinkType is null || !IsValidDistance(distance))
@@ -110,6 +118,7 @@ namespace OPEN_LRD.Visualization
             return true;
         }
 
+        /// <summary>Removes any rest-distance override registered for a forward link type.</summary>
         public static bool RemoveForwardOverride(ForwardLinkTypes forwardLinkType)
         {
             ArgumentNullException.ThrowIfNull(forwardLinkType);
@@ -118,23 +127,27 @@ namespace OPEN_LRD.Visualization
                 return forwardOverrides.Remove(forwardLinkType.Id);
         }
 
+        /// <summary>Returns a snapshot of the configured link-class default distances.</summary>
         public static IReadOnlyDictionary<int, double> GetClassDefaults()
         {
             lock (sync)
                 return new Dictionary<int, double>(classDefaults);
         }
 
+        /// <summary>Returns a snapshot of the configured forward-link distance overrides.</summary>
         public static IReadOnlyDictionary<int, double> GetForwardOverrides()
         {
             lock (sync)
                 return new Dictionary<int, double>(forwardOverrides);
         }
 
+        /// <summary>Determines whether a link rest distance is finite and positive.</summary>
         public static bool IsValidDistance(double distance)
         {
             return double.IsFinite(distance) && distance > 0d;
         }
 
+        /// <summary>Throws when a link rest distance is not finite and greater than zero.</summary>
         private static void ValidateDistance(double distance, string parameterName)
         {
             if (!IsValidDistance(distance))

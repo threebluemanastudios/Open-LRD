@@ -60,12 +60,14 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Throws an exception with the specified message when the condition is false.</summary>
         internal static void Assert(bool condition, string message)
         {
             if (!condition)
                 throw new InvalidOperationException(message);
         }
 
+        /// <summary>Verifies that the given action throws an exception of the expected type.</summary>
         internal static void AssertThrows<T>(Action action, string message) where T : Exception
         {
             try
@@ -84,6 +86,7 @@ namespace OPEN_LRD.SmokeTests
             throw new InvalidOperationException($"{message}: no exception thrown");
         }
 
+        /// <summary>Initializes and returns the singleton graph core.</summary>
         private static LRD_Core NewCore()
         {
             LRD_Core core = LRD_Core.Instance;
@@ -91,6 +94,7 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Verifies that generated node identifiers are non-empty, unique, and stored in the core.</summary>
         private static void TestGuidNodeIds()
         {
             LRD_Core core = NewCore();
@@ -104,6 +108,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetDictionary() is not null && core.GetDictionary()!.ContainsKey(second), "dictionary should contain the second node");
         }
 
+        /// <summary>Verifies link value equality, endpoint assignment, and link-type validation.</summary>
         private static void TestLinkValueSemantics()
         {
             Guid source = Guid.NewGuid();
@@ -122,6 +127,7 @@ namespace OPEN_LRD.SmokeTests
                 "unknown link type should be rejected");
         }
 
+        /// <summary>Verifies URI scheme, path, and credential validation on data pointers.</summary>
         private static void TestDataPointer()
         {
             DataPointer httpPointer = new DataPointer(
@@ -147,6 +153,7 @@ namespace OPEN_LRD.SmokeTests
                 "credentials should be rejected");
         }
 
+        /// <summary>Verifies assigning and clearing a data pointer on a graph node.</summary>
         private static void TestNodeDataPointer()
         {
             Web_Node node = new Web_Node(Guid.NewGuid(), NodeTypes.Basics, NodeLifetime.Temporary, 10);
@@ -159,6 +166,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(node.Get_DataPointer() is null, "node pointer should clear");
         }
 
+        /// <summary>Verifies bidirectional, directed, and removed link connections in the core.</summary>
         private static void TestConnectionSemantics()
         {
             LRD_Core core = NewCore();
@@ -183,6 +191,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(!core.RemoveConnection(missing, second), "missing removal should return false");
         }
 
+        /// <summary>Verifies that duplicate directed links between the same endpoints are not stored twice.</summary>
         private static void TestDuplicateLinkPrevention()
         {
             LRD_Core core = NewCore();
@@ -198,6 +207,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(count == 1, "exact duplicate links should not be stored twice");
         }
 
+        /// <summary>Verifies that temporary nodes are purged once their TTL reaches zero.</summary>
         private static void TestTemporaryTtlPurge()
         {
             LRD_Core core = NewCore();
@@ -211,6 +221,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetExistingNode(nodeID) is null, "node should be purged when TTL expires");
         }
 
+        /// <summary>Verifies that sufficient verified references promote a temporary node to permanent.</summary>
         private static void TestVerifiedReferencePromotion()
         {
             LRD_Core core = NewCore();
@@ -227,6 +238,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetExistingNode(nodeID) is not null, "promoted node should never expire");
         }
 
+        /// <summary>Verifies that permanent nodes survive maintenance cycles without TTL decay.</summary>
         private static void TestPermanentNodeSurvival()
         {
             LRD_Core core = NewCore();
@@ -242,6 +254,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetExistingNode(nodeID)!.Get_TTL() == 0, "permanent node TTL should not decrement");
         }
 
+        /// <summary>Verifies that exceeding the invalid-reference threshold marks a node as disposed.</summary>
         private static void TestInvalidReferenceDisposal()
         {
             Web_Node node = new Web_Node(Guid.NewGuid(), NodeTypes.Basics, NodeLifetime.Permanent, 100);
@@ -250,6 +263,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(node.IsDisposed, "node should be disposed after the invalid-reference threshold");
         }
 
+        /// <summary>Verifies node lookup by type, lifetime, search criteria, link class, and adjacency.</summary>
         private static void TestSearchApis()
         {
             LRD_Core core = NewCore();
@@ -271,6 +285,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetLinks(conceptID).Count == 1, "link retrieval should return the directed edge");
         }
 
+        /// <summary>Verifies that maintenance removes links referencing expired temporary nodes.</summary>
         private static void TestMaintenanceLinkCleanup()
         {
             LRD_Core core = NewCore();
@@ -289,6 +304,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(!core.GetLinks(permanentID).Any(link => link.SourceID == temporaryID || link.DestinationID == temporaryID), "surviving node should not keep stale links");
         }
 
+        /// <summary>Verifies building, appending, and clearing transient query and response chains.</summary>
         private static void TestQueryAndResponseChains()
         {
             LRD_Core core = NewCore();
@@ -307,12 +323,14 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.GetResponse()?.Count == 1, "response chain should be initialized and populated");
         }
 
+        /// <summary>Verifies case-insensitive node-type lookup by name and fallback to Empties.</summary>
         private static void TestNodeTypesNameLookup()
         {
             Assert(ReferenceEquals(NodeTypes.FromName("Concept"), NodeTypes.Concepts), "name lookup should be case-insensitive");
             Assert(ReferenceEquals(NodeTypes.FromName("not-a-real-type"), NodeTypes.Empties), "unknown names should return Empties");
         }
 
+        /// <summary>Verifies seeded and runtime-registered forward, inverse, and link-class registries.</summary>
         private static void TestRuntimeLinkTypeRegistries()
         {
             Assert(ForwardLinkTypes.basic.Id == 0, "basic forward link ID should remain zero");
@@ -383,6 +401,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.FindByLinkClass(customClass).Any(node => node.ID == first), "registered link classes should be searchable");
         }
 
+        /// <summary>Verifies thread-safe concurrent registration and lookup on link-type registries.</summary>
         private static void TestLinkTypeRegistryConcurrency()
         {
             const int iterations = 200;

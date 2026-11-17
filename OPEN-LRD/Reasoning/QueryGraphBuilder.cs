@@ -6,6 +6,7 @@ namespace OPEN_LRD.Reasoning
     /// <summary>Validates chain nodes and converts them into a bounded query graph.</summary>
     internal static class QueryGraphBuilder
     {
+        /// <summary>Builds a validated query graph from an ordered chain of query nodes.</summary>
         public static QueryGraph Build(LinkedList<Chain_Node> chain, ReasoningOptions? options = null)
         {
             ArgumentNullException.ThrowIfNull(chain);
@@ -61,6 +62,7 @@ namespace OPEN_LRD.Reasoning
                 orderedNodes[0].Get_ID());
         }
 
+        /// <summary>Validates a chain link and adds its corresponding query edge if present.</summary>
         private static void AddLinkEdge(
             Link? link,
             Dictionary<Guid, QueryNode> queryNodes,
@@ -90,6 +92,7 @@ namespace OPEN_LRD.Reasoning
             AddEdge(edge, edgeKeys, queryEdges);
         }
 
+        /// <summary>Adds default sequential basic edges between adjacent chain nodes that lack explicit links.</summary>
         private static void AddMissingSequentialEdges(
             List<Chain_Node> orderedNodes,
             HashSet<string> edgeKeys,
@@ -119,6 +122,7 @@ namespace OPEN_LRD.Reasoning
             }
         }
 
+        /// <summary>Adds a query edge to the collection if an identical edge has not already been recorded.</summary>
         private static void AddEdge(
             QueryEdge edge,
             HashSet<string> edgeKeys,
@@ -137,6 +141,7 @@ namespace OPEN_LRD.Reasoning
                 queryEdges.Add(edge);
         }
 
+        /// <summary>Determines whether the query nodes and edges form a single non-branching connected path.</summary>
         private static bool IsLinear(IEnumerable<Guid> nodeIDs, IReadOnlyList<QueryEdge> edges)
         {
             List<Guid> ids = nodeIDs.ToList();
@@ -161,6 +166,7 @@ namespace OPEN_LRD.Reasoning
             return degrees.Values.All(degree => degree <= 2);
         }
 
+        /// <summary>Determines whether all query nodes belong to a single connected component.</summary>
         private static bool IsConnected(IReadOnlyCollection<Guid> nodeIDs, IReadOnlyList<QueryEdge> edges)
         {
             if (nodeIDs.Count == 0)

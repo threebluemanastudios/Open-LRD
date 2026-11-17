@@ -58,6 +58,7 @@ namespace OPEN_LRD.Ontology.Gcide
             [0xB8] = '\u201D'
         };
 
+        /// <summary>Decodes MICRA font hex escapes and named SGML entities in GCIDE text.</summary>
         public static string DecodeEscapes(string input)
         {
             if (string.IsNullOrEmpty(input))
@@ -111,6 +112,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return builder.ToString();
         }
 
+        /// <summary>Removes angle-bracketed markup tags from the supplied input string.</summary>
         public static string StripTags(string input)
         {
             if (string.IsNullOrEmpty(input))
@@ -141,6 +143,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return builder.ToString();
         }
 
+        /// <summary>Decodes escapes, strips markup tags, and normalizes whitespace in GCIDE text.</summary>
         public static string CleanText(string input)
         {
             if (string.IsNullOrEmpty(input))
@@ -149,6 +152,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return NormalizeWhitespace(StripTags(DecodeEscapes(input)));
         }
 
+        /// <summary>Collapses consecutive whitespace characters and trims leading and trailing whitespace.</summary>
         public static string NormalizeWhitespace(string input)
         {
             StringBuilder builder = new StringBuilder(input.Length);
@@ -174,6 +178,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return builder.ToString();
         }
 
+        /// <summary>Checks whether a character is a valid hexadecimal digit.</summary>
         private static bool IsHex(char value)
         {
             return value is >= '0' and <= '9'

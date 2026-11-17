@@ -6,6 +6,7 @@ namespace OPEN_LRD.NLP
     /// <summary>Builds bounded linked-list query and fact chains from NLP relation frames.</summary>
     internal static class ChainBuilder
     {
+        /// <summary>Builds primary and qualifier fact chains from an extracted relation frame.</summary>
         public static ChainBuildResult Build(
             RelationFrame frame,
             EntityResolver resolver,
@@ -135,6 +136,7 @@ namespace OPEN_LRD.NLP
             return new ChainBuildResult(chains, diagnostics);
         }
 
+        /// <summary>Creates a temporary chain node initialized with the resolved label and aliases.</summary>
         private static Chain_Node CreateNode(
             Guid nodeID,
             EntityResolution resolution,
@@ -153,6 +155,7 @@ namespace OPEN_LRD.NLP
             return node;
         }
 
+        /// <summary>Creates a two-node linked list connecting a subject node and target node.</summary>
         private static LinkedList<Chain_Node> CreateChain(
             Chain_Node subject,
             Chain_Node target)
@@ -163,6 +166,7 @@ namespace OPEN_LRD.NLP
             return chain;
         }
 
+        /// <summary>Builds a deduplication key for a subject-relation-target qualifier edge.</summary>
         private static string QualifierKey(
             Guid subjectID,
             string relationName,

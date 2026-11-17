@@ -9,11 +9,13 @@ namespace OPEN_LRD.Ontology
     /// <summary>Builds and exports the upper ontology and loads curated lexical resources.</summary>
     internal static class OntologyLoader
     {
+        /// <summary>Seeds the permanent upper-ontology foundation into the specified core.</summary>
         public static int BuildFoundation(LRD_Core core)
         {
             return UpperOntologyBootstrap.Populate(core);
         }
 
+        /// <summary>Loads the GCIDE corpus into the core using the specified options.</summary>
         public static GcideLoadResult LoadCorpus(LRD_Core core, GcideLoadOptions options)
         {
             ArgumentNullException.ThrowIfNull(core);
@@ -33,6 +35,7 @@ namespace OPEN_LRD.Ontology
 
         // Loads the corpus and immediately writes a core .lrdlog so later runs
         // can restore through the existing Tools import path.
+        /// <summary>Loads the GCIDE corpus and exports the resulting graph state to a core log file.</summary>
         public static (GcideLoadResult Load, CoreLogExportResult Export) LoadAndExport(
             LRD_Core core,
             GcideLoadOptions options,
@@ -48,6 +51,7 @@ namespace OPEN_LRD.Ontology
             return (load, export);
         }
 
+        /// <summary>Imports a persisted ontology or core log file into the specified core.</summary>
         public static PersistenceImportResult LoadFromLog(
             LRD_Core core,
             string logPath,

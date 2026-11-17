@@ -4,9 +4,6 @@ using OPEN_LRD.Visualizer;
 namespace OPEN_LRD
 {
     
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     /// <summary>Provides the application launcher and top-level window navigation.</summary>
     public partial class MainWindow : Window
     {

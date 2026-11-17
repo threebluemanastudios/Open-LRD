@@ -27,6 +27,7 @@ namespace OPEN_LRD.Maintenance
         public int MaxMetadataValuesCreatedPerCycle { get; init; } = 1000;
         public int MetadataValueNodeTimeToLive { get; init; } = Node.DefaultTimeToLive;
 
+        /// <summary>Validates that all configured maintenance budgets and thresholds are within allowed ranges.</summary>
         public void Validate()
         {
             if (MinPatternFrequency < 2)

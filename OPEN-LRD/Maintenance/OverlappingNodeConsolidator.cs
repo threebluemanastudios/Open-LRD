@@ -18,6 +18,7 @@ namespace OPEN_LRD.Maintenance
             public Web_Node? LastWithoutPointer { get; private set; }
             public Web_Node? LastAny { get; private set; }
 
+            /// <summary>Finds a previously recorded node in the bucket that is compatible for merging.</summary>
             public Web_Node? FindCompatible(Web_Node node)
             {
                 DataPointer? pointer = node.Get_DataPointer();
@@ -26,6 +27,7 @@ namespace OPEN_LRD.Maintenance
                 return LastWithoutPointer ?? (pointer is null ? LastAny : null);
             }
 
+            /// <summary>Records a node in the bucket indexed by its data pointer presence.</summary>
             public void Add(Web_Node node)
             {
                 LastAny = node;
@@ -37,6 +39,7 @@ namespace OPEN_LRD.Maintenance
             }
         }
 
+        /// <summary>Scans the graph for duplicate nodes and merges compatible pairs within budget limits.</summary>
         public static void Consolidate(LRD_Core core, MaintenanceOptions options, MaintenanceReport report)
         {
             IReadOnlyDictionary<Guid, Web_Node>? graph = core.GetDictionary();
@@ -187,6 +190,7 @@ namespace OPEN_LRD.Maintenance
             }
         }
 
+        /// <summary>Validates and records a pair of nodes as a merge candidate if they are compatible.</summary>
         private static void AddCandidate(
             IDictionary<(Guid, Guid), Candidate> candidates,
             Web_Node first,
@@ -215,6 +219,7 @@ namespace OPEN_LRD.Maintenance
                 candidates[key] = new Candidate(low, high, sharedDataPointer || existing?.SharedDataPointer == true);
         }
 
+        /// <summary>Determines whether two nodes have compatible types and data pointers for merging.</summary>
         private static bool CanPair(Web_Node first, Web_Node second, bool sharedDataPointer)
         {
             DataPointer? firstPointer = first.Get_DataPointer();
@@ -229,6 +234,7 @@ namespace OPEN_LRD.Maintenance
             return first.Get_NodeType().Id == second.Get_NodeType().Id;
         }
 
+        /// <summary>Selects the surviving node from a merge pair using trust, permanence, weight, degree, and ID.</summary>
         private static Web_Node ChooseSurvivor(LRD_Core core, Web_Node first, Web_Node second)
         {
             double firstTrust = first.TrustRating ?? 0d;
@@ -256,6 +262,7 @@ namespace OPEN_LRD.Maintenance
             return first.ID.CompareTo(second.ID) <= 0 ? first : second;
         }
 
+        /// <summary>Enumerates normalized lowercase label and alias strings for a node.</summary>
         private static IEnumerable<string> GetNames(Web_Node node)
         {
             if (!string.IsNullOrWhiteSpace(node.Label))

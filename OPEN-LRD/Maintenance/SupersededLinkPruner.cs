@@ -7,6 +7,7 @@ namespace OPEN_LRD.Maintenance
     /// <summary>Marks superseded generic links inactive while preserving their historical records.</summary>
     internal static class SupersededLinkPruner
     {
+        /// <summary>Scans active generic links and invalidates those superseded by specific links or paths.</summary>
         public static void Prune(LRD_Core core, MaintenanceOptions options, MaintenanceReport report)
         {
             IReadOnlyDictionary<Guid, Web_Node>? graph = core.GetDictionary();
@@ -94,12 +95,14 @@ namespace OPEN_LRD.Maintenance
             report.NodesExamined += examined;
         }
 
+        /// <summary>Determines whether a link uses a generic basic or related-to relation type.</summary>
         private static bool IsGeneric(Link link)
         {
             return link.ForwardLink.Id == ForwardLinkTypes.basic.Id
                 || link.ForwardLink.Id == OntologyRelations.RelatedTo;
         }
 
+        /// <summary>Searches for a bounded multi-hop path of specific links between two nodes.</summary>
         private static bool HasSpecificPath(
             Guid sourceID,
             Guid destinationID,
@@ -148,6 +151,7 @@ namespace OPEN_LRD.Maintenance
             return false;
         }
 
+        /// <summary>Builds a canonical identity key for a graph link.</summary>
         private static string LinkKey(Link link)
         {
             return string.Join("|", link.SourceID, link.DestinationID,

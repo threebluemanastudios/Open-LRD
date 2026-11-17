@@ -27,6 +27,7 @@ namespace OPEN_LRD.Visualization
     /// <summary>Contains final node positions, bounds, and diagnostics from a layout operation.</summary>
     internal sealed class LayoutResult
     {
+        /// <summary>Creates a layout result with positions, bounds, convergence state, and diagnostics.</summary>
         public LayoutResult(
             IReadOnlyList<Vector3> positions,
             Vector3 boundsMinimum,

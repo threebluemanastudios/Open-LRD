@@ -8,6 +8,7 @@ namespace OPEN_LRD.Ontology
     /// <summary>Creates permanent foundational ontology nodes and hierarchy links.</summary>
     internal static class UpperOntologyBootstrap
     {
+        /// <summary>Populates the core with foundational ontology category nodes and hierarchy relations.</summary>
         public static int Populate(LRD_Core core)
         {
             ArgumentNullException.ThrowIfNull(core);
@@ -67,6 +68,7 @@ namespace OPEN_LRD.Ontology
             return created;
         }
 
+        /// <summary>Returns an existing category node identifier or creates a new permanent category node.</summary>
         internal static Guid GetOrCreateCategory(LRD_Core core, string label, ref int created)
         {
             IReadOnlyList<Web_Node> existing = core.FindByLabel(label, OntologyTypes.Categories);
@@ -81,6 +83,7 @@ namespace OPEN_LRD.Ontology
             return node.Get_ID();
         }
 
+        /// <summary>Finds the identifier of an existing ontology category node by label.</summary>
         internal static Guid? FindCategory(LRD_Core core, string label)
         {
             IReadOnlyList<Web_Node> existing = core.FindByLabel(label, OntologyTypes.Categories);

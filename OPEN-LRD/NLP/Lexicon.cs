@@ -209,11 +209,13 @@ namespace OPEN_LRD.NLP
             "children", "people", "men", "women", "mice", "geese", "teeth", "feet",
             "data");
 
+        /// <summary>Creates a case-insensitive string set from the supplied lexical entries.</summary>
         private static HashSet<string> Create(params string[] values)
         {
             return new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
         }
 
+        /// <summary>Creates pronoun metadata for a third-person personal pronoun.</summary>
         private static PronounInfo ThirdPronoun(
             string surface,
             PronounNumber number,
@@ -222,6 +224,7 @@ namespace OPEN_LRD.NLP
             return PersonalPronoun(surface, PronounPerson.Third, number, pronounCase);
         }
 
+        /// <summary>Creates pronoun metadata for a first-, second-, or third-person pronoun.</summary>
         private static PronounInfo PersonalPronoun(
             string surface,
             PronounPerson person,
@@ -239,6 +242,7 @@ namespace OPEN_LRD.NLP
                 person == PronounPerson.Third);
         }
 
+        /// <summary>Creates pronoun metadata for a reflexive pronoun form.</summary>
         private static PronounInfo ReflexivePronoun(
             string surface,
             PronounPerson person,
@@ -255,6 +259,7 @@ namespace OPEN_LRD.NLP
                 false);
         }
 
+        /// <summary>Creates pronoun metadata for an indefinite pronoun form.</summary>
         private static PronounInfo IndefinitePronoun(string surface)
         {
             return new PronounInfo(
@@ -268,6 +273,7 @@ namespace OPEN_LRD.NLP
                 false);
         }
 
+        /// <summary>Looks up grammatical metadata for a recognized pronoun surface form.</summary>
         public static bool TryGetPronounInfo(string value, out PronounInfo info)
         {
             info = null!;
@@ -278,53 +284,73 @@ namespace OPEN_LRD.NLP
             return pronounInfos.TryGetValue(value.Trim(), out info!);
         }
 
+        /// <summary>Checks whether a word is a known determiner.</summary>
         public static bool IsDeterminer(string value) => determiners.Contains(value);
 
+        /// <summary>Checks whether a word is a known pronoun.</summary>
         public static bool IsPronoun(string value) => pronouns.Contains(value);
 
+        /// <summary>Checks whether a word is a known interrogative wh-word.</summary>
         public static bool IsWhWord(string value) => whWords.Contains(value);
 
+        /// <summary>Checks whether a word is a known auxiliary or modal verb.</summary>
         public static bool IsAuxiliary(string value) => auxiliaries.Contains(value);
 
+        /// <summary>Checks whether a word is a known preposition.</summary>
         public static bool IsPreposition(string value) => prepositions.Contains(value);
 
+        /// <summary>Checks whether a word is a known coordinating or subordinating conjunction.</summary>
         public static bool IsConjunction(string value) => conjunctions.Contains(value);
 
+        /// <summary>Checks whether a word is in the common verb lexicon.</summary>
         public static bool IsKnownVerb(string value) => commonVerbs.Contains(value);
 
+        /// <summary>Checks whether a word is in the common adjective lexicon.</summary>
         public static bool IsKnownAdjective(string value) => commonAdjectives.Contains(value);
 
+        /// <summary>Checks whether a word is in the common adverb lexicon.</summary>
         public static bool IsKnownAdverb(string value) => commonAdverbs.Contains(value);
 
+        /// <summary>Checks whether a word is a known period-bearing abbreviation.</summary>
         public static bool IsAbbreviation(string value) => abbreviations.Contains(value);
 
+        /// <summary>Checks whether a word or phrase matches the location gazetteer.</summary>
         public static bool IsLocationWord(string value) => locationGazetteer.Contains(value);
 
+        /// <summary>Checks whether a word or phrase matches organization names or cues.</summary>
         public static bool IsOrganizationWord(string value)
         {
             return organizationGazetteer.Contains(value) || organizationCues.Contains(value);
         }
 
+        /// <summary>Checks whether a word is a personal honorific or title.</summary>
         public static bool IsPersonTitle(string value) => personTitles.Contains(value);
 
+        /// <summary>Checks whether a word matches the common given-name gazetteer.</summary>
         public static bool IsPersonName(string value) => personFirstNames.Contains(value);
 
+        /// <summary>Checks whether a word is a common event-denoting noun.</summary>
         public static bool IsEventNoun(string value) => eventNouns.Contains(value);
 
+        /// <summary>Checks whether a word is a spelled-out cardinal number.</summary>
         public static bool IsNumberWord(string value) => numberWords.Contains(value);
 
+        /// <summary>Checks whether a word denotes a time of day or temporal unit.</summary>
         public static bool IsTimeWord(string value) => timeWords.Contains(value);
 
+        /// <summary>Looks up the canonical lemma for an irregular verb or noun form.</summary>
         public static bool TryGetIrregularLemma(string value, out string lemma)
         {
             return irregularLemmas.TryGetValue(value, out lemma!);
         }
 
+        /// <summary>Checks whether a word is an irregular inflected verb form.</summary>
         public static bool IsIrregularVerbForm(string value)
         {
             return irregularLemmas.ContainsKey(value) && !irregularNounForms.Contains(value);
         }
 
+        /// <summary>Checks whether a token consists of digits and numeric or date punctuation.</summary>
         public static bool IsNumberOrDate(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -349,6 +375,7 @@ namespace OPEN_LRD.NLP
             return hasDigit;
         }
 
+        /// <summary>Checks whether a word is a month or day-of-week name.</summary>
         public static bool LooksLikeDateWord(string value)
         {
             return value.ToLowerInvariant() switch

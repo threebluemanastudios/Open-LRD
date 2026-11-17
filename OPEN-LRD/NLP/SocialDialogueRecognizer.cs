@@ -52,6 +52,7 @@ namespace OPEN_LRD.NLP
                 ["help"] = ("Ask me about a person, place, thing, or relationship in the knowledge graph. You can also phrase a request naturally, such as ‘Can you tell me where Alice works?’", "Ask me about the knowledge graph.")
             };
 
+        /// <summary>Attempts to match input text against known social or assistant-identity dialogue phrases.</summary>
         public static bool TryRecognize(string? text, out NlpAnswer answer)
         {
             answer = null!;

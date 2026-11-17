@@ -19,6 +19,7 @@ namespace OPEN_LRD.Maintenance
             new CompositionRule(OntologyRelations.ParticipatedIn, OntologyRelations.HasLocation, OntologyRelations.HasLocation)
         };
 
+        /// <summary>Generates inferred links and relation types from compositional rules and frequent two-hop patterns.</summary>
         public static void Generate(
             LRD_Core core,
             MaintenanceOptions options,
@@ -179,6 +180,7 @@ namespace OPEN_LRD.Maintenance
             report.LinksGenerated += generated;
         }
 
+        /// <summary>Materializes permanent relation concept nodes under the ontology relation root.</summary>
         public static void ElevateRelations(
             LRD_Core core,
             IEnumerable<int> relationIds,
@@ -247,6 +249,7 @@ namespace OPEN_LRD.Maintenance
             }
         }
 
+        /// <summary>Collects active outgoing links per node within configured examination budgets.</summary>
         private static Dictionary<Guid, List<Link>> BuildOutgoing(
             LRD_Core core,
             MaintenanceOptions options,
@@ -292,6 +295,7 @@ namespace OPEN_LRD.Maintenance
             return outgoing;
         }
 
+        /// <summary>Adds an inferred ontology link between two nodes if not already supported by reasoning.</summary>
         private static bool AddInferredLink(LRD_Core core, Guid sourceID, Guid destinationID, int relationID)
         {
             if (sourceID == destinationID || core.GetExistingNode(sourceID) is null
@@ -314,6 +318,7 @@ namespace OPEN_LRD.Maintenance
             return !alreadySupported;
         }
 
+        /// <summary>Constructs a bounded relation name for an abstracted two-hop relation pattern.</summary>
         private static string CreatePatternName(string firstName, string secondName, int firstID, int secondID)
         {
             string suffix = $"_{firstID}_{secondID}";

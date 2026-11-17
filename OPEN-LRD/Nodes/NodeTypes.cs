@@ -34,6 +34,7 @@
         /// <summary>Gets the canonical display name of this type.</summary>
         public string Name { get; }
 
+        /// <summary>Initializes a node type descriptor with an identifier and display name.</summary>
         private NodeTypes(int id, string name)
         {
             Id = id;

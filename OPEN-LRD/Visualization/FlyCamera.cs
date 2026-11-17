@@ -11,11 +11,13 @@ namespace OPEN_LRD.Visualization
         private static readonly Vector3 LocalRight = -Vector3.UnitX;
         private Quaternion orientation = Quaternion.Identity;
 
+        /// <summary>Creates a fly camera at the world origin looking along the positive Z axis.</summary>
         public FlyCamera()
             : this(Vector3.Zero, 0d, 0d)
         {
         }
 
+        /// <summary>Creates a fly camera at the specified position, yaw, and pitch.</summary>
         public FlyCamera(Vector3 position, double yaw, double pitch)
         {
             SetPose(position, yaw, pitch);
@@ -42,6 +44,7 @@ namespace OPEN_LRD.Visualization
 
         public Quaternion Orientation => orientation;
 
+        /// <summary>Sets the camera position and yaw/pitch angles while clamping pitch within limits.</summary>
         public void SetPose(Vector3 position, double yaw, double pitch)
         {
             ValidateVector(position, nameof(position));
@@ -59,6 +62,7 @@ namespace OPEN_LRD.Visualization
             orientation = Quaternion.Normalize(yawRotation * pitchRotation);
         }
 
+        /// <summary>Sets the camera position and orthonormal orientation from look and up vectors.</summary>
         public void SetOrientation(Vector3 position, Vector3 lookDirection, Vector3 upDirection)
         {
             ValidateVector(position, nameof(position));
@@ -85,6 +89,7 @@ namespace OPEN_LRD.Visualization
             orientation = Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(basis));
         }
 
+        /// <summary>Rotates the camera orientation in response to pointer movement deltas.</summary>
         public void Look(
             double deltaX,
             double deltaY,
@@ -111,6 +116,7 @@ namespace OPEN_LRD.Visualization
             orientation = Quaternion.Normalize(pitchRotation * afterYaw);
         }
 
+        /// <summary>Rolls the camera around its local forward axis by the given angle in radians.</summary>
         public void Roll(double deltaRadians)
         {
             ValidateFinite(deltaRadians, nameof(deltaRadians));
@@ -118,6 +124,7 @@ namespace OPEN_LRD.Visualization
             orientation = Quaternion.Normalize(orientation * roll);
         }
 
+        /// <summary>Translates the camera along its forward, right, and world-up axes.</summary>
         public void Move(
             double forward,
             double strafe,
@@ -145,6 +152,7 @@ namespace OPEN_LRD.Visualization
             Position += movement * (float)(speed * deltaSeconds);
         }
 
+        /// <summary>Positions the camera along its current look axis to fit a bounding sphere in view.</summary>
         public void FrameSphere(
             Vector3 center,
             float radius,
@@ -182,6 +190,7 @@ namespace OPEN_LRD.Visualization
             Position = center - LookDirection * (float)distance;
         }
 
+        /// <summary>Orbits the camera position and orientation around a target point while respecting pitch limits.</summary>
         public void OrbitAroundTarget(Vector3 target, double deltaYawRadians, double deltaPitchRadians)
         {
             ValidateVector(target, nameof(target));
@@ -241,6 +250,7 @@ namespace OPEN_LRD.Visualization
             orientation = Quaternion.Normalize(positionRotation * orientation);
         }
 
+        /// <summary>Checks whether applying a rotation keeps the camera pitch within allowed bounds.</summary>
         private bool IsCameraPitchWithinLimits(Quaternion positionRotation)
         {
             Quaternion candidateOrientation = Quaternion.Normalize(positionRotation * orientation);
@@ -250,6 +260,7 @@ namespace OPEN_LRD.Visualization
                 && pitch <= MaximumPitchRadians + 1e-6;
         }
 
+        /// <summary>Composes yaw and elevation rotations for an orbit step.</summary>
         private static Quaternion CreateOrbitRotation(
             Quaternion yawRotation,
             Vector3 elevationAxis,
@@ -259,6 +270,7 @@ namespace OPEN_LRD.Visualization
             return Quaternion.Normalize(elevationRotation * yawRotation);
         }
 
+        /// <summary>Clamps a requested pitch delta so the resulting pitch stays within bounds.</summary>
         private static float ClampPitchInput(float currentPitch, float requestedDelta)
         {
             float minimum = (float)-MaximumPitchRadians;
@@ -273,12 +285,14 @@ namespace OPEN_LRD.Visualization
             return Math.Clamp(requestedPitch, minimum, maximum) - currentPitch;
         }
 
+        /// <summary>Throws when the specified floating-point value is not finite.</summary>
         private static void ValidateFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))
                 throw new ArgumentOutOfRangeException(parameterName);
         }
 
+        /// <summary>Throws when any component of the specified vector is not finite.</summary>
         private static void ValidateVector(Vector3 value, string parameterName)
         {
             if (!float.IsFinite(value.X) || !float.IsFinite(value.Y) || !float.IsFinite(value.Z))

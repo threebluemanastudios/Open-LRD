@@ -100,6 +100,7 @@ namespace OPEN_LRD.NLP
                     + "the remainder of the file was not chunked.");
             }
 
+            // Creates the immutable text-import result snapshot from current counters and diagnostics.
             TextImportResult BuildResult(
                 Guid? conversationID,
                 Guid? resolvedSourceNodeID,

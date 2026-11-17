@@ -3,6 +3,7 @@ namespace OPEN_LRD.NLP
     /// <summary>Assigns deterministic part-of-speech tags to normalized tokens.</summary>
     internal static class PosTagger
     {
+        /// <summary>Assigns part-of-speech tags and lemmas to every token in the parsed text.</summary>
         public static ParsedText Tag(ParsedText parsed)
         {
             ArgumentNullException.ThrowIfNull(parsed);
@@ -39,6 +40,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Determines the part of speech for a single token using lexical and contextual rules.</summary>
         private static PartOfSpeech TagToken(
             IReadOnlyList<Token> tokens,
             int index,
@@ -123,6 +125,7 @@ namespace OPEN_LRD.NLP
             return PartOfSpeech.Noun;
         }
 
+        /// <summary>Attempts to classify an apostrophe contraction or possessive token.</summary>
         private static bool TryTagContraction(
             string value,
             string originalText,
@@ -176,6 +179,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Checks whether a month or weekday word occurs in a date-like token context.</summary>
         private static bool IsDateContext(IReadOnlyList<Token> tokens, int index)
         {
             Token? previous = index > 0 ? tokens[index - 1] : null;
@@ -193,12 +197,14 @@ namespace OPEN_LRD.NLP
                     or "until" or "by";
         }
 
+        /// <summary>Checks whether a normalized token is a contracted interrogative word.</summary>
         private static bool TryTagWhContraction(string value)
         {
             return value is "what's" or "who's" or "where's" or "when's" or "why's"
                 or "how's" or "which's";
         }
 
+        /// <summary>Checks whether a token is likely a verb based on lexicon membership, suffixes, and neighbors.</summary>
         private static bool IsLikelyVerb(string value, Token? previous, Token? next)
         {
             bool afterDeterminer = previous?.PartOfSpeech == PartOfSpeech.Determiner;
@@ -264,6 +270,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Checks whether a token looks like a comparative or superlative adjective form.</summary>
         private static bool IsLikelyAdjectiveForm(string value, Token? previous)
         {
             if (value.EndsWith("ier", StringComparison.Ordinal)
@@ -292,6 +299,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Checks whether a word ends with a common derivational adjective suffix.</summary>
         private static bool HasAdjectiveSuffix(string value)
         {
             return value.EndsWith("ous", StringComparison.Ordinal)
@@ -308,16 +316,19 @@ namespace OPEN_LRD.NLP
                 || value.EndsWith("ary", StringComparison.Ordinal);
         }
 
+        /// <summary>Checks whether a token consists solely of punctuation characters.</summary>
         private static bool IsPunctuation(string value)
         {
             return value.All(character => !char.IsLetterOrDigit(character) && character != '_');
         }
 
+        /// <summary>Checks whether a token begins with an uppercase character.</summary>
         private static bool IsCapitalized(string value)
         {
             return value.Length > 0 && char.IsUpper(value[0]);
         }
 
+        /// <summary>Checks whether the stem preceding a contraction's 's is a pronoun or demonstrative.</summary>
         private static bool PossessorIsPronoun(string value)
         {
             return value is "i" or "you" or "he" or "she" or "it" or "we" or "they"

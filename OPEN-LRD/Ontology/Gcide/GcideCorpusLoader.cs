@@ -35,12 +35,14 @@ namespace OPEN_LRD.Ontology.Gcide
         private int skippedRelations;
         private Guid? dictionarySourceNodeID;
 
+        /// <summary>Initializes a loader instance bound to the target core and load options.</summary>
         private GcideCorpusLoader(LRD_Core core, GcideLoadOptions options)
         {
             this.core = core;
             this.options = options;
         }
 
+        /// <summary>Loads GCIDE entries into the specified core according to the supplied options.</summary>
         public static GcideLoadResult Load(LRD_Core core, GcideLoadOptions options)
         {
             ArgumentNullException.ThrowIfNull(core);
@@ -49,6 +51,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return new GcideCorpusLoader(core, options).Run();
         }
 
+        /// <summary>Normalizes a dictionary term into a lowercase alphanumeric lookup key.</summary>
         public static string NormalizeKey(string value)
         {
             string clean = GcideMarkup.CleanText(value);
@@ -83,6 +86,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return builder.ToString();
         }
 
+        /// <summary>Executes the GCIDE corpus ingestion pass and returns the resulting load summary.</summary>
         private GcideLoadResult Run()
         {
             if (!core.initialized)
@@ -131,6 +135,7 @@ namespace OPEN_LRD.Ontology.Gcide
                 SkippedRelations: skippedRelations);
         }
 
+        /// <summary>Reports periodic load progress to the configured callback.</summary>
         private void ReportProgress(GcideEntry entry)
         {
             if (entriesRead % ProgressInterval == 0)
@@ -139,6 +144,7 @@ namespace OPEN_LRD.Ontology.Gcide
 
         // Builds label indexes once so a reload does not scan the whole graph
         // for every entry. The full corpus is roughly 300k nodes.
+        /// <summary>Indexes existing ontology and lexical nodes in the core for fast deduplication.</summary>
         private void IndexExistingNodes()
         {
             foreach (Web_Node node in core.FindNodes())
@@ -168,6 +174,7 @@ namespace OPEN_LRD.Ontology.Gcide
             }
         }
 
+        /// <summary>Adds a node's label and aliases to the specified lookup dictionary.</summary>
         private static void IndexNode(Web_Node node, Dictionary<string, Guid> index)
         {
             if (node.Label is string label)
@@ -177,6 +184,7 @@ namespace OPEN_LRD.Ontology.Gcide
                 index.TryAdd(alias, node.Get_ID());
         }
 
+        /// <summary>Ensures that the permanent trusted dictionary source node exists in the graph.</summary>
         private void EnsureDictionarySourceNode()
         {
             if (dictionarySourceNodeID.HasValue)
@@ -204,6 +212,7 @@ namespace OPEN_LRD.Ontology.Gcide
             dictionarySourceNodeID = source.ID;
         }
 
+        /// <summary>Materializes a single parsed GCIDE entry as lexeme, sense, and relation facts in the graph.</summary>
         private void LoadEntry(GcideEntry entry)
         {
             string key = NormalizeKey(entry.Index.Length > 0 ? entry.Index : entry.Headword);
@@ -280,6 +289,7 @@ namespace OPEN_LRD.Ontology.Gcide
             }
         }
 
+        /// <summary>Returns an existing permanent lexeme node for the key or creates a new one.</summary>
         private Guid GetOrCreateLexeme(string key, string displayForm)
         {
             if (lexemes.TryGetValue(key, out Guid existing))
@@ -306,6 +316,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return node.Get_ID();
         }
 
+        /// <summary>Returns an existing permanent sense node for the entry sense or creates a new one.</summary>
         private Guid GetOrCreateSense(
             Guid lexeme,
             string wordKey,
@@ -340,6 +351,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return node.Get_ID();
         }
 
+        /// <summary>Builds a stable composite identifier for a word sense.</summary>
         private static string BuildSenseKey(
             string wordKey,
             GcideEntry entry,
@@ -358,6 +370,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return wordKey + "#" + partOfSpeech + "." + number;
         }
 
+        /// <summary>Extracts the numeric digits from a raw sense number string.</summary>
         private static string NormalizeSenseNumber(string number)
         {
             StringBuilder builder = new StringBuilder(number.Length);
@@ -371,6 +384,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return builder.ToString();
         }
 
+        /// <summary>Returns a cleaned and length-bounded preview of a sense definition.</summary>
         private static string Preview(string definition)
         {
             string cleaned = GcideMarkup.CleanText(definition);
@@ -381,6 +395,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return cleaned.Substring(0, DefinitionPreviewLength).TrimEnd() + "\u2026";
         }
 
+        /// <summary>Adds a non-empty alias to the specified graph node.</summary>
         private void AddAlias(Guid nodeID, string alias)
         {
             if (string.IsNullOrWhiteSpace(alias))
@@ -390,6 +405,7 @@ namespace OPEN_LRD.Ontology.Gcide
             node?.Add_Alias(alias);
         }
 
+        /// <summary>Promotes the specified node to permanent lifetime when it is currently temporary.</summary>
         private void EnsurePermanent(Guid nodeID)
         {
             Web_Node? node = core.GetExistingNode(nodeID);
@@ -398,6 +414,7 @@ namespace OPEN_LRD.Ontology.Gcide
                 node.PromoteToPermanent();
         }
 
+        /// <summary>Returns an existing category node for the label or creates a new permanent category node.</summary>
         private Guid GetOrCreateCategory(string label)
         {
             return GetOrCreateLabeledNode(
@@ -407,6 +424,7 @@ namespace OPEN_LRD.Ontology.Gcide
                 permanent: true);
         }
 
+        /// <summary>Returns an existing indexed node for the cleaned label or creates and indexes a new node.</summary>
         private Guid GetOrCreateLabeledNode(
             NodeTypes type,
             string label,
@@ -443,6 +461,7 @@ namespace OPEN_LRD.Ontology.Gcide
         // Resolves a relation target to a Lexeme. Unresolved targets create a
         // temporary placeholder when enabled; otherwise they are skipped and
         // counted as diagnostics.
+        /// <summary>Resolves a lexical relation target phrase to an existing or placeholder lexeme node.</summary>
         private Guid? ResolveLexemeTarget(string phrase, string sourceKey)
         {
             string key = NormalizeKey(phrase);
@@ -477,6 +496,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return node.Get_ID();
         }
 
+        /// <summary>Adds an is_a link between the anchor lexeme and a resolved supertype, subtype, or taxon.</summary>
         private void AddIsA(
             Guid anchor,
             string targetPhrase,
@@ -511,12 +531,14 @@ namespace OPEN_LRD.Ontology.Gcide
             AddDirected(anchor, targetNode, linkClass ?? OntologyTypes.taxonomy, OntologyRelations.IsA);
         }
 
+        /// <summary>Returns the label key of the specified lexeme node.</summary>
         private string GetLexemeKey(Guid anchor)
         {
             Web_Node? node = core.GetExistingNode(anchor);
             return node?.Label ?? string.Empty;
         }
 
+        /// <summary>Adds directed lexical links in both directions between a source lexeme and a resolved target.</summary>
         private void AddSymmetric(Guid source, string targetPhrase, int relationId)
         {
             Guid? target = ResolveLexemeTarget(targetPhrase, GetLexemeKey(source));
@@ -530,6 +552,7 @@ namespace OPEN_LRD.Ontology.Gcide
 
         // Adds one directed link unless the exact link already exists. Returns
         // true when the link is present afterwards.
+        /// <summary>Adds a directed link between two nodes when an active link of the same relation is not already present.</summary>
         private bool AddDirected(Guid sourceID, Guid destinationID, LinkClass linkClass, int relationId)
         {
             if (sourceID == Guid.Empty || destinationID == Guid.Empty || sourceID == destinationID)

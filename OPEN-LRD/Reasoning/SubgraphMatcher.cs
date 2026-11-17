@@ -9,6 +9,7 @@ namespace OPEN_LRD.Reasoning
         /// <summary>Stores a selected graph edge and its match score during search.</summary>
         private readonly record struct MatchedEdge(Link Link, double Score);
 
+        /// <summary>Finds and ranks subgraph matches for a query graph within a graph snapshot.</summary>
         public static IReadOnlyList<SubgraphMatch> FindMatches(
             QueryGraph query,
             GraphSnapshot graph,
@@ -45,6 +46,7 @@ namespace OPEN_LRD.Reasoning
             int searchSteps = 0;
             bool searchLimitReached = false;
 
+            // Recursively assigns candidate graph nodes to ordered query nodes and matches connecting edges.
             void Search(int index)
             {
                 if (searchLimitReached)
@@ -151,6 +153,7 @@ namespace OPEN_LRD.Reasoning
                 }
             }
 
+            // Scores the current node and edge mapping and records it if it meets match thresholds.
             void EvaluateMatch()
             {
                 if (mapping.Count == 0 || !mapping.ContainsKey(query.RootQueryNodeID))
@@ -256,6 +259,7 @@ namespace OPEN_LRD.Reasoning
             return filtered.Take(Math.Max(1, options.MaxMatches)).ToList();
         }
 
+        /// <summary>Builds the ranked candidate graph node list for each query node.</summary>
         private static Dictionary<Guid, List<GraphNodeSnapshot>> BuildCandidateIndex(
             QueryGraph query,
             GraphSnapshot graph,
@@ -303,6 +307,7 @@ namespace OPEN_LRD.Reasoning
             return candidates;
         }
 
+        /// <summary>Builds an undirected adjacency list of query nodes and their connecting query edges.</summary>
         private static Dictionary<Guid, List<(Guid NeighborID, QueryEdge Edge)>> BuildAdjacency(QueryGraph query)
         {
             Dictionary<Guid, List<(Guid NeighborID, QueryEdge Edge)>> adjacency =
@@ -317,6 +322,7 @@ namespace OPEN_LRD.Reasoning
             return adjacency;
         }
 
+        /// <summary>Orders query nodes for search starting from the root or most constrained labeled node.</summary>
         private static List<QueryNode> OrderQueryNodes(
             QueryGraph query,
             Dictionary<Guid, List<(Guid NeighborID, QueryEdge Edge)>> adjacency,
@@ -377,6 +383,7 @@ namespace OPEN_LRD.Reasoning
             return ordered;
         }
 
+        /// <summary>Selects candidate graph nodes for a query node, prioritizing neighbors of already-mapped nodes.</summary>
         private static IReadOnlyList<GraphNodeSnapshot> GetCandidatesForSearch(
             QueryNode queryNode,
             Dictionary<Guid, List<(Guid NeighborID, QueryEdge Edge)>> adjacency,
@@ -435,6 +442,7 @@ namespace OPEN_LRD.Reasoning
                 .ToList();
         }
 
+        /// <summary>Determines whether a graph node satisfies the type and label constraints of a query node.</summary>
         private static bool MatchesCandidateConstraints(
             QueryNode queryNode,
             GraphNodeSnapshot candidate,
@@ -470,6 +478,7 @@ namespace OPEN_LRD.Reasoning
                         StringComparison.OrdinalIgnoreCase))));
         }
 
+        /// <summary>Indexes snapshot links by ordered endpoint node ID pairs for fast lookup.</summary>
         private static Dictionary<(Guid, Guid), List<Link>> BuildLinkIndex(GraphSnapshot graph)
         {
             Dictionary<(Guid, Guid), List<Link>> linksByPair =
@@ -493,6 +502,7 @@ namespace OPEN_LRD.Reasoning
             return linksByPair;
         }
 
+        /// <summary>Attempts to find the highest-scoring link between two graph nodes that matches a query edge.</summary>
         private static bool TryMatchEdge(
             QueryEdge queryEdge,
             Guid fromGraphNodeID,
@@ -543,6 +553,7 @@ namespace OPEN_LRD.Reasoning
             return true;
         }
 
+        /// <summary>Scores how well a candidate graph link matches a query edge and its direction.</summary>
         private static double ScoreEdge(
             QueryEdge queryEdge,
             Link link,
@@ -576,6 +587,7 @@ namespace OPEN_LRD.Reasoning
                 : -1.0;
         }
 
+        /// <summary>Scores how well a candidate graph node matches the type, label, and aliases of a query node.</summary>
         private static double ScoreNode(
             QueryNode queryNode,
             GraphNodeSnapshot graphNode,
@@ -612,11 +624,13 @@ namespace OPEN_LRD.Reasoning
             return options.TypeOnlyNodeScore;
         }
 
+        /// <summary>Determines whether two node type descriptors represent the same node type.</summary>
         private static bool TypesEqual(NodeTypes left, NodeTypes right)
         {
             return ReferenceEquals(left, right) || left.Id == right.Id;
         }
 
+        /// <summary>Builds a canonical identity key for a graph link.</summary>
         private static string GetLinkKey(Link link)
         {
             return string.Join(

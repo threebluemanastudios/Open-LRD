@@ -14,6 +14,7 @@ namespace OPEN_LRD.Nodes.Links
         /// <summary>Gets the canonical name of this link type.</summary>
         public string Name { get; }
 
+        /// <summary>Initializes a forward link type descriptor with an identifier and name.</summary>
         private ForwardLinkTypes(int id, string name)
         {
             Id = id;

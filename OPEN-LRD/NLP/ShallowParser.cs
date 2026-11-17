@@ -11,6 +11,7 @@ namespace OPEN_LRD.NLP
             },
             StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Segments sentences into clauses, phrase chunks, and semantic clause arguments.</summary>
         public static ParsedText Parse(ParsedText parsed)
         {
             ArgumentNullException.ThrowIfNull(parsed);
@@ -42,6 +43,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Splits a sentence's tokens into clause spans at clause-connecting conjunctions.</summary>
         private static List<(int Start, int End)> FindClauseSpans(IReadOnlyList<Token> tokens)
         {
             List<(int Start, int End)> spans = new List<(int Start, int End)>();
@@ -71,6 +73,7 @@ namespace OPEN_LRD.NLP
             return spans;
         }
 
+        /// <summary>Adds a punctuation-trimmed token span to a clause span list when non-empty.</summary>
         private static void AddSpan(
             List<(int Start, int End)> spans,
             IReadOnlyList<Token> tokens,
@@ -87,6 +90,7 @@ namespace OPEN_LRD.NLP
                 spans.Add((start, end));
         }
 
+        /// <summary>Builds noun, verb, adjective, and prepositional phrase chunks within a clause span.</summary>
         private static List<Chunk> BuildChunks(
             IReadOnlyList<Token> tokens,
             int start,
@@ -154,6 +158,7 @@ namespace OPEN_LRD.NLP
             return chunks;
         }
 
+        /// <summary>Consumes a contiguous noun phrase span and advances the token cursor.</summary>
         private static int ConsumeNounPhrase(
             IReadOnlyList<Token> tokens,
             int start,
@@ -191,6 +196,7 @@ namespace OPEN_LRD.NLP
             return index - 1;
         }
 
+        /// <summary>Checks whether a preposition 'of' connects two proper nouns inside a single compound name.</summary>
         private static bool IsProperNameOfConnector(
             IReadOnlyList<Token> tokens,
             int phraseStart,
@@ -205,6 +211,7 @@ namespace OPEN_LRD.NLP
                 && tokens[connectorIndex + 1].PartOfSpeech == PartOfSpeech.ProperNoun;
         }
 
+        /// <summary>Consumes a contiguous sequence of adjective tokens and advances the token cursor.</summary>
         private static int ConsumeAdjectivePhrase(
             IReadOnlyList<Token> tokens,
             int start,
@@ -220,6 +227,7 @@ namespace OPEN_LRD.NLP
             return index - 1;
         }
 
+        /// <summary>Consumes a contiguous verb phrase including auxiliaries, adverbs, and coordinated verbs.</summary>
         private static int ConsumeVerbPhrase(
             IReadOnlyList<Token> tokens,
             int start,
@@ -253,6 +261,7 @@ namespace OPEN_LRD.NLP
             return index - 1;
         }
 
+        /// <summary>Checks whether a token index begins a noun phrase within the current clause span.</summary>
         private static bool StartsNounPhrase(
             IReadOnlyList<Token> tokens,
             int start,
@@ -284,6 +293,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Checks whether a part of speech can belong to a noun phrase.</summary>
         private static bool IsNounPhraseToken(PartOfSpeech partOfSpeech)
         {
             return partOfSpeech is PartOfSpeech.Determiner
@@ -294,6 +304,7 @@ namespace OPEN_LRD.NLP
                 or PartOfSpeech.Number;
         }
 
+        /// <summary>Assigns subject, predicate, object, complement, and qualifier roles to clause chunks.</summary>
         private static List<ClauseArgument> BuildArguments(
             Sentence sentence,
             IReadOnlyList<Chunk> chunks)
@@ -368,6 +379,7 @@ namespace OPEN_LRD.NLP
             return arguments;
         }
 
+        /// <summary>Checks whether a chunk lies completely inside any prepositional phrase chunk.</summary>
         private static bool IsInsidePrepositionalPhrase(Chunk chunk, IReadOnlyList<Chunk> chunks)
         {
             return chunks.Any(candidate =>
@@ -376,11 +388,13 @@ namespace OPEN_LRD.NLP
                 && chunk.EndToken <= candidate.EndToken);
         }
 
+        /// <summary>Checks whether a normalized token is a clause-boundary conjunction.</summary>
         private static bool IsClauseConjunction(string value)
         {
             return clauseConjunctions.Contains(value);
         }
 
+        /// <summary>Checks whether any verb or auxiliary token occurs at or after the specified token index.</summary>
         private static bool HasVerbAfter(IReadOnlyList<Token> tokens, int start)
         {
             for (int index = start; index < tokens.Count; index++)
@@ -392,6 +406,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Checks whether a part of speech can start a new clause subject.</summary>
         private static bool IsSubjectStart(PartOfSpeech partOfSpeech)
         {
             return partOfSpeech is PartOfSpeech.Determiner

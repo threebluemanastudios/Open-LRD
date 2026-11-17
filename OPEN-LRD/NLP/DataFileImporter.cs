@@ -542,8 +542,11 @@ namespace OPEN_LRD.NLP
             int recordCharacters = 0;
             string? error = null;
 
+            // Finalizes the current CSV field and resets the field buffer.
             void AddField()
             {
+                if (valueTooLong)
+                    error ??= $"A CSV value exceeds the {maxValueCharacters}-character limit.";
                 if (fields.Count < maxColumns)
                     fields.Add(field.ToString());
                 else
@@ -553,6 +556,7 @@ namespace OPEN_LRD.NLP
                 valueTooLong = false;
             }
 
+            // Appends a character to the current CSV field while enforcing field and record limits.
             void Append(char value)
             {
                 if (recordCharacters < maxRecordCharacters)
@@ -1128,6 +1132,7 @@ namespace OPEN_LRD.NLP
             bool rootTextTooLong = false;
             StringBuilder rootText = new StringBuilder();
 
+            // Appends root-level XML text while enforcing the maximum record character budget.
             void AppendRootText(string text)
             {
                 if (rootText.Length + text.Length > state.Options.MaxRecordCharacters)
@@ -1918,6 +1923,7 @@ namespace OPEN_LRD.NLP
             bool primitive = firstCharacter != '{' && firstCharacter != '[' && firstCharacter != '"';
             int depth = firstCharacter is '{' or '[' ? 1 : 0;
 
+            // Appends a JSON character while enforcing the maximum record character budget.
             void Append(int value)
             {
                 totalCharacters++;

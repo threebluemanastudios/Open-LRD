@@ -3,6 +3,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Captures the immutable state of a single graph node at snapshot creation time.</summary>
     internal sealed record GraphNodeSnapshot(
         Guid ID,
         NodeTypes Type,
@@ -18,6 +19,7 @@ namespace OPEN_LRD.Reasoning
         private readonly Dictionary<Guid, List<Link>> outgoingLinks;
         private readonly Dictionary<Guid, List<Link>> incidentLinks;
 
+        /// <summary>Initializes an immutable snapshot index over the supplied nodes and links.</summary>
         private GraphSnapshot(
             IReadOnlyList<GraphNodeSnapshot> nodes,
             IReadOnlyList<Link> links)
@@ -46,6 +48,7 @@ namespace OPEN_LRD.Reasoning
             Array.Empty<GraphNodeSnapshot>(),
             Array.Empty<Link>());
 
+        /// <summary>Captures an immutable snapshot of active nodes and links from the core graph.</summary>
         public static GraphSnapshot FromCore(LRD_Core core, IReadOnlySet<string>? invalidLinkKeys = null)
         {
             ArgumentNullException.ThrowIfNull(core);
@@ -91,21 +94,25 @@ namespace OPEN_LRD.Reasoning
             return new GraphSnapshot(nodes, uniqueLinks.Values.ToArray());
         }
 
+        /// <summary>Determines whether the snapshot contains a node with the specified ID.</summary>
         public bool ContainsNode(Guid nodeID)
         {
             return nodesByID.ContainsKey(nodeID);
         }
 
+        /// <summary>Attempts to retrieve a node snapshot by its ID.</summary>
         public bool TryGetNode(Guid nodeID, out GraphNodeSnapshot node)
         {
             return nodesByID.TryGetValue(nodeID, out node!);
         }
 
+        /// <summary>Returns all snapshot nodes matching the specified node type.</summary>
         public IReadOnlyList<GraphNodeSnapshot> GetNodesByType(NodeTypes type)
         {
             return Nodes.Where(node => node.Type == type).ToList();
         }
 
+        /// <summary>Finds snapshot nodes whose label or aliases match the specified text and optional type.</summary>
         public IReadOnlyList<GraphNodeSnapshot> FindByLabel(string? label, NodeTypes? type = null)
         {
             if (string.IsNullOrWhiteSpace(label))
@@ -119,6 +126,7 @@ namespace OPEN_LRD.Reasoning
                 .ToList();
         }
 
+        /// <summary>Returns all active outgoing links originating from the specified node.</summary>
         public IReadOnlyList<Link> GetOutgoingLinks(Guid nodeID)
         {
             return outgoingLinks.TryGetValue(nodeID, out List<Link>? links)
@@ -126,6 +134,7 @@ namespace OPEN_LRD.Reasoning
                 : Array.Empty<Link>();
         }
 
+        /// <summary>Returns all active links incident to the specified node.</summary>
         public IReadOnlyList<Link> GetIncidentLinks(Guid nodeID)
         {
             return incidentLinks.TryGetValue(nodeID, out List<Link>? links)
@@ -144,12 +153,14 @@ namespace OPEN_LRD.Reasoning
             links.Add(link);
         }
 
+        /// <summary>Performs a case-insensitive comparison between a candidate label and an expected string.</summary>
         private static bool Matches(string? value, string expected)
         {
             return value is not null
                 && string.Equals(value, expected, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>Builds a canonical identity key for a graph link.</summary>
         internal static string GetLinkKey(Link link)
         {
             return string.Join(

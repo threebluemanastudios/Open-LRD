@@ -42,6 +42,7 @@ namespace OPEN_LRD.NLP
             },
             StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Reduces a normalized token to its canonical lemma using its part of speech.</summary>
         public static string Lemmatize(string normalized, PartOfSpeech partOfSpeech)
         {
             if (string.IsNullOrWhiteSpace(normalized))
@@ -74,6 +75,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Reduces a plural noun form to its singular lemma.</summary>
         private static string LemmatizeNoun(string value)
         {
             if (value.EndsWith("ies", StringComparison.Ordinal) && value.Length > 3)
@@ -100,6 +102,7 @@ namespace OPEN_LRD.NLP
             return value;
         }
 
+        /// <summary>Reduces an inflected verb form to its base lemma.</summary>
         private static string LemmatizeVerb(string value)
         {
             if (value.EndsWith("ies", StringComparison.Ordinal) && value.Length > 3)
@@ -134,6 +137,7 @@ namespace OPEN_LRD.NLP
             return value;
         }
 
+        /// <summary>Restores silent-e or undoubled-consonant verb stems after suffix stripping.</summary>
         private static string ChooseVerbStem(string stem)
         {
             if (stem.Length == 0)
@@ -163,6 +167,7 @@ namespace OPEN_LRD.NLP
             return stem;
         }
 
+        /// <summary>Reduces a comparative or superlative adjective to its positive lemma.</summary>
         private static string LemmatizeAdjective(string value)
         {
             return value switch
@@ -173,6 +178,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Strips comparative or superlative suffixes from a regular adjective form.</summary>
         private static string LemmatizeAdjectiveSuffix(string value)
         {
             if (value.EndsWith("iest", StringComparison.Ordinal) && value.Length > 4)
@@ -190,6 +196,7 @@ namespace OPEN_LRD.NLP
             return value;
         }
 
+        /// <summary>Restores silent-e or undoubled-consonant adjective stems after suffix stripping.</summary>
         private static string ChooseAdjectiveStem(string stem)
         {
             if (stem.Length == 0)
@@ -211,6 +218,7 @@ namespace OPEN_LRD.NLP
             return stem;
         }
 
+        /// <summary>Reduces a regular -ly adverb to its base stem unless it is an exception.</summary>
         private static string LemmatizeAdverb(string value)
         {
             if (value.Length > 5
@@ -223,6 +231,7 @@ namespace OPEN_LRD.NLP
             return value;
         }
 
+        /// <summary>Returns the lemma for a contracted or possessive token when applicable.</summary>
         private static string? GetContractionLemma(string value, PartOfSpeech partOfSpeech)
         {
             switch (value)
@@ -282,12 +291,14 @@ namespace OPEN_LRD.NLP
             return null;
         }
 
+        /// <summary>Checks whether the stem preceding 's is a pronoun or demonstrative.</summary>
         private static bool PossessorIsPronoun(string value)
         {
             return value is "i" or "you" or "he" or "she" or "it" or "we" or "they"
                 or "that" or "there" or "here" or "what" or "who";
         }
 
+        /// <summary>Checks whether a lowercase letter is an English consonant.</summary>
         private static bool IsConsonant(char value)
         {
             return char.IsLetter(value)

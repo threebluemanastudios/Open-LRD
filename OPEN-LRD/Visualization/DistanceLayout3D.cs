@@ -16,6 +16,7 @@ namespace OPEN_LRD.Visualization
         private const int PackingAttempts = 512;
         private const float MaximumExtent = 1e6f;
 
+        /// <summary>Computes a 3D force-and-distance layout for the specified graph snapshot.</summary>
         public static LayoutResult Compute(
             GraphSnapshot snapshot,
             VisualizerOptions? options = null,
@@ -204,6 +205,7 @@ namespace OPEN_LRD.Visualization
                 snapshot.Links.Count);
         }
 
+        /// <summary>Builds sorted, deduplicated undirected adjacency lists for all snapshot nodes.</summary>
         private static List<int>[] BuildAdjacency(GraphSnapshot snapshot)
         {
             List<int>[] adjacency = new List<int>[snapshot.Nodes.Count];
@@ -235,6 +237,7 @@ namespace OPEN_LRD.Visualization
             return adjacency;
         }
 
+        /// <summary>Partitions the graph into connected components and isolated nodes.</summary>
         private static List<Component> FindComponents(
             IReadOnlyList<int>[] adjacency,
             out List<int> isolated)
@@ -282,6 +285,7 @@ namespace OPEN_LRD.Visualization
             return components;
         }
 
+        /// <summary>Orders connected components by descending size and then ascending first node index.</summary>
         private static int CompareComponents(Component left, Component right)
         {
             int comparison = right.Nodes.Length.CompareTo(left.Nodes.Length);
@@ -292,6 +296,7 @@ namespace OPEN_LRD.Visualization
             return left.Nodes[0].CompareTo(right.Nodes[0]);
         }
 
+        /// <summary>Computes the average scaled rest length across all snapshot links.</summary>
         private static float ComputeMeanRestLength(GraphSnapshot snapshot, VisualizerOptions options)
         {
             if (snapshot.Links.Count == 0)
@@ -310,6 +315,7 @@ namespace OPEN_LRD.Visualization
             return (float)mean;
         }
 
+        /// <summary>Seeds deterministic initial 3D positions for each connected component via breadth-first traversal.</summary>
         private static void InitializePositions(
             GraphSnapshot snapshot,
             IReadOnlyList<int>[] adjacency,
@@ -374,6 +380,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Iteratively relaxes edge-distance and collision constraints until convergence or cancellation.</summary>
         private static bool Relax(
             GraphSnapshot snapshot,
             Vector3[] positions,
@@ -510,6 +517,7 @@ namespace OPEN_LRD.Visualization
             return false;
         }
 
+        /// <summary>Pushes overlapping node pairs apart to enforce the minimum spacing distance.</summary>
         private static void SeparateCollisions(
             Vector3[] positions,
             float minimumSpacing,
@@ -566,6 +574,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Packs disconnected components and isolated nodes into non-overlapping spherical regions.</summary>
         private static bool Pack(
             Vector3[] positions,
             IReadOnlyList<Component> components,
@@ -648,6 +657,7 @@ namespace OPEN_LRD.Visualization
             return false;
         }
 
+        /// <summary>Finds a nearby non-overlapping center position for a component bounding sphere.</summary>
         private static Vector3 FindPackSpot(
             IReadOnlyList<PlacedSphere> placed,
             int componentIndex,
@@ -711,6 +721,7 @@ namespace OPEN_LRD.Visualization
             return SphereDirection(componentIndex + 1) * (outer + radius + margin);
         }
 
+        /// <summary>Computes the average position of all nodes in a connected component.</summary>
         private static Vector3 ComputeComponentCentroid(
             Vector3[] positions,
             Component component)
@@ -723,6 +734,7 @@ namespace OPEN_LRD.Visualization
             return total / component.Nodes.Length;
         }
 
+        /// <summary>Computes the bounding radius of a connected component around its centroid.</summary>
         private static float ComputeComponentRadius(
             Vector3[] positions,
             Component component)
@@ -736,6 +748,7 @@ namespace OPEN_LRD.Visualization
             return radius;
         }
 
+        /// <summary>Computes the average position across all node coordinates.</summary>
         private static Vector3 ComputeCentroid(Vector3[] positions)
         {
             if (positions.Length == 0)
@@ -749,6 +762,7 @@ namespace OPEN_LRD.Visualization
             return total / positions.Length;
         }
 
+        /// <summary>Computes the axis-aligned bounding box and origin-relative radius of the node positions.</summary>
         private static void ComputeBounds(
             Vector3[] positions,
             out Vector3 boundsMinimum,
@@ -775,6 +789,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Resets any non-finite node coordinates to the origin and returns the reset count.</summary>
         private static int SanitizePositions(Vector3[] positions)
         {
             int resetCount = 0;
@@ -797,6 +812,7 @@ namespace OPEN_LRD.Visualization
             return resetCount;
         }
 
+        /// <summary>Generates a quasi-uniform unit direction vector from a Fibonacci sphere index.</summary>
         private static Vector3 SphereDirection(int index)
         {
             double fraction = (index + 0.5) * GoldenRatioFraction;
@@ -811,6 +827,7 @@ namespace OPEN_LRD.Visualization
                 radial * (float)Math.Sin(angle));
         }
 
+        /// <summary>Generates a deterministic unit direction vector from an integer seed.</summary>
         private static Vector3 DeterministicDirection(int seed)
         {
             uint value = unchecked((uint)seed * 2654435761u);
@@ -828,6 +845,7 @@ namespace OPEN_LRD.Visualization
         /// <summary>Stores a connected graph component and its local layout bounds.</summary>
         private sealed class Component
         {
+            /// <summary>Creates a component record for the specified sorted node indices.</summary>
             public Component(int[] nodes)
             {
                 Nodes = nodes;
@@ -852,6 +870,7 @@ namespace OPEN_LRD.Visualization
             private readonly float cellSize;
             private readonly int bucketMask;
 
+            /// <summary>Creates a spatial hash grid sized for the specified node count and cell width.</summary>
             public SpatialGrid(int nodeCount, float cellSize)
             {
                 this.cellSize = cellSize;
@@ -872,6 +891,7 @@ namespace OPEN_LRD.Visualization
             public int[] CellY { get; }
             public int[] CellZ { get; }
 
+            /// <summary>Rebuilds the spatial hash buckets from the current node positions.</summary>
             public void Rebuild(Vector3[] positions)
             {
                 Array.Fill(Head, -1);
@@ -893,6 +913,7 @@ namespace OPEN_LRD.Visualization
                 }
             }
 
+            /// <summary>Computes the hash-table bucket index for a 3D cell coordinate.</summary>
             public int GetBucket(int x, int y, int z)
             {
                 unchecked

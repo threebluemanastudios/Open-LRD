@@ -68,6 +68,7 @@ namespace OPEN_LRD.Visualization
 
         public double MinSpacing => Math.Max(CubeSize * MinSpacingFactor, MinimumSpacing);
 
+        /// <summary>Clamps and rounds a spread value to a valid whole-number setting.</summary>
         public static double NormalizeSpread(double value)
         {
             if (!double.IsFinite(value))
@@ -77,11 +78,13 @@ namespace OPEN_LRD.Visualization
             return Math.Round(clamped, MidpointRounding.AwayFromZero);
         }
 
+        /// <summary>Creates a shallow copy of the current visualizer options.</summary>
         public VisualizerOptions Clone()
         {
             return (VisualizerOptions)MemberwiseClone();
         }
 
+        /// <summary>Validates that all option values fall within their supported ranges.</summary>
         public void Validate()
         {
             if (!double.IsFinite(Spread)
@@ -135,6 +138,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Throws when a floating-point option is not finite and greater than zero.</summary>
         private static void ValidatePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0d)
@@ -146,6 +150,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Throws when an integer option is not greater than zero.</summary>
         private static void ValidatePositiveInteger(int value, string parameterName)
         {
             if (value <= 0)

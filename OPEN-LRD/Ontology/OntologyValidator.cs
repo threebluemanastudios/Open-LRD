@@ -22,6 +22,7 @@ namespace OPEN_LRD.Ontology
                 ["is_named"] = (new[] { "Concept", "Sense", "Category" }, new[] { "Lexeme" })
             };
 
+        /// <summary>Checks whether the specified relation allows the given domain and range category labels.</summary>
         public static bool IsRelationAllowed(string relationName, string? domainLabel, string? rangeLabel)
         {
             if (!DomainRange.TryGetValue(relationName, out (string[] Domain, string[] Range) rule))
@@ -30,6 +31,7 @@ namespace OPEN_LRD.Ontology
             return Matches(rule.Domain, domainLabel) && Matches(rule.Range, rangeLabel);
         }
 
+        /// <summary>Checks whether a candidate label matches any allowed category name.</summary>
         private static bool Matches(string[] allowed, string? label)
         {
             if (label is null)
@@ -40,6 +42,7 @@ namespace OPEN_LRD.Ontology
 
         // Walks is_a links from the node. A node is Real unless it reaches one
         // of the non-real reality concepts.
+        /// <summary>Resolves a node's reality status by walking its outgoing is_a hierarchy.</summary>
         public static string GetRealityStatus(LRD_Core core, Guid nodeId)
         {
             ArgumentNullException.ThrowIfNull(core);
@@ -81,6 +84,7 @@ namespace OPEN_LRD.Ontology
             return OntologyCatalog.RealLabel;
         }
 
+        /// <summary>Checks whether the supplied label matches a registered reality category.</summary>
         private static bool IsRealityLabel(string label)
         {
             foreach (string reality in OntologyCatalog.RealityLabels)

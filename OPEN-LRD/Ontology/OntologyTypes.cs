@@ -26,6 +26,7 @@ namespace OPEN_LRD.Ontology
 
         // Forces the static initializers above to run. Callers use this as an
         // explicit, deterministic registration entry point.
+        /// <summary>Ensures that all ontology node types and link classes are registered.</summary>
         public static void EnsureRegistered()
         {
             _ = Categories;

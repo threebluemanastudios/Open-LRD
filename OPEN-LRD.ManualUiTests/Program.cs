@@ -85,6 +85,7 @@ namespace OPEN_LRD.ManualUiTests
                 Environment.Exit(1);
         }
 
+        /// <summary>Records and prints a pass or fail result for a single manual UI check.</summary>
         private static void Check(bool condition, string message)
         {
             if (condition)
@@ -105,6 +106,7 @@ namespace OPEN_LRD.ManualUiTests
             }
         }
 
+        /// <summary>Pumps pending WPF dispatcher messages on the current STA thread.</summary>
         private static void DoEvents()
         {
             DispatcherFrame frame = new DispatcherFrame();
@@ -119,6 +121,7 @@ namespace OPEN_LRD.ManualUiTests
             Dispatcher.PushFrame(frame);
         }
 
+        /// <summary>Renders the graph label overlay into a temporary drawing visual for test verification.</summary>
         private static void RenderLabelsForTesting(GraphLabelOverlay labels)
         {
             DrawingVisual visual = new DrawingVisual();
@@ -126,6 +129,7 @@ namespace OPEN_LRD.ManualUiTests
             labels.RenderForTesting(drawingContext);
         }
 
+        /// <summary>Pumps the WPF dispatcher until the specified condition succeeds or times out.</summary>
         private static void WaitForCondition(Func<bool> condition, int timeoutMs = 60000, string description = "")
         {
             Stopwatch sw = Stopwatch.StartNew();
@@ -141,6 +145,7 @@ namespace OPEN_LRD.ManualUiTests
             DoEvents();
         }
 
+        /// <summary>Invokes the Tools window's file-import click handler and pumps dispatcher events.</summary>
         private static void ClickImport(Tools window)
         {
             MethodInfo? method = typeof(Tools).GetMethod(
@@ -153,6 +158,7 @@ namespace OPEN_LRD.ManualUiTests
             DoEvents();
         }
 
+        /// <summary>Invokes the Tools window's direct-text ingestion click handler and pumps dispatcher events.</summary>
         private static void ClickDirectIngest(Tools window)
         {
             MethodInfo? method = typeof(Tools).GetMethod(
@@ -165,6 +171,7 @@ namespace OPEN_LRD.ManualUiTests
             DoEvents();
         }
 
+        /// <summary>Selects the requested topic mode item in the Tools window dropdown.</summary>
         private static void SelectTopicMode(Tools window, string mode)
         {
             ComboBoxItem? item = window.TopicModeComboBox.Items
@@ -180,6 +187,7 @@ namespace OPEN_LRD.ManualUiTests
             DoEvents();
         }
 
+        /// <summary>Invokes the Tools window's file-import cancel click handler and pumps dispatcher events.</summary>
         private static void ClickCancel(Tools window)
         {
             MethodInfo? method = typeof(Tools).GetMethod(
@@ -192,6 +200,7 @@ namespace OPEN_LRD.ManualUiTests
             DoEvents();
         }
 
+        /// <summary>Waits until an asynchronous file import in the Tools window completes.</summary>
         private static void WaitForImportToFinish(Tools window, int timeoutMs = 60000)
         {
             WaitForCondition(
@@ -203,6 +212,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 0. PREPARATION
         // ================================================================================
+        /// <summary>Verifies test fixture files exist and initializes the core graph.</summary>
         private static void RunSection0_Preparation()
         {
             Console.WriteLine("\n--- SECTION 0: PREPARATION ---");
@@ -223,6 +233,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 1. WINDOW LAYOUT AND DEFAULTS
         // ================================================================================
+        /// <summary>Verifies default control visibility, tab ordering, and initial field values in the Tools window.</summary>
         private static void RunSection1_LayoutAndDefaults()
         {
             Console.WriteLine("\n--- SECTION 1: WINDOW LAYOUT AND DEFAULTS ---");
@@ -300,6 +311,7 @@ namespace OPEN_LRD.ManualUiTests
                 $"Browse dialog filter matches specification: '{filter}'");
         }
 
+        /// <summary>Verifies direct sentence ingestion, dry-run preview, user Source creation, and all topic selection modes.</summary>
         private static void RunSection1_DirectTextIngestion()
         {
             Console.WriteLine("\n--- SECTION 1A: DIRECT TEXT INGESTION AND TOPIC SELECTION ---");
@@ -354,6 +366,7 @@ namespace OPEN_LRD.ManualUiTests
             Guid taxonTopic = AddTopicNode(core, OntologyTypes.Taxa, "TaxonTopic");
             Guid realityTopic = AddTopicNode(core, OntologyTypes.Realities, "RealityTopic");
 
+            // Executes one direct-text ingestion check under the specified topic selection mode.
             void RunTopicCase(
                 string mode,
                 string subjectName,
@@ -415,6 +428,7 @@ namespace OPEN_LRD.ManualUiTests
             window.Close();
             DoEvents();
 
+            // Creates and adds a permanent topic node fixture with an optional alias.
             static Guid AddTopicNode(LRD_Core core, NodeTypes type, string label, string? alias = null)
             {
                 Web_Node node = new Web_Node(Guid.NewGuid(), type, NodeLifetime.Permanent, 0);
@@ -425,6 +439,7 @@ namespace OPEN_LRD.ManualUiTests
                 return node.ID;
             }
 
+            // Extracts and resolves the conversation context reported by a direct-text ingestion run.
             static ConversationContext GetDirectConversation(Tools window)
             {
                 Match match = Regex.Match(
@@ -439,6 +454,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 2. INPUT VALIDATION (NO IMPORT MAY START)
         // ================================================================================
+        /// <summary>Verifies preflight input validation for file paths, GUIDs, and numeric limits in the Tools window.</summary>
         private static void RunSection2_InputValidation()
         {
             Console.WriteLine("\n--- SECTION 2: INPUT VALIDATION (NO IMPORT MAY START) ---");
@@ -532,6 +548,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 3. DRY RUN (STRICTLY READ-ONLY)
         // ================================================================================
+        /// <summary>Verifies that a text-file dry run reports chunk counts without mutating the graph.</summary>
         private static void RunSection3_DryRun()
         {
             Console.WriteLine("\n--- SECTION 3: DRY RUN (STRICTLY READ-ONLY) ---");
@@ -599,6 +616,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 4. REAL IMPORT WITH AUTOMATIC SOURCE (large.txt)
         // ================================================================================
+        /// <summary>Verifies full text-file import, automatic Source node creation, and Source reuse on re-import.</summary>
         private static (Guid sourceId, Guid convId) RunSection4_RealImportAutomaticSource()
         {
             Console.WriteLine("\n--- SECTION 4: REAL IMPORT WITH AUTOMATIC SOURCE (large.txt) ---");
@@ -702,6 +720,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 5. PROVIDED SOURCE AND TOPIC GUIDS
         // ================================================================================
+        /// <summary>Verifies explicit Source and Topic GUID validation and Source-as-topic resolution.</summary>
         private static void RunSection5_ProvidedSourceAndTopicGuids(Guid existingSourceId)
         {
             Console.WriteLine("\n--- SECTION 5: PROVIDED SOURCE AND TOPIC GUIDS ---");
@@ -798,6 +817,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 6. FAILURE CONTINUATION (mixed.txt)
         // ================================================================================
+        /// <summary>Verifies that unsupported chunks in a text file do not abort subsequent valid chunks.</summary>
         private static void RunSection6_FailureContinuation()
         {
             Console.WriteLine("\n--- SECTION 6: FAILURE CONTINUATION (mixed.txt) ---");
@@ -840,6 +860,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 7. SAFETY LIMITS
         // ================================================================================
+        /// <summary>Verifies oversize file rejection, binary file rejection, and chunk-count truncation in the Tools UI.</summary>
         private static void RunSection7_SafetyLimits()
         {
             Console.WriteLine("\n--- SECTION 7: SAFETY LIMITS ---");
@@ -910,6 +931,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 8. CANCELLATION AND BUSY-STATE GATING
         // ================================================================================
+        /// <summary>Verifies control disabling during active imports, cooperative cancellation, and post-cancel recovery.</summary>
         private static void RunSection8_CancellationAndBusyGating()
         {
             Console.WriteLine("\n--- SECTION 8: CANCELLATION AND BUSY-STATE GATING ---");
@@ -1001,6 +1023,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 9. CONVERSATION CONTINUITY AND ENCODING
         // ================================================================================
+        /// <summary>Verifies cross-chunk pronoun resolution and UTF-8 BOM handling during file import.</summary>
         private static void RunSection9_ConversationContinuityAndEncoding()
         {
             Console.WriteLine("\n--- SECTION 9: CONVERSATION CONTINUITY AND ENCODING ---");
@@ -1058,6 +1081,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 11. 3D VISUALIZER SHELL AND LIFECYCLE (Phase 3)
         // ================================================================================
+        /// <summary>Verifies format detection, mode gating, dry runs, and high-trust checksum skips in the Data Files UI.</summary>
         private static void RunSection13_DataFileImportUi()
         {
             Console.WriteLine("\n--- SECTION 13: DATA FILE IMPORT UI ---");
@@ -1326,6 +1350,7 @@ namespace OPEN_LRD.ManualUiTests
             DoEvents();
         }
 
+        /// <summary>Verifies the 3D Visualizer window lifecycle, navigation, picking, labels, colors, and settings persistence.</summary>
         private static void RunSection11_VisualizerWindow()
         {
             Console.WriteLine("\n--- SECTION 11: 3D VISUALIZER SHELL AND LIFECYCLE (Phase 3) ---");
@@ -1938,6 +1963,7 @@ namespace OPEN_LRD.ManualUiTests
             RunLargeGraphLabelBudgetCheck();
         }
 
+        /// <summary>Verifies candidate-projection and label-drawing budgets on a 20,000-node synthetic graph.</summary>
         private static void RunLargeGraphLabelBudgetCheck()
         {
             const int syntheticNodeCount = 20000;
@@ -2069,6 +2095,7 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 10. SIGN-OFF
         // ================================================================================
+        /// <summary>Prints the final verification summary and asserts that zero checks failed.</summary>
         private static void RunSection10_SignOff()
         {
             Console.WriteLine("\n--- SECTION 10: SIGN-OFF ---");

@@ -11,6 +11,7 @@ namespace OPEN_LRD.Reasoning
         private readonly HashSet<string> invalidLinkKeys = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<Guid> reusedNodesCountedForWeight = new HashSet<Guid>();
 
+        /// <summary>Initializes a reasoning engine bound to an initialized core graph.</summary>
         public ReasoningEngine(LRD_Core core, ReasoningOptions? options = null)
         {
             this.core = core ?? throw new ArgumentNullException(nameof(core));
@@ -22,6 +23,7 @@ namespace OPEN_LRD.Reasoning
             trust = new TrustScale(this.options);
         }
 
+        /// <summary>Matches and merges a query chain into the graph without extracting a response.</summary>
         public ReasoningResult Ingest(
             LinkedList<Chain_Node> chain,
             Guid? sourceNodeID = null,
@@ -30,11 +32,13 @@ namespace OPEN_LRD.Reasoning
             return Execute(chain, sourceNodeID, topicNodeID, merge: true, answer: false);
         }
 
+        /// <summary>Matches a query chain against the graph and extracts a response without mutating the graph.</summary>
         public ReasoningResult Answer(LinkedList<Chain_Node> query)
         {
             return Execute(query, null, null, merge: false, answer: true);
         }
 
+        /// <summary>Matches and merges a query chain into the graph and extracts a response.</summary>
         public ReasoningResult IngestAndAnswer(
             LinkedList<Chain_Node> chain,
             Guid? sourceNodeID = null,
@@ -43,11 +47,13 @@ namespace OPEN_LRD.Reasoning
             return Execute(chain, sourceNodeID, topicNodeID, merge: true, answer: true);
         }
 
+        /// <summary>Computes the current trust assessment for a source and optional topic.</summary>
         public TrustAssessment GetTrust(Guid sourceNodeID, Guid? topicNodeID = null)
         {
             return trust.Assess(sourceNodeID, topicNodeID);
         }
 
+        /// <summary>Records weighted verified or invalid trust evidence for a source and optional topic.</summary>
         public void RecordTrustEvidence(
             Guid sourceNodeID,
             Guid? topicNodeID,
@@ -67,6 +73,7 @@ namespace OPEN_LRD.Reasoning
                 verified ? 0.0 : weight);
         }
 
+        /// <summary>Extracts ranked response paths for a query and subgraph match from the current graph.</summary>
         public IReadOnlyList<GraphPath> ExtractResponse(QueryGraph query, SubgraphMatch match)
         {
             ArgumentNullException.ThrowIfNull(query);
@@ -83,6 +90,7 @@ namespace OPEN_LRD.Reasoning
                 options);
         }
 
+        /// <summary>Executes query building, subgraph matching, optional graph merging, and optional answer extraction.</summary>
         private ReasoningResult Execute(
             LinkedList<Chain_Node>? chain,
             Guid? sourceNodeID,
@@ -345,6 +353,7 @@ namespace OPEN_LRD.Reasoning
                 diagnostics);
         }
 
+        /// <summary>Converts the top-ranked graph path into a response chain and updates the core response buffer.</summary>
         private LinkedList<Chain_Node>? BuildResponse(
             IReadOnlyList<GraphPath> paths,
             GraphSnapshot snapshot)
@@ -369,6 +378,7 @@ namespace OPEN_LRD.Reasoning
             return chain;
         }
 
+        /// <summary>Resolves the trust assessment for a proposed source or returns a neutral default.</summary>
         private TrustAssessment GetProposedTrust(Guid? sourceNodeID, Guid? topicNodeID)
         {
             if (sourceNodeID.HasValue && sourceNodeID.Value != Guid.Empty)

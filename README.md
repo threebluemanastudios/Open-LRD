@@ -6,10 +6,12 @@ Open-LRD is a lightweight cognitive knowledge-graph project written in native C#
 
 ## 1.0 Readiness
 
-The project declares version `1.0.0`. Current Release builds and automated suites
-pass; the release review remains open for repository-wide internal-member comment
-coverage and the remaining Module 8 Phase 5 acceptance fixtures. See
-`RELEASE_READINESS.md` for the current gates and reproducible commands.
+The project declares version `1.0.0`. Current Release builds, automated suites
+(194 smoke tests and 417 automated UI checks), Module 8 Phase 5 acceptance
+fixtures, and repository-wide XML member comment coverage are complete; the
+release review remains open for repository/index cleanup (`CleanUpSteps.md`) and
+final pre-tag verification. See `RELEASE_READINESS.md` for the current gates and
+reproducible commands.
 
 
 The goal is a self-organizing semantic memory that can ingest language, represent concepts and relationships as a directed graph, reason over temporary and permanent knowledge, and return explainable answers.
@@ -248,7 +250,7 @@ Upper Ontology, Load GCIDE Lexicon (subset, letter, and entry cap with progress
 and cancel), and Export Ontology Log actions. Nineteen foundational structural
 relations occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
 (2,000,000). The original Module 4 delivery added eleven ontology checks. The
-  current integrated suite has 188 smoke tests and 417 automated UI checks. The
+  current integrated suite has 194 smoke tests and 417 automated UI checks. The
 Visualizer layout is deterministic and reports progress and cancellation. See
 `Module_4_Plan.txt` for the ontology plan, `AdditionalTools.txt` for persistence
 and text import, and `Visualizer_Plan.txt` for the visualizer implementation.
@@ -309,7 +311,7 @@ question answering.
   round-trip through conversation persistence, with defaults preserved for old
   logs.
 - At Module 6 completion, 165 smoke tests and 285 automated UI checks passed;
-  current integrated verification is 188 smoke tests and 417 UI checks.
+  current integrated verification is 194 smoke tests and 417 UI checks.
 
 See `Module_6_Plan.txt` for design decisions, implementation details, and
 acceptance criteria.
@@ -356,7 +358,7 @@ links and searchable time windows.
   Acme" and "Count events that happened yesterday" use the same Ask paths;
   temporal event counts honor the requested date/range and ReferenceTime.
 - Module 7 completion verification: 169 smoke tests and 289 automated UI checks
-  passed at that milestone; current integrated verification is 188 smoke tests
+  passed at that milestone; current integrated verification is 194 smoke tests
   and 417 UI checks.
 
 See `Module_7_Plan.txt` for the complete design and acceptance criteria.
@@ -373,7 +375,7 @@ NLP-based ingestion for text, JSON, CSV, and XML files.
   GUID-ordered candidate list. Articles before the headword are preserved only
   when present in the user's question. Lexeme/Sense evidence remains available
   in the Workbench.
-- **Phases 1-4 complete; Phase 5 in progress; Phase 6 implemented:** Tools tab organization and direct
+- **Phases 1-6 complete:** Tools tab organization and direct
   text ingestion are delivered. The Visualizer has whole-unit spread settings,
   a fixed scrollable selected-node HUD, and debounced cancel-and-replace layout
   actions with exception logging. Phase 4 includes focused/all-visible floating
@@ -381,16 +383,16 @@ NLP-based ingestion for text, JSON, CSV, and XML files.
   250 background candidates per frame, drawing at most 50 including selected and
   hovered labels) and co-rotating orbit controls with Alt+E/Q roll. Phase 5 adds
   multi-format file ingestion through the Data Files tab.
-- Phase 5 currently supports text/CSV/JSON/XML in structured and NLP modes, with
+- Phase 5 supports text/CSV/JSON/XML in structured and NLP modes, with
   source checksums, trust scoring, dry run, cancellation, and position upserts.
   Current adopted design and resolved Topic/Source/revision decisions are in
-  `Module_8_Plan.txt` Sections 8.3-8.4. Manual file-import workflows and WPF UI
-  verification are complete; broader schema and limit coverage remains part of
-  the release-readiness review.
+  `Module_8_Plan.txt` Sections 8.3-8.4. Manual file-import workflows, WPF UI
+  verification, and automated schema, limit, duplicate, revision, and
+  persistence fixtures are complete.
 - Phase 6 query matching prioritizes constrained labeled anchors and expands
   candidates through indexed incident links. Large-graph ambiguous dictionary
   answers retain their Sense candidates and evidence paths in the Workbench.
-- Current integrated verification: 188 smoke tests and 417 automated UI checks
+- Current integrated verification: 194 smoke tests and 417 automated UI checks
   pass; application and test builds complete with zero warnings and zero errors.
 
 See `Module_8_Plan.txt` for implementation details, remaining phases, and
@@ -459,7 +461,7 @@ The original staged delivery is complete:
 7. **Event and temporal support** — Event nodes, relative-time windows, automatic
    temporal extraction, individual/range and quantity queries, and Count commands.
 
-Current integrated verification is **188 smoke tests** and **417 automated UI
+Current integrated verification is **194 smoke tests** and **417 automated UI
 checks**; application and test builds complete with zero warnings and zero
 errors.
 

@@ -18,6 +18,7 @@ namespace OPEN_LRD.Visualization
 
         public IReadOnlyDictionary<int, RgbColor> ClassColors => classColors;
 
+        /// <summary>Returns the overridden or default palette color for a node type ID.</summary>
         public RgbColor GetNodeColor(int nodeTypeId)
         {
             return nodeColors.TryGetValue(nodeTypeId, out RgbColor color)
@@ -25,6 +26,7 @@ namespace OPEN_LRD.Visualization
                 : GraphColorPalette.GetDefaultNodeColor(nodeTypeId).Color;
         }
 
+        /// <summary>Returns the overridden or default palette color for a link class ID.</summary>
         public RgbColor GetClassColor(int classId)
         {
             return classColors.TryGetValue(classId, out RgbColor color)
@@ -32,6 +34,7 @@ namespace OPEN_LRD.Visualization
                 : GraphColorPalette.GetDefaultClassColor(classId).Color;
         }
 
+        /// <summary>Returns the effective link color using forward-type override, class override, or default precedence.</summary>
         public RgbColor GetLinkColor(int forwardTypeId, int classId)
         {
             if (linkColors.TryGetValue(forwardTypeId, out RgbColor color))
@@ -43,36 +46,43 @@ namespace OPEN_LRD.Visualization
             return GraphColorPalette.GetDefaultLinkColor(forwardTypeId).Color;
         }
 
+        /// <summary>Sets a custom color override for a node type ID.</summary>
         public void SetNodeColor(int nodeTypeId, RgbColor color)
         {
             SetColor(nodeColors, nodeTypeId, color);
         }
 
+        /// <summary>Sets a custom color override for a forward link type ID.</summary>
         public void SetLinkColor(int forwardTypeId, RgbColor color)
         {
             SetColor(linkColors, forwardTypeId, color);
         }
 
+        /// <summary>Sets a custom fallback color override for a link class ID.</summary>
         public void SetClassColor(int classId, RgbColor color)
         {
             SetColor(classColors, classId, color);
         }
 
+        /// <summary>Removes any custom color override for a node type ID.</summary>
         public bool ClearNodeColor(int nodeTypeId)
         {
             return RemoveColor(nodeColors, nodeTypeId);
         }
 
+        /// <summary>Removes any custom color override for a forward link type ID.</summary>
         public bool ClearLinkColor(int forwardTypeId)
         {
             return RemoveColor(linkColors, forwardTypeId);
         }
 
+        /// <summary>Removes any custom color override for a link class ID.</summary>
         public bool ClearClassColor(int classId)
         {
             return RemoveColor(classColors, classId);
         }
 
+        /// <summary>Clears all custom node color overrides.</summary>
         public void ClearNodeColors()
         {
             if (nodeColors.Count == 0)
@@ -82,6 +92,7 @@ namespace OPEN_LRD.Visualization
             RaiseChanged();
         }
 
+        /// <summary>Clears all custom forward-link and link-class color overrides.</summary>
         public void ClearLinkColors()
         {
             if (linkColors.Count == 0 && classColors.Count == 0)
@@ -92,6 +103,7 @@ namespace OPEN_LRD.Visualization
             RaiseChanged();
         }
 
+        /// <summary>Clears all node, link, and class color overrides.</summary>
         public void Reset()
         {
             if (nodeColors.Count == 0 && linkColors.Count == 0 && classColors.Count == 0)
@@ -103,6 +115,7 @@ namespace OPEN_LRD.Visualization
             RaiseChanged();
         }
 
+        /// <summary>Replaces all stored node, link, and class color overrides in a single update.</summary>
         public void ReplaceColors(
             IReadOnlyDictionary<int, RgbColor>? newNodeColors,
             IReadOnlyDictionary<int, RgbColor>? newLinkColors,
@@ -133,6 +146,7 @@ namespace OPEN_LRD.Visualization
             RaiseChanged();
         }
 
+        /// <summary>Updates a color entry in the target dictionary and raises the change event when modified.</summary>
         private void SetColor(Dictionary<int, RgbColor> target, int typeId, RgbColor color)
         {
             if (target.TryGetValue(typeId, out RgbColor existing) && existing == color)
@@ -142,6 +156,7 @@ namespace OPEN_LRD.Visualization
             RaiseChanged();
         }
 
+        /// <summary>Removes a color entry from the target dictionary and raises the change event when removed.</summary>
         private bool RemoveColor(Dictionary<int, RgbColor> target, int typeId)
         {
             if (!target.Remove(typeId))
@@ -151,6 +166,7 @@ namespace OPEN_LRD.Visualization
             return true;
         }
 
+        /// <summary>Notifies listeners that one or more color overrides have changed.</summary>
         private void RaiseChanged()
         {
             Changed?.Invoke(this, EventArgs.Empty);

@@ -94,6 +94,7 @@ namespace OPEN_LRD.NLP
         private readonly List<SessionProvenanceEntry> provenance = new List<SessionProvenanceEntry>();
         private readonly NlpOptions options;
 
+        /// <summary>Creates a conversation context with the specified non-empty identifier and NLP options.</summary>
         public ConversationContext(Guid conversationID, NlpOptions? options = null)
         {
             if (conversationID == Guid.Empty)
@@ -129,11 +130,13 @@ namespace OPEN_LRD.NLP
 
         public IReadOnlyList<SessionProvenanceEntry> Provenance => provenance.AsReadOnly();
 
+        /// <summary>Advances the conversation turn counter for a new interaction turn.</summary>
         public void BeginTurn()
         {
             TurnIndex++;
         }
 
+        /// <summary>Records a resolved mention and updates bounded recency and role pointers.</summary>
         public void RecordMention(ConversationMention mention)
         {
             if (!options.EnableConversationContext || mention.NodeID == Guid.Empty)
@@ -167,6 +170,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Records a sequence of resolved mentions in order.</summary>
         public void RecordMentions(IEnumerable<ConversationMention> newMentions)
         {
             ArgumentNullException.ThrowIfNull(newMentions);
@@ -175,6 +179,7 @@ namespace OPEN_LRD.NLP
                 RecordMention(mention);
         }
 
+        /// <summary>Updates the active conversational focus node and role-specific recency pointers.</summary>
         public void SetFocus(Guid? nodeID, FrameRole role, bool fromAnswer)
         {
             if (!options.EnableConversationContext)
@@ -209,6 +214,7 @@ namespace OPEN_LRD.NLP
                 LastAnswerNodeID = nodeID.Value;
         }
 
+        /// <summary>Stores a parameterized question template for follow-up entity substitution.</summary>
         public void SetLastQuestionTemplate(string? questionText, string? subjectText)
         {
             LastQuestionTemplate = null;
@@ -229,6 +235,7 @@ namespace OPEN_LRD.NLP
                 + questionText[(subjectIndex + subjectText.Length)..];
         }
 
+        /// <summary>Resolves a pronoun mention against recent conversational antecedents in the graph.</summary>
         public PronounResolution ResolvePronoun(
             string surfaceText,
             NodeTypes expectedType,
@@ -413,6 +420,7 @@ namespace OPEN_LRD.NLP
                 new[] { $"Pronoun '{info.Surface}' resolved to '{label}'." });
         }
 
+        /// <summary>Appends a session provenance entry and trims history to the configured limit.</summary>
         public SessionProvenanceEntry RecordProvenance(SessionProvenanceEntry entry)
         {
             ArgumentNullException.ThrowIfNull(entry);
@@ -432,6 +440,7 @@ namespace OPEN_LRD.NLP
             return recorded;
         }
 
+        /// <summary>Finds answer-usable session provenance entries that match a graph evidence path.</summary>
         public IReadOnlyList<SessionProvenanceEntry> FindProvenance(GraphPath? path)
         {
             if (path is null || path.NodeIDs.Count < 2 || path.Links.Count == 0)
@@ -442,6 +451,7 @@ namespace OPEN_LRD.NLP
                 .ToList();
         }
 
+        /// <summary>Restores validated turn, focus, mention, and provenance state from persistence.</summary>
         internal void RestoreState(
             int turnIndex,
             int sequence,
@@ -515,6 +525,7 @@ namespace OPEN_LRD.NLP
             provenance.AddRange(provenanceList);
         }
 
+        /// <summary>Resets all turn counters, focus pointers, mentions, and provenance entries.</summary>
         public void Clear()
         {
             TurnIndex = 0;
@@ -529,8 +540,10 @@ namespace OPEN_LRD.NLP
             provenance.Clear();
         }
 
+        /// <summary>Clears all conversational state for this session.</summary>
         public void Reset() => Clear();
 
+        /// <summary>Checks whether a provenance entry matches any directed edge along a graph path.</summary>
         private static bool PathMatches(SessionProvenanceEntry entry, GraphPath path)
         {
             if (entry.ForwardLinkTypeId is null || entry.InverseLinkTypeId is null)
@@ -562,6 +575,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Resolves the display label for a graph node using its label, aliases, or fallback text.</summary>
         private static string ResolveLabel(Web_Node node, string fallback)
         {
             if (node.Get_NodeType() == NodeTypes.Events)

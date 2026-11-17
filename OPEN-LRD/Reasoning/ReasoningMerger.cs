@@ -6,6 +6,7 @@ namespace OPEN_LRD.Reasoning
     /// <summary>Builds and applies validated graph mutation plans from subgraph matches.</summary>
     internal static class ReasoningMerger
     {
+        /// <summary>Builds a validated merge plan for a query graph and selected subgraph match.</summary>
         public static MergePlan BuildPlan(
             LRD_Core core,
             QueryGraph query,
@@ -190,6 +191,7 @@ namespace OPEN_LRD.Reasoning
             return plan;
         }
 
+        /// <summary>Applies a validated merge plan to the core graph and trust scale.</summary>
         public static MergeApplyResult Apply(
             LRD_Core core,
             MergePlan plan,
@@ -343,6 +345,7 @@ namespace OPEN_LRD.Reasoning
                 diagnostics);
         }
 
+        /// <summary>Updates metadata and usage weight on an existing node reused by a merge action.</summary>
         private static void MergeExistingNode(
             LRD_Core core,
             NodeAction action,
@@ -374,11 +377,13 @@ namespace OPEN_LRD.Reasoning
                 existingNode.RegisterVerifiedReference();
         }
 
+        /// <summary>Determines whether the proposed trust assessment can penalize a contradicted target node.</summary>
         private static bool proposalCanInvalidateTarget(TrustAssessment proposedTrust)
         {
             return proposedTrust.Decision == TrustDecision.Trusted;
         }
 
+        /// <summary>Creates a baseline neutral trust assessment for an existing graph link.</summary>
         private static TrustAssessment CreateExistingLinkTrust(
             Link link,
             Guid? topicNodeID,
@@ -403,6 +408,7 @@ namespace OPEN_LRD.Reasoning
                 false);
         }
 
+        /// <summary>Finds an active snapshot link that already satisfies the query edge.</summary>
         private static Link? FindExistingLink(
             GraphSnapshot snapshot,
             QueryEdge queryEdge,
@@ -434,6 +440,7 @@ namespace OPEN_LRD.Reasoning
             return null;
         }
 
+        /// <summary>Creates the directed graph link corresponding to a query edge.</summary>
         private static Link CreateProposedLink(
             QueryEdge queryEdge,
             Guid fromGraphNodeID,
@@ -457,6 +464,7 @@ namespace OPEN_LRD.Reasoning
                 queryEdge.Classification);
         }
 
+        /// <summary>Validates node mappings, link uniqueness, and resource limits on a merge plan.</summary>
         private static void ValidatePlan(
             LRD_Core core,
             QueryGraph query,
@@ -544,6 +552,7 @@ namespace OPEN_LRD.Reasoning
                 plan.ValidationErrors.Add("The core graph is unavailable.");
         }
 
+        /// <summary>Builds a canonical identity key for a graph link.</summary>
         private static string GetLinkKey(Link link)
         {
             return string.Join(

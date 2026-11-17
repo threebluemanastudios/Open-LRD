@@ -18,6 +18,7 @@ namespace OPEN_LRD.Ontology.Gcide
         private static readonly Regex SynonymPrefix =
             new(@"^\s*Syn\.?\s*--\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>Streams parsed GCIDE dictionary entries from the specified corpus directory.</summary>
         public static IEnumerable<GcideEntry> Read(string directory, char? letter = null)
         {
             if (string.IsNullOrWhiteSpace(directory))
@@ -35,6 +36,7 @@ namespace OPEN_LRD.Ontology.Gcide
             }
         }
 
+        /// <summary>Enumerates GCIDE corpus files in the directory, optionally filtered by starting letter.</summary>
         public static IEnumerable<string> EnumerateFiles(string directory, char? letter = null)
         {
             IEnumerable<string> files = Directory.EnumerateFiles(directory, "CIDE.*");
@@ -48,6 +50,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return files.OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
         }
 
+        /// <summary>Parses all headword paragraph blocks in a GCIDE document string into entries.</summary>
         public static IEnumerable<GcideEntry> ParseDocument(string text)
         {
             int index = 0;
@@ -78,6 +81,7 @@ namespace OPEN_LRD.Ontology.Gcide
             }
         }
 
+        /// <summary>Parses a single GCIDE paragraph block into a structured dictionary entry.</summary>
         public static GcideEntry? ParseEntry(string block)
         {
             string index = GcideMarkup.CleanText(ExtractFirst(block, "ent") ?? string.Empty);
@@ -125,6 +129,7 @@ namespace OPEN_LRD.Ontology.Gcide
                 Taxa: taxa.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
         }
 
+        /// <summary>Extracts all sense definitions and associated field or source metadata from an entry block.</summary>
         private static List<GcideSense> ParseSenses(string block)
         {
             List<GcideSense> senses = new();
@@ -164,6 +169,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return senses;
         }
 
+        /// <summary>Parses a sequence of comma- or semicolon-delimited tag values into distinct cleaned terms.</summary>
         private static IReadOnlyList<string> ParseList(IEnumerable<string> rawValues)
         {
             List<string> results = new();
@@ -185,6 +191,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return results;
         }
 
+        /// <summary>Cleans and deduplicates a sequence of raw tag phrase values.</summary>
         private static IReadOnlyList<string> ParsePhrases(IEnumerable<string> rawValues)
         {
             List<string> results = new();
@@ -201,6 +208,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return results;
         }
 
+        /// <summary>Extracts the inner text of every occurrence of the specified tag within a block.</summary>
         private static IEnumerable<string> ExtractAll(string block, string tag)
         {
             string open = "<" + tag + ">";
@@ -225,6 +233,7 @@ namespace OPEN_LRD.Ontology.Gcide
             }
         }
 
+        /// <summary>Extracts the inner text of the first occurrence of the specified tag within a block.</summary>
         private static string? ExtractFirst(string block, string tag)
         {
             foreach (string value in ExtractAll(block, tag))
@@ -233,6 +242,7 @@ namespace OPEN_LRD.Ontology.Gcide
             return null;
         }
 
+        /// <summary>Extracts the inner text of the last occurrence of the specified tag within a block.</summary>
         private static string? ExtractLast(string block, string tag)
         {
             string? result = null;

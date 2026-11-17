@@ -7,6 +7,7 @@ namespace OPEN_LRD.NLP
     /// <summary>Executes recognized read-only NLP commands against graph and conversation state.</summary>
     internal static class CommandProcessor
     {
+        /// <summary>Creates an ambiguous answer prompting the user to clarify an incomplete command.</summary>
         public static NlpAnswer CreateClarification(NlpCommand command)
         {
             string text = string.IsNullOrWhiteSpace(command.Clarification)
@@ -27,6 +28,7 @@ namespace OPEN_LRD.NLP
                 diagnostics);
         }
 
+        /// <summary>Executes a non-query command target against the core graph and conversation context.</summary>
         public static NlpAnswer ExecuteFixed(
             NlpCommand command,
             LRD_Core core,
@@ -53,6 +55,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Builds a quantity answer reporting the count of a requested graph or session item.</summary>
         private static NlpAnswer BuildCount(int count, string unit, AnswerKind kind)
         {
             string plural = count == 1 ? unit : unit + "s";
@@ -68,12 +71,14 @@ namespace OPEN_LRD.NLP
                 kind);
         }
 
+        /// <summary>Counts outgoing stored links across the graph, optionally restricting to active links.</summary>
         private static int CountLinks(LRD_Core core, bool factsOnly)
         {
             return core.FindNodes().Sum(node => core.GetStoredLinks(node.ID).Count(link =>
                 link.SourceID == node.ID && (!factsOnly || link.IsActive)));
         }
 
+        /// <summary>Builds a formatted list of active directed facts in the graph.</summary>
         private static NlpAnswer BuildFacts(LRD_Core core, NlpOptions options)
         {
             List<Web_Node> nodes = core
@@ -125,6 +130,7 @@ namespace OPEN_LRD.NLP
                 diagnostics);
         }
 
+        /// <summary>Builds a summary answer reporting node, link, and node-type counts in the graph.</summary>
         private static NlpAnswer BuildGraph(LRD_Core core)
         {
             IReadOnlyList<Web_Node> nodes = core.FindNodes();
@@ -151,6 +157,7 @@ namespace OPEN_LRD.NLP
                 Array.Empty<string>());
         }
 
+        /// <summary>Builds a summary answer describing the current conversation session state.</summary>
         private static NlpAnswer BuildConversation(ConversationContext conversation)
         {
             string text =
@@ -176,6 +183,7 @@ namespace OPEN_LRD.NLP
                 Array.Empty<string>());
         }
 
+        /// <summary>Builds a combined graph and conversation summary answer.</summary>
         private static NlpAnswer BuildSummary(LRD_Core core, ConversationContext conversation)
         {
             NlpAnswer graph = BuildGraph(core);
@@ -195,6 +203,7 @@ namespace OPEN_LRD.NLP
                 diagnostics);
         }
 
+        /// <summary>Builds a detailed inspection answer for a specific graph node and its links.</summary>
         private static NlpAnswer BuildNode(
             NlpCommand command,
             LRD_Core core,
@@ -269,6 +278,7 @@ namespace OPEN_LRD.NLP
                 diagnostics);
         }
 
+        /// <summary>Creates a command answer record with the supplied status, text, and provenance flags.</summary>
         private static NlpAnswer CreateAnswer(
             AnswerStatus status,
             string text,
@@ -296,6 +306,7 @@ namespace OPEN_LRD.NLP
                 usesSessionProvenance);
         }
 
+        /// <summary>Truncates command output to the configured maximum answer length when necessary.</summary>
         private static string LimitText(
             string text,
             NlpOptions options,
@@ -314,6 +325,7 @@ namespace OPEN_LRD.NLP
             return text[..(maxLength - 3)] + "...";
         }
 
+        /// <summary>Returns the display label for a node ID in the core graph or its GUID string.</summary>
         private static string GetNodeLabel(LRD_Core core, Guid nodeID)
         {
             if (!core.TryGetNode(nodeID, out Web_Node? node) || node is null)
@@ -322,6 +334,7 @@ namespace OPEN_LRD.NLP
             return GetNodeLabel(node);
         }
 
+        /// <summary>Returns the display label for a graph node using its event name, label, alias, or ID.</summary>
         private static string GetNodeLabel(Web_Node node)
         {
             if (node.Get_NodeType() == NodeTypes.Events)
@@ -334,6 +347,7 @@ namespace OPEN_LRD.NLP
             return alias ?? node.ID.ToString();
         }
 
+        /// <summary>Formats an optional GUID for command output.</summary>
         private static string FormatGuid(Guid? value)
         {
             return value?.ToString() ?? "(none)";

@@ -31,6 +31,7 @@ namespace OPEN_LRD.Nodes
     /// <summary>Calculates event status, endpoint variance, duration, and friendly relative-time text.</summary>
     internal static class EventTimeVarianceCalculator
     {
+        /// <summary>Computes the temporal variance and status of an Event node relative to a reference time.</summary>
         public static EventTimeVariance Calculate(
             Web_Node eventNode,
             DateTimeOffset? referenceTime = null)
@@ -91,6 +92,7 @@ namespace OPEN_LRD.Nodes
             return new EventTimeVariance(now, startVariance, endVariance, duration, status, friendly);
         }
 
+        /// <summary>Formats a time span as a concise human-readable distance string.</summary>
         private static string FormatDistance(TimeSpan distance)
         {
             if (distance < TimeSpan.Zero)
@@ -112,6 +114,7 @@ namespace OPEN_LRD.Nodes
             return FormatCount((int)Math.Round(distance.TotalDays / 365.0), "year", "years");
         }
 
+        /// <summary>Formats a positive unit count with singular or plural unit text.</summary>
         private static string FormatCount(int count, string singular, string plural)
         {
             int safeCount = Math.Max(1, count);

@@ -19,8 +19,10 @@ namespace OPEN_LRD
         private Dictionary<Guid, ConversationContext>? conversations;
         private Dictionary<Guid, Guid>? pipelineConversations;
 
+        /// <summary>Initializes the singleton core type.</summary>
         static LRD_Core() { }
 
+        /// <summary>Prevents external instantiation of the singleton core.</summary>
         private LRD_Core() { }
 
         public static LRD_Core Instance => _instance;
@@ -118,6 +120,7 @@ namespace OPEN_LRD
             return new ReadOnlyDictionary<Guid, ConversationContext>(conversations);
         }
 
+        /// <summary>Adds a preconstructed conversation context to the registry.</summary>
         internal bool AddExistingConversation(ConversationContext conversation)
         {
             ArgumentNullException.ThrowIfNull(conversation);
@@ -128,6 +131,7 @@ namespace OPEN_LRD
             return conversations.TryAdd(conversation.ConversationID, conversation);
         }
 
+        /// <summary>Replaces the active graph nodes and conversation registries with validated snapshots.</summary>
         internal void ReplaceGraphAndConversations(
             IReadOnlyDictionary<Guid, Web_Node> replacementNodes,
             IReadOnlyDictionary<Guid, ConversationContext> replacementConversations)
@@ -408,6 +412,7 @@ namespace OPEN_LRD
             return EventTimeVarianceCalculator.Calculate(eventNode, referenceTime);
         }
 
+        /// <summary>Finds an existing Event node that matches the specified name, window, and participants.</summary>
         internal Web_Node? FindMatchingEvent(
             string? eventName,
             DateTimeOffset? startTime,
@@ -435,6 +440,7 @@ namespace OPEN_LRD
                     locationID));
         }
 
+        /// <summary>Checks whether an event's outgoing links match the optional subject, verb, object, and location filters.</summary>
         private bool EventLinksMatch(
             Guid eventID,
             Guid? subjectID,
@@ -458,6 +464,7 @@ namespace OPEN_LRD
             return subjectMatches && objectMatches && locationMatches && actionMatches;
         }
 
+        /// <summary>Verifies that an optional event endpoint identifier refers to an existing node.</summary>
         private void ValidateEventEndpoint(Guid? endpointID, string parameterName)
         {
             if (endpointID.HasValue
@@ -467,6 +474,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Adds a typed event relationship link between two existing graph nodes.</summary>
         private void AddEventLink(Guid sourceID, Guid destinationID, string relationName, LinkClass classification)
         {
             if (nodes is null
@@ -485,6 +493,7 @@ namespace OPEN_LRD
                 classification));
         }
 
+        /// <summary>Formats an event time window as an ISO-8601 range label.</summary>
         private static string FormatEventWindow(DateTimeOffset? start, DateTimeOffset? end)
         {
             if (start.HasValue && end.HasValue)
@@ -493,6 +502,7 @@ namespace OPEN_LRD
             return (start ?? end)?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
         }
 
+        /// <summary>Determines whether an event window overlaps or falls within the requested search interval.</summary>
         private static bool EventOverlaps(
             DateTimeOffset? eventStart,
             DateTimeOffset? eventEnd,
@@ -569,6 +579,7 @@ namespace OPEN_LRD
             return nodes.Remove(nodeID);
         }
 
+        /// <summary>Merges a duplicate node's metadata and links into a survivor node and removes the duplicate.</summary>
         internal bool MergeNodes(Guid survivorID, Guid duplicateID)
         {
             if (!initialized || nodes is null || survivorID == duplicateID
@@ -642,6 +653,7 @@ namespace OPEN_LRD
             return RemoveExistingNode(duplicateID);
         }
 
+        /// <summary>Marks all active graph links matching the target identity as inactive.</summary>
         internal bool InvalidateLink(Link target)
         {
             ArgumentNullException.ThrowIfNull(target);
@@ -665,6 +677,7 @@ namespace OPEN_LRD
             return changed;
         }
 
+        /// <summary>Removes stale metadata-origin flags from a node's outgoing links and invalidates orphaned edges.</summary>
         internal (int FactsRemoved, int LinksInvalidated) ReconcileMetadataLinks(
             Guid sourceID,
             IReadOnlySet<string> expectedLinkKeys)
@@ -739,6 +752,7 @@ namespace OPEN_LRD
             return AddConnections(sourceID, destinationID, linkClass, linkType, false, LinkOrigin.Explicit);
         }
 
+        /// <summary>Adds a directed connection with the supplied class, relationship type, and link origin.</summary>
         internal bool AddDirectedConnection(
             Guid sourceID,
             Guid destinationID,
@@ -749,6 +763,7 @@ namespace OPEN_LRD
             return AddConnections(sourceID, destinationID, linkClass, linkType, false, origin);
         }
 
+        /// <summary>Adds a directed or bidirectional connection between two existing nodes.</summary>
         private bool AddConnections(
             Guid sourceID,
             Guid destinationID,
@@ -963,6 +978,7 @@ namespace OPEN_LRD
                 : Array.Empty<Link>();
         }
 
+        /// <summary>Returns all stored outgoing links for the specified node, including inactive links.</summary>
         internal IReadOnlyList<Link> GetStoredLinks(Guid nodeID)
         {
             if (!initialized || nodes is null)
@@ -1087,6 +1103,7 @@ namespace OPEN_LRD
             return new LinkedList<Chain_Node>(responseChain);
         }
 
+        /// <summary>Replaces the transient query and response chains with copies of the supplied lists.</summary>
         internal void ReplaceTransientChains(
             LinkedList<Chain_Node>? replacementQuery,
             LinkedList<Chain_Node>? replacementResponse)

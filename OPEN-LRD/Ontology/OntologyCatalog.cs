@@ -57,6 +57,7 @@ namespace OPEN_LRD.Ontology
         };
 
         // Maps a GCIDE <pos> abbreviation to a canonical catalog label.
+        /// <summary>Maps a GCIDE part-of-speech abbreviation to its canonical ontology category label.</summary>
         public static string? PartOfSpeechFromAbbreviation(string abbreviation)
         {
             string value = abbreviation.ToLowerInvariant().Replace(".", " ").Trim();

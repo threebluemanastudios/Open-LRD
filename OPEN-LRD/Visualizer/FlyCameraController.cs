@@ -27,6 +27,7 @@ namespace OPEN_LRD.Visualizer
         public event Action? CameraMoved;
         public event Action<double>? SpeedChanged;
 
+        /// <summary>Creates and starts a fly-camera controller bound to the specified viewport host and scene.</summary>
         public FlyCameraController(
             UIElement host,
             Window parentWindow,
@@ -50,6 +51,7 @@ namespace OPEN_LRD.Visualizer
 
         public Func<Vector3?>? GetOrbitTarget { get; set; }
 
+        /// <summary>Computes the net camera roll direction from clockwise and counter-clockwise key states.</summary>
         internal static double GetOrbitRollDirection(bool clockwiseKeyDown, bool counterClockwiseKeyDown)
         {
             return (clockwiseKeyDown ? 1.0 : 0.0) - (counterClockwiseKeyDown ? 1.0 : 0.0);
@@ -80,11 +82,13 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Updates the reference scene radius used to scale base movement speed.</summary>
         public void SetSceneRadius(float radius)
         {
             sceneRadius = Math.Max(radius, 1f);
         }
 
+        /// <summary>Subscribes to the WPF rendering loop to process per-frame camera movement.</summary>
         public void Start()
         {
             if (isRunning || isDisposed)
@@ -95,6 +99,7 @@ namespace OPEN_LRD.Visualizer
             CompositionTarget.Rendering += OnRendering;
         }
 
+        /// <summary>Stops per-frame camera updates and releases any active mouse capture.</summary>
         public void Stop()
         {
             if (!isRunning)
@@ -111,6 +116,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Starts right-button mouse-look capture on the viewport host.</summary>
         public void HandleMouseDown(MouseButtonEventArgs e)
         {
             if (e.ChangedButton == MouseButton.Right)
@@ -122,6 +128,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Ends right-button mouse-look capture on the viewport host.</summary>
         public void HandleMouseUp(MouseButtonEventArgs e)
         {
             if (e.ChangedButton == MouseButton.Right && isMouseLooking)
@@ -132,6 +139,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Applies mouse-look rotation deltas while right-button capture is active.</summary>
         public void HandleMouseMove(MouseEventArgs e)
         {
             if (!isMouseLooking)
@@ -155,6 +163,7 @@ namespace OPEN_LRD.Visualizer
             e.Handled = true;
         }
 
+        /// <summary>Adjusts the camera movement speed multiplier in response to mouse-wheel input.</summary>
         public void HandleMouseWheel(MouseWheelEventArgs e)
         {
             double factor = e.Delta > 0 ? 1.15 : 1.0 / 1.15;
@@ -162,6 +171,7 @@ namespace OPEN_LRD.Visualizer
             e.Handled = true;
         }
 
+        /// <summary>Integrates keyboard translation and orbit inputs on each WPF rendering tick.</summary>
         private void OnRendering(object? sender, EventArgs e)
         {
             if (!isRunning || isDisposed)
@@ -249,6 +259,7 @@ namespace OPEN_LRD.Visualizer
             CameraMoved?.Invoke();
         }
 
+        /// <summary>Stops the controller and unsubscribes from rendering callbacks.</summary>
         public void Dispose()
         {
             if (isDisposed)

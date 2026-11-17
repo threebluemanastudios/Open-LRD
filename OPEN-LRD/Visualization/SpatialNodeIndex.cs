@@ -12,6 +12,7 @@ namespace OPEN_LRD.Visualization
         private readonly Node[] nodes;
         private readonly List<int> traversalStack = new List<int>();
 
+        /// <summary>Creates a bounding-volume hierarchy over the specified node positions.</summary>
         private SpatialNodeIndex(Vector3[] positions, int leafCapacity)
         {
             this.positions = positions;
@@ -32,6 +33,7 @@ namespace OPEN_LRD.Visualization
 
         public int Count => positions.Length;
 
+        /// <summary>Validates node coordinates and builds a spatial index with the requested leaf capacity.</summary>
         public static SpatialNodeIndex Build(
             IReadOnlyList<Vector3> positions,
             int leafCapacity = VisualizerOptions.SpatialIndexLeafCapacity)
@@ -52,6 +54,7 @@ namespace OPEN_LRD.Visualization
             return new SpatialNodeIndex(copy, leafCapacity);
         }
 
+        /// <summary>Collects up to the specified number of visible node indices inside the camera frustum.</summary>
         public void CollectFrustumCandidates(
             CameraView camera,
             double maximumDepth,
@@ -118,6 +121,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Finds the nearest visible node cube intersected by the specified world-space ray.</summary>
         public int? FindNearestRayHit(
             Vector3 origin,
             Vector3 direction,
@@ -140,6 +144,7 @@ namespace OPEN_LRD.Visualization
             return nearestIndex;
         }
 
+        /// <summary>Recursively traverses the BVH to locate the closest ray-node intersection.</summary>
         private void FindNearestRayHit(
             int nodeIndex,
             Vector3 origin,
@@ -198,6 +203,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Visits a child BVH node when its ray entry distance can improve the current nearest hit.</summary>
         private void VisitRayChild(
             int childIndex,
             float entry,
@@ -221,6 +227,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Returns the ray entry distance into an expanded BVH node bounding box.</summary>
         private static float GetRayEntry(Node node, Vector3 origin, Vector3 direction, float nodeHalfExtent)
         {
             Vector3 expansion = new Vector3(nodeHalfExtent);
@@ -234,6 +241,7 @@ namespace OPEN_LRD.Visualization
                 : float.PositiveInfinity;
         }
 
+        /// <summary>Recursively partitions node indices along the longest axis to build a BVH subtree.</summary>
         private int BuildNode(List<Node> builtNodes, int start, int count, int leafCapacity)
         {
             GetBounds(start, count, out Vector3 minimum, out Vector3 maximum);
@@ -259,6 +267,7 @@ namespace OPEN_LRD.Visualization
             return nodeIndex;
         }
 
+        /// <summary>Computes the axis-aligned bounding box for a range of ordered node indices.</summary>
         private void GetBounds(int start, int count, out Vector3 minimum, out Vector3 maximum)
         {
             Vector3 first = positions[orderedIndices[start]];
@@ -272,6 +281,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Determines whether all components of a 3D vector are finite numbers.</summary>
         private static bool IsFinite(Vector3 value) =>
             float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
 
@@ -293,12 +303,14 @@ namespace OPEN_LRD.Visualization
             private readonly Vector3[] positions;
             private readonly int axis;
 
+            /// <summary>Creates a comparer for sorting node indices along the specified coordinate axis.</summary>
             public PositionComparer(Vector3[] positions, int axis)
             {
                 this.positions = positions;
                 this.axis = axis;
             }
 
+            /// <summary>Compares two node indices by their coordinate along the partition axis.</summary>
             public int Compare(int left, int right)
             {
                 float a = GetCoordinate(positions[left], axis);
@@ -308,6 +320,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Returns the X, Y, or Z component of a vector for the given axis index.</summary>
         private static float GetCoordinate(Vector3 value, int axis) => axis switch
         {
             0 => value.X,

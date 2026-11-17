@@ -73,6 +73,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Ontology validation and reality", TestValidationAndReality);
         }
 
+        /// <summary>Initializes and returns the singleton graph core.</summary>
         private static LRD_Core NewCore()
         {
             LRD_Core core = LRD_Core.Instance;
@@ -80,6 +81,7 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Creates and returns a unique temporary directory for GCIDE test fixtures.</summary>
         private static string NewTempDirectory()
         {
             string directory = Path.Combine(
@@ -89,6 +91,7 @@ namespace OPEN_LRD.SmokeTests
             return directory;
         }
 
+        /// <summary>Writes the specified GCIDE corpus fixture files into a new temporary directory.</summary>
         private static string WriteCorpus(params (string File, string Content)[] files)
         {
             string directory = NewTempDirectory();
@@ -99,12 +102,14 @@ namespace OPEN_LRD.SmokeTests
             return directory;
         }
 
+        /// <summary>Deletes a temporary fixture directory if it exists.</summary>
         private static void DeleteDirectory(string directory)
         {
             if (Directory.Exists(directory))
                 Directory.Delete(directory, recursive: true);
         }
 
+        /// <summary>Finds a required graph node matching the specified label and type.</summary>
         private static Web_Node Node(LRD_Core core, string label, NodeTypes type)
         {
             IReadOnlyList<Web_Node> nodes = core.FindByLabel(label, type);
@@ -112,12 +117,14 @@ namespace OPEN_LRD.SmokeTests
             return nodes[0];
         }
 
+        /// <summary>Finds an optional graph node matching the specified label and type.</summary>
         private static Web_Node? Find(LRD_Core core, string label, NodeTypes type)
         {
             IReadOnlyList<Web_Node> nodes = core.FindByLabel(label, type);
             return nodes.Count > 0 ? nodes[0] : null;
         }
 
+        /// <summary>Counts the total number of stored reference links across all graph nodes.</summary>
         private static int TotalLinks(LRD_Core core)
         {
             int total = 0;
@@ -128,6 +135,7 @@ namespace OPEN_LRD.SmokeTests
             return total;
         }
 
+        /// <summary>Determines whether a node has an outgoing link to the specified destination and relation ID.</summary>
         private static bool HasLink(Guid sourceID, Guid destinationID, int relationId)
         {
             Web_Node? source = LRD_Core.Instance.GetExistingNode(sourceID);
@@ -144,6 +152,7 @@ namespace OPEN_LRD.SmokeTests
             return false;
         }
 
+        /// <summary>Verifies that upper ontology bootstrap creates permanent, idempotent category hierarchies.</summary>
         private static void TestFoundationBootstrap()
         {
             LRD_Core core = NewCore();
@@ -176,6 +185,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(core.FindByLabel("Location", OntologyTypes.Categories).Count == 1, "categories should not duplicate");
         }
 
+        /// <summary>Verifies reserved ontology relation IDs, names, inverses, and range enforcement.</summary>
         private static void TestRelationRegistry()
         {
             OntologyRelations.EnsureRegistered();
@@ -208,6 +218,7 @@ namespace OPEN_LRD.SmokeTests
                 "unregistered reserved IDs should still be rejected");
         }
 
+        /// <summary>Verifies that directed ontology links resolve their registered forward and inverse names.</summary>
         private static void TestLinkConstruction()
         {
             LRD_Core core = NewCore();
@@ -230,6 +241,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(link.InverseLink.Name == "has_subtype", "inverse link should keep its name");
         }
 
+        /// <summary>Verifies GCIDE character escape decoding and markup whitespace normalization.</summary>
         private static void TestMarkupDecoding()
         {
             Assert(GcideMarkup.DecodeEscapes("\\'94") == "\u00F6", "\\'94 should decode to o-umlaut");
@@ -243,6 +255,7 @@ namespace OPEN_LRD.SmokeTests
                 "clean text should normalise whitespace");
         }
 
+        /// <summary>Verifies GCIDE paragraph parsing for headwords, parts of speech, senses, and semantic tags.</summary>
         private static void TestEntryParsing()
         {
             GcideEntry? entry = GcideEntryReader.ParseEntry(DogBlock);
@@ -275,6 +288,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(unbalanced.First().Headword == "fox", "the unterminated entry should keep its headword");
         }
 
+        /// <summary>Verifies that GCIDE corpus entries map to permanent lexeme, sense, field, and semantic links.</summary>
         private static void TestCorpusMapping()
         {
             LRD_Core core = NewCore();
@@ -345,6 +359,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that single-sense and multi-sense GCIDE entries answer definition questions in NLP.</summary>
         private static void TestGcideLoaderAskDefinitions()
         {
             LRD_Core core = NewCore();
@@ -387,6 +402,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies that reloading the same GCIDE corpus does not duplicate lexemes, senses, or links.</summary>
         private static void TestIdempotentReload()
         {
             LRD_Core core = NewCore();
@@ -420,6 +436,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies SemanticOnly, MaxEntries, and ByLetter subset filtering during GCIDE loading.</summary>
         private static void TestSubsetPolicies()
         {
             LRD_Core core = NewCore();
@@ -477,6 +494,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies loading a bounded sample from the bundled GCIDE corpus directory when present.</summary>
         private static void TestBundledCorpusSample()
         {
             string directory = OntologyOptions.DefaultCorpusDirectory;
@@ -502,6 +520,7 @@ namespace OPEN_LRD.SmokeTests
                 "lexeme count should match the report");
         }
 
+        /// <summary>Verifies exporting and re-importing ontology node types, link classes, and relations.</summary>
         private static void TestPersistenceRoundTrip()        {
             LRD_Core core = NewCore();
             UpperOntologyBootstrap.Populate(core);
@@ -537,6 +556,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies domain/range relation validation and subtree reality-status resolution.</summary>
         private static void TestValidationAndReality()
         {
             Assert(

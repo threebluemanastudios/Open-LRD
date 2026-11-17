@@ -3,11 +3,13 @@ namespace OPEN_LRD.NLP
     /// <summary>Tokenizes normalized sentences while preserving source spans and question form.</summary>
     internal static class TextTokenizer
     {
+        /// <summary>Splits normalized text into sentences and tokens using the normalized text as the source.</summary>
         public static ParsedText Tokenize(string normalizedText, NlpOptions? options = null)
         {
             return Tokenize(normalizedText, normalizedText, options);
         }
 
+        /// <summary>Splits normalized text into classified sentences and offset-preserving tokens.</summary>
         public static ParsedText Tokenize(
             string normalizedText,
             string originalText,
@@ -57,6 +59,7 @@ namespace OPEN_LRD.NLP
                 diagnostics);
         }
 
+        /// <summary>Tokenizes a single sentence span into word and punctuation tokens.</summary>
         private static List<Token> TokenizeSentence(string text, int start, int end, int sentenceIndex)
         {
             List<Token> tokens = new List<Token>();
@@ -109,6 +112,7 @@ namespace OPEN_LRD.NLP
             return tokens;
         }
 
+        /// <summary>Checks whether the character at an index starts a word or contraction token.</summary>
         private static bool IsWordStart(string text, int index, int end)
         {
             char value = text[index];
@@ -121,6 +125,7 @@ namespace OPEN_LRD.NLP
                 && char.IsLetter(text[index + 1]);
         }
 
+        /// <summary>Checks whether the character at an index continues a word, contraction, hyphenation, or number.</summary>
         private static bool IsWordPart(string text, int index, int end)
         {
             char value = text[index];
@@ -149,6 +154,7 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Classifies a tokenized sentence as declarative, interrogative, or imperative.</summary>
         private static SentenceType ClassifySentence(IReadOnlyList<Token> tokens)
         {
             bool isQuestion = tokens.Any(token => token.Normalized.Contains('?'));
@@ -193,6 +199,7 @@ namespace OPEN_LRD.NLP
             return SentenceType.Declarative;
         }
 
+        /// <summary>Checks whether a sentence's opening words form a wh-question or inverted yes/no question.</summary>
         private static SentenceType ClassifyQuestionOpening(IReadOnlyList<Token> words)
         {
             if (words.Count == 0)

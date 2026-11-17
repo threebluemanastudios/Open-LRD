@@ -7,6 +7,7 @@ namespace OPEN_LRD.Nodes
     {
         private const string LabelPrefix = "OPEN-LRD:EVENT-WINDOW:v1|";
 
+        /// <summary>Formats an event start and end window into a canonical event node label.</summary>
         public static string? FormatWindowLabel(DateTimeOffset? startTime, DateTimeOffset? endTime)
         {
             ValidateWindow(startTime, endTime);
@@ -19,6 +20,7 @@ namespace OPEN_LRD.Nodes
             return LabelPrefix + start + "|" + end;
         }
 
+        /// <summary>Attempts to parse a canonical event window label into start and end timestamps.</summary>
         public static bool TryParseWindow(
             string? label,
             out DateTimeOffset? startTime,
@@ -55,6 +57,7 @@ namespace OPEN_LRD.Nodes
             return startTime.HasValue || endTime.HasValue;
         }
 
+        /// <summary>Attempts to read the start and end time window stored on an Event node.</summary>
         public static bool TryGetWindow(
             Web_Node node,
             out DateTimeOffset? startTime,
@@ -69,6 +72,7 @@ namespace OPEN_LRD.Nodes
             return TryParseWindow(node.Label, out startTime, out endTime);
         }
 
+        /// <summary>Assigns a formatted time window label to an Event node.</summary>
         public static void SetWindow(
             Web_Node node,
             DateTimeOffset? startTime,
@@ -81,6 +85,7 @@ namespace OPEN_LRD.Nodes
             node.Set_Label(FormatWindowLabel(startTime, endTime));
         }
 
+        /// <summary>Adds a display name alias to an Event node when one is supplied.</summary>
         public static bool AddName(Web_Node node, string? name)
         {
             ArgumentNullException.ThrowIfNull(node);
@@ -90,6 +95,7 @@ namespace OPEN_LRD.Nodes
             return node.Add_Alias(name.Trim());
         }
 
+        /// <summary>Returns a human-readable display name for an Event or general graph node.</summary>
         public static string GetDisplayName(Web_Node node)
         {
             ArgumentNullException.ThrowIfNull(node);
@@ -123,6 +129,7 @@ namespace OPEN_LRD.Nodes
             return node.Aliases.FirstOrDefault(alias => !string.IsNullOrWhiteSpace(alias)) ?? string.Empty;
         }
 
+        /// <summary>Throws when the start timestamp of an event window occurs after its end timestamp.</summary>
         public static void ValidateWindow(DateTimeOffset? startTime, DateTimeOffset? endTime)
         {
             if (startTime.HasValue && endTime.HasValue && startTime.Value > endTime.Value)
@@ -131,6 +138,7 @@ namespace OPEN_LRD.Nodes
             }
         }
 
+        /// <summary>Attempts to parse a single ISO-8601 endpoint token from a serialized event window.</summary>
         private static bool TryParseEndpoint(string value, out DateTimeOffset? endpoint)
         {
             if (value.Length == 0)

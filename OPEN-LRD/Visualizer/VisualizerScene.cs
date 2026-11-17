@@ -17,6 +17,7 @@ namespace OPEN_LRD.Visualizer
     /// <summary>Contains prepared node/link meshes and the layout bounds used for camera framing.</summary>
     internal sealed class PreparedSceneGeometry
     {
+        /// <summary>Creates a prepared scene geometry container from frozen WPF mesh batches and bounds.</summary>
         public PreparedSceneGeometry(
             IReadOnlyList<PreparedNodeMeshBatch> nodeBatches,
             IReadOnlyList<PreparedLinkMeshBatch> linkBatches,
@@ -62,6 +63,7 @@ namespace OPEN_LRD.Visualizer
         private Vector3 center;
         private float radius;
 
+        /// <summary>Initializes the 3D scene camera, lighting, and model group on the target viewport.</summary>
         public VisualizerScene(Viewport3D viewport)
         {
             this.viewport = viewport ?? throw new ArgumentNullException(nameof(viewport));
@@ -99,10 +101,13 @@ namespace OPEN_LRD.Visualizer
             set => camera.NearPlaneDistance = Math.Clamp(value, 0.01, 100.0);
         }
 
+        /// <summary>Determines whether meshes for the specified node type ID are currently visible.</summary>
         public bool IsNodeTypeVisible(int nodeTypeId) => !hiddenNodeTypes.Contains(nodeTypeId);
 
+        /// <summary>Determines whether meshes for the specified forward link type ID are currently visible.</summary>
         public bool IsLinkTypeVisible(int forwardTypeId) => !hiddenLinkTypes.Contains(forwardTypeId);
 
+        /// <summary>Shows or hides the 3D model batch for the specified node type ID.</summary>
         public void SetNodeTypeVisible(int nodeTypeId, bool visible)
         {
             if (visible)
@@ -123,6 +128,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Shows or hides the 3D model batch for the specified forward link type ID.</summary>
         public void SetLinkTypeVisible(int forwardTypeId, bool visible)
         {
             if (visible)
@@ -143,6 +149,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Converts raw scene geometry into frozen WPF 3D mesh batches ready for UI attachment.</summary>
         public static PreparedSceneGeometry PrepareGeometry(SceneGeometry geometry)
         {
             ArgumentNullException.ThrowIfNull(geometry);
@@ -158,11 +165,13 @@ namespace OPEN_LRD.Visualizer
             return new PreparedSceneGeometry(nodeBatches, linkBatches, geometry.Center, geometry.Radius);
         }
 
+        /// <summary>Prepares and applies the specified scene geometry and color palette to the viewport.</summary>
         public void Apply(SceneGeometry geometry, GraphColorMap colors)
         {
             Apply(PrepareGeometry(geometry), colors);
         }
 
+        /// <summary>Replaces the active scene models with the prepared geometry batches and frames the graph.</summary>
         public void Apply(PreparedSceneGeometry geometry, GraphColorMap colors)
         {
             ArgumentNullException.ThrowIfNull(geometry);
@@ -200,6 +209,7 @@ namespace OPEN_LRD.Visualizer
             FrameAll();
         }
 
+        /// <summary>Rebuilds node and link materials from the current color map overrides.</summary>
         public void UpdateMaterials(GraphColorMap colors)
         {
             ArgumentNullException.ThrowIfNull(colors);
@@ -217,6 +227,7 @@ namespace OPEN_LRD.Visualizer
             }
         }
 
+        /// <summary>Removes all scene geometry and resets the bounds state.</summary>
         public void Clear()
         {
             ClearGeometry();
@@ -225,6 +236,7 @@ namespace OPEN_LRD.Visualizer
             SyncFlyCameraFromCamera();
         }
 
+        /// <summary>Positions the camera to frame the entire scene bounding sphere.</summary>
         public void FrameAll()
         {
             if (!HasGeometry)
@@ -234,12 +246,14 @@ namespace OPEN_LRD.Visualizer
             SyncFlyCameraFromCamera();
         }
 
+        /// <summary>Positions the camera to frame a specific target point and radius.</summary>
         public void FrameTarget(Vector3 target, float targetRadius)
         {
             Frame(target, Math.Max(targetRadius, 0.5f));
             SyncFlyCameraFromCamera();
         }
 
+        /// <summary>Resets the camera orientation to its default angle and frames the scene.</summary>
         public void ResetView()
         {
             camera.UpDirection = new Vector3D(0.0, 1.0, 0.0);
@@ -247,6 +261,7 @@ namespace OPEN_LRD.Visualizer
             FrameAll();
         }
 
+        /// <summary>Captures the current WPF camera and viewport dimensions as a projection view.</summary>
         public CameraView GetCameraView()
         {
             double width = viewport.ActualWidth > 1.0 ? viewport.ActualWidth : 1600.0;
@@ -263,6 +278,7 @@ namespace OPEN_LRD.Visualizer
                 camera.FarPlaneDistance);
         }
 
+        /// <summary>Updates the WPF perspective camera from the fly-camera state.</summary>
         public void SyncCameraFromFlyCamera()
         {
             camera.Position = ToPoint3D(flyCamera.Position);
@@ -270,6 +286,7 @@ namespace OPEN_LRD.Visualizer
             camera.UpDirection = ToVector3D(flyCamera.Up);
         }
 
+        /// <summary>Updates the fly-camera pose from the current WPF perspective camera.</summary>
         public void SyncFlyCameraFromCamera()
         {
             Vector3 look = ToVector3(camera.LookDirection);
@@ -278,6 +295,7 @@ namespace OPEN_LRD.Visualizer
                 flyCamera.SetOrientation(ToVector3(camera.Position), look, up);
         }
 
+        /// <summary>Shows or clears the highlight cube for the currently selected node.</summary>
         public void SetSelectedHighlight(Vector3? position, double cubeSize)
         {
             if (selectedHighlightModel is not null)
@@ -296,6 +314,7 @@ namespace OPEN_LRD.Visualizer
             sceneGroup.Children.Add(selectedHighlightModel);
         }
 
+        /// <summary>Shows or clears the highlight cube for the currently hovered node.</summary>
         public void SetHoveredHighlight(Vector3? position, double cubeSize)
         {
             if (hoveredHighlightModel is not null)
@@ -314,6 +333,7 @@ namespace OPEN_LRD.Visualizer
             sceneGroup.Children.Add(hoveredHighlightModel);
         }
 
+        /// <summary>Creates the cyan emissive-and-specular material used for selected node highlights.</summary>
         private static Material CreateSelectionHighlightMaterial()
         {
             MaterialGroup group = new MaterialGroup();
@@ -326,6 +346,7 @@ namespace OPEN_LRD.Visualizer
             return group;
         }
 
+        /// <summary>Creates the amber emissive-and-diffuse material used for hovered node highlights.</summary>
         private static Material CreateHoverHighlightMaterial()
         {
             MaterialGroup group = new MaterialGroup();
@@ -337,6 +358,7 @@ namespace OPEN_LRD.Visualizer
             return group;
         }
 
+        /// <summary>Updates the WPF camera position and clip planes to fit the target sphere.</summary>
         private void Frame(System.Numerics.Vector3 target, float targetRadius)
         {
             double width = viewport.ActualWidth > 1.0 ? viewport.ActualWidth : 1600.0;
@@ -361,6 +383,7 @@ namespace OPEN_LRD.Visualizer
             camera.FarPlaneDistance = framed.FarPlaneDistance;
         }
 
+        /// <summary>Creates and adds a 3D geometry model to the scene when the mesh is non-empty.</summary>
         private GeometryModel3D? AddModel(MeshGeometry3D mesh, Material material, Material? backMaterial)
         {
             if (mesh.TriangleIndices.Count == 0)
@@ -375,6 +398,7 @@ namespace OPEN_LRD.Visualizer
             return model;
         }
 
+        /// <summary>Removes all node, link, and highlight models from the scene group.</summary>
         private void ClearGeometry()
         {
             if (selectedHighlightModel is not null)
@@ -397,6 +421,7 @@ namespace OPEN_LRD.Visualizer
             linkModels.Clear();
         }
 
+        /// <summary>Builds a frozen WPF 3D mesh from indexed position, normal, and triangle arrays.</summary>
         private static MeshGeometry3D CreateMesh(MeshData data)
         {
             Point3DCollection positions = new Point3DCollection(data.VertexCount);
@@ -429,6 +454,7 @@ namespace OPEN_LRD.Visualizer
             return mesh;
         }
 
+        /// <summary>Creates a frozen diffuse-and-specular material for a node batch.</summary>
         private static Material CreateNodeMaterial(RgbColor color)
         {
             MaterialGroup group = new MaterialGroup();
@@ -438,6 +464,7 @@ namespace OPEN_LRD.Visualizer
             return group;
         }
 
+        /// <summary>Creates a frozen emissive-and-diffuse material for a link batch.</summary>
         private static Material CreateLinkMaterial(RgbColor color)
         {
             RgbColor glow = new RgbColor(
@@ -452,6 +479,7 @@ namespace OPEN_LRD.Visualizer
             return group;
         }
 
+        /// <summary>Creates a frozen solid-color brush from an RGB color value.</summary>
         private static SolidColorBrush CreateBrush(RgbColor color)
         {
             SolidColorBrush brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
@@ -459,12 +487,14 @@ namespace OPEN_LRD.Visualizer
             return brush;
         }
 
+        /// <summary>Returns a normalized copy of a WPF 3D vector.</summary>
         private static Vector3D Normalize(Vector3D value)
         {
             value.Normalize();
             return value;
         }
 
+        /// <summary>Converts a WPF 3D vector into a single-precision numeric vector.</summary>
         private static System.Numerics.Vector3 ToVector3(Vector3D value)
         {
             return new System.Numerics.Vector3(
@@ -473,6 +503,7 @@ namespace OPEN_LRD.Visualizer
                 (float)value.Z);
         }
 
+        /// <summary>Converts a WPF 3D point into a single-precision numeric vector.</summary>
         private static System.Numerics.Vector3 ToVector3(Point3D value)
         {
             return new System.Numerics.Vector3(
@@ -481,11 +512,13 @@ namespace OPEN_LRD.Visualizer
                 (float)value.Z);
         }
 
+        /// <summary>Converts a single-precision numeric vector into a WPF 3D vector.</summary>
         private static Vector3D ToVector3D(System.Numerics.Vector3 value)
         {
             return new Vector3D(value.X, value.Y, value.Z);
         }
 
+        /// <summary>Converts a single-precision numeric vector into a WPF 3D point.</summary>
         private static Point3D ToPoint3D(System.Numerics.Vector3 value)
         {
             return new Point3D(value.X, value.Y, value.Z);

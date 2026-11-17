@@ -22,6 +22,7 @@ namespace OPEN_LRD.Maintenance
             LinkClass LinkClass,
             bool IsResourceProperty = false);
 
+        /// <summary>Materializes and reconciles metadata facts for a single node immediately.</summary>
         public static MaintenanceReport IngestNode(LRD_Core core, Guid nodeID)
         {
             MaintenanceReport report = new MaintenanceReport();
@@ -53,6 +54,7 @@ namespace OPEN_LRD.Maintenance
             return report;
         }
 
+        /// <summary>Scans eligible graph nodes and reconciles their metadata value nodes and links.</summary>
         public static void RunMaintenance(
             LRD_Core core,
             MaintenanceOptions options,
@@ -85,12 +87,14 @@ namespace OPEN_LRD.Maintenance
             }
         }
 
+        /// <summary>Builds a canonical identity key for a metadata link.</summary>
         internal static string GetLinkKey(Link link)
         {
             return string.Join("|", link.SourceID, link.DestinationID,
                 link.ForwardLink.Id, link.InverseLink.Id, link.Classification.Id);
         }
 
+        /// <summary>Extracts, materializes, and reconciles metadata facts for one owner node.</summary>
         private static void ProcessNode(
             LRD_Core core,
             Guid nodeID,
@@ -243,6 +247,7 @@ namespace OPEN_LRD.Maintenance
             report.LinksInvalidated += linksInvalidated;
         }
 
+        /// <summary>Retrieves an existing metadata value node or creates a new one for the given fact.</summary>
         private static Web_Node? GetOrCreateValueNode(
             LRD_Core core,
             Web_Node owner,
@@ -297,6 +302,7 @@ namespace OPEN_LRD.Maintenance
             return valueNode;
         }
 
+        /// <summary>Builds the ordered list of metadata facts representing a node's fields and data pointer.</summary>
         private static List<MetadataFact> BuildFacts(Web_Node owner)
         {
             List<MetadataFact> facts = new List<MetadataFact>();
@@ -379,6 +385,7 @@ namespace OPEN_LRD.Maintenance
                 .ToList();
         }
 
+        /// <summary>Creates a scalar metadata fact for a field and string value.</summary>
         private static MetadataFact ScalarFact(
             string field,
             string value,
@@ -396,8 +403,10 @@ namespace OPEN_LRD.Maintenance
                 isResourceProperty);
         }
 
+        /// <summary>Computes a deterministic hash key for a metadata value key.</summary>
         private static string CreateStableValueKey(string valueKey) => Hash(valueKey);
 
+        /// <summary>Derives a deterministic non-empty GUID from a hexadecimal metadata key hash.</summary>
         private static Guid CreateStableValueID(string stableKey)
         {
             byte[] bytes = Convert.FromHexString(stableKey);
@@ -405,11 +414,13 @@ namespace OPEN_LRD.Maintenance
             return new Guid(bytes.AsSpan(0, 16));
         }
 
+        /// <summary>Computes a lowercase SHA-256 hexadecimal hash of the specified string.</summary>
         private static string Hash(string value)
         {
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
         }
 
+        /// <summary>Normalizes a metadata string using trimming, Unicode Form KC, and lowercase conversion.</summary>
         private static string Normalize(string value)
         {
             return value.Trim().Normalize(NormalizationForm.FormKC).ToLowerInvariant();

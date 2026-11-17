@@ -33,6 +33,7 @@ namespace OPEN_LRD.NLP
             },
             StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Extracts relation frames and diagnostics from declarative sentences in parsed text.</summary>
         public static RelationExtractionResult Extract(ParsedText parsed, NlpOptions? options = null)
         {
             ArgumentNullException.ThrowIfNull(parsed);
@@ -73,27 +74,32 @@ namespace OPEN_LRD.NLP
             return new RelationExtractionResult(frames, diagnostics);
         }
 
+        /// <summary>Checks whether a normalized token is a lexical or contracted negator.</summary>
         internal static bool IsNegator(string normalized)
         {
             return negators.Contains(normalized)
                 || normalized.Contains("n't", StringComparison.Ordinal);
         }
 
+        /// <summary>Checks whether a verb lemma is a modal auxiliary.</summary>
         internal static bool IsModal(string lemma)
         {
             return modals.Contains(lemma);
         }
 
+        /// <summary>Checks whether a preposition typically introduces a spatial location qualifier.</summary>
         internal static bool IsSpatialPreposition(string value)
         {
             return spatialPrepositions.Contains(value);
         }
 
+        /// <summary>Checks whether a preposition typically introduces a temporal qualifier.</summary>
         internal static bool IsTemporalPreposition(string value)
         {
             return temporalPrepositions.Contains(value);
         }
 
+        /// <summary>Extracts one or more relation frames from a parsed clause, expanding coordinated subjects and predicates.</summary>
         private static void ExtractClause(
             Sentence sentence,
             Clause clause,
@@ -203,6 +209,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Extracts relation frames for one subject span and predicate segment within a clause.</summary>
         private static void ExtractClauseCore(
             Sentence sentence,
             Clause clause,
@@ -598,6 +605,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Splits an indefinite copula predicate nominal into a category noun and adjectival property arguments.</summary>
         private static bool TrySplitIndefinitePredicateNominal(
             Sentence sentence,
             ParsedText parsed,
@@ -668,6 +676,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Constructs a relation frame, evaluates its ingestibility, and appends it to the frame list.</summary>
         private static void AddFrame(
             Sentence sentence,
             Clause clause,
@@ -739,6 +748,7 @@ namespace OPEN_LRD.NLP
                 negation));
         }
 
+        /// <summary>Converts prepositional qualifier spans into typed qualifier arguments on a relation frame.</summary>
         private static void AppendQualifiers(
             Sentence sentence,
             Clause clause,
@@ -787,6 +797,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Classifies a prepositional qualifier as a location, time, or general qualifier role.</summary>
         private static FrameRole ClassifyQualifier(
             NodeTypes nodeType,
             MentionKind kind,
@@ -807,6 +818,7 @@ namespace OPEN_LRD.NLP
             return FrameRole.Qualifier;
         }
 
+        /// <summary>Returns the first resolved prepositional qualifier phrase in a clause.</summary>
         private static QualifierPhrase? FindFirstQualifierPhrase(
             Sentence sentence,
             Clause clause,
@@ -823,6 +835,7 @@ namespace OPEN_LRD.NLP
             return null;
         }
 
+        /// <summary>Extracts the governing preposition and noun-phrase span from a clause qualifier argument.</summary>
         private static QualifierPhrase? GetQualifierNounPhrase(
             Sentence sentence,
             Clause clause,
@@ -861,6 +874,7 @@ namespace OPEN_LRD.NLP
                 nounPhrase.EndToken);
         }
 
+        /// <summary>Creates a typed frame argument from a sentence token span using recognized mentions or token heads.</summary>
         internal static FrameArgument? CreateArgument(
             Sentence sentence,
             ParsedText parsed,
@@ -941,6 +955,7 @@ namespace OPEN_LRD.NLP
                 0.60);
         }
 
+        /// <summary>Finds the main lexical or auxiliary verb token within a predicate token sequence.</summary>
         internal static Token? FindMainVerb(IReadOnlyList<Token> predicateTokens)
         {
             Token? mainVerb = null;
@@ -978,6 +993,7 @@ namespace OPEN_LRD.NLP
             return mainVerb;
         }
 
+        /// <summary>Determines the grammatical tense of a predicate from its auxiliaries, main verb, and modal.</summary>
         internal static Tense DetermineTense(
             IReadOnlyList<Token> predicateTokens,
             Token? mainVerb,
@@ -1018,6 +1034,7 @@ namespace OPEN_LRD.NLP
             return Tense.Present;
         }
 
+        /// <summary>Splits a token span at coordinating conjunctions when both sides contain head tokens.</summary>
         private static List<(int Start, int End)> SplitCoordinatedSpan(
             Sentence sentence,
             int start,
@@ -1069,6 +1086,7 @@ namespace OPEN_LRD.NLP
             return result;
         }
 
+        /// <summary>Combines two coordination kinds, giving precedence to disjunction over conjunction.</summary>
         private static CoordinationKind Combine(CoordinationKind left, CoordinationKind right)
         {
             if (left == CoordinationKind.Disjunction || right == CoordinationKind.Disjunction)
@@ -1080,6 +1098,7 @@ namespace OPEN_LRD.NLP
             return CoordinationKind.None;
         }
 
+        /// <summary>Checks whether a token can serve as the head of a nominal argument.</summary>
         private static bool IsNounHeadToken(Token token)
         {
             return token.PartOfSpeech is PartOfSpeech.Noun
@@ -1088,11 +1107,13 @@ namespace OPEN_LRD.NLP
                 or PartOfSpeech.Number;
         }
 
+        /// <summary>Checks whether a token can serve as the head of a predicate verb phrase.</summary>
         private static bool IsVerbHeadToken(Token token)
         {
             return token.PartOfSpeech is PartOfSpeech.Verb or PartOfSpeech.Auxiliary;
         }
 
+        /// <summary>Trims leading and trailing punctuation tokens from a token index span.</summary>
         private static (int Start, int End) TrimSpan(Sentence sentence, int start, int end)
         {
             while (start <= end
@@ -1110,6 +1131,7 @@ namespace OPEN_LRD.NLP
             return (start, end);
         }
 
+        /// <summary>Checks whether any token in a span satisfies the supplied head predicate.</summary>
         private static bool HasHead(Sentence sentence, int start, int end, Func<Token, bool> isHead)
         {
             for (int index = start; index <= end; index++)
@@ -1121,11 +1143,13 @@ namespace OPEN_LRD.NLP
             return false;
         }
 
+        /// <summary>Finds the first clause argument matching the requested grammatical role.</summary>
         private static ClauseArgument? FindArgument(Clause clause, ClauseRole role)
         {
             return clause.Arguments.FirstOrDefault(argument => argument.Role == role);
         }
 
+        /// <summary>Stores a preposition, its token index, and the token span of its governed noun phrase.</summary>
         private sealed record QualifierPhrase(
             string Preposition,
             int PrepositionToken,
