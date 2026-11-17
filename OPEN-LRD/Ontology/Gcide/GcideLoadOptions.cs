@@ -1,5 +1,6 @@
 namespace OPEN_LRD.Ontology.Gcide
 {
+    /// <summary>Selects a portion of the bundled GCIDE corpus to load.</summary>
     internal enum GcideSubset
     {
         All,
@@ -7,6 +8,7 @@ namespace OPEN_LRD.Ontology.Gcide
         SemanticOnly
     }
 
+    /// <summary>Configures corpus path, subset, limits, progress, and cancellation for GCIDE loading.</summary>
     internal sealed class GcideLoadOptions
     {
         public string CorpusDirectory { get; set; } = string.Empty;
@@ -25,6 +27,7 @@ namespace OPEN_LRD.Ontology.Gcide
         public CancellationToken CancellationToken { get; set; }
     }
 
+    /// <summary>Summarizes parsed entries, graph additions, and diagnostics from a GCIDE load.</summary>
     internal sealed record GcideLoadResult(
         int EntriesRead,
         int EntriesLoaded,

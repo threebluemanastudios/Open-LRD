@@ -6,6 +6,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Stores the visualizer-facing data required to render one graph node.</summary>
     internal sealed record NodeRecord(
         Guid Id,
         int TypeId,
@@ -16,6 +17,7 @@ namespace OPEN_LRD.Visualization
         IReadOnlyList<string> Aliases,
         int Degree);
 
+    /// <summary>Stores the visualizer-facing endpoints and types of one graph link.</summary>
     internal sealed record LinkRecord(
         int AIndex,
         int BIndex,
@@ -25,6 +27,7 @@ namespace OPEN_LRD.Visualization
         string ClassName,
         double Distance);
 
+    /// <summary>Captures a bounded, deduplicated graph view for rendering and picking.</summary>
     internal sealed class GraphSnapshot
     {
         private GraphSnapshot(
@@ -352,12 +355,14 @@ namespace OPEN_LRD.Visualization
             return warnings;
         }
 
+        /// <summary>Defines stable link identity for reciprocal-edge deduplication.</summary>
         private readonly record struct LinkKey(
             Guid AId,
             Guid BId,
             int ForwardTypeId,
             int ClassId);
 
+        /// <summary>Stores a source link before its destination index is resolved.</summary>
         private sealed record PendingLink(
             int AIndex,
             int BIndex,

@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Stores persisted visualizer palette, camera, and rendering settings.</summary>
     internal sealed class VisualizerSettings
     {
         public const int CurrentVersion = 1;
@@ -199,6 +200,7 @@ namespace OPEN_LRD.Visualization
         }
     }
 
+    /// <summary>Stores persisted view-specific visualizer settings.</summary>
     internal sealed class VisualizerViewSettings
     {
         [JsonPropertyName("spread")]
@@ -215,6 +217,9 @@ namespace OPEN_LRD.Visualization
 
         [JsonPropertyName("maxLabels")]
         public int MaxLabels { get; set; } = VisualizerOptions.DefaultMaxLabels;
+
+        [JsonPropertyName("labelMode")]
+        public VisualizerLabelMode LabelMode { get; set; } = VisualizerLabelMode.Focused;
 
         [JsonPropertyName("maxNodes")]
         public int MaxNodes { get; set; } = VisualizerOptions.DefaultMaxNodes;
@@ -239,7 +244,13 @@ namespace OPEN_LRD.Visualization
             CubeSize = options.CubeSize;
             LineWidth = options.LineWidth;
             ShowLabels = options.ShowLabels;
-            MaxLabels = options.MaxLabels;
+            MaxLabels = Math.Clamp(
+                options.MaxLabels,
+                VisualizerOptions.MinimumMaxLabels,
+                VisualizerOptions.MaximumMaxLabels);
+            LabelMode = Enum.IsDefined(options.LabelMode)
+                ? options.LabelMode
+                : VisualizerLabelMode.Focused;
             MaxNodes = options.MaxNodes;
             MaxLinks = options.MaxLinks;
             InvertMouseX = options.InvertMouseX;
@@ -259,9 +270,13 @@ namespace OPEN_LRD.Visualization
                 ? LineWidth
                 : VisualizerOptions.DefaultLineWidth;
             options.ShowLabels = ShowLabels;
-            options.MaxLabels = MaxLabels > 0
-                ? MaxLabels
-                : VisualizerOptions.DefaultMaxLabels;
+            options.MaxLabels = Math.Clamp(
+                MaxLabels,
+                VisualizerOptions.MinimumMaxLabels,
+                VisualizerOptions.MaximumMaxLabels);
+            options.LabelMode = Enum.IsDefined(LabelMode)
+                ? LabelMode
+                : VisualizerLabelMode.Focused;
             options.MaxNodes = MaxNodes > 0 && MaxNodes <= VisualizerOptions.MaximumMaxNodes
                 ? MaxNodes
                 : VisualizerOptions.DefaultMaxNodes;

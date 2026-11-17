@@ -1,13 +1,25 @@
 namespace OPEN_LRD.Nodes
 {
+    /// <summary>Describes an event's temporal position relative to a reference time.</summary>
     public enum EventTemporalStatus
     {
+        /// <summary>The event has no usable time window.</summary>
         Unknown,
+        /// <summary>The event ended before the reference time.</summary>
         Past,
+        /// <summary>The event overlaps the reference time.</summary>
         Active,
+        /// <summary>The event begins after the reference time.</summary>
         Future
     }
 
+    /// <summary>Contains calculated start, end, duration, and display information for an event window.</summary>
+    /// <param name="ReferenceTime">The instant used to calculate the variances.</param>
+    /// <param name="StartVariance">The signed difference between reference time and event start, when present.</param>
+    /// <param name="EndVariance">The signed difference between reference time and event end, when present.</param>
+    /// <param name="Duration">The event duration when both endpoints are present.</param>
+    /// <param name="Status">The event's temporal classification.</param>
+    /// <param name="FriendlyVariance">A concise human-readable description of the time window.</param>
     public sealed record EventTimeVariance(
         DateTimeOffset ReferenceTime,
         TimeSpan? StartVariance,
@@ -16,6 +28,7 @@ namespace OPEN_LRD.Nodes
         EventTemporalStatus Status,
         string FriendlyVariance);
 
+    /// <summary>Calculates event status, endpoint variance, duration, and friendly relative-time text.</summary>
     internal static class EventTimeVarianceCalculator
     {
         public static EventTimeVariance Calculate(

@@ -7,17 +7,20 @@ namespace OPEN_LRD
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
+    /// <summary>Provides the application launcher and top-level window navigation.</summary>
     public partial class MainWindow : Window
     {
         private LRD_Core? thunderCore = LRD_Core.Instance;
         private NlpWorkbenchWindow? nlpWorkbenchWindow;
         private VisualizerWindow? visualizerWindow;
 
+        /// <summary>Creates the application main window.</summary>
         public MainWindow()
         {
             InitializeComponent();
         }
 
+        /// <summary>Initializes the core graph and updates top-level tool availability.</summary>
         private void Launch_Button_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -41,6 +44,7 @@ namespace OPEN_LRD
             return;
         }
 
+        /// <summary>Opens or activates the Tools window when the core is initialized.</summary>
         private void Tools_Button_Click(object sender, RoutedEventArgs e)
         {
             if (thunderCore is null || !thunderCore.initialized)
@@ -54,6 +58,7 @@ namespace OPEN_LRD
             return;
         }
 
+        /// <summary>Opens or activates the NLP Workbench window.</summary>
         private void NlpWorkbench_Button_Click(object sender, RoutedEventArgs e)
         {
             if (thunderCore is null || !thunderCore.initialized)
@@ -79,6 +84,7 @@ namespace OPEN_LRD
             nlpWorkbenchWindow.Show();
         }
 
+        /// <summary>Opens or restores the single Visualizer window instance.</summary>
         private void Visualizer_Button_Click(object sender, RoutedEventArgs e)
         {
             if (thunderCore is null || !thunderCore.initialized)

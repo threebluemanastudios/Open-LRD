@@ -5,6 +5,7 @@ namespace OPEN_LRD.Ontology
 {
     // Additive node-type and link-class registrations used by the ontology and
     // maintenance modules. IDs continue after the existing Module 1-3 ranges.
+    /// <summary>Registers stable ontology node and link-class categories.</summary>
     internal static class OntologyTypes
     {
         public static readonly NodeTypes Categories = NodeTypes.Register(12, "Category");

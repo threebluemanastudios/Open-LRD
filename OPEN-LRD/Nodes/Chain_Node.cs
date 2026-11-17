@@ -2,6 +2,7 @@
 
 namespace OPEN_LRD.Nodes
 {
+    /// <summary>Represents a node in an ordered query or response chain.</summary>
     internal class Chain_Node : Node
     {
         Link? linkNext, linkPrevious;

@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Applies trust and link-class policies to proposed contradictions.</summary>
     internal static class ContradictionResolver
     {
         public static ContradictionResolution Resolve(

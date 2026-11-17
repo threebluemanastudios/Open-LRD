@@ -6,6 +6,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Persistence
 {
+    /// <summary>Defines stable format identifiers and schema version numbers for persisted logs.</summary>
     internal static class CoreLogFormat
     {
         public const string Core = "open-lrd-core-log";
@@ -17,6 +18,7 @@ namespace OPEN_LRD.Persistence
         public const int Version = 1;
     }
 
+    /// <summary>Provides shared JSON serializer settings for log documents and records.</summary>
     internal static class LogJson
     {
         public static JsonSerializerOptions Options { get; } = new JsonSerializerOptions
@@ -36,6 +38,7 @@ namespace OPEN_LRD.Persistence
         };
     }
 
+    /// <summary>Represents a complete unsegmented core graph log document.</summary>
     internal sealed class CoreLogDocument
     {
         public string Format { get; set; } = CoreLogFormat.Core;
@@ -55,6 +58,7 @@ namespace OPEN_LRD.Persistence
         public List<ConversationLog> Conversations { get; set; } = new List<ConversationLog>();
     }
 
+    /// <summary>Describes a segmented core export and its part manifest.</summary>
     internal sealed class CoreLogManifest
     {
         public string Format { get; set; } = CoreLogFormat.CoreManifest;
@@ -69,6 +73,7 @@ namespace OPEN_LRD.Persistence
         public List<LogPartDefinition> Parts { get; set; } = new List<LogPartDefinition>();
     }
 
+    /// <summary>Describes a segmented transient-chain export and its part manifest.</summary>
     internal sealed class TransientLogManifest
     {
         public string Format { get; set; } = CoreLogFormat.TransientManifest;
@@ -84,6 +89,7 @@ namespace OPEN_LRD.Persistence
         public List<LogPartDefinition> Parts { get; set; } = new List<LogPartDefinition>();
     }
 
+    /// <summary>Describes one numbered log part, including its length, checksum, and record count.</summary>
     internal sealed class LogPartDefinition
     {
         public int Index { get; set; }
@@ -94,6 +100,7 @@ namespace OPEN_LRD.Persistence
         public int RecordCount { get; set; }
     }
 
+    /// <summary>Contains one typed record in a segmented core log.</summary>
     internal sealed class CoreLogPartRecord
     {
         public string? Format { get; set; }
@@ -111,6 +118,7 @@ namespace OPEN_LRD.Persistence
         public ConversationLog? Conversation { get; set; }
     }
 
+    /// <summary>Contains one positioned chain-node record in a segmented transient log.</summary>
     internal sealed class TransientLogPartRecord
     {
         public string? Format { get; set; }
@@ -129,6 +137,7 @@ namespace OPEN_LRD.Persistence
         public LinkLog? NextLink { get; set; }
     }
 
+    /// <summary>Stores runtime node, link-class, relationship, and inverse-type definitions.</summary>
     internal sealed class TypeDefinitionLog
     {
         public List<TypeNameLog> NodeTypes { get; set; } = new List<TypeNameLog>();
@@ -142,6 +151,7 @@ namespace OPEN_LRD.Persistence
         public List<RelationTypeLog> Relations { get; set; } = new List<RelationTypeLog>();
     }
 
+    /// <summary>Stores a stable numeric identifier and name for a registered graph type.</summary>
     internal sealed class TypeNameLog
     {
         public int Id { get; set; }
@@ -149,6 +159,7 @@ namespace OPEN_LRD.Persistence
         public string Name { get; set; } = string.Empty;
     }
 
+    /// <summary>Stores the name and inverse name of a relationship type.</summary>
     internal sealed class RelationTypeLog
     {
         public int Id { get; set; }
@@ -158,6 +169,7 @@ namespace OPEN_LRD.Persistence
         public string InverseName { get; set; } = string.Empty;
     }
 
+    /// <summary>Stores one graph node and all persisted metadata fields.</summary>
     internal sealed class NodeLog
     {
         public Guid Id { get; set; }
@@ -183,6 +195,7 @@ namespace OPEN_LRD.Persistence
         public DataPointerLog? DataPointer { get; set; }
     }
 
+    /// <summary>Stores a data pointer using URI and optional payload metadata.</summary>
     internal sealed class DataPointerLog
     {
         public string Location { get; set; } = string.Empty;
@@ -194,6 +207,7 @@ namespace OPEN_LRD.Persistence
         public string? Checksum { get; set; }
     }
 
+    /// <summary>Stores one directed edge, its type identifiers, class, and active state.</summary>
     internal sealed class LinkLog
     {
         public Guid SourceId { get; set; }
@@ -217,6 +231,7 @@ namespace OPEN_LRD.Persistence
         public LinkOrigin Origins { get; set; } = LinkOrigin.Explicit;
     }
 
+    /// <summary>Stores conversational focus, options, mentions, and provenance.</summary>
     internal sealed class ConversationLog
     {
         public Guid Id { get; set; }
@@ -244,6 +259,7 @@ namespace OPEN_LRD.Persistence
         public List<ProvenanceLog> Provenance { get; set; } = new List<ProvenanceLog>();
     }
 
+    /// <summary>Stores a mention and its resolved node, role, and turn metadata.</summary>
     internal sealed class MentionLog
     {
         public Guid NodeId { get; set; }
@@ -265,6 +281,7 @@ namespace OPEN_LRD.Persistence
         public bool FromAnswer { get; set; }
     }
 
+    /// <summary>Stores session provenance for one ingested relation or outcome.</summary>
     internal sealed class ProvenanceLog
     {
         public int Sequence { get; set; }
@@ -314,8 +331,10 @@ namespace OPEN_LRD.Persistence
         public int Negation { get; set; }
     }
 
+    /// <summary>Converts NLP options to and from the persistence DTO schema.</summary>
     internal static class NlpOptionsLogMapper
     {
+        /// <summary>Creates a persistence DTO from runtime NLP options.</summary>
         public static NlpOptionsLog ToLog(NlpOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -352,6 +371,7 @@ namespace OPEN_LRD.Persistence
             };
         }
 
+        /// <summary>Creates runtime NLP options from a persistence DTO.</summary>
         public static NlpOptions FromLog(NlpOptionsLog options)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -389,6 +409,7 @@ namespace OPEN_LRD.Persistence
         }
     }
 
+    /// <summary>Stores versioned NLP option values in a core-log document.</summary>
     internal sealed class NlpOptionsLog
     {
         public int MaxCharacters { get; set; } = 20000;

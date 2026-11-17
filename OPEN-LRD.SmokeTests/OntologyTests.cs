@@ -9,6 +9,7 @@ using static OPEN_LRD.SmokeTests.Program;
 
 namespace OPEN_LRD.SmokeTests
 {
+    /// <summary>Contains regression checks for ontology registration, validation, and GCIDE loading.</summary>
     internal static class OntologyTests
     {
         private const string DogBlock = """
@@ -55,6 +56,7 @@ namespace OPEN_LRD.SmokeTests
             <hw>zebra</hw> <pos>n.</pos> <def>An African striped mammal.</def></p>
             """;
 
+        /// <summary>Registers and executes the ontology regression checks.</summary>
         public static void RunAll()
         {
             Program.Run("Ontology foundation bootstrap", TestFoundationBootstrap);

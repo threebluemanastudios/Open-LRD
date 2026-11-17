@@ -7,6 +7,7 @@ namespace OPEN_LRD.Ontology.Gcide
     // Maps parsed GCIDE entries onto the graph. The loader writes permanent
     // Lexeme and Sense nodes plus the structural links defined by Module 4.
     // Existing permanent nodes are reused, so a repeated load is idempotent.
+    /// <summary>Maps parsed GCIDE entries into lexical graph nodes and relationships.</summary>
     internal sealed class GcideCorpusLoader
     {
         private const int DefinitionPreviewLength = 200;

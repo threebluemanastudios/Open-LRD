@@ -2,12 +2,14 @@ using OPEN_LRD.Nodes;
 
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Plans and applies trust-aware graph reasoning, matching, and response extraction.</summary>
     internal sealed class ReasoningEngine
     {
         private readonly LRD_Core core;
         private readonly ReasoningOptions options;
         private readonly TrustScale trust;
         private readonly HashSet<string> invalidLinkKeys = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<Guid> reusedNodesCountedForWeight = new HashSet<Guid>();
 
         public ReasoningEngine(LRD_Core core, ReasoningOptions? options = null)
         {
@@ -235,7 +237,8 @@ namespace OPEN_LRD.Reasoning
                     plan,
                     trust,
                     proposedTrust,
-                    options);
+                    options,
+                    reusedNodesCountedForWeight);
 
                 invalidLinkKeys.UnionWith(
                     applyResult.InvalidatedLinks.Select(GraphSnapshot.GetLinkKey));

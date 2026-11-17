@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>OPEN-LRD.ManualUiTests</name>
+    </assembly>
+    <members>
+        <member name="T:OPEN_LRD.ManualUiTests.Program">
+            <summary>Runs end-to-end WPF checks for Tools, the NLP Workbench, and the Visualizer.</summary>
+        </member>
+        <member name="M:OPEN_LRD.ManualUiTests.Program.Main">
+            <summary>Creates the WPF application context and executes the manual UI verification suite.</summary>
+        </member>
+        <member name="M:OPEN_LRD.ManualUiTests.Program.RunSection12_NlpWorkbenchCandidateSynthesis">
+            <summary>Verifies synthesized, temporal, dictionary, and large-graph answer candidates in the Workbench.</summary>
+        </member>
+    </members>
+</doc>

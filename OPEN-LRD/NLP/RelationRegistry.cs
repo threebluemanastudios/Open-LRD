@@ -9,6 +9,7 @@ namespace OPEN_LRD.NLP
         ForwardLinkTypes Forward,
         InverseLinkTypes Inverse);
 
+    /// <summary>Registers and resolves the stable relationship types used by NLP and ontology data.</summary>
     internal static class RelationRegistry
     {
         public const int FirstPredicateLinkTypeId = 1000;

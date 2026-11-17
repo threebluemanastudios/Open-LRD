@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "OPEN-LRD.ManualUiTests/1.0.0": {
+        "dependencies": {
+          "OPEN-LRD": "1.0.0"
+        },
+        "runtime": {
+          "OPEN-LRD.ManualUiTests.dll": {}
+        }
+      },
+      "OPEN-LRD/1.0.0": {
+        "runtime": {
+          "OPEN-LRD.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "OPEN-LRD.ManualUiTests/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "OPEN-LRD/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

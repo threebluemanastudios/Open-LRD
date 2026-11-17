@@ -6,8 +6,10 @@ using static OPEN_LRD.SmokeTests.Program;
 
 namespace OPEN_LRD.SmokeTests
 {
+    /// <summary>Contains regression checks for graph matching, trust, merges, and contradictions.</summary>
     internal static class ReasoningTests
     {
+        /// <summary>Registers and executes the reasoning regression checks.</summary>
         public static void RunAll()
         {
             Program.Run("Node labels and aliases", TestNodeLabelsAndAliases);
@@ -27,6 +29,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Contradiction resolver trust policy", TestContradictionResolverTrustPolicy);
         }
 
+        /// <summary>Initializes and returns the singleton graph core.</summary>
         private static LRD_Core NewCore()
         {
             LRD_Core core = LRD_Core.Instance;
@@ -34,6 +37,7 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Adds a node fixture with labels, aliases, lifetime, and type.</summary>
         private static Guid AddNode(
             LRD_Core core,
             NodeTypes type,
@@ -52,6 +56,7 @@ namespace OPEN_LRD.SmokeTests
             return nodeID;
         }
 
+        /// <summary>Creates a labeled chain node fixture for a query graph.</summary>
         private static Chain_Node NewQueryNode(
             NodeTypes type,
             string? label = null,
@@ -66,6 +71,7 @@ namespace OPEN_LRD.SmokeTests
             return node;
         }
 
+        /// <summary>Connects chain nodes with the requested relation class.</summary>
         private static LinkedList<Chain_Node> LinkChain(
             LinkClass classification,
             params Chain_Node[] nodes)
@@ -97,6 +103,7 @@ namespace OPEN_LRD.SmokeTests
                 throw new InvalidOperationException($"{message}: expected {expected}, got {actual}");
         }
 
+        /// <summary>Verifies normalized node labels and aliases participate in lookup.</summary>
         private static void TestNodeLabelsAndAliases()
         {
             LRD_Core core = NewCore();
@@ -119,6 +126,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(!core.TryFindByLabel("missing", out IReadOnlyList<Web_Node> missing) || missing.Count == 0, "missing label should not be found");
         }
 
+        /// <summary>Verifies trust confidence and decision calculations for weighted evidence.</summary>
         private static void TestTrustScaleMath()
         {
             ReasoningOptions options = new ReasoningOptions();
@@ -150,6 +158,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(discredited.Decision == TrustDecision.Discredited, "large invalid evidence should be discredited");
         }
 
+        /// <summary>Verifies topic-specific trust falls back to global source evidence.</summary>
         private static void TestTrustTopicFallback()
         {
             TrustScale trust = new TrustScale(new ReasoningOptions());
@@ -171,6 +180,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(topicAssessment.TotalEvidence == 5, "topic evidence count should be five");
         }
 
+        /// <summary>Verifies query chains map to directed typed query graphs.</summary>
         private static void TestQueryGraphConstruction()
         {
             Chain_Node first = NewQueryNode(NodeTypes.Entities, "First");
@@ -195,6 +205,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(fallback.Edges[0].Classification == LinkClass.basic, "default edge should be basic");
         }
 
+        /// <summary>Verifies malformed or unsupported query graphs are rejected before matching.</summary>
         private static void TestQueryGraphValidation()
         {
             AssertThrows<ArgumentNullException>(
@@ -226,6 +237,7 @@ namespace OPEN_LRD.SmokeTests
                 "links with external endpoints should be rejected");
         }
 
+        /// <summary>Verifies exact multi-hop graph paths produce a successful match.</summary>
         private static void TestExactMultiHopMatching()
         {
             LRD_Core core = NewCore();
@@ -253,6 +265,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(result.ResponsePaths[0].NodeIDs.Contains(firstAlpha), "response should include the selected Alpha");
         }
 
+        /// <summary>Verifies no-match and ambiguous graph candidates are reported distinctly.</summary>
         private static void TestNoMatchAndAmbiguity()
         {
             LRD_Core core = NewCore();
@@ -281,6 +294,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(first != Guid.Empty, "first node should exist");
         }
 
+        /// <summary>Verifies neutral evidence creates temporary nodes without promoting them.</summary>
         private static void TestNeutralMergeCreatesTemporaryNode()
         {
             LRD_Core core = NewCore();
@@ -308,6 +322,7 @@ namespace OPEN_LRD.SmokeTests
                 && link.Classification == LinkClass.identities), "new link should be added");
         }
 
+        /// <summary>Verifies trusted verified evidence promotes matching temporary knowledge.</summary>
         private static void TestTrustedMergePromotesTemporaryNode()
         {
             LRD_Core core = NewCore();
@@ -332,6 +347,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(root != Guid.Empty, "root should be reused");
         }
 
+        /// <summary>Verifies discredited evidence cannot merge a proposed fact.</summary>
         private static void TestDiscreditedMergeIsRejected()
         {
             LRD_Core core = NewCore();
@@ -355,6 +371,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(root != Guid.Empty, "root should exist");
         }
 
+        /// <summary>Verifies repeating the same accepted merge does not duplicate graph state.</summary>
         private static void TestMergeIsIdempotent()
         {
             LRD_Core core = NewCore();
@@ -388,6 +405,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(linksBefore == 1 && linksAfter == 1, "the matched edge should be stored exactly once");
         }
 
+        /// <summary>Verifies neutral evidence cannot replace a conflicting active link.</summary>
         private static void TestNeutralContradictionIsRejected()
         {
             LRD_Core core = NewCore();
@@ -414,6 +432,7 @@ namespace OPEN_LRD.SmokeTests
                 "old link should remain");
         }
 
+        /// <summary>Verifies trusted evidence invalidates a conflicting link and adds its replacement.</summary>
         private static void TestTrustedContradictionReplacesLink()
         {
             LRD_Core core = NewCore();
@@ -448,6 +467,7 @@ namespace OPEN_LRD.SmokeTests
                 "invalid old link should be excluded from response paths");
         }
 
+        /// <summary>Verifies response-path extraction is bounded and cycle-safe.</summary>
         private static void TestResponseExtractionAvoidsCycles()
         {
             LRD_Core core = NewCore();
@@ -475,6 +495,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(result.ResponseChain is not null, "top response should be converted to a chain");
         }
 
+        /// <summary>Verifies contradiction resolution follows source trust policy.</summary>
         private static void TestContradictionResolverTrustPolicy()
         {
             ReasoningOptions options = new ReasoningOptions();

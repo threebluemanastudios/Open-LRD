@@ -2,6 +2,14 @@ using System;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Controls whether labels focus on current interaction or a bounded visible subset.</summary>
+    internal enum VisualizerLabelMode
+    {
+        Focused = 0,
+        AllVisible = 1
+    }
+
+    /// <summary>Configures graph layout, rendering limits, camera behavior, and label presentation.</summary>
     internal sealed class VisualizerOptions
     {
         public const double MinimumSpread = 10.0;
@@ -17,7 +25,11 @@ namespace OPEN_LRD.Visualization
         public const int DefaultMaxLinks = 50000;
         public const int MaximumMaxNodes = 100000;
         public const int MaximumMaxLinks = 250000;
-        public const int DefaultMaxLabels = 1000;
+        public const int MinimumMaxLabels = 2;
+        public const int DefaultMaxLabels = 50;
+        public const int MaximumMaxLabels = 50;
+        public const int MaxLabelCandidatesPerFrame = 250;
+        public const int SpatialIndexLeafCapacity = 32;
         public const int DefaultLabelCharacterLimit = 48;
         public const double DefaultNearPlaneDistance = 0.05;
         public const double MinimumSpacing = 0.05;
@@ -41,6 +53,8 @@ namespace OPEN_LRD.Visualization
         public int MaxLinks { get; set; } = DefaultMaxLinks;
 
         public int MaxLabels { get; set; } = DefaultMaxLabels;
+
+        public VisualizerLabelMode LabelMode { get; set; } = VisualizerLabelMode.Focused;
 
         public int LabelCharacterLimit { get; set; } = DefaultLabelCharacterLimit;
 
@@ -87,8 +101,17 @@ namespace OPEN_LRD.Visualization
             ValidatePositiveInteger(MaxIterations, nameof(MaxIterations));
             ValidatePositiveInteger(MaxNodes, nameof(MaxNodes));
             ValidatePositiveInteger(MaxLinks, nameof(MaxLinks));
-            ValidatePositiveInteger(MaxLabels, nameof(MaxLabels));
+            if (MaxLabels < MinimumMaxLabels || MaxLabels > MaximumMaxLabels)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(MaxLabels),
+                    MaxLabels,
+                    $"MaxLabels must be between {MinimumMaxLabels} and {MaximumMaxLabels}.");
+            }
             ValidatePositiveInteger(LabelCharacterLimit, nameof(LabelCharacterLimit));
+
+            if (!Enum.IsDefined(LabelMode))
+                throw new ArgumentOutOfRangeException(nameof(LabelMode), LabelMode, "LabelMode is invalid.");
 
             if (MaxNodes > MaximumMaxNodes)
                 throw new ArgumentOutOfRangeException(nameof(MaxNodes), MaxNodes, $"MaxNodes cannot exceed {MaximumMaxNodes}.");

@@ -1,11 +1,14 @@
 using System.IO;
 using System.Text;
 using OPEN_LRD.Nodes;
+using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Reports progress while text chunks are imported.</summary>
     internal sealed record TextImportProgress(int ProcessedChunks, int TotalChunks);
 
+    /// <summary>Configures text-file chunking, provenance, safety, and cancellation.</summary>
     internal sealed record TextImportOptions
     {
         public string FilePath { get; init; } = string.Empty;
@@ -20,10 +23,12 @@ namespace OPEN_LRD.NLP
         public int MaxDiagnostics { get; init; } = 100;
         public int MaxRetryDepth { get; init; } = 3;
         public NlpOptions? PipelineOptions { get; init; }
+        public ReasoningOptions? ReasoningOptions { get; init; }
         public Action<TextImportProgress>? Progress { get; init; }
         public CancellationToken CancellationToken { get; init; }
     }
 
+    /// <summary>Summarizes text chunk outcomes, provenance, and diagnostics.</summary>
     internal sealed record TextImportResult
     {
         public string FilePath { get; init; } = string.Empty;
@@ -43,6 +48,7 @@ namespace OPEN_LRD.NLP
         public bool Truncated { get; init; }
         public bool Cancelled { get; init; }
         public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+        public IReadOnlyList<Guid> AffectedNodeIDs { get; init; } = Array.Empty<Guid>();
     }
 
     /// <summary>
@@ -53,6 +59,7 @@ namespace OPEN_LRD.NLP
     {
         private const int BinaryProbeBytes = 8 * 1024;
 
+        /// <summary>Reads, chunks, and ingests a text file using one shared NLP pipeline.</summary>
         public static TextImportResult Import(LRD_Core core, TextImportOptions? options = null)
         {
             ArgumentNullException.ThrowIfNull(core);
@@ -84,6 +91,7 @@ namespace OPEN_LRD.NLP
             });
 
             DiagnosticBag diagnostics = new DiagnosticBag(options.MaxDiagnostics);
+            HashSet<Guid> affectedNodeIDs = new HashSet<Guid>();
 
             if (chunking.Truncated)
             {
@@ -122,7 +130,8 @@ namespace OPEN_LRD.NLP
                         : 0,
                     Truncated = chunking.Truncated,
                     Cancelled = cancelled,
-                    Diagnostics = diagnostics.ToList()
+                    Diagnostics = diagnostics.ToList(),
+                    AffectedNodeIDs = affectedNodeIDs.ToArray()
                 };
             }
 
@@ -162,7 +171,10 @@ namespace OPEN_LRD.NLP
 
             try
             {
-                pipeline = new NlpPipeline(core, options.PipelineOptions);
+                pipeline = new NlpPipeline(
+                    core,
+                    options.PipelineOptions,
+                    reasoningOptions: options.ReasoningOptions);
                 conversationID = pipeline.ConversationID;
 
                 foreach (TextChunk chunk in chunking.Chunks)
@@ -184,6 +196,7 @@ namespace OPEN_LRD.NLP
                             topicNodeID,
                             diagnostics,
                             options,
+                            affectedNodeIDs,
                             depth: 0);
 
                         switch (outcome)
@@ -241,6 +254,7 @@ namespace OPEN_LRD.NLP
                 cancelledRun);
         }
 
+        /// <summary>Ingests a chunk and recursively retries invalid input at sentence boundaries.</summary>
         private static ChunkOutcome IngestWithRetry(
             NlpPipeline pipeline,
             TextChunk chunk,
@@ -248,9 +262,21 @@ namespace OPEN_LRD.NLP
             Guid? topicNodeID,
             DiagnosticBag diagnostics,
             TextImportOptions options,
+            ISet<Guid> affectedNodeIDs,
             int depth)
         {
             NlpResult result = pipeline.Ingest(chunk.Text, sourceNodeID, topicNodeID);
+            foreach (ReasoningResult reasoningResult in result.ReasoningResults)
+            {
+                if (reasoningResult.SelectedMatch is not null)
+                {
+                    foreach (Guid nodeID in reasoningResult.SelectedMatch.NodeMap.Values)
+                        affectedNodeIDs.Add(nodeID);
+                }
+
+                foreach (Guid promotedNodeID in reasoningResult.PromotedNodeIDs)
+                    affectedNodeIDs.Add(promotedNodeID);
+            }
 
             switch (result.Status)
             {
@@ -273,6 +299,7 @@ namespace OPEN_LRD.NLP
                         topicNodeID,
                         diagnostics,
                         options,
+                        affectedNodeIDs,
                         depth + 1);
 
                     ChunkOutcome secondOutcome = IngestWithRetry(
@@ -282,6 +309,7 @@ namespace OPEN_LRD.NLP
                         topicNodeID,
                         diagnostics,
                         options,
+                        affectedNodeIDs,
                         depth + 1);
 
                     return Combine(firstOutcome, secondOutcome);
@@ -298,12 +326,14 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Creates a chunk copy with updated text and sentence metadata.</summary>
         private static TextChunk WithText(TextChunk chunk, string text)
         {
             int sentences = Math.Max(TextChunker.FindSentenceSpans(text).Count, 1);
             return chunk with { Text = text, SentenceCount = sentences };
         }
 
+        /// <summary>Combines the outcomes of two recursively split chunks.</summary>
         private static ChunkOutcome Combine(ChunkOutcome first, ChunkOutcome second)
         {
             if (first == ChunkOutcome.Ingested || second == ChunkOutcome.Ingested)
@@ -315,6 +345,7 @@ namespace OPEN_LRD.NLP
             return ChunkOutcome.Failed;
         }
 
+        /// <summary>Finds or creates the permanent file Source node used for provenance.</summary>
         private static Guid EnsureSourceNode(LRD_Core core, string filePath, out bool created)
         {
             string label = "Source: " + Path.GetFileName(filePath);
@@ -341,6 +372,7 @@ namespace OPEN_LRD.NLP
             return node.ID;
         }
 
+        /// <summary>Reads a bounded UTF text file and rejects binary content.</summary>
         private static string ReadText(string filePath, long maxFileBytes)
         {
             FileInfo info = new FileInfo(filePath);
@@ -380,6 +412,7 @@ namespace OPEN_LRD.NLP
             return reader.ReadToEnd();
         }
 
+        /// <summary>Resolves and validates the selected text-file path.</summary>
         private static string ValidateFilePath(TextImportOptions options)
         {
             if (string.IsNullOrWhiteSpace(options.FilePath))
@@ -397,6 +430,7 @@ namespace OPEN_LRD.NLP
             return fullPath;
         }
 
+        /// <summary>Rejects invalid text-file importer limits before reading the file.</summary>
         private static void ValidateOptions(TextImportOptions options)
         {
             if (options.MaxFileBytes <= 0)
@@ -442,11 +476,14 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Converts an empty optional GUID to a missing value.</summary>
         private static Guid? NormalizeGuid(Guid? value)
         {
             return !value.HasValue || value.Value == Guid.Empty ? null : value;
         }
 
+        /// <summary>Classifies the result of processing one text chunk.</summary>
+        /// <summary>Classifies the result of processing one text chunk.</summary>
         private enum ChunkOutcome
         {
             Ingested,
@@ -454,17 +491,21 @@ namespace OPEN_LRD.NLP
             Failed
         }
 
+        /// <summary>Stores a bounded diagnostic list and reports when entries are omitted.</summary>
+        /// <summary>Stores a bounded set of text-import diagnostics.</summary>
         private sealed class DiagnosticBag
         {
             private readonly int maxEntries;
             private readonly List<string> entries = new List<string>();
             private bool truncated;
 
+            /// <summary>Creates a diagnostic collection with a fixed entry budget.</summary>
             public DiagnosticBag(int maxEntries)
             {
                 this.maxEntries = maxEntries;
             }
 
+            /// <summary>Adds a diagnostic while preserving the configured size limit.</summary>
             public void Add(string message)
             {
                 if (entries.Count < maxEntries)
@@ -473,6 +514,7 @@ namespace OPEN_LRD.NLP
                     truncated = true;
             }
 
+            /// <summary>Returns a copy of the collected diagnostics.</summary>
             public IReadOnlyList<string> ToList()
             {
                 if (!truncated)

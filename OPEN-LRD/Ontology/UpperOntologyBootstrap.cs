@@ -5,6 +5,7 @@ namespace OPEN_LRD.Ontology
     // Creates the permanent upper-ontology foundation. Idempotent: existing
     // Category nodes are reused by label, so repeated calls only add what is
     // missing.
+    /// <summary>Creates permanent foundational ontology nodes and hierarchy links.</summary>
     internal static class UpperOntologyBootstrap
     {
         public static int Populate(LRD_Core core)

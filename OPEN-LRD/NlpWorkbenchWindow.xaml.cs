@@ -6,6 +6,15 @@ using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD
 {
+    /// <summary>Provides presentation-ready candidate details for the NLP Workbench grid.</summary>
+    /// <param name="Label">The candidate label.</param>
+    /// <param name="NodeType">The candidate node type.</param>
+    /// <param name="Score">The formatted match score.</param>
+    /// <param name="Depth">The formatted graph depth.</param>
+    /// <param name="RelationLinkType">The matched relation type.</param>
+    /// <param name="LinkClass">The matched link class.</param>
+    /// <param name="Temporary">Whether the candidate is temporary.</param>
+    /// <param name="PathNodeIDs">The node identifiers in the evidence path.</param>
     public sealed record CandidateRow(
         string Label,
         string NodeType,
@@ -16,8 +25,20 @@ namespace OPEN_LRD
         string Temporary,
         string PathNodeIDs);
 
+    /// <summary>Provides a presentation row for an analyzed semantic frame.</summary>
+    /// <param name="Kind">The frame category.</param>
+    /// <param name="Summary">A concise display summary.</param>
     public sealed record FrameRow(string Kind, string Summary);
 
+    /// <summary>Provides presentation-ready details for a resolved text mention.</summary>
+    /// <param name="Sequence">The mention sequence number.</param>
+    /// <param name="Turn">The conversation turn number.</param>
+    /// <param name="NodeID">The resolved graph node identifier.</param>
+    /// <param name="Label">The resolved node label.</param>
+    /// <param name="Surface">The text span from the input.</param>
+    /// <param name="NodeType">The resolved node type.</param>
+    /// <param name="Role">The mention's semantic role.</param>
+    /// <param name="FromAnswer">Whether the mention came from an answer.</param>
     public sealed record MentionRow(
         string Sequence,
         string Turn,
@@ -28,6 +49,22 @@ namespace OPEN_LRD
         string Role,
         string FromAnswer);
 
+    /// <summary>Provides presentation-ready details for an NLP session provenance entry.</summary>
+    /// <param name="Sequence">The provenance sequence number.</param>
+    /// <param name="Turn">The conversation turn number.</param>
+    /// <param name="Sentence">The sentence sequence number.</param>
+    /// <param name="SourceText">The source sentence.</param>
+    /// <param name="Status">The ingestion outcome.</param>
+    /// <param name="Relation">The extracted relation name.</param>
+    /// <param name="LinkClass">The relation's link class.</param>
+    /// <param name="SubjectNodeID">The subject node identifier.</param>
+    /// <param name="ObjectNodeID">The object node identifier.</param>
+    /// <param name="QualifierNodeID">The optional qualifier node identifier.</param>
+    /// <param name="TrustSourceNodeID">The source used for trust evaluation.</param>
+    /// <param name="TopicNodeID">The optional topic node identifier.</param>
+    /// <param name="TemporaryNodeCount">The temporary-node count associated with the entry.</param>
+    /// <param name="GraphMutated">Whether the graph was changed.</param>
+    /// <param name="UsableForAnswer">Whether the entry is eligible as answer evidence.</param>
     public sealed record ProvenanceRow(
         string Sequence,
         string Turn,
@@ -45,12 +82,17 @@ namespace OPEN_LRD
         string GraphMutated,
         string UsableForAnswer);
 
+    /// <summary>Provides a presentation row for a conversation-focus field.</summary>
+    /// <param name="Field">The focus property name.</param>
+    /// <param name="Value">The formatted focus value.</param>
     public sealed record FocusRow(string Field, string Value);
 
+    /// <summary>Displays NLP Workbench sessions, operations, diagnostics, and graph evidence.</summary>
     public partial class NlpWorkbenchWindow : Window
     {
         private readonly NlpWorkbench workbench;
 
+        /// <summary>Creates a Workbench window and attaches it to a new conversation.</summary>
         public NlpWorkbenchWindow()
         {
             InitializeComponent();
@@ -74,12 +116,15 @@ namespace OPEN_LRD
             RefreshWorkbench(initialStatus);
         }
 
+        /// <summary>Releases the Workbench session when the window closes.</summary>
+        /// <param name="e">The close event arguments.</param>
         protected override void OnClosed(EventArgs e)
         {
             workbench.Dispose();
             base.OnClosed(e);
         }
 
+        /// <summary>Validates optional provenance identifiers and submits the current text for ingestion.</summary>
         private void Ingest_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!TryReadOptionalGuid(IngestSourceBox, "Source Node ID", out Guid? sourceNodeID, out string? sourceError))
@@ -104,11 +149,13 @@ namespace OPEN_LRD
                 });
         }
 
+        /// <summary>Submits the current question to the active Workbench session.</summary>
         private void Ask_Button_Click(object sender, RoutedEventArgs e)
         {
             ExecuteOperation("Ask", () => workbench.Ask(AskInput.Text));
         }
 
+        /// <summary>Starts a new conversation and refreshes the session display.</summary>
         private void NewConversation_Button_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -128,6 +175,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Attaches the Workbench to the conversation identifier in the input field.</summary>
         private void AttachConversation_Button_Click(object sender, RoutedEventArgs e)
         {
             string text = AttachConversationBox.Text.Trim();
@@ -155,6 +203,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Resets the active conversation context without changing graph facts.</summary>
         private void ResetConversation_Button_Click(object sender, RoutedEventArgs e)
         {
             if (workbench.State?.HasSession != true)
@@ -185,6 +234,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Removes the active conversation when it is not attached to another pipeline.</summary>
         private void RemoveConversation_Button_Click(object sender, RoutedEventArgs e)
         {
             if (workbench.State?.HasSession != true)
@@ -215,6 +265,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Clears all conversations and refreshes the Workbench session display.</summary>
         private void ClearConversations_Button_Click(object sender, RoutedEventArgs e)
         {
             MessageBoxResult confirmation = MessageBox.Show(
@@ -239,6 +290,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Copies the active conversation identifier to the clipboard.</summary>
         private void CopyConversation_Button_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -260,6 +312,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Refreshes the displayed session state from the Workbench facade.</summary>
         private void Refresh_Button_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -272,6 +325,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Runs an NLP operation, renders its result, and reports operation failures.</summary>
         private void ExecuteOperation(string operation, Func<NlpResult> action, Action<NlpResult>? onCompleted = null)
         {
             if (workbench.State?.HasSession != true)
@@ -294,6 +348,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Displays an NLP operation result and refreshes its evidence panels.</summary>
         private void ShowResult(string operation, NlpResult result)
         {
             string answerStatus = result.Answer is null
@@ -322,6 +377,7 @@ namespace OPEN_LRD
             FramesGrid.ItemsSource = BuildFrameRows(result);
         }
 
+        /// <summary>Builds the short status text for an ingestion result.</summary>
         private static string BuildIngestSummary(NlpResult result)
         {
             if (result.Provenance.Count > 0)
@@ -333,6 +389,7 @@ namespace OPEN_LRD
             return result.Status.ToString();
         }
 
+        /// <summary>Converts an answer candidate into a display row.</summary>
         private static CandidateRow ToCandidateRow(AnswerCandidate candidate)
         {
             return new CandidateRow(
@@ -346,6 +403,7 @@ namespace OPEN_LRD
                 string.Join(", ", candidate.PathNodeIDs));
         }
 
+        /// <summary>Builds display rows for extracted relation frames and query analysis.</summary>
         private static IReadOnlyList<FrameRow> BuildFrameRows(NlpResult result)
         {
             List<FrameRow> rows = new List<FrameRow>();
@@ -374,6 +432,7 @@ namespace OPEN_LRD
             return rows;
         }
 
+        /// <summary>Refreshes the active-session summary, mentions, provenance, and focus tables.</summary>
         private void RefreshWorkbench(string? status = null)
         {
             NlpWorkbenchState state = workbench.RefreshState();
@@ -412,6 +471,7 @@ namespace OPEN_LRD
                 SetStatus(status);
         }
 
+        /// <summary>Clears operation output and all result-specific evidence tables.</summary>
         private void ClearResultDisplay()
         {
             OperationStatusText.Text = "No operation yet.";
@@ -424,6 +484,7 @@ namespace OPEN_LRD
             FramesGrid.ItemsSource = Array.Empty<FrameRow>();
         }
 
+        /// <summary>Converts a session mention into a display row.</summary>
         private static MentionRow ToMentionRow(ConversationMention mention)
         {
             return new MentionRow(
@@ -437,6 +498,7 @@ namespace OPEN_LRD
                 mention.FromAnswer.ToString());
         }
 
+        /// <summary>Converts a provenance entry into a display row.</summary>
         private static ProvenanceRow ToProvenanceRow(SessionProvenanceEntry entry)
         {
             return new ProvenanceRow(
@@ -457,6 +519,7 @@ namespace OPEN_LRD
                 entry.IsUsableForAnswer.ToString());
         }
 
+        /// <summary>Builds display rows for the current conversation focus values.</summary>
         private static IReadOnlyList<FocusRow> BuildFocusRows(NlpWorkbenchState state)
         {
             return new[]
@@ -469,6 +532,7 @@ namespace OPEN_LRD
             };
         }
 
+        /// <summary>Parses an optional GUID field and returns a user-facing validation error when invalid.</summary>
         private bool TryReadOptionalGuid(
             TextBox box,
             string fieldName,
@@ -498,11 +562,13 @@ namespace OPEN_LRD
             return true;
         }
 
+        /// <summary>Formats an optional GUID for presentation.</summary>
         private static string FormatGuid(Guid? value)
         {
             return value?.ToString() ?? "(none)";
         }
 
+        /// <summary>Reports an operation exception in the status and diagnostic panels.</summary>
         private void ShowOperationError(string operation, Exception exception)
         {
             SetStatus($"{operation} failed: {exception.Message}");
@@ -515,6 +581,7 @@ namespace OPEN_LRD
             RefreshWorkbench();
         }
 
+        /// <summary>Updates the Workbench status text.</summary>
         private void SetStatus(string message)
         {
             WorkbenchStatusBar.Text = message;

@@ -4,6 +4,7 @@ using OPEN_LRD.Ontology;
 
 namespace OPEN_LRD.Maintenance
 {
+    /// <summary>Marks superseded generic links inactive while preserving their historical records.</summary>
     internal static class SupersededLinkPruner
     {
         public static void Prune(LRD_Core core, MaintenanceOptions options, MaintenanceReport report)

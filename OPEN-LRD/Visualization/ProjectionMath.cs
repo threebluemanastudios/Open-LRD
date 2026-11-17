@@ -3,6 +3,7 @@ using System.Numerics;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Stores camera basis vectors and projection parameters for graph rendering.</summary>
     internal sealed class CameraView
     {
         private const float MinimumDirectionLength = 1e-6f;
@@ -83,10 +84,75 @@ namespace OPEN_LRD.Visualization
 
         public double AspectRatio => ViewportWidth / ViewportHeight;
 
+        public bool IsPointInsideFrustum(Vector3 world, double maximumDepth = double.PositiveInfinity)
+        {
+            if (!TryGetCameraCoordinates(world, out double horizontal, out double vertical, out double depth))
+                return false;
+
+            if (depth <= NearPlaneDistance || depth >= FarPlaneDistance || depth > maximumDepth)
+                return false;
+
+            double tanHalfHorizontal = Math.Tan(FieldOfViewDegrees * Math.PI / 360.0);
+            double tanHalfVertical = tanHalfHorizontal / AspectRatio;
+            return Math.Abs(horizontal) <= depth * tanHalfHorizontal
+                && Math.Abs(vertical) <= depth * tanHalfVertical;
+        }
+
+        public bool IntersectsFrustum(Vector3 minimum, Vector3 maximum, double maximumDepth = double.PositiveInfinity)
+        {
+            if (minimum.X > maximum.X || minimum.Y > maximum.Y || minimum.Z > maximum.Z)
+                throw new ArgumentException("AABB minimum must not exceed its maximum.");
+
+            Vector3 center = (minimum + maximum) * 0.5f;
+            Vector3 extent = (maximum - minimum) * 0.5f;
+            Vector3 delta = center - Position;
+
+            double centerDepth = Vector3.Dot(delta, LookDirection);
+            double depthRadius = Math.Abs(LookDirection.X) * extent.X
+                + Math.Abs(LookDirection.Y) * extent.Y
+                + Math.Abs(LookDirection.Z) * extent.Z;
+            double minimumDepth = centerDepth - depthRadius;
+            double maximumAabbDepth = centerDepth + depthRadius;
+
+            if (maximumAabbDepth <= NearPlaneDistance
+                || minimumDepth >= FarPlaneDistance
+                || minimumDepth > maximumDepth)
+            {
+                return false;
+            }
+
+            double horizontal = Vector3.Dot(delta, Right);
+            double horizontalRadius = Math.Abs(Right.X) * extent.X
+                + Math.Abs(Right.Y) * extent.Y
+                + Math.Abs(Right.Z) * extent.Z;
+            double vertical = Vector3.Dot(delta, Up);
+            double verticalRadius = Math.Abs(Up.X) * extent.X
+                + Math.Abs(Up.Y) * extent.Y
+                + Math.Abs(Up.Z) * extent.Z;
+
+            double tanHalfHorizontal = Math.Tan(FieldOfViewDegrees * Math.PI / 360.0);
+            double tanHalfVertical = tanHalfHorizontal / AspectRatio;
+            double frustumDepth = Math.Min(maximumAabbDepth, Math.Min(FarPlaneDistance, maximumDepth));
+
+            return Math.Abs(horizontal) - horizontalRadius <= frustumDepth * tanHalfHorizontal
+                && Math.Abs(vertical) - verticalRadius <= frustumDepth * tanHalfVertical;
+        }
+
+        public double GetAabbNearDepth(Vector3 minimum, Vector3 maximum)
+        {
+            Vector3 center = (minimum + maximum) * 0.5f;
+            Vector3 extent = (maximum - minimum) * 0.5f;
+            Vector3 delta = center - Position;
+            double centerDepth = Vector3.Dot(delta, LookDirection);
+            double depthRadius = Math.Abs(LookDirection.X) * extent.X
+                + Math.Abs(LookDirection.Y) * extent.Y
+                + Math.Abs(LookDirection.Z) * extent.Z;
+            return centerDepth - depthRadius;
+        }
+
         public bool TryProject(Vector3 world, out Vector2 screen, out double depth)
         {
-            Vector3 delta = world - Position;
-            depth = Vector3.Dot(delta, LookDirection);
+            TryGetCameraCoordinates(world, out double horizontal, out double vertical, out depth);
 
             if (!double.IsFinite(depth)
                 || depth <= NearPlaneDistance
@@ -98,8 +164,8 @@ namespace OPEN_LRD.Visualization
 
             double tanHalfHorizontal = Math.Tan(FieldOfViewDegrees * Math.PI / 360.0);
             double tanHalfVertical = tanHalfHorizontal / AspectRatio;
-            double horizontal = Vector3.Dot(delta, Right) / (depth * tanHalfHorizontal);
-            double vertical = Vector3.Dot(delta, Up) / (depth * tanHalfVertical);
+            horizontal /= depth * tanHalfHorizontal;
+            vertical /= depth * tanHalfVertical;
 
             double screenX = (horizontal * 0.5 + 0.5) * ViewportWidth;
             double screenY = (0.5 - vertical * 0.5) * ViewportHeight;
@@ -112,6 +178,19 @@ namespace OPEN_LRD.Visualization
 
             screen = new Vector2((float)screenX, (float)screenY);
             return true;
+        }
+
+        private bool TryGetCameraCoordinates(
+            Vector3 world,
+            out double horizontal,
+            out double vertical,
+            out double depth)
+        {
+            Vector3 delta = world - Position;
+            depth = Vector3.Dot(delta, LookDirection);
+            horizontal = Vector3.Dot(delta, Right);
+            vertical = Vector3.Dot(delta, Up);
+            return double.IsFinite(depth) && double.IsFinite(horizontal) && double.IsFinite(vertical);
         }
 
         public bool TryProjectCompleteBox(
@@ -221,6 +300,7 @@ namespace OPEN_LRD.Visualization
         }
     }
 
+    /// <summary>Provides projection, frustum, ray, and bounds calculations for the visualizer.</summary>
     internal static class ProjectionMath
     {
         public static CameraView FrameBounds(

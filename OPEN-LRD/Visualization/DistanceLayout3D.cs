@@ -6,6 +6,7 @@ using System.Threading;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Computes deterministic 3D node positions from semantic link-distance constraints.</summary>
     internal static class DistanceLayout3D
     {
         private const double GoldenAngle = 2.399963229728653;
@@ -824,6 +825,7 @@ namespace OPEN_LRD.Visualization
             return Vector3.Normalize(direction);
         }
 
+        /// <summary>Stores a connected graph component and its local layout bounds.</summary>
         private sealed class Component
         {
             public Component(int[] nodes)
@@ -841,8 +843,10 @@ namespace OPEN_LRD.Visualization
             public float Radius { get; set; }
         }
 
+        /// <summary>Stores an already placed node sphere used by collision avoidance.</summary>
         private readonly record struct PlacedSphere(Vector3 Center, float Radius);
 
+        /// <summary>Accelerates candidate overlap checks for placed node spheres.</summary>
         private sealed class SpatialGrid
         {
             private readonly float cellSize;

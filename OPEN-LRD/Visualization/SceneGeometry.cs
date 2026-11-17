@@ -4,14 +4,17 @@ using System.Numerics;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Groups node meshes that share a node type.</summary>
     internal sealed record NodeMeshBatch(int NodeTypeId, string NodeTypeName, MeshData Mesh);
 
+    /// <summary>Groups link meshes that share a relationship type and link class.</summary>
     internal sealed record LinkMeshBatch(
         int ForwardTypeId,
         string ForwardTypeName,
         int ClassId,
         MeshData Mesh);
 
+    /// <summary>Contains prepared mesh batches and layout positions for viewport rendering.</summary>
     internal sealed class SceneGeometry
     {
         public SceneGeometry(
@@ -74,6 +77,7 @@ namespace OPEN_LRD.Visualization
         }
     }
 
+    /// <summary>Builds bounded, batched scene geometry from a graph snapshot and layout.</summary>
     internal static class VisualizerSceneBuilder
     {
         public static SceneGeometry Build(

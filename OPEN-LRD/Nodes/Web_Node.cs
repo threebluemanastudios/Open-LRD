@@ -2,6 +2,7 @@
 
 namespace OPEN_LRD.Nodes
 {
+    /// <summary>Extends a node with outgoing typed links and reference-link maintenance.</summary>
     internal class Web_Node : Node
     {
         private const int DefaultWebNodeTimeToLive = 32760;

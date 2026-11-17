@@ -9,6 +9,7 @@ namespace OPEN_LRD.NLP
         QuestionVariant Variant,
         ReasoningResult Result);
 
+    /// <summary>Generates answer text and evidence-aware explanations from reasoning results.</summary>
     internal static class AnswerGenerator
     {
         private static readonly HashSet<string> prepositionRelations =

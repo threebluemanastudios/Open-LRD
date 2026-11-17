@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Configures bounded NLP parsing, reasoning, conversation, and temporal behavior.</summary>
     internal sealed record NlpOptions
     {
         public int MaxCharacters { get; init; } = 20000;

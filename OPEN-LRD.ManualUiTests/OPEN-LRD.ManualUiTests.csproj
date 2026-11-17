@@ -5,6 +5,8 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RootNamespace>OPEN_LRD.ManualUiTests</RootNamespace>
   </PropertyGroup>
 

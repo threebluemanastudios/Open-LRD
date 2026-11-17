@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 
 namespace OPEN_LRD
 {
+    /// <summary>Owns the graph, runtime registries, conversations, persistence hooks, and lifecycle operations.</summary>
     internal class LRD_Core
     {
         private static readonly LRD_Core _instance = new LRD_Core();
@@ -25,6 +26,7 @@ namespace OPEN_LRD
         public static LRD_Core Instance => _instance;
 
         // Initializes the graph dictionary and the temporary query/response chains.
+        /// <summary>Initializes or resets the singleton graph and its runtime state.</summary>
         public void InitializeCore()
         {
             nodes = new Dictionary<Guid, Web_Node>();
@@ -35,6 +37,7 @@ namespace OPEN_LRD
             initialized = true;
         }
 
+        /// <summary>Creates and registers a conversation with the supplied NLP options.</summary>
         public Guid CreateConversation(NlpOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -54,6 +57,7 @@ namespace OPEN_LRD
             return conversationID;
         }
 
+        /// <summary>Returns the registered conversation or throws when it does not exist.</summary>
         public ConversationContext GetConversation(Guid conversationID)
         {
             if (!initialized || conversations is null)
@@ -65,6 +69,7 @@ namespace OPEN_LRD
             throw new InvalidOperationException($"Conversation '{conversationID}' was not found.");
         }
 
+        /// <summary>Attempts to retrieve a registered conversation.</summary>
         public bool TryGetConversation(Guid conversationID, out ConversationContext? context)
         {
             context = null;
@@ -75,6 +80,7 @@ namespace OPEN_LRD
             return conversations.TryGetValue(conversationID, out context);
         }
 
+        /// <summary>Resolves an existing conversation or creates one when no identifier is supplied.</summary>
         public ConversationContext ResolveConversation(Guid? conversationID, NlpOptions options)
         {
             if (!initialized)
@@ -86,6 +92,7 @@ namespace OPEN_LRD
             return GetConversation(conversationID.Value);
         }
 
+        /// <summary>Removes a conversation when no active pipeline depends on it.</summary>
         public bool RemoveConversation(Guid conversationID)
         {
             if (!initialized || conversations is null || pipelineConversations is null)
@@ -102,6 +109,7 @@ namespace OPEN_LRD
             return conversations.Remove(conversationID);
         }
 
+        /// <summary>Returns a read-only snapshot of registered conversations.</summary>
         public IReadOnlyDictionary<Guid, ConversationContext>? GetConversations()
         {
             if (!initialized || conversations is null)
@@ -154,12 +162,14 @@ namespace OPEN_LRD
             initialized = true;
         }
 
+        /// <summary>Clears registered conversation state and pipeline attachments.</summary>
         public void ClearConversations()
         {
             conversations?.Clear();
             pipelineConversations?.Clear();
         }
 
+        /// <summary>Associates an active pipeline with a registered conversation.</summary>
         public bool RegisterPipelineConversation(Guid pipelineID, Guid conversationID)
         {
             if (!initialized || conversations is null || pipelineConversations is null)
@@ -172,6 +182,7 @@ namespace OPEN_LRD
             return true;
         }
 
+        /// <summary>Attempts to retrieve the conversation attached to a pipeline.</summary>
         public bool TryGetPipelineConversation(Guid pipelineID, out Guid conversationID)
         {
             conversationID = Guid.Empty;
@@ -182,6 +193,7 @@ namespace OPEN_LRD
             return pipelineConversations.TryGetValue(pipelineID, out conversationID);
         }
 
+        /// <summary>Removes an active pipeline-to-conversation association.</summary>
         public bool UnregisterPipelineConversation(Guid pipelineID)
         {
             if (!initialized || pipelineConversations is null)
@@ -191,6 +203,7 @@ namespace OPEN_LRD
         }
 
         // Generates a new basic type node with a collision-resistant GUID and adds it to the graph.
+        /// <summary>Creates and stores a node using a generated identifier.</summary>
         public Guid GenerateNewNode(NodeLifetime lifetime = NodeLifetime.Temporary, int ttl = Node.DefaultTimeToLive)
         {
             if (!initialized || nodes is null)
@@ -209,6 +222,7 @@ namespace OPEN_LRD
         }
 
         // Adds the specified Node to the nodes dictionary.
+        /// <summary>Adds a preconstructed node to the graph.</summary>
         public bool AddExistingNode(Web_Node tempNode)
         {
             if (!initialized || nodes is null || tempNode is null)
@@ -217,6 +231,7 @@ namespace OPEN_LRD
             return nodes.TryAdd(tempNode.Get_ID(), tempNode);
         }
 
+        /// <summary>Creates an Event node with a time window and links its participants, action, and location.</summary>
         public Web_Node CreateEvent(
             string? eventName,
             DateTimeOffset? startTime,
@@ -237,6 +252,7 @@ namespace OPEN_LRD
                 locationID);
         }
 
+        /// <summary>Creates an Event node from an existing event window and relationship identifiers.</summary>
         public Web_Node CreateEvent(
             Guid eventID,
             string? eventName,
@@ -315,6 +331,7 @@ namespace OPEN_LRD
             return eventNode;
         }
 
+        /// <summary>Finds active Event nodes whose time windows overlap the requested interval.</summary>
         public IReadOnlyList<Web_Node> FindEventsInWindow(
             DateTimeOffset start,
             DateTimeOffset end,
@@ -340,6 +357,7 @@ namespace OPEN_LRD
                 .ToList();
         }
 
+        /// <summary>Finds Event nodes matching optional subject, action, and object constraints.</summary>
         public IReadOnlyList<Web_Node> FindEventsFor(
             Guid subjectID,
             string verb,
@@ -363,6 +381,7 @@ namespace OPEN_LRD
                 .ToList();
         }
 
+        /// <summary>Calculates an event's temporal status relative to a supplied reference time.</summary>
         public EventTimeVariance CalculateEventTimeVariance(
             Guid eventNodeID,
             DateTimeOffset? referenceTime = null)
@@ -377,6 +396,7 @@ namespace OPEN_LRD
             return EventTimeVarianceCalculator.Calculate(eventNode, referenceTime);
         }
 
+        /// <summary>Calculates an event's temporal status relative to the current time.</summary>
         public EventTimeVariance CalculateEventTimeVariance(
             Web_Node eventNode,
             DateTimeOffset? referenceTime = null)
@@ -493,12 +513,14 @@ namespace OPEN_LRD
                 : actualStart >= searchStart && actualEnd <= searchEnd;
         }
 
+        /// <summary>Materializes the selected node's metadata as typed graph facts.</summary>
         public MaintenanceReport IngestNodeMetadata(Guid nodeID)
         {
             return NodeMetadataReasoner.IngestNode(this, nodeID);
         }
 
         // Returns the existing node at index (NodeID) or null when it does not exist.
+        /// <summary>Returns a graph node by identifier or null when it is absent.</summary>
         public Web_Node? GetExistingNode(Guid nodeID)
         {
             if (!initialized || nodes is null)
@@ -507,6 +529,7 @@ namespace OPEN_LRD
             return nodes.TryGetValue(nodeID, out Web_Node? node) ? node : null;
         }
 
+        /// <summary>Attempts to retrieve a graph node by identifier.</summary>
         public bool TryGetNode(Guid nodeID, out Web_Node? node)
         {
             node = null;
@@ -517,6 +540,7 @@ namespace OPEN_LRD
             return nodes.TryGetValue(nodeID, out node);
         }
 
+        /// <summary>Removes a graph node and cleans links that reference it.</summary>
         public bool RemoveExistingNode(Web_Node nodeToRemove)
         {
             ArgumentNullException.ThrowIfNull(nodeToRemove);
@@ -524,6 +548,7 @@ namespace OPEN_LRD
         }
 
         // Removes the node and every link that references it.
+        /// <summary>Removes a graph node by identifier and cleans its links.</summary>
         public bool RemoveExistingNode(Guid nodeID)
         {
             if (!initialized || nodes is null)
@@ -672,6 +697,7 @@ namespace OPEN_LRD
         }
 
         // Adds a two-way connection between the source and destination nodes.
+        /// <summary>Adds a bidirectional basic-class connection between two nodes.</summary>
         public bool AddConnection(Guid sourceID, Guid destinationID)
         {
             return AddConnections(sourceID, destinationID, LinkClass.basic, ForwardLinkTypes.basic.Id, true,
@@ -679,30 +705,35 @@ namespace OPEN_LRD
         }
 
         // Adds a two-way connection between the source and destination nodes.
+        /// <summary>Adds a bidirectional connection with the supplied semantic class.</summary>
         public bool AddConnection(Guid sourceID, Guid destinationID, LinkClass linkClass)
         {
             return AddConnections(sourceID, destinationID, linkClass, ForwardLinkTypes.basic.Id, true,
                 LinkOrigin.Explicit);
         }
 
+        /// <summary>Adds a bidirectional connection with the supplied class and relationship type.</summary>
         public bool AddConnection(Guid sourceID, Guid destinationID, LinkClass linkClass, int linkType)
         {
             return AddConnections(sourceID, destinationID, linkClass, linkType, true, LinkOrigin.Explicit);
         }
 
         // Adds a single directed connection from the source node to the destination node.
+        /// <summary>Adds a directed basic-class connection between two nodes.</summary>
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID)
         {
             return AddConnections(sourceID, destinationID, LinkClass.basic, ForwardLinkTypes.basic.Id, false,
                 LinkOrigin.Explicit);
         }
 
+        /// <summary>Adds a directed connection with the supplied semantic class.</summary>
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID, LinkClass linkClass)
         {
             return AddConnections(sourceID, destinationID, linkClass, ForwardLinkTypes.basic.Id, false,
                 LinkOrigin.Explicit);
         }
 
+        /// <summary>Adds a directed connection with the supplied class and relationship type.</summary>
         public bool AddDirectedConnection(Guid sourceID, Guid destinationID, LinkClass linkClass, int linkType)
         {
             return AddConnections(sourceID, destinationID, linkClass, linkType, false, LinkOrigin.Explicit);
@@ -744,6 +775,7 @@ namespace OPEN_LRD
         }
 
         // Removes both directions of a connection between the source and destination nodes.
+        /// <summary>Removes links in both directions between two nodes.</summary>
         public bool RemoveConnection(Guid sourceID, Guid destinationID)
         {
             if (!initialized || nodes is null)
@@ -761,6 +793,7 @@ namespace OPEN_LRD
         }
 
         // Removes only the connection from the source node to the destination node.
+        /// <summary>Removes only the directed link from source to destination.</summary>
         public bool RemoveDirectedConnection(Guid sourceID, Guid destinationID)
         {
             if (!initialized || nodes is null)
@@ -770,6 +803,7 @@ namespace OPEN_LRD
                 && source.RemoveLinksBetween(sourceID, destinationID);
         }
 
+        /// <summary>Removes links whose destination node no longer exists.</summary>
         public void CleanObsoleteLinks(Guid destinationID)
         {
             if (!initialized || nodes is null)
@@ -779,6 +813,7 @@ namespace OPEN_LRD
                 node.Remove_Destination_Link(destinationID);
         }
 
+        /// <summary>Returns a read-only view of the graph node dictionary.</summary>
         public IReadOnlyDictionary<Guid, Web_Node>? GetDictionary()
         {
             if (!initialized || nodes is null)
@@ -787,6 +822,7 @@ namespace OPEN_LRD
             return new ReadOnlyDictionary<Guid, Web_Node>(nodes);
         }
 
+        /// <summary>Finds nodes that satisfy the supplied optional search criteria.</summary>
         public IReadOnlyList<Web_Node> FindNodes(NodeSearchCriteria? criteria = null)
         {
             if (!initialized || nodes is null)
@@ -825,6 +861,7 @@ namespace OPEN_LRD
             return results.ToList();
         }
 
+        /// <summary>Finds nodes accepted by a caller-supplied predicate.</summary>
         public IReadOnlyList<Web_Node> FindNodes(Func<Web_Node, bool> predicate)
         {
             ArgumentNullException.ThrowIfNull(predicate);
@@ -835,16 +872,19 @@ namespace OPEN_LRD
             return nodes.Values.Where(predicate).ToList();
         }
 
+        /// <summary>Finds nodes with the specified node type.</summary>
         public IReadOnlyList<Web_Node> FindByType(NodeTypes type)
         {
             return FindNodes(new NodeSearchCriteria { Type = type });
         }
 
+        /// <summary>Finds nodes with the specified lifetime classification.</summary>
         public IReadOnlyList<Web_Node> FindByLifetime(NodeLifetime lifetime)
         {
             return FindNodes(new NodeSearchCriteria { Lifetime = lifetime });
         }
 
+        /// <summary>Finds nodes by case-insensitive label and optional type.</summary>
         public IReadOnlyList<Web_Node> FindByLabel(string label, NodeTypes? type = null)
         {
             if (!initialized || nodes is null || string.IsNullOrWhiteSpace(label))
@@ -858,17 +898,20 @@ namespace OPEN_LRD
                 .ToList();
         }
 
+        /// <summary>Attempts to find nodes by label and reports whether any match.</summary>
         public bool TryFindByLabel(string label, out IReadOnlyList<Web_Node> foundNodes)
         {
             foundNodes = FindByLabel(label);
             return foundNodes.Count > 0;
         }
 
+        /// <summary>Finds nodes participating in links of the specified class.</summary>
         public IReadOnlyList<Web_Node> FindByLinkClass(LinkClass linkClass)
         {
             return FindNodes(new NodeSearchCriteria { LinkClass = linkClass });
         }
 
+        /// <summary>Finds nodes connected to the specified node by active links.</summary>
         public IReadOnlyList<Web_Node> FindLinkedTo(Guid nodeID)
         {
             if (!initialized || nodes is null)
@@ -909,6 +952,7 @@ namespace OPEN_LRD
                 .ToList();
         }
 
+        /// <summary>Returns the outgoing links stored by the specified node.</summary>
         public IReadOnlyList<Link> GetLinks(Guid nodeID)
         {
             if (!initialized || nodes is null)
@@ -929,6 +973,7 @@ namespace OPEN_LRD
                 : Array.Empty<Link>();
         }
 
+        /// <summary>Replaces the current query chain with a copy of the supplied nodes.</summary>
         public void BuildQuery(LinkedList<Chain_Node> chainList)
         {
             if (!initialized)
@@ -950,6 +995,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Replaces the current query chain with a single node.</summary>
         public void BuildQuery(Chain_Node chainNode)
         {
             if (!initialized || chainNode is null)
@@ -959,11 +1005,13 @@ namespace OPEN_LRD
             queryChain.AddLast(chainNode);
         }
 
+        /// <summary>Appends a node to the current query chain.</summary>
         public void AddQueryNode(Chain_Node chainNode)
         {
             BuildQuery(chainNode);
         }
 
+        /// <summary>Clears the current query chain.</summary>
         public void ClearQuery()
         {
             if (!initialized)
@@ -973,6 +1021,7 @@ namespace OPEN_LRD
             queryChain.Clear();
         }
 
+        /// <summary>Replaces the current response chain with a copy of the supplied nodes.</summary>
         public void BuildResponse(LinkedList<Chain_Node> chainList)
         {
             if (!initialized)
@@ -994,6 +1043,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Replaces the current response chain with a single node.</summary>
         public void BuildResponse(Chain_Node chainNode)
         {
             if (!initialized || chainNode is null)
@@ -1003,11 +1053,13 @@ namespace OPEN_LRD
             responseChain.AddLast(chainNode);
         }
 
+        /// <summary>Appends a node to the current response chain.</summary>
         public void AddResponseNode(Chain_Node chainNode)
         {
             BuildResponse(chainNode);
         }
 
+        /// <summary>Clears the current response chain.</summary>
         public void ClearResponse()
         {
             if (!initialized)
@@ -1017,6 +1069,7 @@ namespace OPEN_LRD
             responseChain.Clear();
         }
 
+        /// <summary>Returns a copy of the current query chain.</summary>
         public LinkedList<Chain_Node>? GetQuery()
         {
             if (!initialized || queryChain is null)
@@ -1025,6 +1078,7 @@ namespace OPEN_LRD
             return new LinkedList<Chain_Node>(queryChain);
         }
 
+        /// <summary>Returns a copy of the current response chain.</summary>
         public LinkedList<Chain_Node>? GetResponse()
         {
             if (!initialized || responseChain is null)
@@ -1048,11 +1102,13 @@ namespace OPEN_LRD
                 : new LinkedList<Chain_Node>(replacementResponse);
         }
 
+        /// <summary>Runs lifecycle maintenance with reasoning stages disabled.</summary>
         public MaintenanceReport RunMaintenanceCycle()
         {
             return RunMaintenanceCycle(new MaintenanceOptions());
         }
 
+        /// <summary>Runs lifecycle maintenance and the explicitly selected reasoning stages.</summary>
         public MaintenanceReport RunMaintenanceCycle(MaintenanceOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);

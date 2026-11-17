@@ -3,6 +3,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Builds and applies validated graph mutation plans from subgraph matches.</summary>
     internal static class ReasoningMerger
     {
         public static MergePlan BuildPlan(
@@ -194,13 +195,15 @@ namespace OPEN_LRD.Reasoning
             MergePlan plan,
             TrustScale trust,
             TrustAssessment proposedTrust,
-            ReasoningOptions options)
+            ReasoningOptions options,
+            ISet<Guid> reusedNodesCountedForWeight)
         {
             ArgumentNullException.ThrowIfNull(core);
             ArgumentNullException.ThrowIfNull(plan);
             ArgumentNullException.ThrowIfNull(trust);
             ArgumentNullException.ThrowIfNull(proposedTrust);
             ArgumentNullException.ThrowIfNull(options);
+            ArgumentNullException.ThrowIfNull(reusedNodesCountedForWeight);
 
             if (!plan.CanApply)
                 return new MergeApplyResult(
@@ -219,13 +222,13 @@ namespace OPEN_LRD.Reasoning
                 switch (action.Kind)
                 {
                     case NodeActionKind.ReuseExistingNode:
-                        MergeExistingNode(core, action, proposedTrust);
+                        MergeExistingNode(core, action, proposedTrust, options, reusedNodesCountedForWeight);
                         break;
 
                     case NodeActionKind.PromoteExistingNode:
                         if (core.TryGetNode(action.GraphNodeID, out Web_Node? promoteNode) && promoteNode is not null)
                         {
-                            MergeExistingNode(core, action, proposedTrust);
+                            MergeExistingNode(core, action, proposedTrust, options, reusedNodesCountedForWeight);
 
                             if (proposedTrust.Decision == TrustDecision.Trusted)
                             {
@@ -343,7 +346,9 @@ namespace OPEN_LRD.Reasoning
         private static void MergeExistingNode(
             LRD_Core core,
             NodeAction action,
-            TrustAssessment proposedTrust)
+            TrustAssessment proposedTrust,
+            ReasoningOptions options,
+            ISet<Guid> reusedNodesCountedForWeight)
         {
             if (!core.TryGetNode(action.GraphNodeID, out Web_Node? existingNode) || existingNode is null)
                 return;
@@ -357,7 +362,15 @@ namespace OPEN_LRD.Reasoning
                     existingNode.Add_Alias(alias);
             }
 
-            if (proposedTrust.Decision == TrustDecision.Trusted)
+            bool incrementWeight = options.ExistingNodeWeightPolicy switch
+            {
+                ExistingNodeWeightUpPolicy.TrustBased => proposedTrust.Decision == TrustDecision.Trusted,
+                ExistingNodeWeightUpPolicy.OncePerPipeline => reusedNodesCountedForWeight.Add(existingNode.ID),
+                ExistingNodeWeightUpPolicy.Suppress => false,
+                _ => proposedTrust.Decision == TrustDecision.Trusted
+            };
+
+            if (incrementWeight)
                 existingNode.RegisterVerifiedReference();
         }
 

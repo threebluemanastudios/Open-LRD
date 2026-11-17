@@ -1,5 +1,6 @@
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Stores weighted verified and invalid evidence and computes source/topic trust assessments.</summary>
     internal sealed class TrustScale
     {
         private readonly ReasoningOptions options;

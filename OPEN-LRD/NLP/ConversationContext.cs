@@ -4,6 +4,7 @@ using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Identifies grammatical person for a pronoun.</summary>
     internal enum PronounPerson
     {
         Unknown,
@@ -12,6 +13,7 @@ namespace OPEN_LRD.NLP
         Third
     }
 
+    /// <summary>Identifies grammatical number for a pronoun.</summary>
     internal enum PronounNumber
     {
         Unknown,
@@ -19,6 +21,7 @@ namespace OPEN_LRD.NLP
         Plural
     }
 
+    /// <summary>Identifies the grammatical case for a pronoun.</summary>
     internal enum PronounCase
     {
         Unknown,
@@ -27,6 +30,7 @@ namespace OPEN_LRD.NLP
         Possessive
     }
 
+    /// <summary>Stores normalized grammatical and resolution properties for a pronoun form.</summary>
     internal sealed record PronounInfo(
         string Surface,
         string Normalized,
@@ -37,6 +41,7 @@ namespace OPEN_LRD.NLP
         bool IsIndefinite,
         bool IsResolvable);
 
+    /// <summary>Stores a resolved conversational mention and its turn and role.</summary>
     internal sealed record ConversationMention(
         Guid NodeID,
         string Label,
@@ -47,6 +52,7 @@ namespace OPEN_LRD.NLP
         int Sequence,
         bool FromAnswer);
 
+    /// <summary>Stores the result and candidate set from pronoun resolution.</summary>
     internal sealed record PronounResolution(
         Guid? NodeID,
         string? Label,
@@ -56,6 +62,7 @@ namespace OPEN_LRD.NLP
         bool IsSupported,
         IReadOnlyList<string> Diagnostics);
 
+    /// <summary>Stores one ordered provenance outcome produced by conversational NLP.</summary>
     internal sealed record SessionProvenanceEntry(
         int Sequence,
         int TurnIndex,
@@ -80,6 +87,7 @@ namespace OPEN_LRD.NLP
         int CoordinationGroup = 0,
         NegationKind Negation = NegationKind.None);
 
+    /// <summary>Maintains turn history, mentions, focus, pronoun context, and session provenance.</summary>
     internal sealed class ConversationContext
     {
         private readonly List<ConversationMention> mentions = new List<ConversationMention>();

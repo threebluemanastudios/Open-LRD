@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes;
 
 namespace OPEN_LRD.Maintenance
 {
+    /// <summary>Runs selected bounded maintenance reasoning stages and aggregates their reports.</summary>
     internal static class MaintenanceReasoningEngine
     {
         public static void Run(LRD_Core core, MaintenanceOptions options, MaintenanceReport report)

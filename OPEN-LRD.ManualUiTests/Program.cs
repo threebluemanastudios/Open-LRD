@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -11,6 +12,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using OPEN_LRD;
 using OPEN_LRD.NLP;
@@ -23,12 +25,14 @@ using OPEN_LRD.Visualizer;
 
 namespace OPEN_LRD.ManualUiTests
 {
+    /// <summary>Runs end-to-end WPF checks for Tools, the NLP Workbench, and the Visualizer.</summary>
     public static class Program
     {
         private static int passedChecks = 0;
         private static int failedChecks = 0;
         private static string fixtureDir = "";
 
+        /// <summary>Creates the WPF application context and executes the manual UI verification suite.</summary>
         [STAThread]
         public static void Main()
         {
@@ -60,6 +64,7 @@ namespace OPEN_LRD.ManualUiTests
                 RunSection7_SafetyLimits();
                 RunSection8_CancellationAndBusyGating();
                 RunSection9_ConversationContinuityAndEncoding();
+                RunSection13_DataFileImportUi();
                 RunSection12_NlpWorkbenchCandidateSynthesis();
                 RunSection11_VisualizerWindow();
                 RunSection10_SignOff();
@@ -112,6 +117,13 @@ namespace OPEN_LRD.ManualUiTests
                 }),
                 frame);
             Dispatcher.PushFrame(frame);
+        }
+
+        private static void RenderLabelsForTesting(GraphLabelOverlay labels)
+        {
+            DrawingVisual visual = new DrawingVisual();
+            using DrawingContext drawingContext = visual.RenderOpen();
+            labels.RenderForTesting(drawingContext);
         }
 
         private static void WaitForCondition(Func<bool> condition, int timeoutMs = 60000, string description = "")
@@ -252,8 +264,14 @@ namespace OPEN_LRD.ManualUiTests
             TabItem? dataFilesTab = window.ToolsTabControl.Items
                 .Cast<TabItem>()
                 .FirstOrDefault(item => item.Header?.ToString() == "Data Files");
-            Check(dataFilesTab?.Content is Grid dataFilesGrid && dataFilesGrid.Children.Count == 0,
-                "Phase 2 Data Files tab is blank with no placeholder content.");
+            Check(dataFilesTab?.Content is ScrollViewer,
+                "Data Files tab presents its file-ingestion controls in a scrollable panel.");
+            Check(window.DataFileFormatComboBox.SelectedIndex == 0
+                && window.DataFileModeComboBox.SelectedIndex == 0,
+                "Data Files defaults to Auto-detect and Structured Data.");
+            Check(window.DataFileFormatComboBox.Items.Count == 5
+                && window.DataFileModeComboBox.Items.Count == 2,
+                "Data Files offers the supported formats and ingestion modes.");
 
             Check(window.TextImportPathBox.Text == "", "Default File path is empty.");
             Check(window.TextImportPathBox.IsReadOnly, "File path box is read-only.");
@@ -271,14 +289,14 @@ namespace OPEN_LRD.ManualUiTests
             Check(window.TextImportProgressBar.Value == 0, "Default Progress bar value is 0.");
             Check(!window.TextImportProgressBar.IsIndeterminate, "Default Progress bar is determinate.");
 
-            Check(window.TextImportStatusText.Text == "Ready. 0 chunks.", "Default status line is 'Ready. 0 chunks.'");
+            Check(window.TextImportStatusText.Text == "Ready. 0 records.", "Default status line is 'Ready. 0 records.'");
 
             Check(window.MinWidth == 760, $"Window MinWidth is 760 (actual: {window.MinWidth})");
             Check(window.MinHeight == 700, $"Window MinHeight is 700 (actual: {window.MinHeight})");
 
-            FieldInfo? filterField = typeof(Tools).GetField("TextFileFilter", BindingFlags.NonPublic | BindingFlags.Static);
+            FieldInfo? filterField = typeof(Tools).GetField("DataFileFilter", BindingFlags.NonPublic | BindingFlags.Static);
             string? filter = filterField?.GetValue(null) as string;
-            Check(filter == "Text files (*.txt;*.md;*.log)|*.txt;*.md;*.log|All files (*.*)|*.*",
+            Check(filter == "Supported data files (*.txt;*.md;*.log;*.csv;*.json;*.xml)|*.txt;*.md;*.log;*.csv;*.json;*.xml|All files (*.*)|*.*",
                 $"Browse dialog filter matches specification: '{filter}'");
         }
 
@@ -703,9 +721,8 @@ namespace OPEN_LRD.ManualUiTests
             WaitForImportToFinish(window);
 
             string report = window.StatusBox.Text;
-            Check(report.Contains("Text import complete."), "Import with provided Source ID succeeds.");
-            Check(report.Contains($"Source node: {existingSourceId}") && !report.Contains($"Source node: {existingSourceId} (created)"),
-                "Source node line reports provided ID with NO '(created)'.");
+            Check(window.TextImportStatusText.Text == "Text import failed: The selected Source node points to a different file.",
+                "A provided Source ID that points to another file is rejected.");
 
             // Verify no duplicate "Source: small-valid.txt" node was created
             var dict = LRD_Core.Instance.GetDictionary()!;
@@ -750,20 +767,31 @@ namespace OPEN_LRD.ManualUiTests
             // 5. Use the automatically attributed file Source as the topic.
             window.TextImportSourceBox.Text = "";
             SelectTopicMode(window, "Source");
-            window.TextImportPathBox.Text = smallPath;
-            ClickImport(window);
-            WaitForImportToFinish(window);
-            Match sourceMatch = Regex.Match(window.StatusBox.Text, @"Source node:\s+([a-fA-F0-9\-]{36})");
-            Match conversationMatch = Regex.Match(window.StatusBox.Text, @"Conversation:\s+([a-fA-F0-9\-]{36})");
-            Check(sourceMatch.Success && conversationMatch.Success,
-                "File Source topic import reports its Source and Conversation IDs.");
-            if (sourceMatch.Success && conversationMatch.Success)
+            string sourceTopicPath = Path.Combine(
+                Path.GetTempPath(),
+                "open-lrd-source-topic-" + Guid.NewGuid().ToString("N") + ".txt");
+            File.Copy(smallPath, sourceTopicPath);
+            window.TextImportPathBox.Text = sourceTopicPath;
+            try
             {
-                Guid fileSourceID = Guid.Parse(sourceMatch.Groups[1].Value);
-                Guid conversationID = Guid.Parse(conversationMatch.Groups[1].Value);
-                Check(LRD_Core.Instance.GetConversation(conversationID).Provenance
-                        .All(entry => entry.TopicNodeID == fileSourceID),
-                    "Source topic mode uses the file's automatically created Source node as topic.");
+                ClickImport(window);
+                WaitForImportToFinish(window);
+                Match sourceMatch = Regex.Match(window.StatusBox.Text, @"Source node:\s+([a-fA-F0-9\-]{36})");
+                Match conversationMatch = Regex.Match(window.StatusBox.Text, @"Conversation:\s+([a-fA-F0-9\-]{36})");
+                Check(sourceMatch.Success && conversationMatch.Success,
+                    "File Source topic import reports its Source and Conversation IDs.");
+                if (sourceMatch.Success && conversationMatch.Success)
+                {
+                    Guid fileSourceID = Guid.Parse(sourceMatch.Groups[1].Value);
+                    Guid conversationID = Guid.Parse(conversationMatch.Groups[1].Value);
+                    Check(LRD_Core.Instance.GetConversation(conversationID).Provenance
+                            .All(entry => entry.TopicNodeID == fileSourceID),
+                        "Source topic mode uses the file's automatically created Source node as topic.");
+                }
+            }
+            finally
+            {
+                File.Delete(sourceTopicPath);
             }
         }
 
@@ -841,6 +869,7 @@ namespace OPEN_LRD.ManualUiTests
             string binaryPath = Path.Combine(fixtureDir, "binary.bin");
             window.TextImportPathBox.Text = binaryPath;
             window.TextImportMaxMegabytesBox.Text = "500";
+            window.DataFileFormatComboBox.SelectedIndex = 1;
 
             ClickImport(window);
             WaitForImportToFinish(window);
@@ -850,6 +879,7 @@ namespace OPEN_LRD.ManualUiTests
             Check(binStatus == "Text import failed: The file appears to be binary and cannot be imported as text.",
                 $"Binary rejection error matches: '{binStatus}'");
             Check((LRD_Core.Instance.GetDictionary()?.Count ?? 0) == initialNodes, "No nodes created on binary rejection.");
+            window.DataFileFormatComboBox.SelectedIndex = 0;
 
             // 3. Max chunks = 1
             string largePath = Path.Combine(fixtureDir, "large.txt");
@@ -1028,6 +1058,67 @@ namespace OPEN_LRD.ManualUiTests
         // ================================================================================
         // 11. 3D VISUALIZER SHELL AND LIFECYCLE (Phase 3)
         // ================================================================================
+        private static void RunSection13_DataFileImportUi()
+        {
+            Console.WriteLine("\n--- SECTION 13: DATA FILE IMPORT UI ---");
+            LRD_Core.Instance.InitializeCore();
+            Tools window = new Tools();
+            DoEvents();
+
+            string csvPath = Path.Combine(Path.GetTempPath(), "open-lrd-data-file-ui.csv");
+            File.WriteAllText(csvPath, "name,age\nAda,36\n");
+            try
+            {
+                window.TextImportPathBox.Text = csvPath;
+                window.DataFileFormatComboBox.SelectedIndex = 0;
+                window.DataFileModeComboBox.SelectedIndex = 0;
+                window.DataFileFormatComboBox.SelectedIndex = 3;
+                Check(window.DataFileDetectedFormatText.Text.Contains("JSON (override; extension suggests CSV)"),
+                    "Format override remains visible alongside the detected CSV extension.");
+                window.DataFileFormatComboBox.SelectedIndex = 0;
+                window.DataFileFormatComboBox.SelectedIndex = 1;
+                Check(!((ComboBoxItem)window.DataFileModeComboBox.Items[0]).IsEnabled
+                    && window.DataFileModeComboBox.SelectedIndex == 1,
+                    "Plain-text format forces Extract Text for NLP mode.");
+                window.DataFileFormatComboBox.SelectedIndex = 0;
+                window.DataFileModeComboBox.SelectedIndex = 0;
+                SelectTopicMode(window, "Guid");
+                window.TextImportTopicBox.Text = "not-a-guid";
+                window.TextImportDryRunCheckBox.IsChecked = true;
+                ClickImport(window);
+                WaitForImportToFinish(window);
+
+                Check(window.TextImportStatusText.Text.StartsWith("Dry run: 1 record(s):"),
+                    "Structured CSV dry run ignores the NLP-only Topic selector and reports the parsed record.");
+                Check((LRD_Core.Instance.GetDictionary()?.Count ?? 0) == 0,
+                    "CSV dry run leaves the graph unchanged.");
+
+                SelectTopicMode(window, "Base");
+                window.TextImportDryRunCheckBox.IsChecked = false;
+                ClickImport(window);
+                WaitForImportToFinish(window);
+                Check(window.TextImportStatusText.Text.Contains("1 record(s): 1 succeeded"),
+                    "Structured CSV import reports a successfully processed record.");
+                Check(window.StatusBox.Text.Contains("Data-file import complete."),
+                    "Structured CSV import writes a detailed completion report.");
+                Check(window.StatusBox.Text.Contains("Source node:"),
+                    "Structured CSV report includes its provenance Source.");
+
+                int importedNodeCount = LRD_Core.Instance.GetDictionary()?.Count ?? 0;
+                ClickImport(window);
+                WaitForImportToFinish(window);
+                Check(window.TextImportStatusText.Text.Contains("Unchanged high-trust source; import skipped."),
+                    "Unchanged high-trust CSV re-import is reported as skipped.");
+                Check((LRD_Core.Instance.GetDictionary()?.Count ?? 0) == importedNodeCount,
+                    "Skipped CSV re-import does not grow the graph.");
+            }
+            finally
+            {
+                File.Delete(csvPath);
+            }
+        }
+
+        /// <summary>Verifies synthesized, temporal, dictionary, and large-graph answer candidates in the Workbench.</summary>
         private static void RunSection12_NlpWorkbenchCandidateSynthesis()
         {
             Console.WriteLine("\n--- SECTION 12: NLP WORKBENCH MULTI-ANSWER CANDIDATES ---");
@@ -1180,6 +1271,57 @@ namespace OPEN_LRD.ManualUiTests
                     row.PathNodeIDs.Contains(commitLexeme.ID.ToString(), StringComparison.Ordinal)),
                 "Workbench multi-definition candidates retain the Lexeme evidence path.");
 
+            Web_Node mullLexeme = new Web_Node(
+                Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeef"),
+                OntologyTypes.Lexemes,
+                NodeLifetime.Permanent,
+                0);
+            mullLexeme.Set_Label("mull");
+            Check(core.AddExistingNode(mullLexeme), "Large-graph dictionary Lexeme was added.");
+
+            bool unrelatedNodesAdded = true;
+            for (int index = 3; index <= 62; index++)
+            {
+                Web_Node unrelatedSense = new Web_Node(
+                    Guid.Parse($"00000000-0000-0000-0000-{index:D12}"),
+                    OntologyTypes.Senses,
+                    NodeLifetime.Permanent,
+                    0);
+                unrelatedSense.Set_Label($"Unrelated definition {index}.");
+                unrelatedNodesAdded &= core.AddExistingNode(unrelatedSense);
+            }
+            Check(unrelatedNodesAdded, "Large-graph unrelated Senses were added before the target senses.");
+
+            Guid[] connectedSenseIDs = Enumerable.Range(1, 12)
+                .Select(index => Guid.Parse($"ffffffff-ffff-ffff-ffff-{index:D12}"))
+                .ToArray();
+            bool connectedSensesAdded = true;
+            foreach ((Guid senseID, int index) in connectedSenseIDs.Select((id, index) => (id, index)))
+            {
+                Web_Node sense = new Web_Node(senseID, OntologyTypes.Senses, NodeLifetime.Permanent, 0);
+                sense.Set_Label($"Mull definition {index + 1}.");
+                bool senseAdded = core.AddExistingNode(sense);
+                bool senseLinked = senseAdded && core.AddDirectedConnection(
+                    mullLexeme.ID,
+                    senseID,
+                    OntologyTypes.lexicon,
+                    OntologyRelations.HasSense);
+                connectedSensesAdded &= senseLinked;
+            }
+            Check(connectedSensesAdded, "Large-graph dictionary Senses were linked to their Lexeme.");
+
+            window.AskInput.Text = "What is mull?";
+            askClick?.Invoke(window, new object[] { window.AskButton, new RoutedEventArgs() });
+            DoEvents();
+            CandidateRow[] largeGraphCandidates = window.CandidatesGrid.ItemsSource
+                ?.Cast<CandidateRow>()
+                .ToArray() ?? Array.Empty<CandidateRow>();
+            Check(largeGraphCandidates.Length == 10,
+                $"Large-graph dictionary query displays the reasoning match limit (rows: {largeGraphCandidates.Length}).");
+            Check(largeGraphCandidates.All(row => row.Label.StartsWith("Mull definition", StringComparison.Ordinal)
+                    && row.PathNodeIDs.Contains(mullLexeme.ID.ToString(), StringComparison.Ordinal)),
+                "Large-graph dictionary candidate rows contain only senses linked to the requested Lexeme.");
+
             window.Close();
             DoEvents();
         }
@@ -1299,6 +1441,26 @@ namespace OPEN_LRD.ManualUiTests
                 "Selected-node HUD is an overlay in the viewport, outside the sidebar.");
             Check(visualizerWin.SelectionScrollViewer.VerticalScrollBarVisibility == ScrollBarVisibility.Auto,
                 "Selected-node HUD uses an auto-hiding vertical scrollbar.");
+            Check(visualizerWin.MaxLabelsSlider.Minimum == 2.0 && visualizerWin.MaxLabelsSlider.Maximum == 50.0,
+                "All Visible label cap ranges from 2 through 50.");
+
+            visualizerWin.LabelModeComboBox.SelectedIndex = 0;
+            DoEvents();
+            Check(visualizerWin.Options.LabelMode == VisualizerLabelMode.Focused,
+                "Label Mode selector applies Focused mode.");
+            Check(!visualizerWin.MaxLabelsSlider.IsEnabled,
+                "Max Visible Labels cap is disabled in Focused mode.");
+
+            visualizerWin.LabelModeComboBox.SelectedIndex = 1;
+            DoEvents();
+            Check(visualizerWin.Options.LabelMode == VisualizerLabelMode.AllVisible,
+                "Label Mode selector applies All Visible mode.");
+            Check(visualizerWin.MaxLabelsSlider.IsEnabled,
+                "Max Visible Labels cap is enabled in All Visible mode.");
+            visualizerWin.MaxLabelsSlider.Value = 2;
+            DoEvents();
+            Check(visualizerWin.Options.MaxLabels == 2,
+                "All Visible mode allows the minimum cap of two priority labels.");
 
             // 6. Toolbar actions
             MethodInfo? frameClick = typeof(VisualizerWindow).GetMethod("FrameAll_Button_Click", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -1334,6 +1496,12 @@ namespace OPEN_LRD.ManualUiTests
             visualizerWin.Scene.SyncCameraFromFlyCamera();
             Check(visualizerWin.Controller.FlyCamera.Yaw != initialYaw, "FlyCamera.Look updates Yaw.");
             Check(visualizerWin.Controller.FlyCamera.Pitch != initialPitch, "FlyCamera.Look updates Pitch.");
+            Check(FlyCameraController.GetOrbitRollDirection(clockwiseKeyDown: true, counterClockwiseKeyDown: false) == 1.0,
+                "Alt+E maps to clockwise camera roll.");
+            Check(FlyCameraController.GetOrbitRollDirection(clockwiseKeyDown: false, counterClockwiseKeyDown: true) == -1.0,
+                "Alt+Q maps to counter-clockwise camera roll.");
+            Check(FlyCameraController.GetOrbitRollDirection(clockwiseKeyDown: false, counterClockwiseKeyDown: false) == 0.0,
+                "No Alt+E/Q input produces no camera roll.");
 
             // 8. Phase 4: Label Overlay & 'L' Key Toggle
             Check(visualizerWin.Labels.ShowLabels, "LabelOverlay ShowLabels is true by default.");
@@ -1414,6 +1582,30 @@ namespace OPEN_LRD.ManualUiTests
             Check(visualizerWin.StatusText.Text.Contains("Node Beta"), $"Status bar displays hovered node info (actual: '{visualizerWin.StatusText.Text}').");
             Check(visualizerWin.Labels.HoveredNodeIndex == 1, "LabelOverlay reflects HoveredNodeIndex = 1.");
 
+            visualizerWin.Scene.FrameAll();
+            typeof(VisualizerWindow).GetMethod("UpdateCameraView", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?.Invoke(visualizerWin, null);
+            RenderLabelsForTesting(visualizerWin.Labels);
+            Check(visualizerWin.Labels.LastDrawnLabelCount == 2,
+                $"All Visible cap 2 retains the selected and hovered floating labels (drawn: {visualizerWin.Labels.LastDrawnLabelCount}, projected: {visualizerWin.Labels.LastProjectedLabelCount}).");
+            Check(visualizerWin.Labels.LastCandidateProjectionCount <= VisualizerOptions.MaxLabelCandidatesPerFrame,
+                "All Visible background projection work respects its 250-candidate budget.");
+
+            visualizerWin.LabelModeComboBox.SelectedIndex = 0;
+            DoEvents();
+            RenderLabelsForTesting(visualizerWin.Labels);
+            Check(visualizerWin.Labels.LastProjectedLabelCount == 2
+                && visualizerWin.Labels.LastDrawnLabelCount == 2,
+                $"Focused mode projects and draws only selected and hovered nodes (projected: {visualizerWin.Labels.LastProjectedLabelCount}, drawn: {visualizerWin.Labels.LastDrawnLabelCount}).");
+            visualizerWin.Labels.ShowLabels = false;
+            RenderLabelsForTesting(visualizerWin.Labels);
+            Check(visualizerWin.Labels.LastProjectedLabelCount == 0
+                && visualizerWin.Labels.LastDrawnLabelCount == 0,
+                "Turning labels off skips priority-label projection and drawing.");
+            visualizerWin.Labels.ShowLabels = true;
+            visualizerWin.LabelModeComboBox.SelectedIndex = 1;
+            DoEvents();
+
             visualizerWin.HoverNodeForTesting(null);
             DoEvents();
             Check(visualizerWin.HoveredIndex is null, "Hovered index cleared.");
@@ -1449,14 +1641,24 @@ namespace OPEN_LRD.ManualUiTests
             Check(linkCheckBox!.IsChecked == true, "Link visibility CheckBox is checked by default.");
 
             // Toggle node visibility off
+            visualizerWin.SelectNodeForTesting(0);
+            visualizerWin.HoverNodeForTesting(1);
             nodeCheckBox.IsChecked = false;
             DoEvents();
             Check(!visualizerWin.Scene.IsNodeTypeVisible(NodeTypes.Basics.Id), "Unchecking node visibility hides node type in scene.");
+            Check(visualizerWin.SelectedIndex == 0 && visualizerWin.HoveredIndex == 1,
+                "Hiding a node type retains selected and hovered node state.");
+            RenderLabelsForTesting(visualizerWin.Labels);
+            Check(visualizerWin.Labels.LastDrawnLabelCount == 2,
+                $"Selected and hovered floating labels bypass node-type visibility filters (drawn: {visualizerWin.Labels.LastDrawnLabelCount}, projected: {visualizerWin.Labels.LastProjectedLabelCount}).");
 
             // Toggle node visibility back on
             nodeCheckBox.IsChecked = true;
             DoEvents();
             Check(visualizerWin.Scene.IsNodeTypeVisible(NodeTypes.Basics.Id), "Re-checking node visibility shows node type in scene.");
+            visualizerWin.HoverNodeForTesting(null);
+            visualizerWin.SelectNodeForTesting(null);
+            DoEvents();
 
             // Live color override and material update
             RgbColor overrideColor = new RgbColor(220, 60, 60); // Red
@@ -1491,7 +1693,7 @@ namespace OPEN_LRD.ManualUiTests
             visualizerWin.SpreadSlider.Value = 17.6;
             visualizerWin.CubeSizeSlider.Value = 1.2;
             visualizerWin.LineWidthSlider.Value = 0.2;
-            visualizerWin.MaxLabelsSlider.Value = 500;
+            visualizerWin.MaxLabelsSlider.Value = 50;
             visualizerWin.MaxNodesSlider.Value = 30000;
             visualizerWin.MaxLinksSlider.Value = 75000;
             visualizerWin.NearPlaneSlider.Value = 0.25;
@@ -1508,12 +1710,14 @@ namespace OPEN_LRD.ManualUiTests
             Check(visualizerWin.Options.Spread == 18.0, "SpreadSlider rounds/snaps to a whole-unit options.Spread.");
             Check(visualizerWin.Options.CubeSize == 1.2, "CubeSizeSlider updates options.CubeSize.");
             Check(visualizerWin.Options.LineWidth == 0.2, "LineWidthSlider updates options.LineWidth.");
-            Check(visualizerWin.Options.MaxLabels == 500, "MaxLabelsSlider updates options.MaxLabels.");
+            Check(visualizerWin.Options.MaxLabels == 50, "MaxLabelsSlider updates options.MaxLabels within the new cap.");
             Check(visualizerWin.Options.MaxNodes == 31000, "MaxNodes numeric input updates options.MaxNodes.");
             Check(visualizerWin.Options.MaxLinks == 76000, "MaxLinks numeric input updates options.MaxLinks.");
             Check(visualizerWin.Options.NearPlaneDistance == 0.25, "NearPlaneSlider updates options.NearPlaneDistance.");
             Check(visualizerWin.Scene.NearPlaneDistance == 0.25, "NearPlaneSlider updates scene.NearPlaneDistance.");
-            Check(visualizerWin.Labels.MaxLabels == 500, "MaxLabels updates LabelOverlay.MaxLabels.");
+            Check(visualizerWin.Labels.MaxLabels == 50, "MaxLabels updates LabelOverlay.MaxLabels.");
+            Check(visualizerWin.Options.LabelMode == VisualizerLabelMode.AllVisible,
+                "The saved label mode is All Visible.");
 
             MethodInfo? applySettings = typeof(VisualizerWindow).GetMethod("ApplySettings_Click", BindingFlags.NonPublic | BindingFlags.Instance);
             applySettings?.Invoke(visualizerWin, new object[] { visualizerWin.ApplySettingsButton, new RoutedEventArgs() });
@@ -1530,6 +1734,8 @@ namespace OPEN_LRD.ManualUiTests
             Check(settingsJson.Contains("\"cubeSize\": 1.2"), "Saved settings JSON contains updated cubeSize (1.2).");
             Check(settingsJson.Contains("\"maxNodes\": 31000"), "Saved settings JSON contains updated maxNodes (31000).");
             Check(settingsJson.Contains("\"maxLinks\": 76000"), "Saved settings JSON contains updated maxLinks (76000).");
+            Check(settingsJson.Contains("\"maxLabels\": 50"), "Saved settings JSON contains the 50-label cap.");
+            Check(settingsJson.Contains("\"labelMode\": 1"), "Saved settings JSON contains All Visible label mode.");
 
             // Mouse Axis Inversion controls
             Check(visualizerWin.InvertMouseXCheckBox.IsChecked == true, "InvertMouseXCheckBox is checked by default (horizontal inverted).");
@@ -1561,6 +1767,12 @@ namespace OPEN_LRD.ManualUiTests
             Check(visualizerWin.Options.CubeSize == 1.0, "ResetViewSettings restores default CubeSize (1.0).");
             Check(visualizerWin.Options.MaxNodes == VisualizerOptions.DefaultMaxNodes, "ResetViewSettings restores default node cap.");
             Check(visualizerWin.Options.MaxLinks == VisualizerOptions.DefaultMaxLinks, "ResetViewSettings restores default link cap.");
+            Check(visualizerWin.Options.MaxLabels == VisualizerOptions.DefaultMaxLabels,
+                "ResetViewSettings restores the default 50-label cap.");
+            Check(visualizerWin.Options.LabelMode == VisualizerLabelMode.Focused,
+                "ResetViewSettings restores Focused label mode.");
+            Check(!visualizerWin.MaxLabelsSlider.IsEnabled,
+                "ResetViewSettings disables the cap control in Focused mode.");
             Check(visualizerWin.Options.MaxIterations == 300, "ResetViewSettings keeps max layout iterations at 300.");
 
             // Phase 3: cancel-and-replace, trailing-edge debounce, and exception logging.
@@ -1600,10 +1812,10 @@ namespace OPEN_LRD.ManualUiTests
                     visualizerWin,
                     new object[] { visualizerWin.ResetViewSettingsButton, new RoutedEventArgs() });
                 visualizerWin.SpreadSlider.Value = 37.0;
+                DateTime latestSettingsClickUtc = DateTime.UtcNow;
                 applySettings?.Invoke(
                     visualizerWin,
                     new object[] { visualizerWin.ApplySettingsButton, new RoutedEventArgs() });
-                DateTime latestSettingsClickUtc = DateTime.UtcNow;
 
                 WaitForCondition(
                     () => Interlocked.Read(ref replacementStartTicks) > 0,
@@ -1611,8 +1823,8 @@ namespace OPEN_LRD.ManualUiTests
                     "debounced replacement layout to start");
                 TimeSpan debounceElapsed = new TimeSpan(
                     Interlocked.Read(ref replacementStartTicks) - latestSettingsClickUtc.Ticks);
-                Check(debounceElapsed >= TimeSpan.FromSeconds(2),
-                    $"Replacement waits at least two seconds after the latest click (actual: {debounceElapsed.TotalSeconds:F2}s).");
+                Check(debounceElapsed >= TimeSpan.FromSeconds(1.95),
+                    $"Replacement respects the two-second debounce within dispatcher timer tolerance (actual: {debounceElapsed.TotalSeconds:F2}s).");
                 WaitForCondition(
                     () => cancelledLayout.IsCompleted
                         && !visualizerWin.HasPendingLayoutReplacement
@@ -1722,6 +1934,136 @@ namespace OPEN_LRD.ManualUiTests
 
             mainWindow.Close();
             DoEvents();
+
+            RunLargeGraphLabelBudgetCheck();
+        }
+
+        private static void RunLargeGraphLabelBudgetCheck()
+        {
+            const int syntheticNodeCount = 20000;
+            LRD_Core core = LRD_Core.Instance;
+            for (int index = 0; index < syntheticNodeCount; index++)
+            {
+                Web_Node node = new Web_Node(Guid.NewGuid(), NodeTypes.Basics, NodeLifetime.Permanent, 0);
+                node.Set_Label("Performance node " + index.ToString(CultureInfo.InvariantCulture));
+                if (!core.AddExistingNode(node))
+                    throw new InvalidOperationException("A synthetic Visualizer performance node could not be added.");
+            }
+
+            VisualizerOptions snapshotOptions = new VisualizerOptions
+            {
+                MaxNodes = VisualizerOptions.MaximumMaxNodes,
+                MaxLinks = VisualizerOptions.MaximumMaxLinks
+            };
+            GraphSnapshot graph = GraphSnapshot.FromCore(core, snapshotOptions);
+            CameraView camera = new CameraView(
+                Vector3.Zero,
+                Vector3.UnitZ,
+                Vector3.UnitY,
+                55d,
+                1600d,
+                900d,
+                0.05d,
+                1000d);
+            double tangentHorizontal = Math.Tan(camera.FieldOfViewDegrees * Math.PI / 360d);
+            double tangentVertical = tangentHorizontal / camera.AspectRatio;
+            Vector3[] positions = new Vector3[graph.Nodes.Count];
+            const int columns = 200;
+            for (int index = 0; index < positions.Length; index++)
+            {
+                int column = index % columns;
+                int row = index / columns;
+                double horizontal = ((column + 0.5d) / columns * 2d - 1d) * 100d * tangentHorizontal * 0.8d;
+                double vertical = ((row + 0.5d) / Math.Ceiling(positions.Length / (double)columns) * 2d - 1d)
+                    * 100d * tangentVertical * 0.8d;
+                positions[index] = camera.Position
+                    + camera.LookDirection * 100f
+                    + camera.Right * (float)horizontal
+                    + camera.Up * (float)vertical;
+            }
+            if (positions.Length > 0)
+                positions[0] = new Vector3(0f, 0f, 100f);
+            if (positions.Length > 1)
+                positions[1] = new Vector3(0.2f, 0f, 100f);
+
+            GraphLabelOverlay overlay = new GraphLabelOverlay
+            {
+                MaxLabelDistance = 500d,
+                NodeBoxSize = 1d
+            };
+            overlay.SetGraph(graph, positions, VisualizerOptions.DefaultLabelCharacterLimit);
+            overlay.SetSpatialIndex(SpatialNodeIndex.Build(positions));
+            overlay.UpdateCamera(camera);
+            overlay.LabelMode = VisualizerLabelMode.AllVisible;
+            overlay.MaxLabels = VisualizerOptions.DefaultMaxLabels;
+
+            Stopwatch renderTimer = Stopwatch.StartNew();
+            RenderLabelsForTesting(overlay);
+            renderTimer.Stop();
+            Check(graph.Nodes.Count >= syntheticNodeCount,
+                $"Large-label fixture contains at least {syntheticNodeCount:N0} nodes (actual: {graph.Nodes.Count:N0}).");
+            Check(overlay.LastCandidateProjectionCount == VisualizerOptions.MaxLabelCandidatesPerFrame,
+                $"All Visible projects exactly the 250-node budget on a large graph (actual: {overlay.LastCandidateProjectionCount}).");
+            Check(overlay.LastDrawnLabelCount <= VisualizerOptions.DefaultMaxLabels,
+                $"Large-graph label drawing stays within the 50-label cap (actual: {overlay.LastDrawnLabelCount}).");
+            Console.WriteLine($"  Large graph label overlay: {overlay.LastCandidateProjectionCount} candidates, "
+                + $"{overlay.LastDrawnLabelCount} labels in {renderTimer.Elapsed.TotalMilliseconds:F2} ms.");
+
+            const int cameraMotionFrames = 60;
+            FlyCamera movingCamera = new FlyCamera(Vector3.Zero, 0d, 0d);
+            overlay.SelectedNodeIndex = 0;
+            overlay.HoveredNodeIndex = 1;
+            overlay.LabelMode = VisualizerLabelMode.Focused;
+            Stopwatch focusedMotionTimer = Stopwatch.StartNew();
+            for (int frame = 0; frame < cameraMotionFrames; frame++)
+            {
+                movingCamera.Move(forward: 0.1d, strafe: 0.05d, vertical: 0d, speed: 1d, deltaSeconds: 1d / 60d);
+                overlay.UpdateCamera(new CameraView(
+                    movingCamera.Position,
+                    movingCamera.LookDirection,
+                    movingCamera.Up,
+                    camera.FieldOfViewDegrees,
+                    camera.ViewportWidth,
+                    camera.ViewportHeight,
+                    camera.NearPlaneDistance,
+                    camera.FarPlaneDistance));
+                RenderLabelsForTesting(overlay);
+            }
+            focusedMotionTimer.Stop();
+            Check(overlay.LastProjectedLabelCount == 2 && overlay.LastDrawnLabelCount == 2,
+                "Focused mode projects and draws only the selected and hovered nodes on a large graph.");
+
+            movingCamera = new FlyCamera(Vector3.Zero, 0d, 0d);
+            overlay.LabelMode = VisualizerLabelMode.AllVisible;
+            Stopwatch allVisibleMotionTimer = Stopwatch.StartNew();
+            bool allVisibleBudgetRespected = true;
+            for (int frame = 0; frame < cameraMotionFrames; frame++)
+            {
+                movingCamera.Move(forward: 0.1d, strafe: 0.05d, vertical: 0d, speed: 1d, deltaSeconds: 1d / 60d);
+                overlay.UpdateCamera(new CameraView(
+                    movingCamera.Position,
+                    movingCamera.LookDirection,
+                    movingCamera.Up,
+                    camera.FieldOfViewDegrees,
+                    camera.ViewportWidth,
+                    camera.ViewportHeight,
+                    camera.NearPlaneDistance,
+                    camera.FarPlaneDistance));
+                RenderLabelsForTesting(overlay);
+                allVisibleBudgetRespected &=
+                    overlay.LastCandidateProjectionCount <= VisualizerOptions.MaxLabelCandidatesPerFrame;
+            }
+            allVisibleMotionTimer.Stop();
+            Check(allVisibleBudgetRespected,
+                "All Visible respects the candidate projection budget during large-graph camera movement.");
+            Console.WriteLine($"  Large graph camera-motion labels ({cameraMotionFrames} frames): "
+                + $"Focused {focusedMotionTimer.Elapsed.TotalMilliseconds:F2} ms; "
+                + $"All Visible {allVisibleMotionTimer.Elapsed.TotalMilliseconds:F2} ms.");
+
+            overlay.ShowLabels = false;
+            RenderLabelsForTesting(overlay);
+            Check(overlay.LastProjectedLabelCount == 0 && overlay.LastDrawnLabelCount == 0,
+                "Labels-off mode skips all projection and drawing on a large graph.");
         }
 
         // ================================================================================

@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Stores the resolved label, type, candidates, and diagnostics for one entity mention.</summary>
     internal sealed record EntityResolution(
         string Label,
         string Lemma,
@@ -13,6 +14,7 @@ namespace OPEN_LRD.NLP
         bool IsPronoun,
         IReadOnlyList<string> Diagnostics);
 
+    /// <summary>Resolves typed entity mentions against graph nodes and conversation context.</summary>
     internal sealed class EntityResolver
     {
         private readonly LRD_Core core;

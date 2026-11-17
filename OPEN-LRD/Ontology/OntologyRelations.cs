@@ -3,6 +3,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Ontology
 {
+    /// <summary>Describes a stable ontology relation and its inverse and link class.</summary>
     internal sealed record OntologyRelation(
         int Id,
         string Name,
@@ -11,6 +12,7 @@ namespace OPEN_LRD.Ontology
 
     // Fixed structural relations from the reserved 1-999 ID range. IDs are
     // hardcoded so they stay stable across runs and across persisted logs.
+    /// <summary>Registers the fixed structural ontology relationship types.</summary>
     internal static class OntologyRelations
     {
         public const int IsA = 1;
@@ -32,6 +34,14 @@ namespace OPEN_LRD.Ontology
         public const int Produces = 17;
         public const int Uses = 18;
         public const int HasReality = 19;
+        public const int HasRecord = 20;
+        public const int HasTable = 21;
+        public const int HasRow = 22;
+        public const int HasCell = 23;
+        public const int HasChild = 24;
+        public const int HasItem = 25;
+        public const int HasAttribute = 26;
+        public const int HasValue = 27;
 
         public const int Antonym = RelationRegistry.AntonymLinkTypeId;
 
@@ -55,7 +65,15 @@ namespace OPEN_LRD.Ontology
             new OntologyRelation(ComposedOf, "composed_of", "component_of", nameof(OntologyTypes.ontology)),
             new OntologyRelation(Produces, "produces", "produced_by", nameof(OntologyTypes.ontology)),
             new OntologyRelation(Uses, "uses", "used_by", nameof(OntologyTypes.ontology)),
-            new OntologyRelation(HasReality, "has_reality", "reality_of", nameof(OntologyTypes.ontology))
+            new OntologyRelation(HasReality, "has_reality", "reality_of", nameof(OntologyTypes.ontology)),
+            new OntologyRelation(HasRecord, "has_record", "record_of", nameof(OntologyTypes.ontology)),
+            new OntologyRelation(HasTable, "has_table", "table_of", nameof(OntologyTypes.ontology)),
+            new OntologyRelation(HasRow, "has_row", "row_of", nameof(OntologyTypes.ontology)),
+            new OntologyRelation(HasCell, "has_cell", "cell_of", nameof(OntologyTypes.ontology)),
+            new OntologyRelation(HasChild, "has_child", "child_of", nameof(OntologyTypes.ontology)),
+            new OntologyRelation(HasItem, "has_item", "item_of", nameof(OntologyTypes.ontology)),
+            new OntologyRelation(HasAttribute, "has_attribute", "attribute_of", nameof(OntologyTypes.properties)),
+            new OntologyRelation(HasValue, "has_value", "value_of", nameof(OntologyTypes.properties))
         };
 
         private static bool registered;

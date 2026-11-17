@@ -8,8 +8,10 @@ using OPEN_LRD.Visualization;
 
 namespace OPEN_LRD.SmokeTests
 {
+    /// <summary>Contains regression checks for metadata, consolidation, induction, and pruning.</summary>
     internal static class MaintenanceTests
     {
+        /// <summary>Registers and executes the maintenance regression checks.</summary>
         public static void RunAll()
         {
             Program.Run("Maintenance defaults to TTL only", TestDefaultsToTtlOnly);
@@ -21,6 +23,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Maintenance blocks distinct DataPointers", TestDistinctPointersBlockMerge);
             Program.Run("Maintenance transfers DataPointer", TestPointerTransfer);
             Program.Run("Maintenance merges synonym-linked nodes", TestSemanticMerge);
+            Program.Run("Maintenance prefers trust and preserves maximum WeightUp", TestTrustFirstMerge);
             Program.Run("Maintenance applies composition rules", TestComposition);
             Program.Run("Maintenance composition is idempotent", TestCompositionIdempotence);
             Program.Run("Maintenance abstracts repeated patterns", TestPatternAbstraction);
@@ -304,6 +307,32 @@ namespace OPEN_LRD.SmokeTests
             MaintenanceReport report = core.RunMaintenanceCycle(ReasoningOptions());
             Assert(report.NodesMerged == 1, "synonym-linked compatible nodes should consolidate");
             Assert(core.GetDictionary()!.Count == 1, "semantic merge should remove the duplicate node");
+        }
+
+        private static void TestTrustFirstMerge()
+        {
+            LRD_Core core = NewCore();
+            Web_Node trusted = Node(NodeTypes.Concepts, "Trust winner", NodeLifetime.Temporary);
+            Web_Node heavierPermanent = Node(NodeTypes.Concepts, "trust winner", NodeLifetime.Permanent);
+            trusted.Set_TrustRating(0.9);
+            heavierPermanent.Set_TrustRating(0.5);
+            trusted.Add_WeightUp(2f);
+            heavierPermanent.Add_WeightUp(10f);
+            core.AddExistingNode(trusted);
+            core.AddExistingNode(heavierPermanent);
+
+            MaintenanceReport report = core.RunMaintenanceCycle(ReasoningOptions());
+
+            Assert(report.NodesMerged == 1, "matching labels should consolidate under the trust-first policy");
+            Assert(core.GetExistingNode(trusted.ID) is not null,
+                "the higher-trust node should survive even when it was temporary");
+            Assert(core.GetExistingNode(heavierPermanent.ID) is null,
+                "the lower-trust permanent node should be removed");
+            Assert(trusted.TrustRating == 0.9, "the survivor should retain the higher trust rating");
+            Assert(trusted.Get_WeightUp() == 10f,
+                "the survivor should retain the maximum WeightUp rather than summing values");
+            Assert(trusted.IsPermanent,
+                "metadata merge should preserve permanence from either merged node");
         }
 
         private static void TestComposition()

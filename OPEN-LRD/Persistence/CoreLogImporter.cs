@@ -7,6 +7,7 @@ using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.Persistence
 {
+    /// <summary>Validates and imports core or transient log documents using merge or replace semantics.</summary>
     internal static class CoreLogImporter
     {
         internal const long MaxLogBytes = 512L * 1024L * 1024L;
@@ -16,6 +17,7 @@ namespace OPEN_LRD.Persistence
         private const int MaxChains = 10000;
         private const int MaxPartsPerExport = 10000;
 
+        /// <summary>Defines stable identity for validating duplicate persisted links.</summary>
         private readonly record struct LinkIdentity(
             Guid SourceID,
             Guid DestinationID,
@@ -2225,6 +2227,7 @@ namespace OPEN_LRD.Persistence
                 linkType => string.Equals(linkType.Name, name, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>Stores staged graph nodes and endpoint-validation sets for a core import.</summary>
         private sealed class NodePlan
         {
             public Dictionary<Guid, Web_Node> NewNodes { get; } = new Dictionary<Guid, Web_Node>();
@@ -2234,6 +2237,7 @@ namespace OPEN_LRD.Persistence
             public HashSet<Guid> BlockedNodeIds { get; } = new HashSet<Guid>();
         }
 
+        /// <summary>Tracks source and destination node validation while planning a core import.</summary>
         private sealed class NodePlanningContext
         {
             public NodePlanningContext(IReadOnlyDictionary<Guid, Web_Node>? existingGraph)
@@ -2246,6 +2250,7 @@ namespace OPEN_LRD.Persistence
             public IReadOnlyDictionary<Guid, Web_Node>? ExistingGraph { get; }
         }
 
+        /// <summary>Tracks duplicate and endpoint validation while planning imported links.</summary>
         private sealed class LinkPlanningContext
         {
             public LinkPlanningContext(LRD_Core core, NodePlan nodePlan, ImportMode mode)
@@ -2262,6 +2267,7 @@ namespace OPEN_LRD.Persistence
             public List<Link> Accepted { get; } = new List<Link>();
         }
 
+        /// <summary>Tracks duplicate and accepted conversation IDs while planning an import.</summary>
         private sealed class ConversationPlanningContext
         {
             public ConversationPlanningContext(LRD_Core core, ImportMode mode)
@@ -2277,6 +2283,7 @@ namespace OPEN_LRD.Persistence
                 new Dictionary<Guid, ConversationContext>();
         }
 
+        /// <summary>Reconstructs and validates one ordered transient query or response chain.</summary>
         private sealed class TransientChainBuilder
         {
             private readonly HashSet<Guid> nodeIDs = new HashSet<Guid>();

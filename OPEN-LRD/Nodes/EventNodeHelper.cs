@@ -2,6 +2,7 @@ using System.Globalization;
 
 namespace OPEN_LRD.Nodes
 {
+    /// <summary>Parses, formats, and updates event time-window metadata.</summary>
     internal static class EventNodeHelper
     {
         private const string LabelPrefix = "OPEN-LRD:EVENT-WINDOW:v1|";

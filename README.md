@@ -1,8 +1,15 @@
-# Open-LRD Project Outline
+# Open-LRD 1.0 Readiness Overview
 
 ## Purpose
 
 Open-LRD is a lightweight cognitive knowledge-graph project written in native C# with no external library dependencies. 
+
+## 1.0 Readiness
+
+The project declares version `1.0.0`. Current Release builds and automated suites
+pass; the release review remains open for repository-wide internal-member comment
+coverage and the remaining Module 8 Phase 5 acceptance fixtures. See
+`RELEASE_READINESS.md` for the current gates and reproducible commands.
 
 
 The goal is a self-organizing semantic memory that can ingest language, represent concepts and relationships as a directed graph, reason over temporary and permanent knowledge, and return explainable answers.
@@ -174,7 +181,7 @@ Reply commands remain read-only.
 attachment by ID, reset, removal, clear-all, Ingest, Ask, and read-only state
 snapshots. `NlpWorkbenchWindow` shows diagnostics, candidates, evidence, frames,
 chains, mentions, focus, and session provenance. The Tools window handles log
-import/export, large text-file ingestion, ontology loading, and maintenance; the
+import/export, text/CSV/JSON/XML ingestion, ontology loading, and maintenance; the
 3D Visualizer is a separate fullscreen WPF window. Conversation state is held in
 memory and can be persisted in `.lrdlog` files. See `Module_3_Plan.txt`,
 `Module_6_Plan.txt`, `Module_7_Plan.txt`, and `AdditionalTools.txt` for details.
@@ -241,7 +248,7 @@ Upper Ontology, Load GCIDE Lexicon (subset, letter, and entry cap with progress
 and cancel), and Export Ontology Log actions. Nineteen foundational structural
 relations occupy reserved IDs 1-19; `antonym` stays at the Module 3 reservation
 (2,000,000). The original Module 4 delivery added eleven ontology checks. The
-  current integrated suite has 171 smoke tests and 375 automated UI checks. The
+  current integrated suite has 188 smoke tests and 417 automated UI checks. The
 Visualizer layout is deterministic and reports progress and cancellation. See
 `Module_4_Plan.txt` for the ontology plan, `AdditionalTools.txt` for persistence
 and text import, and `Visualizer_Plan.txt` for the visualizer implementation.
@@ -272,8 +279,8 @@ relation inference during an explicitly enabled maintenance run.
   keeping stale facts inactive for audit while preserving other link origins.
   Generated DataPointer resource values do not carry the owner's pointer, so
   they cannot trigger identity-based node merging.
-- The completed Modules 5-7, Module 8 Phases 1-3, and NLP conversational
-  coverage bring the current suite to 171 passing smoke checks and 375 passing
+- The completed Modules 5-7, Module 8 Phases 1-4, and NLP conversational
+  coverage bring the current suite to 172 passing smoke checks and 401 passing
   automated UI checks.
 
 See `Module_5_Plan.txt` for the detailed phased design and acceptance criteria.
@@ -302,7 +309,7 @@ question answering.
   round-trip through conversation persistence, with defaults preserved for old
   logs.
 - At Module 6 completion, 165 smoke tests and 285 automated UI checks passed;
-  current integrated verification is 171 smoke tests and 375 UI checks.
+  current integrated verification is 188 smoke tests and 417 UI checks.
 
 See `Module_6_Plan.txt` for design decisions, implementation details, and
 acceptance criteria.
@@ -349,8 +356,8 @@ links and searchable time windows.
   Acme" and "Count events that happened yesterday" use the same Ask paths;
   temporal event counts honor the requested date/range and ReferenceTime.
 - Module 7 completion verification: 169 smoke tests and 289 automated UI checks
-  passed at that milestone; current integrated verification is 171 smoke tests
-  and 375 UI checks.
+  passed at that milestone; current integrated verification is 188 smoke tests
+  and 417 UI checks.
 
 See `Module_7_Plan.txt` for the complete design and acceptance criteria.
 
@@ -366,14 +373,24 @@ NLP-based ingestion for text, JSON, CSV, and XML files.
   GUID-ordered candidate list. Articles before the headword are preserved only
   when present in the user's question. Lexeme/Sense evidence remains available
   in the Workbench.
-- **Phases 2-3 complete; Phase 4 planned:** Tools tab organization and direct
+- **Phases 1-4 complete; Phase 5 in progress; Phase 6 implemented:** Tools tab organization and direct
   text ingestion are delivered. The Visualizer has whole-unit spread settings,
   a fixed scrollable selected-node HUD, and debounced cancel-and-replace layout
-  actions with exception logging. Multi-format file ingestion remains planned.
-- Phase 4 implementation has not started. Its data schemas, NLP field selection,
-  graph mapping, duplicate/source identity, trust scoring, and resource/cancellation
-  policies remain open decisions in `Module_8_Plan.txt` Section 6.3.
-- Current integrated verification: 171 smoke tests and 375 automated UI checks
+  actions with exception logging. Phase 4 includes focused/all-visible floating
+  labels (Focused by default; All Visible spatially filters and projects at most
+  250 background candidates per frame, drawing at most 50 including selected and
+  hovered labels) and co-rotating orbit controls with Alt+E/Q roll. Phase 5 adds
+  multi-format file ingestion through the Data Files tab.
+- Phase 5 currently supports text/CSV/JSON/XML in structured and NLP modes, with
+  source checksums, trust scoring, dry run, cancellation, and position upserts.
+  Current adopted design and resolved Topic/Source/revision decisions are in
+  `Module_8_Plan.txt` Sections 8.3-8.4. Manual file-import workflows and WPF UI
+  verification are complete; broader schema and limit coverage remains part of
+  the release-readiness review.
+- Phase 6 query matching prioritizes constrained labeled anchors and expands
+  candidates through indexed incident links. Large-graph ambiguous dictionary
+  answers retain their Sense candidates and evidence paths in the Workbench.
+- Current integrated verification: 188 smoke tests and 417 automated UI checks
   pass; application and test builds complete with zero warnings and zero errors.
 
 See `Module_8_Plan.txt` for implementation details, remaining phases, and
@@ -383,8 +400,8 @@ acceptance criteria.
 
 - **Log Persistence (.lrdlog)**: Versioned JSON snapshots supporting separate
   core and transient query/response chains, with Merge and Replace import modes.
-- **Large Text File Import**: Automated paragraph/sentence chunking, retry on
-  overflow, shared conversational context, and automatic Source node provenance.
+- **File Ingestion**: Text, CSV, JSON, and XML imports with structured and NLP
+  modes, position-based upserts, Source checksums/trust, dry run, and cancellation.
 - **Native 3D Visualizer**: Standalone fullscreen 3D window rendering node
   cubes and colored link lines laid out by semantic link distance into an
   isotropic spherical volume cloud. Includes WASD/QE fly navigation, mouse look,
@@ -442,9 +459,25 @@ The original staged delivery is complete:
 7. **Event and temporal support** — Event nodes, relative-time windows, automatic
    temporal extraction, individual/range and quantity queries, and Count commands.
 
-Current integrated verification is **171 smoke tests** and **375 automated UI
+Current integrated verification is **188 smoke tests** and **417 automated UI
 checks**; application and test builds complete with zero warnings and zero
 errors.
+
+## Build and Verification
+
+The application targets .NET 10 WPF on Windows. From the repository root, build
+and run the current suites with:
+
+```text
+dotnet build OPEN-LRD.slnx --no-restore --nologo -c Release
+dotnet build OPEN-LRD.ManualUiTests/OPEN-LRD.ManualUiTests.csproj --no-restore --nologo -c Release
+dotnet run --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build --no-restore -c Release
+dotnet run --project OPEN-LRD.ManualUiTests/OPEN-LRD.ManualUiTests.csproj --no-build --no-restore -c Release
+```
+
+The smoke suite is cross-platform; the WPF application and Manual UI suite
+require Windows. Release tagging should follow the documented 1.0 readiness
+review and verification of the current working tree.
 
 Potential follow-on work, not yet assigned to a module, includes broader temporal
 language and recurring-event support, non-linear graph queries, richer causal and

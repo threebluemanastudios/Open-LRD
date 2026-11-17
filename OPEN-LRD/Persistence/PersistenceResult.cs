@@ -1,11 +1,13 @@
 namespace OPEN_LRD.Persistence
 {
+    /// <summary>Chooses whether imported persistence records merge with or replace graph state.</summary>
     internal enum ImportMode
     {
         Merge,
         Replace
     }
 
+    /// <summary>Summarizes output paths, graph counts, and warnings from a log export.</summary>
     internal sealed class CoreLogExportResult
     {
         public string CorePath { get; init; } = string.Empty;
@@ -33,6 +35,7 @@ namespace OPEN_LRD.Persistence
         public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     }
 
+    /// <summary>Summarizes graph changes and diagnostics from a persistence import.</summary>
     internal sealed class PersistenceImportResult
     {
         public bool Success { get; set; }

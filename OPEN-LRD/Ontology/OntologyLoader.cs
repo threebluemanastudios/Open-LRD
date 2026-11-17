@@ -6,6 +6,7 @@ namespace OPEN_LRD.Ontology
     // Facade over the Module 4 halves: the permanent upper ontology and the
     // GCIDE ETL. Callers keep the core, so the loader never owns application
     // lifecycle.
+    /// <summary>Builds and exports the upper ontology and loads curated lexical resources.</summary>
     internal static class OntologyLoader
     {
         public static int BuildFoundation(LRD_Core core)

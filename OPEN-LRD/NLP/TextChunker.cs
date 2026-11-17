@@ -2,6 +2,7 @@ using System.Text;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Defines maximum character, sentence, and chunk counts for text chunking.</summary>
     internal sealed record TextChunkOptions
     {
         public int MaxChunkCharacters { get; init; } = 15000;
@@ -9,6 +10,7 @@ namespace OPEN_LRD.NLP
         public int MaxChunks { get; init; } = 10000;
     }
 
+    /// <summary>Stores one bounded text segment and its source paragraph metadata.</summary>
     internal sealed record TextChunk(
         int Index,
         string Text,
@@ -18,6 +20,7 @@ namespace OPEN_LRD.NLP
         public int CharacterCount => Text.Length;
     }
 
+    /// <summary>Contains text chunks, source statistics, and truncation state.</summary>
     internal sealed record TextChunkingResult(
         IReadOnlyList<TextChunk> Chunks,
         int TotalCharacters,
@@ -31,6 +34,7 @@ namespace OPEN_LRD.NLP
     /// </summary>
     internal static class TextChunker
     {
+        /// <summary>Splits raw text into bounded chunks, preferring paragraph and sentence boundaries.</summary>
         public static TextChunkingResult Chunk(string? rawText, TextChunkOptions? options = null)
         {
             options ??= new TextChunkOptions();
@@ -72,6 +76,7 @@ namespace OPEN_LRD.NLP
         /// Returns the tokenizer's sentence spans without tokenizing.
         /// Shared so the chunker and the tokenizer agree on boundaries.
         /// </summary>
+        /// <summary>Finds sentence spans while accounting for punctuation, abbreviations, and decimals.</summary>
         internal static List<(int Start, int Length)> FindSentenceSpans(string text)
         {
             List<(int Start, int Length)> spans = new List<(int Start, int Length)>();
@@ -130,6 +135,7 @@ namespace OPEN_LRD.NLP
         /// Splits a chunk in half at the sentence boundary closest to the midpoint.
         /// Returns false when the text holds fewer than two sentences.
         /// </summary>
+        /// <summary>Splits text near a sentence boundary when both halves remain non-empty.</summary>
         internal static bool TrySplitAtSentenceBoundary(string text, out string first, out string second)
         {
             first = string.Empty;
@@ -171,6 +177,7 @@ namespace OPEN_LRD.NLP
             return true;
         }
 
+        /// <summary>Validates the configured chunking budgets.</summary>
         private static void Validate(TextChunkOptions options)
         {
             if (options.MaxChunkCharacters <= 0)
@@ -195,6 +202,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Adds sentence or hard-split chunks for one normalized paragraph.</summary>
         private static void AddParagraph(
             ChunkCollector collector,
             string paragraph,
@@ -274,6 +282,7 @@ namespace OPEN_LRD.NLP
             Flush();
         }
 
+        /// <summary>Splits oversized text into bounded spans without dropping characters.</summary>
         private static IEnumerable<string> HardSplit(string text, int maxCharacters)
         {
             int offset = 0;
@@ -312,6 +321,7 @@ namespace OPEN_LRD.NLP
             }
         }
 
+        /// <summary>Finds a safe hard-split index near the character budget.</summary>
         private static int FindHardSplit(string text, int offset, int maxCharacters)
         {
             int limit = Math.Min(text.Length, offset + maxCharacters);
@@ -327,6 +337,7 @@ namespace OPEN_LRD.NLP
             return limit;
         }
 
+        /// <summary>Splits input into paragraphs separated by blank lines.</summary>
         private static List<string> SplitParagraphs(string text)
         {
             List<string> paragraphs = new List<string>();
@@ -384,6 +395,7 @@ namespace OPEN_LRD.NLP
             return paragraphs;
         }
 
+        /// <summary>Adds a trimmed, non-empty text span to a sentence span list.</summary>
         private static void AddSpan(List<(int Start, int Length)> spans, string text, int start, int end)
         {
             while (start < end && char.IsWhiteSpace(text[start]))
@@ -396,16 +408,19 @@ namespace OPEN_LRD.NLP
                 spans.Add((start, end - start));
         }
 
+        /// <summary>Checks whether a character may terminate a sentence.</summary>
         private static bool IsTerminal(char value)
         {
             return value is '.' or '!' or '?';
         }
 
+        /// <summary>Checks whether a character closes a quoted or bracketed sentence.</summary>
         private static bool IsClosingCharacter(char value)
         {
             return value is '"' or '\'' or ')' or ']' or '}' or ',';
         }
 
+        /// <summary>Determines whether punctuation at an index is a true sentence boundary.</summary>
         private static bool IsBoundary(string text, int index)
         {
             if (index >= text.Length)
@@ -419,6 +434,7 @@ namespace OPEN_LRD.NLP
             return value is ',' or ';' or ':' or ')' or ']' or '}' or '"' or '\'';
         }
 
+        /// <summary>Checks whether a period is between digits and therefore part of a decimal.</summary>
         private static bool IsDecimalPoint(string text, int index)
         {
             return index > 0
@@ -427,6 +443,7 @@ namespace OPEN_LRD.NLP
                 && char.IsDigit(text[index + 1]);
         }
 
+        /// <summary>Checks whether a period terminates a known abbreviation rather than a sentence.</summary>
         private static bool IsAbbreviationPoint(string text, int index)
         {
             int wordStart = index;
@@ -468,6 +485,7 @@ namespace OPEN_LRD.NLP
             private readonly TextChunkOptions options;
             private readonly List<TextChunk> chunks = new List<TextChunk>();
 
+            /// <summary>Creates a chunk collector with the specified resource limits.</summary>
             public ChunkCollector(TextChunkOptions options)
             {
                 this.options = options;
@@ -477,6 +495,7 @@ namespace OPEN_LRD.NLP
 
             public bool Truncated { get; private set; }
 
+            /// <summary>Adds text to the current paragraph chunk or marks the result truncated.</summary>
             public void Add(string text, int paragraphIndex, int sentenceCount)
             {
                 if (Truncated)

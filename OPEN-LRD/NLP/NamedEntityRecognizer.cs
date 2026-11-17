@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Identifies and types named entities and temporal mentions in parsed sentences.</summary>
     internal static class NamedEntityRecognizer
     {
         public static ParsedText Recognize(ParsedText parsed)

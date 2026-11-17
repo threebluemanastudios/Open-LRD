@@ -17,6 +17,7 @@ using OPEN_LRD.Visualization;
 
 namespace OPEN_LRD.Visualizer
 {
+    /// <summary>Displays the graph in an interactive fullscreen 3D visualization window.</summary>
     public partial class VisualizerWindow : Window
     {
         private static readonly object exceptionLogLock = new object();
@@ -27,11 +28,13 @@ namespace OPEN_LRD.Visualizer
         private readonly GraphColorMap colors = new GraphColorMap();
         private readonly VisualizerScene scene;
         private readonly DispatcherTimer layoutReplacementTimer;
+        private readonly Func<int, bool> nodeVisibilityFilter;
         private FlyCameraController? controller;
 
         private CancellationTokenSource? layoutCancellation;
         private GraphSnapshot? snapshot;
         private SceneGeometry? geometry;
+        private SpatialNodeIndex? spatialIndex;
         private int snapshotMaxNodes = VisualizerOptions.DefaultMaxNodes;
         private int snapshotMaxLinks = VisualizerOptions.DefaultMaxLinks;
         private int? selectedNodeIndex;
@@ -48,6 +51,7 @@ namespace OPEN_LRD.Visualizer
         internal bool HasPendingLayoutReplacement =>
             pendingLayoutAction is not null || layoutReplacementTimer.IsEnabled;
 
+        /// <summary>Creates a Visualizer window attached to the initialized application core.</summary>
         public VisualizerWindow()
             : this(LRD_Core.Instance)
         {
@@ -57,6 +61,7 @@ namespace OPEN_LRD.Visualizer
         {
             this.core = core ?? throw new ArgumentNullException(nameof(core));
             InitializeComponent();
+            nodeVisibilityFilter = IsNodeTypeVisibleForIndex;
 
             scene = new VisualizerScene(GraphViewport);
             layoutReplacementTimer = new DispatcherTimer
@@ -75,12 +80,7 @@ namespace OPEN_LRD.Visualizer
                 return null;
             };
 
-            LabelOverlay.IsNodeVisible = index =>
-            {
-                if (snapshot is not null && index < snapshot.Nodes.Count)
-                    return scene.IsNodeTypeVisible(snapshot.Nodes[index].TypeId);
-                return true;
-            };
+            LabelOverlay.IsNodeVisible = nodeVisibilityFilter;
 
             colors.Changed += OnColorsChanged;
 
@@ -98,6 +98,7 @@ namespace OPEN_LRD.Visualizer
         internal GraphLabelOverlay Labels => LabelOverlay;
         internal GraphSnapshot? Snapshot => snapshot;
         internal SceneGeometry? Geometry => geometry;
+        internal SpatialNodeIndex? NodeSpatialIndex => spatialIndex;
         internal GraphColorMap ColorsMap => colors;
         internal VisualizerOptions Options => options;
         internal int? SelectedIndex => selectedNodeIndex;
@@ -112,6 +113,8 @@ namespace OPEN_LRD.Visualizer
         internal void SaveSettingsForTesting() => SaveSettings();
         internal void LoadSettingsForTesting() => LoadSettings();
 
+        /// <summary>Maximizes the borderless window on its active monitor after native initialization.</summary>
+        /// <param name="e">The source-initialization event arguments.</param>
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
@@ -195,6 +198,7 @@ namespace OPEN_LRD.Visualizer
             layoutCancellation?.Dispose();
             layoutCancellation = null;
 
+            spatialIndex = null;
             LabelOverlay.Clear();
             scene.Clear();
         }
@@ -393,38 +397,26 @@ namespace OPEN_LRD.Visualizer
 
         private int? PickNode(Point screenPoint)
         {
-            if (geometry is null || snapshot is null || snapshot.Nodes.Count == 0)
+            if (geometry is null || snapshot is null || spatialIndex is null || snapshot.Nodes.Count == 0)
                 return null;
 
             CameraView cameraView = scene.GetCameraView();
             if (!cameraView.TryCreateRay(new Vector2((float)screenPoint.X, (float)screenPoint.Y), out Vector3 origin, out Vector3 direction))
                 return null;
 
-            float halfExtent = (float)(options.CubeSize * 0.5);
-            Vector3 halfVector = new Vector3(halfExtent);
-            int? hitIndex = null;
-            float minDistance = float.PositiveInfinity;
+            return spatialIndex.FindNearestRayHit(
+                origin,
+                direction,
+                (float)(options.CubeSize * 0.5),
+                nodeVisibilityFilter);
+        }
 
-            for (int i = 0; i < geometry.Layout.Positions.Count && i < snapshot.Nodes.Count; i++)
-            {
-                if (!scene.IsNodeTypeVisible(snapshot.Nodes[i].TypeId))
-                    continue;
-
-                Vector3 center = geometry.Layout.Positions[i];
-                Vector3 min = center - halfVector;
-                Vector3 max = center + halfVector;
-
-                if (ProjectionMath.TryIntersectRayAabb(origin, direction, min, max, out float dist))
-                {
-                    if (dist < minDistance)
-                    {
-                        minDistance = dist;
-                        hitIndex = i;
-                    }
-                }
-            }
-
-            return hitIndex;
+        private bool IsNodeTypeVisibleForIndex(int index)
+        {
+            return snapshot is null
+                || index < 0
+                || index >= snapshot.Nodes.Count
+                || scene.IsNodeTypeVisible(snapshot.Nodes[index].TypeId);
         }
 
         private void SetSelectedNode(int? index)
@@ -550,6 +542,7 @@ namespace OPEN_LRD.Visualizer
             if (fresh.Nodes.Count == 0)
             {
                 geometry = null;
+                spatialIndex = null;
                 scene.Clear();
                 LabelOverlay.Clear();
                 SetSelectedNode(null);
@@ -566,7 +559,8 @@ namespace OPEN_LRD.Visualizer
 
             try
             {
-                (SceneGeometry Geometry, PreparedSceneGeometry Prepared)? result = await Task.Run<(SceneGeometry, PreparedSceneGeometry)?>(() =>
+                (SceneGeometry Geometry, PreparedSceneGeometry Prepared, SpatialNodeIndex SpatialIndex)? result =
+                    await Task.Run<(SceneGeometry, PreparedSceneGeometry, SpatialNodeIndex)?>(() =>
                 {
                     LayoutResult layout = LayoutComputationForTesting is null
                         ? DistanceLayout3D.Compute(fresh, options, token, progress)
@@ -578,7 +572,8 @@ namespace OPEN_LRD.Visualizer
 
                     SceneGeometry builtGeometry = VisualizerSceneBuilder.Build(fresh, layout, options);
                     PreparedSceneGeometry prepared = VisualizerScene.PrepareGeometry(builtGeometry);
-                    return (builtGeometry, prepared);
+                    SpatialNodeIndex index = SpatialNodeIndex.Build(layout.Positions);
+                    return (builtGeometry, prepared, index);
                 }, token);
 
                 if (isClosed || token.IsCancellationRequested)
@@ -592,13 +587,16 @@ namespace OPEN_LRD.Visualizer
 
                 SceneGeometry built = result.Value.Geometry;
                 geometry = built;
+                spatialIndex = result.Value.SpatialIndex;
                 snapshotMaxNodes = options.MaxNodes;
                 snapshotMaxLinks = options.MaxLinks;
                 scene.Apply(result.Value.Prepared, colors);
                 controller?.SetSceneRadius(built.Radius);
 
                 LabelOverlay.SetGraph(fresh, built.Layout.Positions, options.LabelCharacterLimit);
+                LabelOverlay.SetSpatialIndex(spatialIndex);
                 LabelOverlay.MaxLabels = options.MaxLabels;
+                LabelOverlay.LabelMode = options.LabelMode;
                 LabelOverlay.ShowLabels = options.ShowLabels;
                 LabelOverlay.NodeBoxSize = options.CubeSize;
                 LabelOverlay.MaxLabelDistance = Math.Max(built.Radius * 3.0f, 50.0f);
@@ -962,8 +960,22 @@ namespace OPEN_LRD.Visualizer
                 LineWidthSlider.Value = options.LineWidth;
                 LineWidthValText.Text = options.LineWidth.ToString("F2", CultureInfo.InvariantCulture);
 
+                LabelModeComboBox.SelectedItem = null;
+                foreach (object item in LabelModeComboBox.Items)
+                {
+                    if (item is ComboBoxItem comboItem
+                        && string.Equals(comboItem.Tag as string, options.LabelMode.ToString(), StringComparison.Ordinal))
+                    {
+                        LabelModeComboBox.SelectedItem = comboItem;
+                        break;
+                    }
+                }
+                LabelOverlay.LabelMode = options.LabelMode;
+
                 MaxLabelsSlider.Value = options.MaxLabels;
+                MaxLabelsSlider.IsEnabled = options.LabelMode == VisualizerLabelMode.AllVisible;
                 MaxLabelsValText.Text = options.MaxLabels.ToString(CultureInfo.InvariantCulture);
+                LabelOverlay.MaxLabels = options.MaxLabels;
 
                 MaxNodesSlider.Value = options.MaxNodes;
                 MaxNodesInputBox.Text = options.MaxNodes.ToString("N0", CultureInfo.InvariantCulture);
@@ -976,6 +988,7 @@ namespace OPEN_LRD.Visualizer
                 scene.NearPlaneDistance = options.NearPlaneDistance;
 
                 ToggleLabelsButton.IsChecked = options.ShowLabels;
+                LabelOverlay.ShowLabels = options.ShowLabels;
 
                 InvertMouseXCheckBox.IsChecked = options.InvertMouseX;
                 InvertMouseYCheckBox.IsChecked = options.InvertMouseY;
@@ -1037,18 +1050,6 @@ namespace OPEN_LRD.Visualizer
                     onVisibilityChanged: visible =>
                     {
                         scene.SetNodeTypeVisible(typeId, visible);
-                        if (!visible && selectedNodeIndex.HasValue && snapshot is not null &&
-                            selectedNodeIndex.Value < snapshot.Nodes.Count &&
-                            snapshot.Nodes[selectedNodeIndex.Value].TypeId == typeId)
-                        {
-                            SetSelectedNode(null);
-                        }
-                        if (!visible && hoveredNodeIndex.HasValue && snapshot is not null &&
-                            hoveredNodeIndex.Value < snapshot.Nodes.Count &&
-                            snapshot.Nodes[hoveredNodeIndex.Value].TypeId == typeId)
-                        {
-                            SetHoveredNode(null);
-                        }
                         LabelOverlay.InvalidateVisual();
                     },
                     isVisible: isVisible));
@@ -1285,6 +1286,7 @@ namespace OPEN_LRD.Visualizer
                 options.CubeSize = defaults.CubeSize;
                 options.LineWidth = defaults.LineWidth;
                 options.MaxLabels = defaults.MaxLabels;
+                options.LabelMode = defaults.LabelMode;
                 options.MaxNodes = defaults.MaxNodes;
                 options.MaxLinks = defaults.MaxLinks;
                 options.ShowLabels = defaults.ShowLabels;
@@ -1382,6 +1384,25 @@ namespace OPEN_LRD.Visualizer
                 MaxLabelsValText.Text = options.MaxLabels.ToString(CultureInfo.InvariantCulture);
 
             LabelOverlay.MaxLabels = options.MaxLabels;
+        }
+
+        private void LabelModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (isInitializingControls)
+                return;
+
+            if (LabelModeComboBox.SelectedItem is not ComboBoxItem selectedItem)
+                return;
+
+            options.LabelMode = string.Equals(selectedItem.Tag as string, "AllVisible", StringComparison.Ordinal)
+                ? VisualizerLabelMode.AllVisible
+                : VisualizerLabelMode.Focused;
+            LabelOverlay.LabelMode = options.LabelMode;
+            MaxLabelsSlider.IsEnabled = options.LabelMode == VisualizerLabelMode.AllVisible;
+            SaveSettings();
+            SetStatus(options.LabelMode == VisualizerLabelMode.Focused
+                ? "Focused labels enabled."
+                : "All visible labels enabled (maximum 50).");
         }
 
         private void MaxNodesSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

@@ -5,6 +5,7 @@ namespace OPEN_LRD.Ontology.Gcide
     // Decodes the GCIDE SGML-like markup: MICRA \'xx escape positions and
     // <name/ entities, then strips remaining tags. See gcide-0.54 webfont.txt
     // and tagset.txt.
+    /// <summary>Decodes GCIDE markup and abbreviations into readable dictionary text.</summary>
     internal static class GcideMarkup
     {
         private static readonly Dictionary<string, string> NamedEntities = new(StringComparer.OrdinalIgnoreCase)

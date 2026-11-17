@@ -4,6 +4,7 @@ using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Executes recognized read-only NLP commands against graph and conversation state.</summary>
     internal static class CommandProcessor
     {
         public static NlpAnswer CreateClarification(NlpCommand command)

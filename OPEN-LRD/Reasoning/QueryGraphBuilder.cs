@@ -3,6 +3,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Validates chain nodes and converts them into a bounded query graph.</summary>
     internal static class QueryGraphBuilder
     {
         public static QueryGraph Build(LinkedList<Chain_Node> chain, ReasoningOptions? options = null)

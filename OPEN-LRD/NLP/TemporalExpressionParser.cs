@@ -9,6 +9,7 @@ namespace OPEN_LRD.NLP
         string OriginalExpression,
         bool IsCountQuery = false);
 
+    /// <summary>Parses bounded absolute and relative temporal expressions using a reference time.</summary>
     internal static class TemporalExpressionParser
     {
         private const RegexOptions Options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;

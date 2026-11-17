@@ -3,6 +3,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Builds bounded linked-list query and fact chains from NLP relation frames.</summary>
     internal static class ChainBuilder
     {
         public static ChainBuildResult Build(

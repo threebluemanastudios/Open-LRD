@@ -1,5 +1,6 @@
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Provides bounded lexical sets and grammatical classifications for NLP components.</summary>
     internal static class Lexicon
     {
         private static readonly HashSet<string> determiners = Create(

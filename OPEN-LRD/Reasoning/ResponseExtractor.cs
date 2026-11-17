@@ -3,6 +3,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Extracts bounded, ranked, cycle-safe answer paths from a graph snapshot.</summary>
     internal static class ResponseExtractor
     {
         public static IReadOnlyList<GraphPath> Extract(

@@ -8,8 +8,10 @@ using static OPEN_LRD.SmokeTests.Program;
 
 namespace OPEN_LRD.SmokeTests
 {
+    /// <summary>Contains regression checks for tokenization, parsing, NLP ingestion, and Ask behavior.</summary>
     internal static class NlpTests
     {
+        /// <summary>Registers and executes the NLP regression checks.</summary>
         public static void RunAll()
         {
             Program.Run("NLP pipeline parsing", TestNlpPipelineParsing);
@@ -31,6 +33,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("NLP question analysis", TestNlpQuestionAnalysis);
             Program.Run("NLP answer generation", TestNlpAnswerGeneration);
             Program.Run("NLP GCIDE dictionary definitions", TestNlpGcideDictionaryDefinitions);
+            Program.Run("NLP large-graph dictionary candidate retrieval", TestNlpLargeGraphDictionaryCandidates);
             Program.Run("NLP social dialogue is read-only", TestNlpSocialDialogue);
             Program.Run("NLP conversational preambles and punctuation", TestNlpConversationalInput);
             Program.Run("NLP multi-answer synthesis", TestNlpMultiAnswerSynthesis);
@@ -1734,6 +1737,72 @@ namespace OPEN_LRD.SmokeTests
             Assert(
                 manySenses.Answer?.EvidencePaths.Count == senseIDs.Length,
                 "dictionary answers should preserve an evidence path for each returned Sense");
+        }
+
+        /// <summary>Verifies linked dictionary senses are found beyond the generic type-only candidate window.</summary>
+        private static void TestNlpLargeGraphDictionaryCandidates()
+        {
+            OntologyTypes.EnsureRegistered();
+            OntologyRelations.EnsureRegistered();
+            LRD_Core core = NewCore();
+
+            Web_Node lexeme = new Web_Node(
+                Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+                OntologyTypes.Lexemes,
+                NodeLifetime.Permanent,
+                0);
+            lexeme.Set_Label("commit");
+            Assert(core.AddExistingNode(lexeme), "the target Lexeme should be added");
+
+            for (int index = 1; index <= 60; index++)
+            {
+                Web_Node unrelatedSense = new Web_Node(
+                    Guid.Parse($"00000000-0000-0000-0000-{index:D12}"),
+                    OntologyTypes.Senses,
+                    NodeLifetime.Permanent,
+                    0);
+                unrelatedSense.Set_Label($"Unrelated definition {index}.");
+                Assert(core.AddExistingNode(unrelatedSense), "each unrelated Sense should be added");
+            }
+
+            Guid[] expectedSenseIDs = Enumerable.Range(1, 14)
+                .Select(index => Guid.Parse($"ffffffff-ffff-ffff-ffff-{index:D12}"))
+                .ToArray();
+            foreach ((Guid senseID, int index) in expectedSenseIDs.Select((id, index) => (id, index)))
+            {
+                Web_Node sense = new Web_Node(senseID, OntologyTypes.Senses, NodeLifetime.Permanent, 0);
+                sense.Set_Label($"Commit definition {index + 1}.");
+                Assert(core.AddExistingNode(sense), "each target Sense should be added");
+                Assert(core.AddDirectedConnection(
+                    lexeme.ID,
+                    sense.ID,
+                    OntologyTypes.lexicon,
+                    OntologyRelations.HasSense),
+                    "each target Sense should be linked to the commit Lexeme");
+            }
+
+            NlpPipeline pipeline = new NlpPipeline(
+                core,
+                reasoningOptions: new ReasoningOptions
+                {
+                    MaxCandidateNodesPerQueryNode = 10,
+                    MaxMatches = 10
+                });
+            NlpResult result = pipeline.Ask("What is commit?");
+
+            Assert(result.Answer?.Status == AnswerStatus.Ambiguous,
+                $"the loaded Lexeme should return multiple-sense ambiguity, got {result.Answer?.Status}: "
+                + string.Join("; ", result.Diagnostics));
+            Assert(result.Answer?.Text == "Multiple definitions for commit were found.",
+                "dictionary ambiguity should use the specific multiple-definitions response");
+            Assert(result.Answer?.Candidates.Count == 10,
+                "all ten results allowed by the reasoning match limit should be candidates");
+            Assert(result.Answer?.Candidates.All(candidate =>
+                    candidate.NodeType == OntologyTypes.Senses
+                    && expectedSenseIDs.Contains(candidate.NodeID)) == true,
+                "candidate rows should contain connected commit Senses rather than unrelated type-only nodes");
+            Assert(result.Answer?.EvidencePaths.Count == 10,
+                "each displayed Sense candidate should retain a Lexeme-to-Sense evidence path");
         }
 
         private static void TestNlpYesNoAnswers()

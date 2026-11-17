@@ -1,5 +1,6 @@
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Tokenizes normalized sentences while preserving source spans and question form.</summary>
     internal static class TextTokenizer
     {
         public static ParsedText Tokenize(string normalizedText, NlpOptions? options = null)

@@ -8,10 +8,12 @@ using OPEN_LRD.Ontology;
 
 namespace OPEN_LRD.Maintenance
 {
+    /// <summary>Materializes and reconciles node fields as typed metadata graph facts.</summary>
     internal static class NodeMetadataReasoner
     {
         private const string MetadataValueKeyPrefix = "metadata-value-key:";
 
+        /// <summary>Identifies one generated metadata relation and its typed value.</summary>
         private sealed record MetadataFact(
             string Field,
             string ValueKey,

@@ -1,5 +1,6 @@
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Assigns deterministic part-of-speech tags to normalized tokens.</summary>
     internal static class PosTagger
     {
         public static ParsedText Tag(ParsedText parsed)

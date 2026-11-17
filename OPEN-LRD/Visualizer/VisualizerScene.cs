@@ -8,10 +8,13 @@ using OPEN_LRD.Visualization;
 
 namespace OPEN_LRD.Visualizer
 {
+    /// <summary>Stores a prepared WPF mesh batch for one node type.</summary>
     internal sealed record PreparedNodeMeshBatch(int NodeTypeId, MeshGeometry3D Mesh);
 
+    /// <summary>Stores a prepared WPF mesh batch for one forward relationship type and class.</summary>
     internal sealed record PreparedLinkMeshBatch(int ForwardTypeId, int ClassId, MeshGeometry3D Mesh);
 
+    /// <summary>Contains prepared node/link meshes and the layout bounds used for camera framing.</summary>
     internal sealed class PreparedSceneGeometry
     {
         public PreparedSceneGeometry(
@@ -32,6 +35,7 @@ namespace OPEN_LRD.Visualizer
         public float Radius { get; }
     }
 
+    /// <summary>Manages WPF 3D scene models, camera state, visibility, and node picking.</summary>
     internal sealed class VisualizerScene
     {
         private static readonly Vector3D InitialLookDirection =
@@ -269,14 +273,9 @@ namespace OPEN_LRD.Visualizer
         public void SyncFlyCameraFromCamera()
         {
             Vector3 look = ToVector3(camera.LookDirection);
-            float length = look.Length();
-            if (length > 1e-6f)
-            {
-                Vector3 norm = look / length;
-                double pitch = Math.Asin(Math.Clamp(norm.Y, -1f, 1f));
-                double yaw = Math.Atan2(norm.X, norm.Z);
-                flyCamera.SetPose(ToVector3(camera.Position), yaw, pitch);
-            }
+            Vector3 up = ToVector3(camera.UpDirection);
+            if (look.LengthSquared() > 1e-12f && up.LengthSquared() > 1e-12f)
+                flyCamera.SetOrientation(ToVector3(camera.Position), look, up);
         }
 
         public void SetSelectedHighlight(Vector3? position, double cubeSize)

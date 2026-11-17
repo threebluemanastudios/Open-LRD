@@ -48,7 +48,7 @@
               "RelativeDocumentMoniker": "OPEN-LRD\\MainWindow.xaml.cs",
               "ToolTip": "C:\\Users\\three\\source\\repos\\OPEN-LRD\\OPEN-LRD\\MainWindow.xaml.cs",
               "RelativeToolTip": "OPEN-LRD\\MainWindow.xaml.cs",
-              "ViewState": "AgIAAAYAAAAAAAAAAAAswAEAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAswAgAAAASAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-11-09T10:07:29.612Z",
               "EditorCaption": ""
@@ -75,8 +75,7 @@
               "RelativeToolTip": "OPEN-LRD\\Nodes\\Node.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-11-08T04:08:34.353Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-11-08T04:08:34.353Z"
             },
             {
               "$type": "Document",
@@ -88,8 +87,7 @@
               "RelativeToolTip": "OPEN-LRD\\Nodes\\Links\\Link.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAA6AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-11-06T08:10:32.036Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-11-06T08:10:32.036Z"
             },
             {
               "$type": "Document",

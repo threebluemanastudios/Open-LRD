@@ -2,22 +2,28 @@ OPEN-LRD
 MODULE 8: GCIDE ASK, TOOLS UI, VISUALIZER, AND DATA FILE INGESTION
 IMPLEMENTATION PLAN
 
-Status: Phases 1-3 complete; Phase 4 planned.
-Current integrated verification: 171 smoke tests and 375 WPF UI checks pass;
-application and test builds complete with zero warnings and zero errors.
-Phase 4 implementation has not started; its open design decisions are listed in
-Section 6.3 and should be resolved before implementation begins.
+Status: Phases 1-4 complete; Phase 5 implementation in progress; Phase 6 large-graph candidate retrieval complete.
+Current verification: 188 smoke tests and 417 WPF UI checks pass; application
+and test builds complete with zero warnings and zero errors.
+Phase 4 Visualizer label/orbit work is implemented and verified. Phase 5 adopted
+design is in Section 8.3 and resolved decisions are listed in Section 8.4.
 Scope: GCIDE dictionary question answering, Tools window organization, Visualizer
-       layout controls and selection HUD, and text/JSON/CSV/XML file ingestion.
+       layout controls, selection HUD, label performance and orbit behavior, and
+       text/JSON/CSV/XML file ingestion.
 Target: .NET 10 WPF (net10.0-windows), using existing OPEN-LRD graph and NLP
        services. No external dependencies are planned.
 Decisions confirmed with the user:
-  - New Phase 1 fixes GCIDE definition questions such as "What is commit?".
-  - Tools has Logs, Ingestion, Ontology, and Maintenance tabs in Phase 2, with
-    Status pinned outside the tabs. Phase 2 may prepare the Data Files tab
-    layout as a blank tab; its controls and behavior are implemented in Phase 4.
-  - Phase 3 spread range is 10-100 with default 20.
-  - The selected-node info pane is a bottom-right HUD over the 3D viewport.
+   - New Phase 1 fixes GCIDE definition questions such as "What is commit?".
+   - Tools has Logs, Ingestion, Ontology, and Maintenance tabs in Phase 2, with
+      Status pinned outside the tabs. Phase 2 may prepare the Data Files tab
+      layout as a blank tab; its controls and behavior are implemented in Phase 5.
+   - Phase 3 spread range is 10-100 with default 20.
+   - The selected-node info pane is a bottom-right HUD over the 3D viewport.
+   - Phase 4 provides Focused (Hover & Selection) and All Visible (up to cap)
+     floating-label modes. Focused is the default; All Visible is capped at 50.
+   - Orbiting rotates camera position around the selected node and applies the
+     same, un-inverted rotation to camera orientation; it must not snap the camera
+     to face the selected node. Alt+E/Q provide clockwise/counter-clockwise roll.
   - Structured graph records/triples and NLP text extraction are both in scope
     for JSON, CSV, and XML ingestion.
   - Each direct text submission uses a new conversation; dry runs use a
@@ -27,16 +33,16 @@ Decisions confirmed with the user:
     unless specified at entry. Topic selection is single-select, with options
     for GUID, Sense, Node Label, Node Type, Alias, Category, Field/Discipline,
     Taxon, Reality, Current Topic, and Source. Direct input is limited to 1,000
-    characters, and the Phase 2 text-file importer defaults to a 500 MiB limit.
+     characters, and the Phase 2 text-file importer defaults to a 500 MiB limit.
   - All tables use one schema regardless of column count. CSV structure is
     Source -> Table -> Row Head -> ordered cell chain; the header row is index 0
     and its header cells are represented as nodes.
-  - A non-dictionary file imported without errors receives a 90% trust rating.
-    Failed data-extraction chunks lower the rating relative to successful
-    chunks, with a floor of 30%; the exact formula is TBD.
+   - Non-dictionary file trust is `0.30 + 0.60*S/(S+F)`, where S/F are successful/
+     failed processed records or chunks; complete clean imports score 90%, and
+     all-failed imports score the 30% floor. Empty/no-op imports leave trust unchanged.
   - Dictionary imports use a `dictionary` source node and receive 100% trust.
-  - Higher-trust nodes take precedence over lower-trust nodes during conflict
-    resolution and receive priority in maintenance merge cycles.
+   - The higher-TrustRating node survives a maintenance merge. The survivor
+     retains the maximum TrustRating and maximum WeightUp; WeightUp is not summed.
   - Duplicate nodes found while importing a new source increase the original
     node's weightUp by 1, are ignored as new entries, and count as successful reads.
     Same-file re-imports above 80% trust are skipped; at or below 80%, re-imports
@@ -61,9 +67,9 @@ Decisions confirmed with the user:
 ================================================================================
 
 Module 8 fixes dictionary definition retrieval, improves tool discoverability,
-makes selected-node information easier to access, broadens the Visualizer's
-spread control, and adds multi-format file ingestion. Work is divided into four
-phases, with the GCIDE Ask fix delivered before the UI and file-ingestion work.
+makes selected-node information easier to access, improves Visualizer label and
+orbit performance, and adds multi-format file ingestion. Work is divided into
+five phases, with the GCIDE Ask fix delivered before the UI and file-ingestion work.
 
 Implementation constraints:
 - Keep graph mutations within existing graph/NLP service boundaries.
@@ -78,12 +84,13 @@ Implementation constraints:
 Current implementation references:
 - `OPEN-LRD/Tools.xaml` and `OPEN-LRD/Tools.xaml.cs`: current vertically stacked
   export, import/text-file import, ontology, maintenance, and status controls.
-- `OPEN-LRD/Visualizer/VisualizerWindow.xaml`: View sidebar, Spread slider, and
-  current selected-node card.
+- `OPEN-LRD/Visualizer/VisualizerWindow.xaml`: View sidebar, Spread and label
+  controls, and selected-node HUD.
 - `OPEN-LRD/Visualizer/VisualizerWindow.xaml.cs`: layout handlers, layout
   generation state, selection updates, and view-control synchronization.
 - `OPEN-LRD/Visualization/VisualizerOptions.cs` and `VisualizerSettings.cs`:
-  spread option defaults, validation, and persisted settings.
+  spread/label option defaults, validation, and persisted settings.
+- `OPEN-LRD/Visualization/FlyCamera.cs`: camera pose, movement, framing, and orbit.
 - `OPEN-LRD/NLP/TextFileImporter.cs`: existing bounded, cancellable plain-text
   file ingestion through the NLP pipeline.
 - `OPEN-LRD/NLP/PosTagger.cs`, `ShallowParser.cs`, `NamedEntityRecognizer.cs`,
@@ -193,7 +200,7 @@ Tabs:
    - A dry-run option is available. Topic selection uses the shared dropdown
      described below.
    - Retain the existing text-file import workflow during Phase 2; move it to
-     Data Files when that tab's functionality is implemented in Phase 4.
+      Data Files when that tab's functionality is implemented in Phase 5.
    - Existing text-file options (source/topic assignment, dry run, file/chunk
      limits, progress, cancellation) remain available while the legacy importer
      remains on this tab. Set its default maximum file size to 500 MiB.
@@ -212,7 +219,7 @@ Tabs:
 5. Data Files
    - Phase 2 creates a blank tab only: no explanatory placeholder text, active
      file-ingestion controls, or file-ingestion behavior. The existing
-     plain-text import remains in Ingestion until Phase 4.
+      plain-text import remains in Ingestion until Phase 5.
 
 Pinned Status:
 - Keep the shared multiline StatusBox visible beneath the tab control.
@@ -269,7 +276,7 @@ Pinned Status:
 - The retained plain-text file importer defaults to a 500 MiB file limit.
 - The 1,000-character input boundary and over-limit behavior are tested.
 - The Data Files tab is present and blank, with no active file-ingestion controls
-  or explanatory placeholder text until Phase 4.
+  or explanatory placeholder text until Phase 5.
 - All controls remain accessible at minimum and typical window sizes.
 - Automated UI checks cover tab presence, control defaults, all topic-dropdown
   choices and field visibility, tab switching, pinned status output, and all
@@ -377,10 +384,179 @@ Application, smoke-test, and Manual UI test builds completed with zero warnings
 and zero errors.
 
 ================================================================================
-5. PHASE 4: TEXT, JSON, CSV, AND XML FILE INGESTION
+5. PHASE 4: VISUALIZER LABEL PERFORMANCE AND RELATIVE ORBIT
 ================================================================================
 
-5.1 Objectives and Tools tab
+5.1 Objectives
+- Improve flight/look responsiveness when floating labels are enabled by avoiding
+  per-frame work over the full graph in the default label mode.
+- Add a user-selectable label mode while keeping selected-node and hovered-node
+  labels available by default.
+- Lower the All Visible label cap from 1,000 to 50.
+- Preserve the camera's facing relative to the selected node when orbit controls
+  rotate the camera around that node; do not snap the view toward the node.
+
+5.2 Label modes and rendering behavior
+- Define `VisualizerLabelMode` in the WPF-free `OPEN-LRD/Visualization/` layer:
+  - `Focused`: default mode; draw floating labels only for the selected node and
+    the node currently under the cursor, for at most two labels.
+  - `AllVisible`: draw visible background labels using projection, sorting,
+    occlusion, and badge-decluttering, up to the configured display cap.
+- Keep the existing `ShowLabels` toggle. When false, return from
+  `GraphLabelOverlay.OnRender` before any projection, candidate allocation,
+  sorting, occlusion, or text drawing.
+- In `Focused`, directly project only the selected and hovered node centers;
+  skip the full-graph scan, complete-box corner projection, candidate sorting,
+  and collision/occlusion passes. If selected and hovered refer to the same node,
+  draw one selected-style label.
+- In `AllVisible`, do not scan every node position each frame. Build a balanced
+  3D spatial BVH over layout positions after each graph layout; keep the index
+  until positions change. Query it with the current view frustum, bounded by
+  `MaxLabelDistance`, and traverse intersecting branches near-to-far. Use a small
+  leaf capacity (initially 32 node positions) so dense graph regions can still
+  be bounded by the candidate budget.
+- The 250-candidate budget counts only background node candidates passed to
+  projection; BVH branch/leaf visits and candidates rejected before projection do
+  not consume it. Apply cheap frustum and camera-distance checks before the more
+  expensive complete-box corner projection. Traverse near-to-far and process at
+  most 250 background candidates per frame, then apply the 50-label draw cap and
+  existing decluttering. Reuse candidate buffers to avoid per-frame allocations.
+- With Show Labels enabled, selected and hovered labels are always shown in both
+  modes when their centers project into the viewport. They bypass the
+  250-background-candidate budget and node-type visibility filtering, but do
+  consume the total draw cap in All Visible mode. Set that mode's cap range to
+  2-50, default 50; both priority labels fit even at the lower bound. Focused
+  mode draws up to two priority labels. If selected and hovered identify the same
+  node, draw one selected-style label.
+- Reuse the same spatial index for `PickNode` ray queries so mouse-hover lookup
+  does not scan every graph node on each pointer move. Preserve nearest-hit and
+  node-type visibility behavior.
+- Respect node-type visibility for background labels in both modes; selected and
+  hovered labels override that filter. The selected-node information HUD remains
+  independent of floating-label visibility.
+- Add a `Label Mode` selector in the View tab with the accepted option names:
+  `Focused (Hover & Selection)` and `All Visible (up to cap)`.
+- Disable the `Max Visible Labels` control in Focused mode. In All Visible mode,
+  allow a cap from 2 through 50, defaulting to 50 with whole-number steps.
+- Change `DefaultMaxLabels` and the overlay/settings defaults from 1,000 to 50.
+  Clamp older persisted values above 50 to 50; normalize invalid values to the
+  default. A missing or invalid `labelMode` loads as Focused.
+- Persist label mode and cap through `visualizer-settings.json`; sidebar Reset
+  View restores Focused mode and a cap of 50. The toolbar's separate camera Reset
+  behavior remains unchanged.
+
+5.3 Relative orbit and roll behavior
+- Keep the existing Alt + WASD / Arrow orbit controls and selected-node orbit
+  center.
+- On entering orbit controls, preserve the current camera position and facing;
+  pressing Alt alone must not reposition or re-aim the camera.
+- Apply the orbit position transform around the selected node to the camera
+  position offset and apply that same, un-inverted rotation to camera orientation.
+  A clockwise position rotation around the node's vertical axis rotates the
+  camera orientation clockwise by the same angle.
+- Construct one world-space orbit rotation from the input deltas in a documented
+  order (world-up yaw followed by elevation about the post-yaw orbit tangent).
+  Apply that rotation to the position offset and camera orientation. Never derive
+  orientation by aiming at the selected node.
+- Retain the +/-85-degree orbit-elevation and camera-look pitch limits. If an
+  elevation input would push camera-look pitch beyond its limit, reduce the
+  effective elevation delta and apply that same effective rotation to both
+  position and orientation.
+- Preserve camera-to-node radial distance. Orbit entry without movement leaves
+  position and orientation unchanged; orbit motion applies the same rotation to
+  both, with no target-facing snap.
+- Add `Alt+E` for clockwise roll and `Alt+Q` for counter-clockwise roll about the
+  camera's local forward axis. Without Alt and an orbit target, E/Q retain their
+  existing vertical-flight behavior. Define clockwise/counter-clockwise from the
+  view looking forward into the scene.
+- Represent orientation with a full 3D rotation (quaternion or equivalent
+  orthonormal basis) so orbit rotations and forward-axis roll compose
+  without discarding roll. Preserve existing flight/look behavior when roll is
+  zero. Explicit framing actions such as Center View and Frame Selected may
+  continue to aim at the selected node; this change applies to orbit navigation.
+
+5.4 Relevant implementation and test files
+- `OPEN-LRD/Visualization/VisualizerOptions.cs`: label-mode enum, default mode,
+  and maximum/default label cap.
+- `OPEN-LRD/Visualization/GraphSnapshot.cs` or a focused spatial-index type in
+  `OPEN-LRD/Visualization/`: build/rebuild the layout-position index and expose
+  frustum and ray candidate queries.
+- `OPEN-LRD/Visualization/VisualizerSettings.cs`: label-mode and cap migration,
+  validation, and persistence.
+- `OPEN-LRD/Visualization/FlyCamera.cs`: full camera orientation, co-rotating orbit
+  transform, and forward-axis roll.
+- `OPEN-LRD/Visualizer/GraphLabelOverlay.cs`: focused rendering fast path,
+  All Visible spatial candidate query/budget, and no-label early exit.
+- `OPEN-LRD/Visualizer/VisualizerWindow.xaml` and `.xaml.cs`: label-mode control,
+  cap control state, settings synchronization, reset behavior, and indexed node
+  picking.
+- `OPEN-LRD/Visualizer/FlyCameraController.cs`: Alt+E/Q roll mapping and retaining
+  E/Q vertical flight outside orbit controls.
+- `OPEN-LRD.SmokeTests/VisualizerTests.cs`: defaults, settings migration,
+  focused/All Visible options, spatial-index query correctness, candidate-budget
+  bounds, ray-pick parity, co-rotating orbit math, and roll direction.
+- `OPEN-LRD.ManualUiTests/Program.cs`: mode selection, cap enablement, settings
+  persistence/reset, per-render candidate/projection/draw counts, Alt+E/Q mapping,
+  and Visualizer interaction checks.
+
+5.5 Acceptance criteria
+- Fresh settings and legacy settings without `labelMode` use Focused mode.
+  Unknown enum values also safely fall back to Focused.
+- Focused mode draws no more than the selected and hovered labels, skips the
+  full-graph projection/decluttering pipeline, and draws one label when both
+  indices identify the same node.
+- Turning Show Labels off performs no label projection work.
+- All Visible mode remains selectable and draws no more than 50 labels. Its cap
+  control is enabled only in that mode, accepts values from 2 to 50, and defaults
+  and resets to 50.
+- All Visible projects no more than 250 background candidates per frame (plus
+  selected/hovered priority candidates) after spatial-index filtering. The budget
+  counts only candidates passed to projection, not BVH visits or early rejects.
+  The selected and hovered labels are always prioritized and consume slots in
+  the total All Visible draw cap; at cap 2 they take both slots.
+- Focused and All Visible modes reuse a layout-built index; node-position changes
+  rebuild it, while camera movement alone does not.
+- Background labels respect hidden node types, while selected/hovered labels
+  remain visible above that filter; Show Labels off suppresses both priority and
+  background labels.
+- Indexed hover/ray picking returns the same nearest visible node as a reference
+  full scan for representative rays, including hidden node types and misses.
+- Test instrumentation verifies that Show Labels off projects zero nodes,
+  Focused projects at most two, and All Visible stays within its candidate and
+  draw limits.
+- Mode and cap persist across settings save/load; previous saved caps above 50
+  normalize to 50.
+- Label projection, drawing, and mode changes do not change selection, HUD
+  content, node visibility settings, or the existing selection/hover behavior.
+- Orbit entry does not change camera position or look direction. After orbit
+  movement, camera-to-node radius is preserved and camera orientation changes by
+  the inverse of the position's composed orbit rotation; the camera does not snap
+  to target-facing orientation. Alt+E/Q roll in opposite directions around the
+  local forward axis, and E/Q still move vertically outside orbit mode.
+- Keep the existing +/-85-degree pitch and orbit-elevation clamps in the initial
+  Phase 4 implementation. Quaternion orientation keeps yaw continuous across
+  turns; its reported yaw angle wraps to the equivalent range without a jump.
+  Tests cover both pitch bounds and yaw wraparound.
+- Tests cover Focused and All Visible modes, the 50-label bound, no-label early
+  exit, persistence/reset, cap-2 selected/hovered priority, same selected/hovered
+  node, orbit signs/composition, zero-motion orbit entry, and Alt+E/Q roll.
+- Manual performance verification compares navigation in Focused mode with
+  labels enabled and All Visible mode on a large graph; record observed frame
+  responsiveness without requiring a hardware-specific FPS threshold.
+
+Phase 4 completion verification: 172 smoke tests and 401 WPF UI checks passed.
+Application, smoke-test, and Manual UI test builds completed with zero warnings
+and zero errors.
+The 20,003-node WPF label fixture projected the 250-candidate budget and drew
+two priority labels in 2.63 ms in this test environment. A 60-frame synthetic
+camera-motion comparison took 2.80 ms in Focused mode and 32.11 ms in All Visible
+mode. These timings are observational, not hardware-independent thresholds.
+
+================================================================================
+6. PHASE 5: TEXT, JSON, CSV, AND XML FILE INGESTION
+================================================================================
+
+6.1 Objectives and Tools tab
 - Activate and populate the fifth Tools tab, Data Files / File Ingestion, whose
   layout shell is prepared in Phase 2.
 - Support text, JSON, CSV, and XML files.
@@ -392,150 +568,249 @@ and zero errors.
   new Data Files tab; keep direct text/sentence input on Ingestion.
 
 Suggested controls:
-- File picker and supported-format filter; detected format shown to the user.
-- Ingestion mode selector: Structured Data or Extract Text for NLP.
+- File picker and filter for `.txt`, `.md`, `.log`, `.csv`, `.json`, and `.xml`;
+  detect format from extension, display it, and allow an explicit override.
+- Ingestion mode selector: Structured Data or Extract Text for NLP. For plain-text
+  formats, disable Structured Data and route through the existing text importer.
 - Automatically record source filename and a DataPointer to its location;
   provide source assignment controls where applicable.
 - Reuse the Phase 2 single-select topic dropdown, defaulting to
   `base/general/none` and supporting its same topic-resolution choices.
-- Dry run, bounded file/record limits, progress, cancellation, and summary.
+- Dry run, progress, cancellation, and a summary of successful, unsupported,
+  failed, skipped, and processed records.
 - Default the file-size control to 500 MiB and reject larger files before
   parsing or graph mutation.
-- Per-record diagnostics, including malformed/skipped/failed counts and a
-  bounded sample of diagnostic messages.
+- Default maximum records to 10,000; enforce 32-level JSON/XML depth, 1,000 CSV
+  columns, 15,000 characters per value, and at most 100 diagnostic messages.
 
-5.2 Format handling
+6.2 Format handling
 - Plain text: route through `TextFileImporter` with its existing chunking,
-  provenance, dry-run, cancellation, and size-limit behavior; set the maximum
-  size of any one input file to 500 MiB.
-- CSV: support quoted fields, escaped quotes, delimiters, and line endings.
-  Treat all table widths with the same table schema; do not switch schemas based
-  on column count. For each CSV table:
-  - Create a `base/basic` Table node with Label `table_` plus its integer index
-    within the source document (for example, `table_0`, `table_1`). Connect the
-    Source node to the Table node, then connect the Table node to each row head.
-  - Treat the first row as the header row at integer index 0. Create its
-    `base/basic` row-head node with Label `0` and Alias equal to the number of
-    cells.
-  - Create one `base/basic` node for each header cell, with Label equal to the
-    header text and Alias `HEADER`. Connect the header row head to the header
-    cells in their original order as a directed chain.
-  - For each remaining row, create a `base/basic` row-head node with Label equal
-    to its integer row index and Alias equal to the number of cells. Create one
-    `base/basic` cell node per cell, with Label equal to its contents and Alias
-    equal to the corresponding header. Connect each row head to its cells in
-    column order as a directed chain.
-  - The resulting sequence is Source -> Table -> Row Head -> Cell 1 -> Cell 2 ->
-    Cell 3 -> ... for each row. Source links to the Table; the Table links to
-    the header row head and every data row head. There are no direct Source-to-
-    row links and no all-to-all peer-cell links. Use base-type structural links.
-- JSON: parse with System.Text.Json. Represent each element using directed
-  source-to-element-to-property-to-value links:
-  - Element node: Label = element name, Type = `base/basic`, Alias = `JSON
-    Element`.
-  - Property node: Label = property name, Type = `Property`, Alias = `Property`.
-  - Value node: Label = value, Type = `Value`, Alias = the value type plus
-    `Value` (for example, `numberValue`, `stringValue`, or `pathValue`).
-- XML: parse with System.Xml using safe reader settings (DTD/external entity
-  resolution disabled). Use the same element/property/value structure as JSON,
-  with element Alias = `XML Element`.
-- NLP text mode: extract configured text content from each supported format and
-  submit it through the existing NLP ingestion path. Field selection, ordering,
-  and treatment of nested/empty values are specified in section 6.3.
-- Preserve structured triples and generic entity/attribute data through the
-  documented format mappings; all CSV tables retain the common row/cell graph
-  structure above. Whether recognized CSV triples additionally create semantic
-  subject/relation/object links remains to be determined.
-- Every non-dry-run NLP file import creates a new conversation.
-- Reject any single input file larger than 500 MiB, regardless of format.
-- Auto-detection may select format by extension, but the UI must display the
-  selected format and report parse errors rather than silently falling back to
-  plain text.
+  provenance, dry-run, cancellation, and size-limit behavior. Plain-text files
+  use NLP mode; Structured Data mode is unavailable for plain text.
+- Detect format by extension, display it in the UI, and allow an explicit format
+  override. A parse failure reports the selected format; never silently fall back
+  to plain-text parsing.
+- Structural relationship names are a fixed Phase 5 registry set with reserved,
+  stable IDs. Use `has_record`, `has_table`, `has_row`, `has_cell`, `has_child`,
+  `has_item`, `has_attribute`, and `has_value`; reuse existing `has_property`.
+  Use `LinkClass.basic` for hierarchy/table relationships and
+  `LinkClass.properties` for property/attribute/value relationships. Never
+  derive relation names from user-provided headers, JSON keys, or XML tags.
+- CSV: use a streaming RFC-4180-style parser supporting quoted fields, escaped
+  quotes, delimiters, and line endings. One or more wholly blank records separate
+  tables; each non-empty section starts with a header row. Treat all table widths
+  with the same schema. A row whose cell count differs from its header is a failed
+  record; report it and continue at the next recoverable row.
+  - Create a `NodeTypes.Basics` Table node, Alias `Table`, Label `table_N` with a
+    zero-based per-file index. Link Source -> Table with `has_table`.
+  - Header row is index 0. Row-head Label and cell-count Alias use invariant
+    integer strings. Header cells retain their original text and use Alias
+    `HEADER`; connect them in column order with `has_cell`.
+  - Data rows use invariant row-index labels and cell-count aliases. Each cell
+    retains its original text as Label and corresponding header as Alias.
+    Connect Source -> Table -> row heads with `has_table`/`has_row`, then chain
+    each row's cells with `has_cell`; do not add Source-to-row or peer-cell links.
+  - Give tables, row heads, header cells, and data cells stable file-URI fragments
+    (`#table_N`, `#table_N/row_R/column_C`). This keeps identical local table names
+    and repeated cell values in separate source positions distinct.
+- JSON: stream one UTF-8 JSON value. A root object or scalar is one record; a root
+  array has one record per item. Link Source to a synthetic root Element (Label
+  `root`, Alias `JSON Element`) by `has_record`.
+  - Objects use `NodeTypes.Basics` Element nodes. Properties use
+    `OntologyTypes.Properties`, Label = exact key, Alias `Property`; link Element
+    -> Property with `has_property`.
+  - Primitive properties link Property -> Value with `has_value`. Nested objects
+    link Property -> child Element with `has_child`. Arrays link Property -> an
+    Item node with `has_item`; Item Alias is `array_N`. Object/array items recurse;
+    scalar items link Item -> Value with `has_value`.
+  - Values use `OntologyTypes.MetadataValues`. Preserve the source lexeme as
+    Label and classify JSON values by token type with Alias `numberValue`,
+    `booleanValue`, `stringValue`, or `nullValue`; absolute supported URIs use
+    `pathValue`. Empty strings remain empty-label `stringValue` nodes; JSON null
+    is Label `null`, Alias `nullValue`.
+- XML: stream with `XmlReaderSettings` using `DtdProcessing.Prohibit` and
+  `XmlResolver = null`. Link the document root from Source by `has_record`; each
+  direct child element is a record boundary, or the root is one record if it has
+  no child elements. Commit complete record subtrees as they are parsed.
+  Elements use `NodeTypes.Basics`, Alias `XML Element`, and expanded-name labels
+  `{namespace-uri}local-name` so prefix changes do not change identity. Child
+  elements link by `has_child`. Attributes use `OntologyTypes.Properties`, Alias
+  `XML Attribute`, and `has_attribute`; link them to typed Values with `has_value`.
+  Preserve non-whitespace text nodes in document order, including mixed content,
+  as typed Values linked by `has_value`; empty leaf elements create empty-string
+  Values. Include stable element/attribute/text positions in file-URI fragments.
+- Typed values: classify JSON from its native token. CSV/XML recognize booleans,
+  invariant-culture numbers, and absolute supported URIs; otherwise use
+  `stringValue`. Preserve original text in Value Labels. Empty CSV cells remain
+  explicit empty-string Values to preserve row/cell positions.
+- Extract Text for NLP mode is selected per file and uses one new `NlpPipeline`
+  conversation per non-dry-run import:
+  - CSV rows with normalized headers `Subject`, `Predicate`/`Relation`, and
+    `Object` become `subject predicate object.` sentences. Other rows become
+    ordered `header: value` text, omitting empty cells.
+  - For each JSON record, if known prose keys (`text`, `content`, `body`,
+    `description`, `message`, `summary`) occur, extract their string values in
+    document order. Otherwise extract all string leaf values in document order.
+  - XML extracts non-whitespace text nodes in document order; attributes are not
+    included by default. Plain text uses the existing `TextFileImporter`.
+- Reject files larger than 500 MiB before parsing or graph mutation. Use streaming
+  parsers for CSV/JSON/XML, bounded to 10,000 records, 32 nested JSON/XML levels,
+  1,000 CSV columns, and 15,000 characters per value. Keep at most 100 diagnostic
+  messages and report when diagnostics are truncated.
+- Dry run validates and summarizes without graph mutation, trust updates, Source
+  node creation, or persistent conversations. Cancellation is cooperative between
+  records; already committed records remain and are reported as partial import.
 
-5.3 Graph semantics and operational guarantees
-- Structured records map to existing node/link conventions and relation/type
-  registries; do not invent IDs, relation names, or type semantics implicitly.
-- When ingestion from a new source finds an existing duplicate node, increase
-  the original node's `weightUp` by 1, ignore creation of the duplicate, and
-  count the duplicate as a successful read for trust calculations.
-- During re-import from the same source, a source trust rating above 80% skips
-  processing the file. At 80% or below, reprocess it without increasing
-  `weightUp` on its own existing nodes. New, nonduplicate data recovered during
-  re-import may be added. Only raise the source node's trust rating if the new
-  ingestion result has a higher success rate; do not change existing node
-  weights from that same source.
-- Skip empty files and show a warning that the file is empty; do not create table
-  or data nodes for an empty file.
-- Remaining record-validation policy must define unknown relation names, missing
-  triple fields, nulls, type conversion, and malformed records.
-- Keep graph mutation on the supported core APIs and attach file provenance in
-  a consistent way to imported data.
-- Assign a trust rating to each source/provenance record and associate imported
-  nodes with that source rating:
-  - Manually entered text: source node `user`, 50% trust.
-  - For non-dictionary imports with no parse/import errors: 90%.
-  - For non-dictionary chunked imports, count successful and failed chunks.
-    Divide failed chunks by successful chunks, normalize the result, then scale
-    it inversely from 90% down to 30%. The exact normalization/scoring formula
-    is TBD. No failed chunks yields 90%; failed chunks with no successful
-    chunks receive the 30% floor.
-  - Dictionary imports use a `dictionary` source node and are assigned 100%
-    trust.
-  - Associate imported nodes with their file/source rating so maintenance can
-    compare trust across manual, file, and dictionary sources.
-  - Higher-trust nodes override lower-trust nodes during conflicts and receive
-    priority in maintenance merge cycles.
-  - Persist ratings with their source/provenance records so they remain
-    available after reload and can be inspected by maintenance.
-- Enforce file-size, record/depth, diagnostic-count, and other resource bounds.
-- Dry run validates and summarizes the selected mapping without graph mutation.
-- Cancellation is cooperative and reports what was processed. Unless an
-  explicit transaction is designed, already committed records remain and are
-  reported as partial import; do not claim file-level atomic rollback.
-- Repeated imports and source-node reuse behavior must be defined and tested.
+6.3 Graph semantics and operational guarantees
+Phase 5's data contracts and graph semantics are now specified as follows:
+- The fixed structural relations are registered once with stable ontology IDs:
+  `has_record` 20, `has_table` 21, `has_row` 22, `has_cell` 23, `has_child` 24,
+  `has_item` 25, `has_attribute` 26, and `has_value` 27. Reuse `has_property` ID 4.
+  Hierarchy/table relations use `LinkClass.ontology`; property/attribute/value
+  relations use `LinkClass.properties`. File values never add relation types.
+- Source identity is the normalized absolute file URI in `DataPointer.Location`.
+  Resolve with `Path.GetFullPath` and canonical URI escaping; compare paths
+  case-insensitively on Windows. Moving/renaming a file creates a new Source.
+  Content SHA-256 distinguishes revisions at the same path and is stored on the
+  Source DataPointer only after a complete import.
+- Skip an unchanged file only when its stored checksum matches and Source
+  `TrustRating > 0.80`. Changed content at the same path is reprocessed even when
+  the previous rating is higher. Partial/cancelled/truncated imports do not update
+  the completed checksum or trust, so a retry cannot be skipped. A legacy Source
+  without a checksum is processed once to establish the checksum. Empty files
+  warn and create no Source or data nodes.
+- Structural records carry stable source-specific DataPointer fragments:
+  CSV table/row/column positions, JSON Pointer paths (RFC 6901), and XML expanded
+  names plus sibling/text indexes. Same-source re-import upserts these positions.
+  Structural cells/elements remain position-distinct; semantic entities produced
+  by NLP use the duplicate policy below.
+- A semantic duplicate has the same NodeType and normalized Label (trim, collapse
+  internal whitespace, compare case-insensitively), unless both nodes have
+  non-null, unequal DataPointers. A duplicate found from a new Source is reused,
+  linked into the new structure, adds exactly one to its `weightUp`, and counts
+  as a successful read. Same-source re-import never increases `weightUp`; newly
+  recovered non-duplicate entities may be added.
+- Count trust outcomes per record/chunk: text uses TextFileImporter chunks; CSV
+  uses data rows (headers are structural metadata); JSON uses each root-array item
+  or its single root value; XML uses each direct child of the document root, or
+  the root itself if it has no child elements. A syntactically valid but
+  unsupported NLP unit is successful. Malformed/failed records are failures;
+  warnings alone are not failures.
+- A complete non-dictionary import computes `Trust = 0.30 + 0.60 * S / (S + F)`.
+  Thus no failures gives 90%, all failures gives 30%, and `S + F == 0` leaves the
+  rating unchanged. Dictionary Source trust is 100%; manual `user` Source trust
+  remains 50%. Store the complete import rating on the Source and inherited trust
+  on newly created nodes. A reused semantic node keeps the greater of its current
+  rating and the current Source rating.
+- Update Source trust only after a complete import. On a complete same-source
+  re-import, raise trust only when the new score is higher; never lower it.
+- Maintenance survivor selection is trust-first: higher `TrustRating` always
+  stays, even if the lower-trust node is permanent or has higher `weightUp`.
+  Missing trust is 0.0. On equal trust, tie-break by permanence, higher
+  `weightUp`, link count, DataPointer presence, then GUID order. Merge metadata
+  preserves the maximum TrustRating and maximum `weightUp` (not their sum), plus
+  aliases, maximum WeightDown, and maximum TTL.
+- The 500 MiB, 10,000-record, 32-depth, 1,000-column, 15,000-character-value,
+  and 100-diagnostic limits are enforced. Recoverable bad CSV rows/records are
+  failed and skipped; fatal JSON/XML document syntax stops parsing. Earlier
+  committed records remain and are reported. Cancellation is checked between
+  records, with no rollback of already committed graph changes.
+- Dry run uses the same format, schema, type, and limit validation but does not
+  create graph nodes, update trust/checksum, or persist a conversation. Graph
+  mutation uses the existing supported Core APIs.
 
-5.4 Acceptance criteria
-- The Data Files tab provides distinct, understandable controls for all four
-  formats and both ingestion modes.
-- Its Phase 2 placeholder becomes functional in Phase 4; no file-ingestion
+6.4 Acceptance criteria
+- The Data Files tab provides distinct, understandable controls for all formats.
+  Structured Data/Extract Text modes are available for CSV/JSON/XML;
+  plain-text inputs use the existing NLP importer and disable Structured Data.
+- Its Phase 2 placeholder becomes functional in Phase 5; no file-ingestion
   controls or behavior need to be implemented before this phase.
-- Valid sample files for each format ingest via structured mode and NLP-text
-  mode where the format contains relevant content.
+- Format detection is shown and overridable. Invalid content reports a format
+  parse error without silently retrying as plain text.
+- Valid CSV/JSON/XML fixtures ingest in both modes; valid text fixtures use the
+  existing TextFileImporter in NLP mode.
+- File-format override, text-mode restriction, detected-format display, and
+  parse-error/no-fallback behavior are covered by UI and ingestion tests.
 - Wide-table fixtures verify one row node per data row, one cell node per value,
   header row index 0, header-cell nodes with Alias `HEADER`, the specified
   labels/aliases, Source -> Table -> row-head linkage, and directed row/cell
   chains for every table width.
 - Multi-table fixtures verify table labels are `table_` plus the table's
-  integer index within the source document and are unique within that document.
-- Trust-rating fixtures verify 50% for the `user` source, 90% for error-free
-  file imports, 100% for dictionary imports, a decreasing rating as
-  failed/successful chunk ratio rises, a 30% floor when all chunks fail, and
-  persistence of ratings.
-- Maintenance merge fixtures verify that higher-trust nodes take precedence
-  over lower-trust nodes and receive merge priority.
-- Duplicate-import fixtures verify weightUp increases by exactly 1 for
-  duplicates found from a new source, successful-read accounting for ignored
-  duplicates, re-import skip above 80% trust, and no weightUp increments on
-  same-source re-import.
+  integer index within the source document and are unique within that document;
+  blank-record table separators, row-width failures, and source-specific
+  DataPointer fragments are covered.
+- JSON fixtures cover object, array, and scalar roots; nested objects/arrays;
+  null and empty values; exact property labels; value aliases; and stable JSON
+  Pointer fragments. XML fixtures cover expanded names, attributes, mixed/empty
+  text, sibling positions, namespaces, and prohibited DTD/external-entity input.
+- NLP extraction fixtures verify recognized CSV triple headers, ordinary
+  header/value rows, known JSON prose keys and fallback string leaves, and XML
+  text traversal order. A file import uses one conversation; dry run creates none.
+- Trust fixtures verify `0.30 + 0.60*S/(S+F)`: 90% for complete error-free input,
+  30% when all processed records fail, valid unsupported records counted in S,
+  and no trust/checksum update when S+F is zero or import is incomplete. They also
+  verify the 50% `user` and 100% `dictionary` source baselines and persistence.
+- Duplicate fixtures verify normalized-label/type matching, unequal non-null
+  DataPointer exclusion, exactly +1 WeightUp for duplicates from a new source,
+  no WeightUp increase on same-source re-import, and structural-position upsert.
+- Re-import fixtures verify same path/same checksum skip above 80% trust, reprocess
+  at or below 80%, changed-content reprocessing at the same path, moved files as
+  new sources, checksum commit only on complete imports, and retries after partial
+  or cancelled imports.
+- Maintenance merge fixtures verify the higher-trust node always survives,
+  including when the lower-trust node is permanent or has higher WeightUp; the
+  survivor retains the higher TrustRating and maximum WeightUp (not the sum).
+  Equal-trust fixtures cover permanence and deterministic tiebreakers; metadata
+  merge preserves maximum WeightDown/TTL and unions aliases.
 - Empty-file fixtures verify the warning and that no table/data nodes are made.
 - Dry run performs parsing/validation without changing graph state.
 - Malformed inputs, unsupported structures, limits, cancellation, and partial
   failures produce clear summaries and bounded diagnostics.
 - XML parsing disallows DTD/external entity resolution; JSON/XML/CSV processing
   observes documented resource limits.
-- Import provenance, duplicate handling, and deterministic test outcomes meet
-  the confirmed policy.
+- Boundary fixtures cover 500 MiB, 10,000 records, 1,000 columns, depth 32,
+  15,000-character values, and the 100-diagnostic cap. Recoverable record errors
+  continue; fatal document syntax errors and cancellation report partial commits.
+- Source fixtures verify normalized-path identity, same-path checksum matching,
+  changed-content reprocessing, moved-file new-source behavior, checksum updates
+  only on completion, and unchanged imports skipped above 80% trust.
+- Import provenance, fixed relation IDs, duplicate handling, trust scoring,
+  survivor metadata, and deterministic outcomes meet the confirmed policy.
+
+6.5 Phase 6: Large-graph query candidates and Workbench evidence
+Status: Implemented and verified.
+- Phase 6 fixes answer-candidate loss when an unlabeled query variable (for
+  example, the Sense node in "What is commit?") has a large type-only candidate
+  space and is linked to a labeled anchor (the `commit` Lexeme).
+- Query matching now orders a labeled, more selective query node first when the
+  declared root is unlabeled. `QueryGraph.RootQueryNodeID` remains unchanged, so
+  answer-path and response-chain semantics are preserved.
+- Once a query node has a mapped neighbor, its candidates are drawn first from
+  that graph node's incident links, filtered by query node type and label/alias
+  constraints. Remaining global candidates are appended as a bounded fallback,
+  de-duplicated, and capped by `MaxCandidateNodesPerQueryNode`.
+- `GraphSnapshot` maintains an incident-link index so neighborhood expansion
+  avoids rescanning the complete graph for every query node.
+- Ambiguous reasoning matches retain their edge-backed answer candidates and
+  evidence paths. The Workbench Evidence / Candidates table therefore presents
+  the candidates that produced an ambiguous answer.
+- Regression coverage creates 60 unrelated Sense nodes before 12 connected
+  dictionary senses, sets the generic candidate window to 10, asks the query, and
+  verifies the Workbench displays 10 linked candidates. Existing ambiguity and
+  contradiction checks remain passing.
+- Phase 6 verification: 188 smoke tests and 417 WPF UI checks pass; Release
+  solution and Manual UI builds complete with zero warnings and zero errors.
 
 ================================================================================
-5. VERIFICATION AND DOCUMENTATION
+7. VERIFICATION AND DOCUMENTATION
 ================================================================================
 
 Build and regression:
 - Build the application, smoke tests, and Manual UI tests with zero warnings
   and zero errors.
 - Run smoke and UI suites after each phase and record the aggregate counts.
-  Phases 1-3 currently pass 171 smoke tests and 375 WPF UI checks; Phase 4
-  verification is pending its implementation and tests.
+  Phase 5 currently passes 188 smoke tests and 417 WPF UI checks; application
+  and test builds complete with zero warnings and zero errors.
 - Preserve existing checks for log import/export, text import, ontology,
   maintenance, Visualizer rendering, selection, and settings persistence.
 
@@ -547,11 +822,17 @@ Phase verification:
 - Phase 3 (complete): spread boundaries/settings persistence, HUD selection and
   long-content scrolling, Apply/Reset cancellation and latest-click debounce,
   exception logging, and recovery were verified; see the completion note below.
-- Phase 4: fixture-based CSV/JSON/XML/text tests for both modes; malformed and
-  boundary inputs; dry-run graph immutability; source attribution; cancellation;
-  duplicate/reimport behavior; and partial import reports.
-- Add/update the manual UI checklist for visual behavior not reliable to assert
-  in automated WPF checks.
+- Phase 4 (complete): Focused/All Visible labels, 50-label cap, spatial BVH and
+  250-projection candidate budget, indexed ray picking, no-label early exit,
+  persistence/reset, inverse relative orbit, and Alt+E/Q roll passed verification.
+- Phase 5 (in progress): importer, Data Files UI, CSV/JSON/XML structured and
+  NLP paths, checksum/trust behavior, dry-run, cancellation, re-import, and core
+  UI flows are implemented and verified. Manual file-import UI workflows and
+  WPF verification are complete; broader schema/limit/revision fixtures and the
+  complete acceptance review remain.
+- Phase 5 manual UI verification (complete): file-format detection and override,
+  text-mode restriction, structured CSV dry-run/import/re-import, Topic behavior,
+  and Source/checksum reporting pass in the WPF runner.
 
 Documentation:
 - Update README.md and To-Do.txt when a phase is delivered, recording actual
@@ -559,14 +840,14 @@ Documentation:
 - Update this plan's status and milestone verification counts as phases finish.
 
 ================================================================================
-6. COVERAGE GAPS AND DECISIONS TO CONFIRM
+8. COVERAGE STATUS AND DECISIONS
 ================================================================================
 
-The following gaps were found while reviewing the requested scope and the
-current code. Items marked Proposed are assumptions in this plan, not confirmed
-requirements; resolve them before implementing the affected behavior.
+This section records confirmed decisions, completed-phase notes, and Phase 5
+implementation status. Phase 5's adopted design is in Section 8.3 and its
+resolved Source/Topic and revision-reconciliation choices are in Section 8.4.
 
-6.1 Confirmed user decisions
+8.1 Confirmed user decisions
 - Confirmed: manually entered text is attributed to the `user` source node at
   50% trust.
 - Confirmed: each direct submission gets a new conversation; dry runs use a
@@ -588,8 +869,13 @@ requirements; resolve them before implementing the affected behavior.
   the same article appeared before that headword in the input question.
 - Confirmed: multiple matching senses are listed as candidates ordered by
   ascending GUID, with a generated multiple-definitions statement.
+- Confirmed: Phase 4 label modes are `Focused (Hover & Selection)` (default) and
+  `All Visible (up to cap)`, with All Visible capped at 50 labels and a minimum
+  cap of 2. Selected and hovered labels are prioritized and count against the
+  total draw cap. Orbit applies the same position rotation to camera
+  orientation; Alt+E/Q roll clockwise/counter-clockwise around camera-forward.
 
-6.2 Phase 2: topic selection behavior (implemented)
+8.2 Phase 2: topic selection behavior (implemented)
 - Node Label and Alias modes resolve only when exactly one graph node matches;
   zero or multiple matches report a selection error. GUID mode is available to
   disambiguate.
@@ -601,47 +887,55 @@ requirements; resolve them before implementing the affected behavior.
   Source; file import uses the file Source created/reused by the importer. Dry
   runs do not create graph nodes.
 
-6.3 Phase 4: data contracts and graph semantics still to be determined
-Phase 4 remains in planning. The following decisions are open and block a
-deterministic implementation and acceptance suite:
-1. JSON/XML node roles and labels are specified, but exact input schemas remain
-   TBD: nested elements/objects, arrays, attributes, text nodes, scalar roots,
-   and how multiple top-level records are represented.
-2. CSV table labels use `table_` plus a per-document integer index. Confirm
-   whether repeated table labels across different source documents are distinct
-   nodes or candidates for duplicate matching. Confirm whether row-head Alias
-   cell counts are stored as invariant strings.
-3. All CSV widths use the table chain. Confirm whether a recognized
-   subject/relation/object table also materializes semantic graph links, or is
-   represented only by the table, row-head, header, and value-cell nodes.
-4. The structured/text mode selection is clear, but behavior for format
-   auto-detection, per-format defaults, and mixed files containing facts and
-   prose remains open. Confirm per-file versus per-record mode for mixed files.
-5. NLP extraction field policy is open: known text fields only, all string
-   leaves, or user-selected fields; define traversal order and deduplication.
-6. Define how arbitrary CSV headers/XML tags/JSON properties map to relation
-   names and node types, including case normalization and unknown relations.
-7. Define null/empty cell and value handling, numeric/path type detection, and
-   whether valid elements/chunks continue after a malformed value.
-8. For a duplicate found from a new source, `weightUp` increases by 1. Define
-   the matching/identity criteria for deciding that two nodes are duplicates.
-9. Define how a matching source file is recognized across path changes, moves,
-   and modified contents. Confirm whether empty-file skips create a source node
-   or only report a warning.
-10. For same-source re-imports at or below 80% trust, define the success-rate
-    comparison used to raise trust and confirm whether newly recovered
-    nonduplicate nodes may be added. Existing same-source nodes must not receive
-    a `weightUp` increase; only source trust may rise.
-11. The trust-score formula is TBD. Define normalization/scaling of failed
-    chunks divided by successful chunks, how chunks are counted across formats,
-    and how warnings, empty files, and ignored duplicates affect trust. Define
-    persistence/integration with TrustScale and tie behavior in maintenance
-    merge priority.
-12. Define depth/record/column-count limits and whether cancellation leaves
-    partial graph changes (the proposed default is partial commit with an
-    explicit report, not rollback).
+8.3 Phase 5 decisions confirmed for implementation
+- Mode selection is per file. CSV, JSON, and XML support Structured Data and
+  Extract Text for NLP; plain-text files use the existing TextFileImporter and
+  have Structured Data disabled. Format is detected from the extension, shown,
+  and overridable. Parse errors never fall back to another parser.
+- JSON uses a synthetic root Element for object/scalar roots and indexed Item
+  nodes for arrays; XML uses expanded names, explicit attribute properties, and
+  ordered text-value nodes. Values use the documented `numberValue`,
+  `booleanValue`, `stringValue`, `nullValue`, and `pathValue` aliases. CSV blank
+  record runs delimit tables; each table uses the same header/row/cell schema.
+- Fixed structural relations use stable IDs 20-27 and existing `has_property` ID
+  4. Headers, tags, and keys are node labels, never dynamically registered link
+  types. Structural nodes carry stable source-specific DataPointer fragments.
+- Source identity is normalized absolute file URI. A SHA-256 checksum identifies
+  the completed content revision. Moved files are new sources; changed contents
+  at the same path are reprocessed. Only a completed import updates checksum and
+  trust; partial imports remain retryable. Empty files create no Source node.
+- Semantic duplicates match normalized Label and NodeType unless both non-null
+  DataPointers differ. A duplicate from a new source is reused, linked into the
+  new structure, increments `weightUp` by exactly one, and counts as successful.
+  Same-source re-import never increments existing nodes' `weightUp`.
+- Trust is `0.30 + 0.60*S/(S+F)`, with S/F counting processed successful/failed
+  chunks or records as defined in 6.3. Valid-but-unsupported NLP input and
+  ignored duplicates count as successful reads; warnings alone are not failures.
+  Empty/no-op imports with S+F=0 do not change trust. `user` remains 50% and
+  `dictionary` remains 100%; source trust is persisted and inherited by new nodes.
+- Maintenance survivor selection prioritizes TrustRating first. The higher-trust
+  node stays even if the other is permanent or has higher WeightUp. The survivor
+  retains the higher TrustRating and maximum WeightUp (not the sum); equal-trust
+  ties then use permanence, WeightUp, link count, DataPointer presence, and GUID.
+- Limits are 500 MiB, 10,000 records, 32 JSON/XML nesting levels, 1,000 CSV
+  columns, 15,000 characters per value, and 100 diagnostics. XML DTD/external
+  entity resolution is prohibited. Recoverable record errors continue; fatal
+  syntax errors stop parsing with prior commits retained. Cancellation is
+  cooperative between records and reports partial progress; dry run is read-only.
 
-6.4 Phase 3: exception capture and HUD details
+8.4 Phase 5: resolved implementation decisions
+- Topic applies only to Extract Text for NLP mode, where it is supplied as NLP
+  provenance. Structured Data mode does not assign Topic to structural nodes and
+  does not validate or require the selected Topic.
+- An explicit Source ID must identify an existing Sources node. A Source with no
+  DataPointer may be assigned to the selected file; a Source already pointing to
+  a different normalized file URI is rejected. Automatic source identity remains
+  the normalized file URI.
+- Re-import updates graph nodes at matching structural positions. Positions no
+  longer present in a completed revision are retained as historical data and are
+  not pruned. Partial or cancelled imports never prune prior positions.
+
+8.5 Phase 3: exception capture and HUD details
 Phase 3 is complete. Apply Layout and sidebar Reset View use cancel-and-replace
 with a two-second trailing-edge debounce; injected layout tasks verify latest-
 click wins, cancellation logging, unexpected exception reporting, and recovery.
@@ -653,7 +947,23 @@ wrapping, and scrolling, plus spread normalization/persistence, are covered by
 the 375-check WPF UI suite. The Visualizer window is maximized and non-resizable;
 viewport resizing is therefore not an interactive window workflow.
 
-6.5 Cross-phase coverage
+8.6 Phase 4 pitch/yaw limit decision
+- Phase 4 retains +/-85-degree limits for direct camera pitch and orbit elevation.
+  The co-rotating orbit operation reduces its effective elevation delta if needed so
+  the same applied transform still governs position and camera orientation.
+- Yaw has no visual rotation limit. Quaternion storage plus the derived `atan2`
+  yaw property naturally wraps equivalent angles without an ever-growing numeric
+  accumulator.
+- Removing yaw limits would not expand the camera's orientation range; yaw is
+  already unlimited. Removing pitch/elevation limits would permit pole crossing
+  and upside-down views. The quaternion camera basis remains mathematically valid,
+  but the current spherical orbit calculation would need to be replaced with
+  direct quaternion rotation of the position offset to avoid azimuth discontinuity
+  at the poles. Movement and roll controls could also feel inverted when upside
+  down. Keep the current pitch/elevation limits unless removal is separately
+  confirmed, and add pole-crossing/recovery tests before changing that policy.
+
+8.7 Cross-phase coverage
 - Accessibility (keyboard navigation, focus, screen-reader names and contrast)
   is not yet specified for new tabs, direct ingestion, or the HUD.
 - Localization is not in current scope; confirm if labels/messages remain
@@ -661,4 +971,4 @@ viewport resizing is therefore not an interactive window workflow.
 - Additional coverage remains for close-window behavior during active ingestion
   and layout, plus cleanup of cancellation resources under those close paths.
 - Preserve backward compatibility for existing settings and saved workflows
-  while Phase 4 adds the Data Files workflows.
+  while Phase 5 adds the Data Files workflows.

@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Identifies the graph or conversation target of a recognized command.</summary>
     internal enum CommandTargetKind
     {
         None,
@@ -18,6 +19,7 @@ namespace OPEN_LRD.NLP
         Query
     }
 
+    /// <summary>Stores a recognized command's verb, target, and clarification state.</summary>
     internal sealed record NlpCommand(
         string Verb,
         CommandTargetKind TargetKind,
@@ -27,6 +29,7 @@ namespace OPEN_LRD.NLP
         string? Clarification,
         IReadOnlyList<string> Diagnostics);
 
+    /// <summary>Recognizes supported natural-language command phrases and their targets.</summary>
     internal static class CommandRecognizer
     {
         private const string SupportedTargets =

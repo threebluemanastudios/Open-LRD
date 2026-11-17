@@ -2,6 +2,7 @@ using System.Text;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Normalizes Unicode, punctuation, whitespace, and sentence text for NLP processing.</summary>
     internal static class TextNormalizer
     {
         public static string Normalize(string? text)

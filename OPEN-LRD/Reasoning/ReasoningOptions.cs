@@ -3,6 +3,15 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Controls whether reusing existing semantic nodes increments upward usage weight.</summary>
+    internal enum ExistingNodeWeightUpPolicy
+    {
+        TrustBased = 0,
+        OncePerPipeline = 1,
+        Suppress = 2
+    }
+
+    /// <summary>Configures graph matching, trust, traversal, and merge behavior.</summary>
     internal sealed record ReasoningOptions
     {
         public double MinimumMatchScore { get; init; } = 0.65;
@@ -39,6 +48,9 @@ namespace OPEN_LRD.Reasoning
         public double TrustedThreshold { get; init; } = 0.70;
         public double DiscreditedThreshold { get; init; } = 0.30;
         public double TrustMargin { get; init; } = 0.10;
+
+        public ExistingNodeWeightUpPolicy ExistingNodeWeightPolicy { get; init; } =
+            ExistingNodeWeightUpPolicy.TrustBased;
 
         public IReadOnlyCollection<LinkClass> FunctionalLinkClasses { get; init; } =
             new[] { LinkClass.identities };

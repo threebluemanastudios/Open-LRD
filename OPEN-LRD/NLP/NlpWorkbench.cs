@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Provides UI-independent lifecycle and operation access to NLP pipeline sessions.</summary>
     internal sealed class NlpWorkbench : IDisposable
     {
         private readonly LRD_Core core;

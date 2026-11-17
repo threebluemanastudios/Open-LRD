@@ -8,6 +8,7 @@ using OPEN_LRD.Visualization;
 
 namespace OPEN_LRD.Visualizer
 {
+    /// <summary>Maps keyboard, mouse, and frame timing input to fly-camera movement and orbit control.</summary>
     internal sealed class FlyCameraController : IDisposable
     {
         private readonly UIElement host;
@@ -48,6 +49,11 @@ namespace OPEN_LRD.Visualizer
         public bool InvertMouseY { get; set; } = false;
 
         public Func<Vector3?>? GetOrbitTarget { get; set; }
+
+        internal static double GetOrbitRollDirection(bool clockwiseKeyDown, bool counterClockwiseKeyDown)
+        {
+            return (clockwiseKeyDown ? 1.0 : 0.0) - (counterClockwiseKeyDown ? 1.0 : 0.0);
+        }
 
         public double SpeedMultiplier
         {
@@ -187,6 +193,7 @@ namespace OPEN_LRD.Visualizer
             {
                 double orbitYaw = 0.0;
                 double orbitPitch = 0.0;
+                double orbitRoll = 0.0;
 
                 if (Keyboard.IsKeyDown(Key.A) || Keyboard.IsKeyDown(Key.Left))
                     orbitYaw += 1.0;
@@ -196,8 +203,11 @@ namespace OPEN_LRD.Visualizer
                     orbitPitch += 1.0;
                 if (Keyboard.IsKeyDown(Key.S) || Keyboard.IsKeyDown(Key.Down))
                     orbitPitch -= 1.0;
+                orbitRoll = GetOrbitRollDirection(
+                    clockwiseKeyDown: Keyboard.IsKeyDown(Key.E),
+                    counterClockwiseKeyDown: Keyboard.IsKeyDown(Key.Q));
 
-                if (orbitYaw != 0.0 || orbitPitch != 0.0)
+                if (orbitYaw != 0.0 || orbitPitch != 0.0 || orbitRoll != 0.0)
                 {
                     bool isBoosted = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
                     double baseAngularSpeed = Math.PI / 4.0; // 45 degrees per second
@@ -207,6 +217,7 @@ namespace OPEN_LRD.Visualizer
                         orbitTarget.Value,
                         orbitYaw * effectiveAngularSpeed * dt,
                         orbitPitch * effectiveAngularSpeed * dt);
+                    flyCamera.Roll(orbitRoll * effectiveAngularSpeed * dt);
                     scene.SyncCameraFromFlyCamera();
                     CameraMoved?.Invoke();
                     return;

@@ -2,13 +2,23 @@ using System.IO;
 
 namespace OPEN_LRD.Nodes
 {
+    /// <summary>Identifies an external payload by a validated absolute URI and optional metadata.</summary>
     public sealed record DataPointer
     {
+        /// <summary>Gets the absolute URI where the referenced payload is located.</summary>
         public Uri Location { get; }
+        /// <summary>Gets the optional media type associated with the payload.</summary>
         public string? MediaType { get; }
+        /// <summary>Gets the optional payload size in bytes.</summary>
         public long? ByteLength { get; }
+        /// <summary>Gets the optional checksum used to identify a payload revision.</summary>
         public string? Checksum { get; }
 
+        /// <summary>Creates a pointer after validating its URI scheme and metadata.</summary>
+        /// <param name="location">An absolute file, HTTP, or HTTPS URI.</param>
+        /// <param name="mediaType">An optional MIME type.</param>
+        /// <param name="byteLength">An optional non-negative payload size.</param>
+        /// <param name="checksum">An optional payload checksum.</param>
         public DataPointer(Uri location, string? mediaType = null, long? byteLength = null, string? checksum = null)
         {
             ArgumentNullException.ThrowIfNull(location);
@@ -32,6 +42,9 @@ namespace OPEN_LRD.Nodes
             Checksum = string.IsNullOrWhiteSpace(checksum) ? null : checksum.Trim();
         }
 
+        /// <summary>Creates a file pointer from a path after converting it to an absolute path.</summary>
+        /// <param name="path">The local file path to reference.</param>
+        /// <returns>A pointer whose location uses the file URI scheme.</returns>
         public static DataPointer FromFilePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))

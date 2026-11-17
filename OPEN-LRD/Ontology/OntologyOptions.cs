@@ -2,6 +2,7 @@ namespace OPEN_LRD.Ontology
 {
     // Module 4 feature flags. The foundation is opt-in at startup so a new
     // graph stays empty until the user seeds it or imports an ontology log.
+    /// <summary>Defines stable ontology loading and validation defaults.</summary>
     internal static class OntologyOptions
     {
         public static bool AutoSeedFoundation { get; set; }

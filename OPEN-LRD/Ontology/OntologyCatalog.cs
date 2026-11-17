@@ -1,10 +1,12 @@
 namespace OPEN_LRD.Ontology
 {
+    /// <summary>Describes a foundational ontology concept and its optional parent.</summary>
     internal sealed record OntologyConcept(string Label, string? ParentLabel);
 
     // The hardcoded upper-ontology concept set. Every concept becomes a
     // permanent Category node; each non-root concept is joined to its parent
     // with an is_a link.
+    /// <summary>Provides the curated list of foundational ontology concepts.</summary>
     internal static class OntologyCatalog
     {
         public const string RootLabel = "Entity";

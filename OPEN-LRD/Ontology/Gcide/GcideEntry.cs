@@ -1,11 +1,13 @@
 namespace OPEN_LRD.Ontology.Gcide
 {
+    /// <summary>Stores one parsed dictionary sense and its lexical metadata.</summary>
     internal sealed record GcideSense(
         string Number,
         string Definition,
         string? Field,
         string? Source);
 
+    /// <summary>Stores a parsed headword and its senses from a GCIDE corpus entry.</summary>
     internal sealed record GcideEntry(
         string Headword,
         string Index,

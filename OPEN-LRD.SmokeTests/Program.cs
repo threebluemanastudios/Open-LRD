@@ -4,11 +4,13 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.SmokeTests
 {
+    /// <summary>Hosts the smoke-test runner and assertions shared by test suites.</summary>
     internal static class Program
     {
         private static int _passed;
         private static int _failed;
 
+        /// <summary>Runs all smoke suites and sets the process exit code from their results.</summary>
         private static void Main()
         {
             Run("Guid node IDs", TestGuidNodeIds);
@@ -33,12 +35,16 @@ namespace OPEN_LRD.SmokeTests
             MaintenanceTests.RunAll();
             OntologyTests.RunAll();
             TextImportTests.RunAll();
+            DataFileImporterTests.RunAll();
             VisualizerTests.RunAll();
 
             Console.WriteLine($"{_passed} passed, {_failed} failed");
             Environment.ExitCode = _failed == 0 ? 0 : 1;
         }
 
+        /// <summary>Runs one named test action and records its pass or failure.</summary>
+        /// <param name="name">The title shown in the test report.</param>
+        /// <param name="test">The test action to execute.</param>
         internal static void Run(string name, Action test)
         {
             try

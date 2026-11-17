@@ -6,6 +6,7 @@ namespace OPEN_LRD.Ontology.Gcide
     // Streams GCIDE paragraphs and turns each headword paragraph into a
     // GcideEntry. Files are read one at a time so the full 61 MB corpus is
     // never held in memory at once.
+    /// <summary>Streams and parses dictionary entries from bundled GCIDE files.</summary>
     internal static class GcideEntryReader
     {
         private static readonly string[] TaxonomyTags =

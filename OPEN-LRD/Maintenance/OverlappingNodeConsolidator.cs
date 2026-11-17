@@ -4,10 +4,13 @@ using OPEN_LRD.Ontology;
 
 namespace OPEN_LRD.Maintenance
 {
+    /// <summary>Finds and merges supported duplicate graph nodes under trust-first survivor rules.</summary>
     internal static class OverlappingNodeConsolidator
     {
+        /// <summary>Stores a candidate node pair and whether its identity evidence is a shared pointer.</summary>
         private sealed record Candidate(Guid First, Guid Second, bool SharedDataPointer);
 
+        /// <summary>Groups graph nodes by normalized labels and aliases for duplicate comparison.</summary>
         private sealed class NameBucket
         {
             private readonly Dictionary<DataPointer, Web_Node> byPointer = new Dictionary<DataPointer, Web_Node>();
@@ -228,7 +231,13 @@ namespace OPEN_LRD.Maintenance
 
         private static Web_Node ChooseSurvivor(LRD_Core core, Web_Node first, Web_Node second)
         {
-            int comparison = first.IsPermanent.CompareTo(second.IsPermanent);
+            double firstTrust = first.TrustRating ?? 0d;
+            double secondTrust = second.TrustRating ?? 0d;
+            int comparison = firstTrust.CompareTo(secondTrust);
+            if (comparison != 0)
+                return comparison > 0 ? first : second;
+
+            comparison = first.IsPermanent.CompareTo(second.IsPermanent);
             if (comparison != 0)
                 return comparison > 0 ? first : second;
 

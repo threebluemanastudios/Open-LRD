@@ -6,10 +6,12 @@ using static OPEN_LRD.SmokeTests.Program;
 
 namespace OPEN_LRD.SmokeTests
 {
+    /// <summary>Contains regression checks for visualization snapshots, geometry, projection, and layout.</summary>
     internal static class VisualizerTests
     {
         private static int nextTypeId = 1_500_000;
 
+        /// <summary>Registers and executes the visualizer regression checks.</summary>
         public static void RunAll()
         {
             Run("Visualizer snapshot ordering and labels", TestSnapshotOrderingAndLabels);
@@ -23,6 +25,7 @@ namespace OPEN_LRD.SmokeTests
             Run("Visualizer settings round trip", TestSettingsRoundTrip);
             Run("Visualizer settings fallback", TestSettingsFallback);
             Run("Visualizer options validation", TestOptionsValidation);
+            Run("Visualizer spatial node index queries", TestSpatialNodeIndex);
             Run("Visualizer projection quadrants", TestProjectionQuadrants);
             Run("Visualizer projection depth rejection", TestProjectionDepthRejection);
             Run("Visualizer projection ray round trip", TestProjectionRayRoundTrip);
@@ -354,7 +357,8 @@ namespace OPEN_LRD.SmokeTests
                     CubeSize = 1.2,
                     LineWidth = 0.2,
                     ShowLabels = false,
-                    MaxLabels = 250,
+                    MaxLabels = 49,
+                    LabelMode = VisualizerLabelMode.AllVisible,
                     MaxNodes = 75000,
                     MaxLinks = 125000,
                     NearPlaneDistance = 0.75
@@ -388,7 +392,8 @@ namespace OPEN_LRD.SmokeTests
                 Assert(loadedOptions.CubeSize == 1.2, "cube size should round trip");
                 Assert(loadedOptions.LineWidth == 0.2, "line width should round trip");
                 Assert(!loadedOptions.ShowLabels, "label visibility should round trip");
-                Assert(loadedOptions.MaxLabels == 250, "label cap should round trip");
+                Assert(loadedOptions.MaxLabels == 49, "label cap should round trip");
+                Assert(loadedOptions.LabelMode == VisualizerLabelMode.AllVisible, "label mode should round trip");
                 Assert(loadedOptions.MaxNodes == 75000, "node cap should round trip");
                 Assert(loadedOptions.MaxLinks == 125000, "link cap should round trip");
                 Assert(loadedOptions.NearPlaneDistance == 0.75, "near plane distance should round trip");
@@ -410,6 +415,8 @@ namespace OPEN_LRD.SmokeTests
                 Assert(missingWarning is null, "a missing settings file should not produce a warning");
                 Assert(missing.Version == VisualizerSettings.CurrentVersion, "missing settings should use defaults");
                 Assert(missing.View.Spread == VisualizerOptions.DefaultSpread, "missing settings should use default view options");
+                Assert(missing.View.MaxLabels == VisualizerOptions.DefaultMaxLabels, "missing settings should default to the 50-label cap");
+                Assert(missing.View.LabelMode == VisualizerLabelMode.Focused, "missing settings should default to Focused label mode");
 
                 string corruptPath = Path.Combine(directory, "corrupt.json");
                 File.WriteAllText(corruptPath, "{ this is not json");
@@ -424,6 +431,22 @@ namespace OPEN_LRD.SmokeTests
                 Assert(future.View.Spread == VisualizerOptions.DefaultSpread, "unsupported versions should use defaults");
 
                 VisualizerOptions migrated = new VisualizerOptions();
+                VisualizerSettings legacyLabels = VisualizerSettings.CreateDefault();
+                legacyLabels.View.MaxLabels = 1000;
+                legacyLabels.ApplyTo(new GraphColorMap(), migrated);
+                Assert(migrated.MaxLabels == 50, "legacy label caps above 50 should clamp to 50");
+                Assert(migrated.LabelMode == VisualizerLabelMode.Focused, "legacy settings should default to Focused mode");
+
+                VisualizerSettings invalidLabelMode = VisualizerSettings.CreateDefault();
+                invalidLabelMode.View.LabelMode = (VisualizerLabelMode)99;
+                invalidLabelMode.ApplyTo(new GraphColorMap(), migrated);
+                Assert(migrated.LabelMode == VisualizerLabelMode.Focused, "unknown persisted label modes should fall back to Focused");
+
+                VisualizerSettings lowLabelCap = VisualizerSettings.CreateDefault();
+                lowLabelCap.View.MaxLabels = 1;
+                lowLabelCap.ApplyTo(new GraphColorMap(), migrated);
+                Assert(migrated.MaxLabels == VisualizerOptions.MinimumMaxLabels, "persisted label caps below 2 should clamp to 2");
+
                 VisualizerSettings oldLowSpread = VisualizerSettings.CreateDefault();
                 oldLowSpread.View.Spread = 7.5;
                 oldLowSpread.ApplyTo(new GraphColorMap(), migrated);
@@ -470,11 +493,14 @@ namespace OPEN_LRD.SmokeTests
                 Gravity = 0d,
                 MaxNodes = 1,
                 MaxLinks = 1,
-                MaxLabels = 1,
+                MaxLabels = 2,
                 LabelCharacterLimit = 1
             };
 
             valid.Validate();
+            Assert(new VisualizerOptions().LabelMode == VisualizerLabelMode.Focused, "Focused label mode should be the default");
+            Assert(new VisualizerOptions().MaxLabels == 50, "the default All Visible label cap should be 50");
+            Assert(VisualizerOptions.MaxLabelCandidatesPerFrame == 250, "background label projection budget should be 250 per frame");
             Assert(valid.MinSpacing == VisualizerOptions.MinimumSpacing, "minimum spacing should clamp tiny values");
             Assert(VisualizerOptions.NormalizeSpread(9.9) == 10.0, "spread below the slider range should clamp to 10");
             Assert(VisualizerOptions.NormalizeSpread(100.1) == 100.0, "spread above the slider range should clamp to 100");
@@ -515,8 +541,14 @@ namespace OPEN_LRD.SmokeTests
                 () => new VisualizerOptions { MaxLinks = VisualizerOptions.MaximumMaxLinks + 1 }.Validate(),
                 "link cap above the UI-supported maximum should be rejected");
             AssertThrows<ArgumentOutOfRangeException>(
-                () => new VisualizerOptions { MaxLabels = 0 }.Validate(),
-                "zero label cap should be rejected");
+                () => new VisualizerOptions { MaxLabels = 1 }.Validate(),
+                "label caps below 2 should be rejected");
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => new VisualizerOptions { MaxLabels = 51 }.Validate(),
+                "label caps above 50 should be rejected");
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => new VisualizerOptions { LabelMode = (VisualizerLabelMode)99 }.Validate(),
+                "unknown label modes should be rejected by options validation");
             AssertThrows<ArgumentOutOfRangeException>(
                 () => new VisualizerOptions { LabelCharacterLimit = 0 }.Validate(),
                 "zero label length should be rejected");
@@ -612,12 +644,19 @@ namespace OPEN_LRD.SmokeTests
 
             camera.Look(deltaX: 0d, deltaY: 100000d);
             Assert(
-                Math.Abs(camera.Pitch + FlyCamera.MaximumPitchRadians) < 1e-9,
+                Math.Abs(camera.Pitch + FlyCamera.MaximumPitchRadians) < 1e-6,
                 "pitch should clamp at the downward limit");
             Assert(IsFinite(camera.LookDirection) && IsFinite(camera.Right) && IsFinite(camera.Up), "clamped camera vectors should stay finite");
 
             camera.SetPose(Vector3.Zero, 0d, 10d);
-            Assert(Math.Abs(camera.Pitch - FlyCamera.MaximumPitchRadians) < 1e-9, "set pose should clamp pitch");
+            Assert(Math.Abs(camera.Pitch - FlyCamera.MaximumPitchRadians) < 1e-6, "set pose should clamp pitch");
+
+            FlyCamera yawWrap = new FlyCamera(Vector3.Zero, Math.PI - 0.01, 0d);
+            Vector3 lookBeforeYawWrap = yawWrap.LookDirection;
+            yawWrap.Look(deltaX: 10d, deltaY: 0d);
+            Assert(yawWrap.Yaw < -3.0, "reported yaw should wrap to the equivalent signed angle");
+            Assert(Vector3.Distance(yawWrap.LookDirection, lookBeforeYawWrap) < 0.03f,
+                "yaw wrapping should not introduce a visible direction discontinuity");
 
             FlyCamera framed = new FlyCamera(Vector3.Zero, 0d, 0d);
             framed.FrameSphere(new Vector3(0f, 0f, 10f), 2f, 60d, 1.5d);
@@ -625,13 +664,73 @@ namespace OPEN_LRD.SmokeTests
             Assert(distance > 2f, "framing should move the camera outside the sphere");
             Assert(Vector3.Distance(framed.LookDirection, Vector3.UnitZ) < 1e-5f, "framing should preserve the view axis");
 
-            FlyCamera orbitCam = new FlyCamera(new Vector3(0f, 0f, -10f), 0d, 0d);
+            FlyCamera orbitCam = new FlyCamera(new Vector3(0f, 0f, -10f), Math.PI / 6d, 0d);
             Vector3 target = Vector3.Zero;
-            orbitCam.OrbitAroundTarget(target, deltaYawRadians: Math.PI / 2.0, deltaPitchRadians: 0.0);
+            Quaternion orientationBeforeOrbit = orbitCam.Orientation;
+            Vector3 targetDirectionBeforeOrbit = Vector3.Normalize(target - orbitCam.Position);
+            double targetFacingAngleBeforeOrbit = Math.Acos(Math.Clamp(
+                Vector3.Dot(orbitCam.LookDirection, targetDirectionBeforeOrbit),
+                -1f,
+                1f));
+            float yawDelta = MathF.PI / 2f;
+            Quaternion positionYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, yawDelta);
+            Quaternion expectedOrientation = Quaternion.Normalize(positionYaw * orientationBeforeOrbit);
+            orbitCam.OrbitAroundTarget(target, deltaYawRadians: yawDelta, deltaPitchRadians: 0.0);
             float orbitDistance = Vector3.Distance(orbitCam.Position, target);
             Assert(Near(orbitDistance, 10f, 1e-2f), "orbiting should preserve radial distance to target");
-            Vector3 expectedDir = Vector3.Normalize(target - orbitCam.Position);
-            Assert(Vector3.Distance(orbitCam.LookDirection, expectedDir) < 1e-3f, "orbiting should keep camera facing target");
+            Assert(QuaternionEquivalent(orbitCam.Orientation, expectedOrientation), "orbit orientation should use the same position rotation");
+            double targetFacingAngleAfterOrbit = Math.Acos(Math.Clamp(
+                Vector3.Dot(orbitCam.LookDirection, Vector3.Normalize(target - orbitCam.Position)),
+                -1f,
+                1f));
+            Assert(Math.Abs(targetFacingAngleAfterOrbit - targetFacingAngleBeforeOrbit) < 1e-4,
+                "orbiting should preserve the camera's target-relative facing angle without re-aiming");
+
+            FlyCamera pitchOrbit = new FlyCamera(new Vector3(0f, 0f, -10f), 0.3, -0.2);
+            Quaternion beforeCombinedOrbit = pitchOrbit.Orientation;
+            const double combinedYaw = 0.4;
+            const double combinedPitch = 0.25;
+            Quaternion yawRotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, (float)combinedYaw);
+            double azimuth = Math.Atan2(pitchOrbit.Position.X, pitchOrbit.Position.Z) + combinedYaw;
+            Vector3 elevationAxis = Vector3.Normalize(new Vector3((float)-Math.Cos(azimuth), 0f, (float)Math.Sin(azimuth)));
+            Quaternion elevationRotation = Quaternion.CreateFromAxisAngle(elevationAxis, (float)combinedPitch);
+            Quaternion combinedPositionRotation = Quaternion.Normalize(elevationRotation * yawRotation);
+            Vector3 expectedOffset = Vector3.Transform(pitchOrbit.Position, combinedPositionRotation);
+            Quaternion expectedCombinedOrientation = Quaternion.Normalize(combinedPositionRotation * beforeCombinedOrbit);
+            pitchOrbit.OrbitAroundTarget(Vector3.Zero, combinedYaw, combinedPitch);
+            Assert(Vector3.Distance(pitchOrbit.Position, expectedOffset) < 1e-4f,
+                "combined yaw/elevation orbit should apply the composed position transform");
+            Assert(QuaternionEquivalent(pitchOrbit.Orientation, expectedCombinedOrientation),
+                "combined orbit should apply the same composed transform to camera orientation");
+
+            FlyCamera boundedOrbit = new FlyCamera(
+                new Vector3(0f, 0f, -10f),
+                yaw: 0d,
+                pitch: -FlyCamera.MaximumPitchRadians + 0.05d);
+            boundedOrbit.OrbitAroundTarget(Vector3.Zero, deltaYawRadians: 0d, deltaPitchRadians: 1d);
+            Assert(boundedOrbit.Pitch >= -FlyCamera.MaximumPitchRadians - 1e-5,
+                "orbit rotation should respect the camera pitch limit");
+            Assert(boundedOrbit.Position.Y < 10f,
+                "orbit elevation should be reduced when camera pitch reaches its limit");
+
+            FlyCamera rollCamera = new FlyCamera(Vector3.Zero, 0d, 0d);
+            Vector3 originalRight = rollCamera.Right;
+            rollCamera.Roll(Math.PI / 2.0);
+            Assert(Vector3.Distance(rollCamera.Up, originalRight) < 1e-5f,
+                "positive forward-axis roll should rotate screen up clockwise to screen right");
+            FlyCamera restoredRoll = new FlyCamera();
+            restoredRoll.SetOrientation(rollCamera.Position, rollCamera.LookDirection, rollCamera.Up);
+            Assert(Vector3.Distance(restoredRoll.Right, rollCamera.Right) < 1e-5f
+                && Vector3.Distance(restoredRoll.Up, rollCamera.Up) < 1e-5f,
+                "camera synchronization should preserve the complete rolled orientation");
+            rollCamera.Roll(-Math.PI / 2.0);
+            Assert(Vector3.Distance(rollCamera.Up, Vector3.UnitY) < 1e-5f,
+                "opposite forward-axis roll should restore the original camera up direction");
+        }
+
+        private static bool QuaternionEquivalent(Quaternion left, Quaternion right)
+        {
+            return Math.Abs(Quaternion.Dot(Quaternion.Normalize(left), Quaternion.Normalize(right))) > 0.99999f;
         }
 
         private static void TestRayAabbPicking()
@@ -663,6 +762,66 @@ namespace OPEN_LRD.SmokeTests
             AssertThrows<ArgumentException>(
                 () => ProjectionMath.TryIntersectRayAabb(origin, direction, Vector3.One, Vector3.Zero, out _),
                 "invalid bounds should be rejected");
+        }
+
+        private static void TestSpatialNodeIndex()
+        {
+            Vector3[] positions = new Vector3[20000];
+            for (int index = 0; index < positions.Length; index++)
+                positions[index] = new Vector3(0f, 0f, index + 1f);
+
+            SpatialNodeIndex spatialIndex = SpatialNodeIndex.Build(positions, leafCapacity: 8);
+            CameraView camera = new CameraView(
+                Vector3.Zero,
+                Vector3.UnitZ,
+                Vector3.UnitY,
+                fieldOfViewDegrees: 90d,
+                viewportWidth: 1200d,
+                viewportHeight: 800d,
+                nearPlaneDistance: 0.1d,
+                farPlaneDistance: 25000d);
+            List<int> candidates = new List<int>();
+
+            spatialIndex.CollectFrustumCandidates(
+                camera,
+                maximumDepth: 20000d,
+                maximumCandidates: 250,
+                isNodeVisible: null,
+                priorityIndexA: 0,
+                priorityIndexB: 1,
+                candidates);
+            Assert(candidates.Count == 250, "the BVH query should respect the background candidate budget");
+            Assert(!candidates.Contains(0) && !candidates.Contains(1), "priority nodes should be excluded from the background budget");
+            Assert(candidates[0] < candidates[^1], "near-to-far traversal should visit near graph positions first");
+
+            spatialIndex.CollectFrustumCandidates(
+                camera,
+                maximumDepth: 20000d,
+                maximumCandidates: 250,
+                isNodeVisible: nodeIndex => nodeIndex % 2 == 0,
+                priorityIndexA: null,
+                priorityIndexB: null,
+                candidates);
+            Assert(candidates.Count == 250, "node-type filtering should continue until the projection budget is filled");
+            Assert(candidates.All(candidate => candidate % 2 == 0), "the spatial index should apply node visibility filters");
+
+            Vector3[] pickPositions =
+            {
+                new Vector3(0f, 0f, 5f),
+                new Vector3(0f, 0f, 10f),
+                new Vector3(5f, 0f, 4f)
+            };
+            SpatialNodeIndex pickIndex = SpatialNodeIndex.Build(pickPositions, leafCapacity: 1);
+            int? nearest = pickIndex.FindNearestRayHit(Vector3.Zero, Vector3.UnitZ, 0.5f);
+            Assert(nearest == 0, "indexed ray picking should return the nearest AABB hit");
+            int? visibleNearest = pickIndex.FindNearestRayHit(
+                Vector3.Zero,
+                Vector3.UnitZ,
+                0.5f,
+                nodeIndex => nodeIndex != 0);
+            Assert(visibleNearest == 1, "indexed ray picking should skip hidden nodes and find the next visible hit");
+            Assert(pickIndex.FindNearestRayHit(Vector3.Zero, Vector3.UnitY, 0.5f) is null,
+                "indexed ray picking should report misses");
         }
 
         private static void TestCubeMesh()

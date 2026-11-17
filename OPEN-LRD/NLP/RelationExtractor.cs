@@ -4,6 +4,7 @@ using OPEN_LRD.Ontology;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Extracts typed, qualified relation frames from parsed sentence structures.</summary>
     internal static class RelationExtractor
     {
         private static readonly HashSet<string> negators = new HashSet<string>(

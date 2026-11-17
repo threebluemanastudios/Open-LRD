@@ -4,6 +4,7 @@ using System.Numerics;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Constructs validated mesh data for graph nodes, links, and merged render batches.</summary>
     internal static class GraphMeshBuilder
     {
         private const int CubeVerticesPerNode = 24;
@@ -445,6 +446,7 @@ namespace OPEN_LRD.Visualization
             }
         }
 
+        /// <summary>Stores vertex indices and a normal for one cube face.</summary>
         private readonly record struct CubeFace(
             Vector3 Normal,
             Vector3 V0,
@@ -452,6 +454,7 @@ namespace OPEN_LRD.Visualization
             Vector3 V2,
             Vector3 V3);
 
+        /// <summary>Stores an ordered pair of node indices joined by a link.</summary>
         private readonly record struct LinkPair(int AIndex, int BIndex);
     }
 }

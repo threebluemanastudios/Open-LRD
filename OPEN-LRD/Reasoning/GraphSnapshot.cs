@@ -11,10 +11,12 @@ namespace OPEN_LRD.Reasoning
         NodeLifetime Lifetime,
         float WeightUp);
 
+    /// <summary>Provides an immutable bounded graph view for matching and response extraction.</summary>
     internal sealed class GraphSnapshot
     {
         private readonly Dictionary<Guid, GraphNodeSnapshot> nodesByID;
         private readonly Dictionary<Guid, List<Link>> outgoingLinks;
+        private readonly Dictionary<Guid, List<Link>> incidentLinks;
 
         private GraphSnapshot(
             IReadOnlyList<GraphNodeSnapshot> nodes,
@@ -26,6 +28,14 @@ namespace OPEN_LRD.Reasoning
             outgoingLinks = links
                 .GroupBy(link => link.SourceID)
                 .ToDictionary(group => group.Key, group => group.ToList());
+
+            incidentLinks = new Dictionary<Guid, List<Link>>();
+            foreach (Link link in links)
+            {
+                AddIncidentLink(link.SourceID, link);
+                if (link.DestinationID != link.SourceID)
+                    AddIncidentLink(link.DestinationID, link);
+            }
         }
 
         public IReadOnlyList<GraphNodeSnapshot> Nodes { get; }
@@ -118,9 +128,20 @@ namespace OPEN_LRD.Reasoning
 
         public IReadOnlyList<Link> GetIncidentLinks(Guid nodeID)
         {
-            return Links
-                .Where(link => link.SourceID == nodeID || link.DestinationID == nodeID)
-                .ToList();
+            return incidentLinks.TryGetValue(nodeID, out List<Link>? links)
+                ? links
+                : Array.Empty<Link>();
+        }
+
+        /// <summary>Adds a link to the incident-link index for one endpoint.</summary>
+        private void AddIncidentLink(Guid nodeID, Link link)
+        {
+            if (!incidentLinks.TryGetValue(nodeID, out List<Link>? links))
+            {
+                links = new List<Link>();
+                incidentLinks.Add(nodeID, links);
+            }
+            links.Add(link);
         }
 
         private static bool Matches(string? value, string expected)

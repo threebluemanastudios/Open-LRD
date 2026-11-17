@@ -7,6 +7,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Persistence
 {
+    /// <summary>Serializes graph, conversation, and transient-chain state to bounded log files.</summary>
     internal static class CoreLogExporter
     {
         internal const long MaxPartBytes = 500L * 1024L * 1024L - 1L;
@@ -594,6 +595,7 @@ namespace OPEN_LRD.Persistence
             return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
         }
 
+        /// <summary>Writes bounded JSON log parts and tracks their manifest metadata.</summary>
         private sealed class SegmentedPartWriter : IDisposable
         {
             private readonly string directory;
@@ -760,6 +762,7 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Wraps a stream and rejects writes that exceed a fixed byte budget.</summary>
         private sealed class CappedWriteStream : Stream
         {
             private readonly Stream inner;
@@ -819,12 +822,15 @@ namespace OPEN_LRD.Persistence
             }
         }
 
+        /// <summary>Signals that a serialized output part exceeded its configured byte budget.</summary>
         private sealed class OutputLimitExceededException : IOException
         {
         }
 
+        /// <summary>Signals that one serialized record cannot fit into an empty log part.</summary>
         private sealed class OversizedLogRecordException : IOException
         {
+            /// <summary>Creates an exception describing the oversized record.</summary>
             public OversizedLogRecordException(string message) : base(message) { }
         }
 

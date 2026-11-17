@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Resolves and validates semantic rest distances for graph link classes and types.</summary>
     internal static class LinkDistanceDefinitions
     {
         public const double FallbackDistance = 1.0;

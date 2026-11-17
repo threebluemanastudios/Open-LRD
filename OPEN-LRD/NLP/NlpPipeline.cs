@@ -4,6 +4,7 @@ using OPEN_LRD.Reasoning;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Coordinates NLP parsing, conversational context, reasoning ingestion, and read-only Ask.</summary>
     internal sealed class NlpPipeline : IDisposable
     {
         private readonly LRD_Core core;
@@ -13,11 +14,13 @@ namespace OPEN_LRD.NLP
         private readonly Guid conversationID;
         private readonly ConversationContext conversation;
 
+        /// <summary>Creates a pipeline attached to an initialized graph and conversation.</summary>
         public NlpPipeline(
             LRD_Core core,
             NlpOptions? options = null,
             ReasoningEngine? reasoning = null,
-            Guid? conversationID = null)
+            Guid? conversationID = null,
+            ReasoningOptions? reasoningOptions = null)
         {
             this.core = core ?? throw new ArgumentNullException(nameof(core));
 
@@ -25,7 +28,7 @@ namespace OPEN_LRD.NLP
                 throw new InvalidOperationException("The core graph must be initialized before creating an NLP pipeline.");
 
             this.options = options ?? new NlpOptions();
-            this.reasoning = reasoning ?? new ReasoningEngine(core);
+            this.reasoning = reasoning ?? new ReasoningEngine(core, reasoningOptions);
             this.pipelineID = Guid.NewGuid();
             this.conversation = core.ResolveConversation(conversationID, this.options);
             this.conversationID = this.conversation.ConversationID;
@@ -42,13 +45,16 @@ namespace OPEN_LRD.NLP
 
         public IReadOnlyList<SessionProvenanceEntry> Provenance => conversation.Provenance;
 
+        /// <summary>Clears conversational mentions, focus, provenance, and turn state.</summary>
         public void ResetConversation() => conversation.Clear();
 
+        /// <summary>Detaches the pipeline from its graph-managed conversation.</summary>
         public void Dispose()
         {
             core.UnregisterPipelineConversation(pipelineID);
         }
 
+        /// <summary>Parses text into tokens, clauses, mentions, and relation frames without graph mutation.</summary>
         public NlpResult Analyze(string? text)
         {
             if (string.IsNullOrWhiteSpace(text))
@@ -113,6 +119,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Answers a supported natural-language query without mutating graph knowledge.</summary>
         public NlpResult Ask(string? text)
         {
             NlpResult initialAnalysis = Analyze(text);
@@ -426,6 +433,7 @@ namespace OPEN_LRD.NLP
             };
         }
 
+        /// <summary>Parses text and merges supported relation chains into the graph with source/topic trust.</summary>
         public NlpResult Ingest(
             string? text,
             Guid? sourceNodeID = null,

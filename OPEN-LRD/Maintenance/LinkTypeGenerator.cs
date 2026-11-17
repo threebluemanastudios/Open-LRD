@@ -5,8 +5,10 @@ using OPEN_LRD.Ontology;
 
 namespace OPEN_LRD.Maintenance
 {
+    /// <summary>Generates bounded relation types from configured composition and repeated-path rules.</summary>
     internal static class LinkTypeGenerator
     {
+        /// <summary>Defines the input and result relation IDs for one composition rule.</summary>
         private sealed record CompositionRule(int FirstRelation, int SecondRelation, int ResultRelation);
 
         private static readonly CompositionRule[] CompositionRules =

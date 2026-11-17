@@ -2,6 +2,7 @@ using System;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Stores indexed vertex, normal, and triangle data for a renderable mesh.</summary>
     internal sealed class MeshData
     {
         public static MeshData Empty { get; } = new MeshData(

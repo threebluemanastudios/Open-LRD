@@ -1,5 +1,6 @@
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Normalizes inflected words to lexical lemmas using part-of-speech rules.</summary>
     internal static class Lemmatizer
     {
         private static readonly Dictionary<string, string> pronounLemmas =

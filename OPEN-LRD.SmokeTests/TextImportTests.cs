@@ -6,8 +6,10 @@ using static OPEN_LRD.SmokeTests.Program;
 
 namespace OPEN_LRD.SmokeTests
 {
+    /// <summary>Contains regression checks for text chunking, provenance, limits, and cancellation.</summary>
     internal static class TextImportTests
     {
+        /// <summary>Registers and executes the text-file importer checks.</summary>
         public static void RunAll()
         {
             Program.Run("Text import paragraph chunking", TestParagraphChunking);
@@ -25,6 +27,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Text import cancellation", TestCancellation);
         }
 
+        /// <summary>Verifies paragraphs are preserved as separate bounded text chunks.</summary>
         private static void TestParagraphChunking()
         {
             string text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
@@ -38,6 +41,7 @@ namespace OPEN_LRD.SmokeTests
             Assert(result.Chunks.All(chunk => chunk.CharacterCount <= 15000), "short paragraphs must not be split");
         }
 
+        /// <summary>Verifies oversized paragraphs split at sentence boundaries.</summary>
         private static void TestSentenceFallback()
         {
             string paragraph = string.Join(
@@ -59,6 +63,7 @@ namespace OPEN_LRD.SmokeTests
                 "concatenated sentence chunks should reproduce the paragraph content");
         }
 
+        /// <summary>Verifies a single oversized sentence is split without dropping text.</summary>
         private static void TestHardSplit()
         {
             const string text = "alpha beta gamma delta epsilon zeta eta theta";
@@ -78,6 +83,7 @@ namespace OPEN_LRD.SmokeTests
                 "hard splitting must not drop characters");
         }
 
+        /// <summary>Verifies chunk and sentence budgets are enforced.</summary>
         private static void TestChunkBudgets()
         {
             string text = string.Join(
@@ -100,6 +106,7 @@ namespace OPEN_LRD.SmokeTests
                 "every chunk should stay within the sentence budget");
         }
 
+        /// <summary>Verifies imported chunks share one pipeline conversation.</summary>
         private static void TestSharedConversation()
         {
             LRD_Core core = NewCore();
@@ -137,6 +144,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies an unsupported or failed chunk does not stop later chunks.</summary>
         private static void TestContinueOnFailure()
         {
             LRD_Core core = NewCore();
@@ -171,6 +179,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies oversized NLP chunks are retried after safe sentence splitting.</summary>
         private static void TestLimitRetry()
         {
             LRD_Core core = NewCore();
@@ -199,6 +208,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies a missing Source selection creates a reusable file-backed Source.</summary>
         private static void TestAutoSourceNode()
         {
             LRD_Core core = NewCore();
@@ -280,6 +290,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies a text-import dry run does not mutate graph or conversation state.</summary>
         private static void TestDryRun()
         {
             LRD_Core core = NewCore();
@@ -323,6 +334,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies file-size, chunk-count, and binary-content safety checks.</summary>
         private static void TestSafetyLimits()
         {
             LRD_Core core = NewCore();
@@ -362,6 +374,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies large text files are streamed and split within configured budgets.</summary>
         private static void TestLargeFile()
         {
             LRD_Core core = NewCore();
@@ -433,6 +446,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies supported text encodings and malformed input handling.</summary>
         private static void TestEncoding()
         {
             LRD_Core core = NewCore();
@@ -480,6 +494,7 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Verifies cancellation preserves completed chunks and stops subsequent work.</summary>
         private static void TestCancellation()
         {
             LRD_Core core = NewCore();
@@ -512,11 +527,13 @@ namespace OPEN_LRD.SmokeTests
             }
         }
 
+        /// <summary>Removes whitespace from a string for lossless chunk comparisons.</summary>
         private static string NonWhitespace(string value)
         {
             return new string(value.Where(character => !char.IsWhiteSpace(character)).ToArray());
         }
 
+        /// <summary>Initializes and returns the singleton graph core.</summary>
         private static LRD_Core NewCore()
         {
             LRD_Core core = LRD_Core.Instance;
@@ -524,11 +541,13 @@ namespace OPEN_LRD.SmokeTests
             return core;
         }
 
+        /// <summary>Returns the graph node count for a test core.</summary>
         private static int CountNodes(LRD_Core core)
         {
             return core.GetDictionary()?.Count ?? 0;
         }
 
+        /// <summary>Returns the number of directed links stored across graph nodes.</summary>
         private static int CountLinks(LRD_Core core)
         {
             IReadOnlyDictionary<Guid, Web_Node>? nodes = core.GetDictionary();
@@ -539,6 +558,7 @@ namespace OPEN_LRD.SmokeTests
             return nodes.Values.Sum(node => core.GetLinks(node.ID).Count);
         }
 
+        /// <summary>Adds a labeled node fixture to the graph.</summary>
         private static Guid AddNode(
             LRD_Core core,
             NodeTypes type,
@@ -552,6 +572,7 @@ namespace OPEN_LRD.SmokeTests
             return nodeID;
         }
 
+        /// <summary>Writes a temporary text fixture using the requested encoding.</summary>
         private static string WriteTempFile(string content, Encoding? encoding = null)
         {
             string directory = NewTempDirectory();
@@ -560,6 +581,7 @@ namespace OPEN_LRD.SmokeTests
             return path;
         }
 
+        /// <summary>Writes a temporary binary fixture.</summary>
         private static string WriteTempBytes(byte[] bytes)
         {
             string directory = NewTempDirectory();
@@ -568,6 +590,7 @@ namespace OPEN_LRD.SmokeTests
             return path;
         }
 
+        /// <summary>Creates and returns a unique temporary directory for test data.</summary>
         private static string NewTempDirectory()
         {
             string directory = Path.Combine(
@@ -577,6 +600,7 @@ namespace OPEN_LRD.SmokeTests
             return directory;
         }
 
+        /// <summary>Removes a temporary test file if it exists.</summary>
         private static void DeleteFile(string path)
         {
             try

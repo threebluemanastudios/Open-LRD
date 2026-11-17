@@ -13,11 +13,82 @@
         MinWidth="760">
     <Grid Margin="10">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="150" />
         </Grid.RowDefinitions>
 
-        <TabControl x:Name="ToolsTabControl" Grid.Row="0">
+        <GroupBox Grid.Row="0" Header="Topic" Padding="8" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,8,0"
+                           VerticalAlignment="Center" Text="Selection:" />
+                <ComboBox x:Name="TopicModeComboBox"
+                          Grid.Row="0" Grid.Column="1"
+                          SelectionChanged="TopicModeComboBox_SelectionChanged">
+                    <ComboBoxItem Content="base/general/none" Tag="Base" />
+                    <ComboBoxItem Content="GUID" Tag="Guid" />
+                    <ComboBoxItem Content="Sense" Tag="Sense" />
+                    <ComboBoxItem Content="Node Label" Tag="Label" />
+                    <ComboBoxItem Content="Node Type" Tag="NodeType" />
+                    <ComboBoxItem Content="Alias" Tag="Alias" />
+                    <ComboBoxItem Content="Category" Tag="Category" />
+                    <ComboBoxItem Content="Field/Discipline" Tag="Field" />
+                    <ComboBoxItem Content="Taxon" Tag="Taxon" />
+                    <ComboBoxItem Content="Reality" Tag="Reality" />
+                    <ComboBoxItem Content="Current Topic" Tag="CurrentTopic" />
+                    <ComboBoxItem Content="Source" Tag="Source" />
+                </ComboBox>
+                <TextBlock x:Name="TopicValueLabel"
+                           Grid.Row="0" Grid.Column="2"
+                           Margin="12,0,8,0"
+                           VerticalAlignment="Center"
+                           Text="Value:" />
+                <TextBox x:Name="TextImportTopicBox"
+                         Grid.Row="0" Grid.Column="3"
+                         VerticalAlignment="Center" />
+                <TextBlock x:Name="TopicNodeTypeLabel"
+                           Grid.Row="1" Grid.Column="0"
+                           Margin="0,8,8,0"
+                           VerticalAlignment="Center"
+                           Text="Type:" />
+                <ComboBox x:Name="TopicNodeTypeComboBox"
+                          Grid.Row="1" Grid.Column="1"
+                          Margin="0,8,0,0"
+                          SelectionChanged="TopicNodeTypeComboBox_SelectionChanged"
+                          Visibility="Collapsed" />
+                <TextBlock x:Name="TopicNodePickerLabel"
+                           Grid.Row="1" Grid.Column="2"
+                           Margin="12,8,8,0"
+                           VerticalAlignment="Center"
+                           Text="Topic node:" />
+                <ComboBox x:Name="TopicNodePickerComboBox"
+                          Grid.Row="1" Grid.Column="3"
+                          Margin="0,8,0,0"
+                          DisplayMemberPath="Label"
+                          SelectedValuePath="ID"
+                          Visibility="Collapsed" />
+                <TextBlock x:Name="TopicSelectionStatusText"
+                           Grid.Row="2"
+                           Grid.Column="0"
+                           Grid.ColumnSpan="4"
+                           Margin="0,6,0,0"
+                           TextWrapping="Wrap"
+                           Text="No topic override; use base/general/none." />
+            </Grid>
+        </GroupBox>
+
+        <TabControl x:Name="ToolsTabControl" Grid.Row="1">
             <TabItem Header="Logs">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="8">
@@ -96,77 +167,6 @@
             <TabItem Header="Ingestion">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="8">
-                        <GroupBox Header="Topic" Padding="8">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="220" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,8,0"
-                                           VerticalAlignment="Center" Text="Selection:" />
-                                <ComboBox x:Name="TopicModeComboBox"
-                                          Grid.Row="0" Grid.Column="1"
-                                          SelectionChanged="TopicModeComboBox_SelectionChanged">
-                                    <ComboBoxItem Content="base/general/none" Tag="Base" />
-                                    <ComboBoxItem Content="GUID" Tag="Guid" />
-                                    <ComboBoxItem Content="Sense" Tag="Sense" />
-                                    <ComboBoxItem Content="Node Label" Tag="Label" />
-                                    <ComboBoxItem Content="Node Type" Tag="NodeType" />
-                                    <ComboBoxItem Content="Alias" Tag="Alias" />
-                                    <ComboBoxItem Content="Category" Tag="Category" />
-                                    <ComboBoxItem Content="Field/Discipline" Tag="Field" />
-                                    <ComboBoxItem Content="Taxon" Tag="Taxon" />
-                                    <ComboBoxItem Content="Reality" Tag="Reality" />
-                                    <ComboBoxItem Content="Current Topic" Tag="CurrentTopic" />
-                                    <ComboBoxItem Content="Source" Tag="Source" />
-                                </ComboBox>
-                                <TextBlock x:Name="TopicValueLabel"
-                                           Grid.Row="0" Grid.Column="2"
-                                           Margin="12,0,8,0"
-                                           VerticalAlignment="Center"
-                                           Text="Value:" />
-                                <TextBox x:Name="TextImportTopicBox"
-                                         Grid.Row="0" Grid.Column="3"
-                                         VerticalAlignment="Center" />
-
-                                <TextBlock x:Name="TopicNodeTypeLabel"
-                                           Grid.Row="1" Grid.Column="0"
-                                           Margin="0,8,8,0"
-                                           VerticalAlignment="Center"
-                                           Text="Type:" />
-                                <ComboBox x:Name="TopicNodeTypeComboBox"
-                                          Grid.Row="1" Grid.Column="1"
-                                          Margin="0,8,0,0"
-                                          SelectionChanged="TopicNodeTypeComboBox_SelectionChanged"
-                                          Visibility="Collapsed" />
-                                <TextBlock x:Name="TopicNodePickerLabel"
-                                           Grid.Row="1" Grid.Column="2"
-                                           Margin="12,8,8,0"
-                                           VerticalAlignment="Center"
-                                           Text="Topic node:" />
-                                <ComboBox x:Name="TopicNodePickerComboBox"
-                                          Grid.Row="1" Grid.Column="3"
-                                          Margin="0,8,0,0"
-                                          DisplayMemberPath="Label"
-                                          SelectedValuePath="ID"
-                                          Visibility="Collapsed" />
-                                <TextBlock x:Name="TopicSelectionStatusText"
-                                           Grid.Row="2"
-                                           Grid.Column="0"
-                                           Grid.ColumnSpan="4"
-                                           Margin="0,6,0,0"
-                                           TextWrapping="Wrap"
-                                           Text="No topic override; use base/general/none." />
-                            </Grid>
-                        </GroupBox>
-
                         <GroupBox Header="Direct Text Ingestion" Padding="8" Margin="0,8,0,0">
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -211,72 +211,6 @@
                             </Grid>
                         </GroupBox>
 
-                        <GroupBox Header="Text File Import" Padding="8" Margin="0,8,0,0">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid Grid.Row="0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Margin="0,0,6,0"
-                                               VerticalAlignment="Center" Text="File:" />
-                                    <TextBox x:Name="TextImportPathBox"
-                                             Grid.Column="1"
-                                             VerticalAlignment="Center"
-                                             IsReadOnly="True" />
-                                    <Button x:Name="TextImportBrowseButton"
-                                            Grid.Column="2"
-                                            Margin="8,0,0,0"
-                                            Padding="12,4"
-                                            Click="TextImportBrowse_Button_Click"
-                                            Content="Browse..." />
-                                </Grid>
-                                <WrapPanel Grid.Row="1" Margin="0,8,0,0">
-                                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Text="Source ID:" />
-                                    <TextBox x:Name="TextImportSourceBox" Width="260" />
-                                </WrapPanel>
-                                <WrapPanel Grid.Row="2" Margin="0,8,0,0">
-                                    <CheckBox x:Name="TextImportDryRunCheckBox"
-                                              VerticalAlignment="Center"
-                                              Content="Dry run" />
-                                    <TextBlock Margin="16,0,6,0" VerticalAlignment="Center" Text="Max file MiB:" />
-                                    <TextBox x:Name="TextImportMaxMegabytesBox" Width="70" Text="500" />
-                                    <TextBlock Margin="16,0,6,0" VerticalAlignment="Center" Text="Max chunks:" />
-                                    <TextBox x:Name="TextImportMaxChunksBox" Width="80" Text="10000" />
-                                </WrapPanel>
-                                <WrapPanel Grid.Row="3" Margin="0,8,0,0">
-                                    <Button x:Name="TextImportButton"
-                                            Padding="12,4"
-                                            Click="TextImport_Button_Click"
-                                            Content="Import Text File" />
-                                    <Button x:Name="TextImportCancelButton"
-                                            Margin="10,0,0,0"
-                                            Padding="12,4"
-                                            IsEnabled="False"
-                                            Click="TextImportCancel_Button_Click"
-                                            Content="Cancel" />
-                                    <ProgressBar x:Name="TextImportProgressBar"
-                                                 Width="180"
-                                                 Height="16"
-                                                 Margin="10,0,0,0"
-                                                 Minimum="0"
-                                                 Maximum="100" />
-                                </WrapPanel>
-                                <TextBlock x:Name="TextImportStatusText"
-                                           Grid.Row="4"
-                                           Margin="0,6,0,0"
-                                           TextWrapping="Wrap"
-                                           Text="Ready. 0 chunks." />
-                            </Grid>
-                        </GroupBox>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -394,11 +328,118 @@
             </TabItem>
 
             <TabItem Header="Data Files">
-                <Grid />
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="8">
+                        <GroupBox Header="File Ingestion" Padding="8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Margin="0,0,8,0"
+                                               VerticalAlignment="Center" Text="Format:" />
+                                    <ComboBox x:Name="DataFileFormatComboBox"
+                                              Grid.Column="1"
+                                              SelectionChanged="DataFileFormatComboBox_SelectionChanged">
+                                        <ComboBoxItem Content="Auto-detect" Tag="Auto" />
+                                        <ComboBoxItem Content="Plain Text" Tag="Text" />
+                                        <ComboBoxItem Content="CSV" Tag="Csv" />
+                                        <ComboBoxItem Content="JSON" Tag="Json" />
+                                        <ComboBoxItem Content="XML" Tag="Xml" />
+                                    </ComboBox>
+                                    <TextBlock Grid.Column="2" Margin="16,0,8,0"
+                                               VerticalAlignment="Center" Text="Mode:" />
+                                    <ComboBox x:Name="DataFileModeComboBox"
+                                              Grid.Column="3"
+                                              SelectionChanged="DataFileModeComboBox_SelectionChanged">
+                                        <ComboBoxItem Content="Structured Data" Tag="Structured" />
+                                        <ComboBoxItem Content="Extract Text for NLP" Tag="Nlp" />
+                                    </ComboBox>
+                                </Grid>
+                                <Grid Grid.Row="1" Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Margin="0,0,6,0"
+                                               VerticalAlignment="Center" Text="File:" />
+                                    <TextBox x:Name="TextImportPathBox"
+                                             Grid.Column="1"
+                                             VerticalAlignment="Center"
+                                             IsReadOnly="True" />
+                                    <Button x:Name="TextImportBrowseButton"
+                                            Grid.Column="2"
+                                            Margin="8,0,0,0"
+                                            Padding="12,4"
+                                            Click="TextImportBrowse_Button_Click"
+                                            Content="Browse..." />
+                                </Grid>
+                                <WrapPanel Grid.Row="2" Margin="0,8,0,0">
+                                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Text="Source ID:" />
+                                    <TextBox x:Name="TextImportSourceBox" Width="260" />
+                                    <TextBlock Margin="14,0,0,0" VerticalAlignment="Center" Text="Detected:" />
+                                    <TextBlock x:Name="DataFileDetectedFormatText"
+                                               Margin="6,0,0,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="#4FC3F7"
+                                               Text="(choose a file)" />
+                                </WrapPanel>
+                                <WrapPanel Grid.Row="3" Margin="0,8,0,0">
+                                    <CheckBox x:Name="TextImportDryRunCheckBox"
+                                              VerticalAlignment="Center"
+                                              Content="Dry run" />
+                                    <TextBlock Margin="16,0,6,0" VerticalAlignment="Center" Text="Max file MiB:" />
+                                    <TextBox x:Name="TextImportMaxMegabytesBox" Width="70" Text="500" />
+                                    <TextBlock Margin="16,0,6,0" VerticalAlignment="Center" Text="Max records/chunks:" />
+                                    <TextBox x:Name="TextImportMaxChunksBox" Width="80" Text="10000" />
+                                </WrapPanel>
+                                <WrapPanel Grid.Row="4" Margin="0,8,0,0">
+                                    <Button x:Name="TextImportButton"
+                                            Padding="12,4"
+                                            Click="TextImport_Button_Click"
+                                            Content="Import File" />
+                                    <Button x:Name="TextImportCancelButton"
+                                            Margin="10,0,0,0"
+                                            Padding="12,4"
+                                            IsEnabled="False"
+                                            Click="TextImportCancel_Button_Click"
+                                            Content="Cancel" />
+                                    <ProgressBar x:Name="TextImportProgressBar"
+                                                 Width="180"
+                                                 Height="16"
+                                                 Margin="10,0,0,0"
+                                                 Minimum="0"
+                                                 Maximum="100" />
+                                </WrapPanel>
+                                <TextBlock x:Name="TextImportStatusText"
+                                           Grid.Row="5"
+                                           Margin="0,6,0,0"
+                                           TextWrapping="Wrap"
+                                           Text="Ready. 0 records." />
+                            </Grid>
+                        </GroupBox>
+                        <TextBlock Margin="4,8,4,0"
+                                   TextWrapping="Wrap"
+                                   Foreground="#9FB0C6"
+                                   Text="Limits: 500 MiB, 10,000 records, 1,000 CSV columns, depth 32, 15,000 characters per value, 100 diagnostics. Structured Data is unavailable for plain text." />
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
 
-        <GroupBox Grid.Row="1" Header="Status" Padding="8" Margin="0,8,0,0">
+        <GroupBox Grid.Row="2" Header="Status" Padding="8" Margin="0,8,0,0">
             <TextBox x:Name="StatusBox"
                      IsReadOnly="True"
                      AcceptsReturn="True"

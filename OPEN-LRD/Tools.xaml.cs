@@ -14,6 +14,7 @@ using OPEN_LRD.Persistence;
 
 namespace OPEN_LRD
 {
+    /// <summary>Hosts graph persistence, text ingestion, ontology, maintenance, and data-file tools.</summary>
     public partial class Tools : Window
     {
         private const string LogFilter =
@@ -22,20 +23,28 @@ namespace OPEN_LRD
         private const string TextFileFilter =
             "Text files (*.txt;*.md;*.log)|*.txt;*.md;*.log|All files (*.*)|*.*";
 
+        private const string DataFileFilter =
+            "Supported data files (*.txt;*.md;*.log;*.csv;*.json;*.xml)|*.txt;*.md;*.log;*.csv;*.json;*.xml|All files (*.*)|*.*";
+
         private static LRD_Core Core => LRD_Core.Instance;
 
         private CancellationTokenSource? ontologyLoad;
         private CancellationTokenSource? textImport;
         private bool directIngestBusy;
 
+        /// <summary>Creates the Tools window and initializes its shared topic and file selectors.</summary>
         public Tools()
         {
             InitializeComponent();
             InitializeTopicSelectors();
+            DataFileFormatComboBox.SelectedIndex = 0;
+            DataFileModeComboBox.SelectedIndex = 0;
+            UpdateDataFileControls();
         }
 
         private bool IsIngestionBusy => textImport is not null || ontologyLoad is not null || directIngestBusy;
 
+        /// <summary>Populates topic type selectors and initializes their selected values.</summary>
         private void InitializeTopicSelectors()
         {
             OntologyTypes.EnsureRegistered();
@@ -47,6 +56,7 @@ namespace OPEN_LRD
             UpdateTopicSelectionControls();
         }
 
+        /// <summary>Refreshes topic-entry controls after the topic selection mode changes.</summary>
         private void TopicModeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             if (TopicSelectionStatusText is null)
@@ -56,6 +66,7 @@ namespace OPEN_LRD
             UpdateTopicSelectionControls();
         }
 
+        /// <summary>Refreshes available topic nodes after the requested node type changes.</summary>
         private void TopicNodeTypeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             if (TopicNodePickerComboBox is null)
@@ -64,6 +75,7 @@ namespace OPEN_LRD
             RefreshTopicNodePicker();
         }
 
+        /// <summary>Shows and enables the topic input controls required by the selected mode.</summary>
         private void UpdateTopicSelectionControls()
         {
             string mode = SelectedTopicMode;
@@ -103,6 +115,7 @@ namespace OPEN_LRD
                 TopicNodePickerComboBox.ItemsSource = Array.Empty<Web_Node>();
         }
 
+        /// <summary>Loads graph nodes that match the selected topic category.</summary>
         private void RefreshTopicNodePicker()
         {
             if (TopicNodePickerComboBox is null)
@@ -144,6 +157,7 @@ namespace OPEN_LRD
             (TopicModeComboBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string
             ?? "Base";
 
+        /// <summary>Resolves the selected topic mode to a graph node before ingestion begins.</summary>
         private bool TryResolveTopicNode(
             Guid? sourceNodeID,
             string? filePath,
@@ -231,6 +245,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Resolves a unique topic candidate and reports missing or ambiguous matches.</summary>
         private bool ResolveUniqueTopic(
             IReadOnlyList<Web_Node> matches,
             string selectionName,
@@ -247,12 +262,14 @@ namespace OPEN_LRD
             return true;
         }
 
+        /// <summary>Stores a topic validation error and returns a failed resolution result.</summary>
         private bool TopicSelectionError(string message)
         {
             TopicSelectionStatusText.Text = message;
             return false;
         }
 
+        /// <summary>Finds the most recent topic node recorded in conversation provenance.</summary>
         private Guid? FindMostRecentTopicNodeID()
         {
             IReadOnlyDictionary<Guid, ConversationContext>? conversations = Core.GetConversations();
@@ -274,11 +291,13 @@ namespace OPEN_LRD
             return null;
         }
 
+        /// <summary>Finds the graph's reserved user Source node.</summary>
         private static Web_Node? FindUserSourceNode()
         {
             return Core.FindByLabel("user", NodeTypes.Sources).FirstOrDefault();
         }
 
+        /// <summary>Finds or creates the reserved user Source node with its fixed trust baseline.</summary>
         private static Web_Node EnsureUserSourceNode()
         {
             Web_Node? existing = FindUserSourceNode();
@@ -300,6 +319,7 @@ namespace OPEN_LRD
             return source;
         }
 
+        /// <summary>Enables or disables ingestion and shared topic controls together.</summary>
         private void SetIngestionControlsEnabled(bool enabled)
         {
             DirectTextInput.IsEnabled = enabled;
@@ -313,12 +333,15 @@ namespace OPEN_LRD
             TextImportDryRunCheckBox.IsEnabled = enabled;
             TextImportMaxMegabytesBox.IsEnabled = enabled;
             TextImportMaxChunksBox.IsEnabled = enabled;
+            DataFileFormatComboBox.IsEnabled = enabled;
+            DataFileModeComboBox.IsEnabled = enabled;
             TextImportButton.IsEnabled = enabled;
             TextImportTopicBox.IsEnabled = enabled && TextImportTopicBox.Visibility == Visibility.Visible;
             TopicNodeTypeComboBox.IsEnabled = enabled && TopicNodeTypeComboBox.Visibility == Visibility.Visible;
             TopicNodePickerComboBox.IsEnabled = enabled && TopicNodePickerComboBox.Visibility == Visibility.Visible;
         }
 
+        /// <summary>Runs the selected graph maintenance stages and displays their report.</summary>
         private void RunMaintenance_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -359,6 +382,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Exports the core and transient logs to the selected destination.</summary>
         private void ExportLogs_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -395,6 +419,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Imports a core log using the selected merge or replace policy.</summary>
         private void ImportCoreLog_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -421,6 +446,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Imports transient query and response chains using the selected policy.</summary>
         private void ImportTransientLog_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -447,6 +473,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Ingests the typed sentence input with selected source, topic, and dry-run settings.</summary>
         private void DirectTextIngest_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -604,6 +631,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Clears the direct text input and its preview state.</summary>
         private void DirectTextClear_Button_Click(object sender, RoutedEventArgs e)
         {
             DirectTextInput.Clear();
@@ -611,6 +639,7 @@ namespace OPEN_LRD
             SetDirectTextStatus("Ready.");
         }
 
+        /// <summary>Updates direct-ingestion busy state and shared control availability.</summary>
         private void SetDirectTextBusy(bool busy)
         {
             directIngestBusy = busy;
@@ -618,25 +647,81 @@ namespace OPEN_LRD
             UpdateTopicSelectionControls();
         }
 
+        /// <summary>Sets the direct-ingestion status message.</summary>
         private void SetDirectTextStatus(string text)
         {
             DirectTextStatusText.Text = text;
         }
 
+        /// <summary>Opens the supported data-file picker and stores the chosen path.</summary>
         private void TextImportBrowse_Button_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog dialog = new OpenFileDialog
             {
-                Title = "Select a text file to import",
-                Filter = TextFileFilter,
+                Title = "Select a data file to import",
+                Filter = DataFileFilter,
                 CheckFileExists = true,
                 Multiselect = false
             };
 
             if (dialog.ShowDialog(this) == true)
+            {
                 TextImportPathBox.Text = dialog.FileName;
+                UpdateDataFileControls();
+            }
         }
 
+        /// <summary>Refreshes format detection and mode controls after a format selection.</summary>
+        private void DataFileFormatComboBox_SelectionChanged(
+            object sender,
+            System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            UpdateDataFileControls();
+        }
+
+        /// <summary>Refreshes file-ingestion controls after the ingestion mode changes.</summary>
+        private void DataFileModeComboBox_SelectionChanged(
+            object sender,
+            System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            UpdateDataFileControls();
+        }
+
+        /// <summary>Shows the detected format and enforces format-specific mode availability.</summary>
+        private void UpdateDataFileControls()
+        {
+            if (DataFileFormatComboBox is null || DataFileModeComboBox is null)
+                return;
+
+            string format = (DataFileFormatComboBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string
+                ?? "Auto";
+            string path = TextImportPathBox?.Text ?? string.Empty;
+            string extension = Path.GetExtension(path).ToLowerInvariant();
+            System.Windows.Controls.ComboBoxItem structuredMode =
+                (System.Windows.Controls.ComboBoxItem)DataFileModeComboBox.Items[0];
+            bool isPlainText = format == nameof(DataFileFormat.Text)
+                || (format == "Auto" && extension is ".txt" or ".md" or ".log");
+            structuredMode.IsEnabled = !isPlainText;
+            if (isPlainText)
+                DataFileModeComboBox.SelectedIndex = 1;
+
+            extension = extension.TrimStart('.').ToUpperInvariant();
+            string suggestedFormat = extension switch
+            {
+                "TXT" or "MD" or "LOG" => "TEXT",
+                "CSV" => "CSV",
+                "JSON" => "JSON",
+                "XML" => "XML",
+                _ => string.Empty
+            };
+            DataFileDetectedFormatText.Text = format == "Auto"
+                ? suggestedFormat.Length == 0 ? "(auto-detect)" : $"Auto: {suggestedFormat}"
+                : suggestedFormat.Length > 0 && suggestedFormat != format.ToUpperInvariant()
+                    ? $"{format.ToUpperInvariant()} (override; extension suggests {suggestedFormat})"
+                    : format.ToUpperInvariant();
+        }
+
+        /// <summary>Validates options and asynchronously imports the selected text, CSV, JSON, or XML file.</summary>
         private async void TextImport_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -668,22 +753,42 @@ namespace OPEN_LRD
                 return;
             }
 
+            UpdateDataFileControls();
+
             if (!TryParseOptionalGuid(TextImportSourceBox.Text, "Source ID", out Guid? sourceNodeID)
                 || !TryParsePositiveInt(TextImportMaxMegabytesBox.Text, "Max file MB", out int maxMegabytes)
-                || !TryParsePositiveInt(TextImportMaxChunksBox.Text, "Max chunks", out int maxChunks))
+                || !TryParsePositiveInt(TextImportMaxChunksBox.Text, "Max chunks", out int maxRecords))
             {
                 return;
             }
 
-            bool dryRun = TextImportDryRunCheckBox.IsChecked == true;
-            if (!TryResolveTopicNode(
-                sourceNodeID,
-                path,
-                dryRun,
-                out Guid? topicNodeID,
-                out bool useSourceAsTopic))
+            string? formatTag = (DataFileFormatComboBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string;
+            string? modeTag = (DataFileModeComboBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string;
+            if (!Enum.TryParse(formatTag, ignoreCase: true, out DataFileFormat format)
+                || !Enum.TryParse(modeTag == "Nlp" ? "ExtractTextForNlp" : "StructuredData",
+                    ignoreCase: true,
+                    out DataFileIngestionMode mode))
             {
-                SetTextImportStatus("Text import failed: " + TopicSelectionStatusText.Text);
+                SetTextImportStatus("Choose a supported format and ingestion mode.");
+                return;
+            }
+
+            bool dryRun = TextImportDryRunCheckBox.IsChecked == true;
+            bool isPlainTextImport = format == DataFileFormat.Text
+                || (format == DataFileFormat.Auto
+                    && Path.GetExtension(path).ToLowerInvariant() is ".txt" or ".md" or ".log");
+            Guid? topicNodeID = null;
+            bool useSourceAsTopic = false;
+            if (mode == DataFileIngestionMode.ExtractTextForNlp
+                && !TryResolveTopicNode(
+                    sourceNodeID,
+                    path,
+                    dryRun,
+                    out topicNodeID,
+                    out useSourceAsTopic))
+            {
+                SetTextImportStatus((isPlainTextImport ? "Text import failed: " : "Data-file import failed: ")
+                    + TopicSelectionStatusText.Text);
                 return;
             }
 
@@ -699,15 +804,17 @@ namespace OPEN_LRD
                 return;
             }
 
-            TextImportOptions options = new TextImportOptions
+            DataFileImportOptions options = new DataFileImportOptions
             {
                 FilePath = path,
+                Format = format,
+                Mode = mode,
                 SourceNodeID = sourceNodeID,
                 TopicNodeID = topicNodeID,
-                DryRun = dryRun,
                 UseSourceAsTopic = useSourceAsTopic,
+                DryRun = dryRun,
                 MaxFileBytes = maxFileBytes,
-                MaxChunks = maxChunks
+                MaxRecords = maxRecords
             };
 
             textImport = new CancellationTokenSource();
@@ -726,11 +833,12 @@ namespace OPEN_LRD
                             return;
                         }
 
-                        TextImportProgressBar.Value = progress.TotalChunks == 0
+                        TextImportProgressBar.Value = progress.RecordLimit == 0
                             ? 0
-                            : (double)progress.ProcessedChunks / progress.TotalChunks * 100.0;
-                        TextImportStatusText.Text =
-                            $"Importing chunk {progress.ProcessedChunks} of {progress.TotalChunks}...";
+                            : Math.Min(100.0, (double)progress.ProcessedRecords / progress.RecordLimit * 100.0);
+                        TextImportStatusText.Text = isPlainTextImport
+                            ? $"Importing chunk {progress.ProcessedRecords} of {progress.RecordLimit}..."
+                            : $"{progress.Stage}: {progress.ProcessedRecords} of {progress.RecordLimit}...";
                     }));
                 }
             };
@@ -741,22 +849,25 @@ namespace OPEN_LRD
 
             try
             {
-                TextImportResult result = await Task.Run(
-                    () => TextFileImporter.Import(Core, options));
+                DataFileImportResult result = await Task.Run(
+                    () => DataFileImporter.Import(Core, options));
 
                 if (!result.Cancelled)
                     TextImportProgressBar.Value = 100;
 
-                SetTextImportStatus(FormatTextImportSummary(result));
-                SetStatus(FormatTextImportReport(result));
+                SetTextImportStatus(FormatDataFileImportSummary(result));
+                SetStatus(FormatDataFileImportReport(result));
             }
             catch (OperationCanceledException)
             {
-                SetTextImportStatus("Text import cancelled. Ingested chunks remain.");
+                SetTextImportStatus(isPlainTextImport
+                    ? "Text import cancelled. Ingested chunks remain."
+                    : "Data-file import cancelled. Completed records remain.");
             }
             catch (Exception ex)
             {
-                SetTextImportStatus("Text import failed: " + ex.Message);
+                SetTextImportStatus((isPlainTextImport ? "Text import failed: " : "Data-file import failed: ")
+                    + ex.Message);
             }
             finally
             {
@@ -766,6 +877,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Requests cooperative cancellation of the active file import.</summary>
         private void TextImportCancel_Button_Click(object sender, RoutedEventArgs e)
         {
             if (textImport is null)
@@ -775,6 +887,7 @@ namespace OPEN_LRD
             SetTextImportStatus("Cancelling after the current chunk...");
         }
 
+        /// <summary>Seeds the foundational upper ontology into the initialized core.</summary>
         private void SeedOntology_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -795,6 +908,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Loads the selected GCIDE subset asynchronously with progress and cancellation.</summary>
         private async void LoadGcide_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -859,11 +973,13 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Requests cancellation of the active ontology corpus load.</summary>
         private void CancelOntology_Button_Click(object sender, RoutedEventArgs e)
         {
             ontologyLoad?.Cancel();
         }
 
+        /// <summary>Exports ontology and lexical graph data to a core log.</summary>
         private void ExportOntology_Button_Click(object sender, RoutedEventArgs e)
         {
             if (!EnsureCoreInitialized())
@@ -899,6 +1015,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Builds GCIDE loader settings from the current UI controls.</summary>
         private GcideLoadOptions? BuildGcideOptions(string directory)
         {
             GcideSubset subset = CorpusSubsetCombo.SelectedIndex switch
@@ -939,6 +1056,7 @@ namespace OPEN_LRD
             };
         }
 
+        /// <summary>Updates ontology loading state and disables conflicting operations.</summary>
         private void SetOntologyBusy(bool busy)
         {
             SeedOntologyButton.IsEnabled = !busy;
@@ -950,11 +1068,13 @@ namespace OPEN_LRD
             SetIngestionControlsEnabled(!busy);
         }
 
+        /// <summary>Sets the ontology status message.</summary>
         private void SetOntologyStatus(string text)
         {
             OntologyStatusText.Text = text;
         }
 
+        /// <summary>Updates file-import busy state and disables conflicting controls.</summary>
         private void SetTextImportBusy(bool busy)
         {
             SetIngestionControlsEnabled(!busy);
@@ -971,11 +1091,13 @@ namespace OPEN_LRD
             TextImportProgressBar.IsIndeterminate = false;
         }
 
+        /// <summary>Sets the file-import status message.</summary>
         private void SetTextImportStatus(string text)
         {
             TextImportStatusText.Text = text;
         }
 
+        /// <summary>Parses an optional non-empty GUID and reports invalid text.</summary>
         private bool TryParseOptionalGuid(string value, string label, out Guid? result)
         {
             result = null;
@@ -994,6 +1116,7 @@ namespace OPEN_LRD
             return true;
         }
 
+        /// <summary>Parses a positive integer and reports invalid or out-of-range input.</summary>
         private bool TryParsePositiveInt(string value, string label, out int result)
         {
             if (!int.TryParse(value.Trim(), out result) || result <= 0)
@@ -1005,6 +1128,7 @@ namespace OPEN_LRD
             return true;
         }
 
+        /// <summary>Formats the concise summary for the legacy text importer result.</summary>
         private static string FormatTextImportSummary(TextImportResult result)
         {
             StringBuilder summary = new StringBuilder();
@@ -1034,6 +1158,118 @@ namespace OPEN_LRD
             return summary.ToString();
         }
 
+        /// <summary>Formats the concise status summary for a multi-format file import.</summary>
+        private static string FormatDataFileImportSummary(DataFileImportResult result)
+        {
+            StringBuilder summary = new StringBuilder();
+            if (result.Format == DataFileFormat.Text)
+            {
+                if (result.FailedFatally)
+                {
+                    string failure = result.Diagnostics.FirstOrDefault() ?? "The file could not be imported.";
+                    if (failure.StartsWith("Import stopped: ", StringComparison.Ordinal))
+                        failure = failure["Import stopped: ".Length..];
+                    return "Text import failed: " + failure;
+                }
+
+                if (result.DryRun)
+                {
+                    summary.Append($"Dry run: {result.TextChunkCount} chunk(s), ");
+                    summary.Append($"{result.TextParagraphs} paragraph(s), ");
+                    summary.Append($"{result.TextSentences} sentence(s), ");
+                    summary.Append($"{result.TextCharacters} character(s).");
+                }
+                else
+                {
+                    summary.Append(
+                        $"Processed {result.RecordsProcessed} of {result.TextChunkCount} chunk(s): ");
+                    summary.Append(
+                        $"{result.TextIngestedChunks} ingested, {result.RecordsUnsupported} unsupported, ");
+                    summary.Append($"{result.RecordsFailed} failed.");
+                }
+                if (result.Truncated)
+                    summary.Append(" Chunk limit reached; the file remainder was not imported.");
+                if (result.Cancelled)
+                    summary.Append(" Import cancelled.");
+                return summary.ToString();
+            }
+
+            summary.Append(result.DryRun ? "Dry run: " : "Processed ");
+            summary.Append($"{result.RecordsProcessed} record(s): ");
+            summary.Append($"{result.RecordsSucceeded} succeeded, ");
+            summary.Append($"{result.RecordsUnsupported} unsupported, ");
+            summary.Append($"{result.RecordsFailed} failed.");
+            if (result.NodesCreated > 0 || result.LinksCreated > 0)
+                summary.Append($" Created {result.NodesCreated} node(s) and {result.LinksCreated} link(s).");
+            if (result.SkippedHighTrust)
+                summary.Append(" Unchanged high-trust source; import skipped.");
+            if (result.Truncated)
+                summary.Append(" Import limit reached; remaining records were skipped.");
+            if (result.Cancelled)
+                summary.Append(" Import cancelled; completed records remain.");
+            if (result.FailedFatally)
+                summary.Append(" Import stopped after a fatal error.");
+            return summary.ToString();
+        }
+
+        /// <summary>Builds a detailed report for a multi-format file import.</summary>
+        private static string FormatDataFileImportReport(DataFileImportResult result)
+        {
+            StringBuilder report = new StringBuilder();
+            if (result.Format == DataFileFormat.Text)
+            {
+                report.AppendLine(result.FailedFatally
+                    ? "Text import failed."
+                    : result.DryRun ? "Text import dry run." : "Text import complete.");
+                report.AppendLine("File: " + result.FilePath);
+                report.AppendLine($"Characters: {result.TextCharacters}");
+                report.AppendLine($"Paragraphs: {result.TextParagraphs}");
+                report.AppendLine($"Sentences: {result.TextSentences}");
+                report.AppendLine($"Chunks: {result.TextChunkCount}");
+                report.AppendLine($"Processed: {result.RecordsProcessed}");
+                if (!result.DryRun)
+                {
+                    report.AppendLine($"Ingested: {result.TextIngestedChunks}");
+                    report.AppendLine($"Unsupported: {result.RecordsUnsupported}");
+                    report.AppendLine($"Failed: {result.RecordsFailed}");
+                    report.AppendLine($"Skipped: {result.TextSkippedChunks}");
+                    report.AppendLine("Conversation: " + (result.ConversationID?.ToString() ?? "(none)"));
+                    report.AppendLine("Source node: " + (result.SourceNodeID?.ToString() ?? "(none)")
+                        + (result.SourceNodeCreated ? " (created)" : string.Empty));
+                }
+                if (result.Truncated)
+                    report.AppendLine("The chunk limit was reached; the remainder of the file was not imported.");
+                if (result.Cancelled)
+                    report.AppendLine("The import was cancelled; ingested chunks remain.");
+                AppendMessages(report, "Notes", result.Diagnostics);
+                return report.ToString().TrimEnd();
+            }
+
+            report.AppendLine(result.DryRun ? "Data-file import dry run." : "Data-file import complete.");
+            report.AppendLine("File: " + result.FilePath);
+            report.AppendLine($"Format: {result.Format}");
+            report.AppendLine($"Mode: {result.Mode}");
+            report.AppendLine($"Records processed: {result.RecordsProcessed}");
+            report.AppendLine($"Records succeeded: {result.RecordsSucceeded}");
+            report.AppendLine($"Records unsupported: {result.RecordsUnsupported}");
+            report.AppendLine($"Records failed: {result.RecordsFailed}");
+            report.AppendLine($"Nodes created: {result.NodesCreated}");
+            report.AppendLine($"Links created: {result.LinksCreated}");
+            report.AppendLine("Source node: " + (result.SourceNodeID?.ToString() ?? "(none)"));
+            report.AppendLine("Source trust: " + (result.SourceTrustRating?.ToString("P0") ?? "(not updated)"));
+            report.AppendLine("Conversation: " + (result.ConversationID?.ToString() ?? "(none)"));
+            if (result.Truncated)
+                report.AppendLine("An import limit was reached; remaining records were skipped.");
+            if (result.Cancelled)
+                report.AppendLine("The import was cancelled; completed records remain.");
+            if (result.FailedFatally)
+                report.AppendLine("The import stopped after a fatal error.");
+            foreach (string diagnostic in result.Diagnostics)
+                report.AppendLine("- " + diagnostic);
+            return report.ToString();
+        }
+
+        /// <summary>Builds a detailed report for a text-file import.</summary>
         private static string FormatTextImportReport(TextImportResult result)
         {
             StringBuilder report = new StringBuilder();
@@ -1071,6 +1307,7 @@ namespace OPEN_LRD
             return report.ToString().TrimEnd();
         }
 
+        /// <summary>Builds a detailed completion report for a GCIDE load.</summary>
         private static string FormatGcideReport(GcideLoadResult result)
         {
             StringBuilder report = new StringBuilder();
@@ -1086,6 +1323,7 @@ namespace OPEN_LRD
             return report.ToString().TrimEnd();
         }
 
+        /// <summary>Returns the selected core-log merge or replace policy.</summary>
         private ImportMode GetSelectedImportMode()
         {
             return ReplaceModeRadio.IsChecked == true
@@ -1093,6 +1331,7 @@ namespace OPEN_LRD
                 : ImportMode.Merge;
         }
 
+        /// <summary>Confirms the consequences of importing a core log with the selected policy.</summary>
         private bool ConfirmCoreImport(ImportMode mode)
         {
             string message = mode == ImportMode.Replace
@@ -1114,6 +1353,7 @@ namespace OPEN_LRD
                 image) == MessageBoxResult.OK;
         }
 
+        /// <summary>Confirms the consequences of importing transient chains with the selected policy.</summary>
         private bool ConfirmTransientImport(ImportMode mode)
         {
             string message = mode == ImportMode.Replace
@@ -1130,6 +1370,7 @@ namespace OPEN_LRD
                 MessageBoxImage.Information) == MessageBoxResult.OK;
         }
 
+        /// <summary>Opens a log-file picker and returns the chosen path.</summary>
         private string? SelectLogPath(string title)
         {
             OpenFileDialog dialog = new OpenFileDialog
@@ -1144,6 +1385,7 @@ namespace OPEN_LRD
             return dialog.ShowDialog(this) == true ? dialog.FileName : null;
         }
 
+        /// <summary>Checks that the core is initialized and displays a launch prompt when needed.</summary>
         private bool EnsureCoreInitialized()
         {
             if (Core.initialized)
@@ -1153,11 +1395,13 @@ namespace OPEN_LRD
             return false;
         }
 
+        /// <summary>Updates the Tools window's shared status report.</summary>
         private void SetStatus(string text)
         {
             StatusBox.Text = text;
         }
 
+        /// <summary>Formats the outcome of a core and transient log export.</summary>
         private static string FormatExportReport(CoreLogExportResult result)
         {
             StringBuilder report = new StringBuilder();
@@ -1190,6 +1434,7 @@ namespace OPEN_LRD
             return report.ToString().TrimEnd();
         }
 
+        /// <summary>Formats a persistence import result for display.</summary>
         private static string FormatImportReport(
             string action,
             PersistenceImportResult result,
@@ -1230,6 +1475,7 @@ namespace OPEN_LRD
             return report.ToString().TrimEnd();
         }
 
+        /// <summary>Appends a labeled list of diagnostic messages to a report.</summary>
         private static void AppendMessages(
             StringBuilder report,
             string label,

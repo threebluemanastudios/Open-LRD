@@ -4,6 +4,7 @@ using System.Linq;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Represents an immutable RGB color with byte-sized components.</summary>
     internal readonly record struct RgbColor(byte R, byte G, byte B)
     {
         public override string ToString()
@@ -12,8 +13,10 @@ namespace OPEN_LRD.Visualization
         }
     }
 
+    /// <summary>Associates a user-facing palette name with an RGB color.</summary>
     internal sealed record ColorChoice(string Name, RgbColor Color);
 
+    /// <summary>Provides the built-in palette and stable color-name lookup.</summary>
     internal static class GraphColorPalette
     {
         private static readonly ColorChoice[] palette = new[]

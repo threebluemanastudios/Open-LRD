@@ -445,15 +445,24 @@
                                         ValueChanged="LineWidthSlider_ValueChanged"
                                         Margin="0,0,0,8" />
 
+                                <TextBlock Margin="0,2,0,4" Foreground="#C7D3E2" Text="Label Mode:" />
+                                <ComboBox x:Name="LabelModeComboBox"
+                                          Margin="0,0,0,8"
+                                          SelectionChanged="LabelModeComboBox_SelectionChanged"
+                                          ToolTip="Focused labels only the selected and hovered nodes; All Visible considers nearby labels." >
+                                    <ComboBoxItem Content="Focused (Hover &amp; Selection)" Tag="Focused" />
+                                    <ComboBoxItem Content="All Visible (up to cap)" Tag="AllVisible" />
+                                </ComboBox>
+
                                 <DockPanel Margin="0,0,0,4">
                                     <TextBlock DockPanel.Dock="Left" Foreground="#C7D3E2" Text="Max Visible Labels:" />
-                                    <TextBlock x:Name="MaxLabelsValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="1000" />
+                                    <TextBlock x:Name="MaxLabelsValText" DockPanel.Dock="Right" Foreground="#4FC3F7" Text="50" />
                                 </DockPanel>
                                 <Slider x:Name="MaxLabelsSlider"
-                                        Minimum="50"
-                                        Maximum="3000"
-                                        Value="1000"
-                                        TickFrequency="50"
+                                        Minimum="2"
+                                        Maximum="50"
+                                        Value="50"
+                                        TickFrequency="1"
                                         IsSnapToTickEnabled="True"
                                         ValueChanged="MaxLabelsSlider_ValueChanged"
                                         Margin="0,0,0,8" />

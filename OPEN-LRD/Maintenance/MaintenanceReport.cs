@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace OPEN_LRD.Maintenance
 {
+    /// <summary>Collects per-stage counts, warnings, and diagnostics from maintenance.</summary>
     internal sealed class MaintenanceReport
     {
         private readonly Stopwatch stopwatch = Stopwatch.StartNew();

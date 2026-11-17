@@ -8,10 +8,12 @@ using OPEN_LRD.Visualization;
 
 namespace OPEN_LRD.SmokeTests
 {
+    /// <summary>Contains core and transient persistence round-trip and input-safety checks.</summary>
     internal static class PersistenceTests
     {
         private static int nextTypeId = 600000;
 
+        /// <summary>Registers and executes the persistence regression checks.</summary>
         public static void RunAll()
         {
             Program.Run("Persistence core round trip", TestCoreRoundTrip);

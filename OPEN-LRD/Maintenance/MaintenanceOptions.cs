@@ -2,6 +2,7 @@ using OPEN_LRD.Nodes;
 
 namespace OPEN_LRD.Maintenance
 {
+    /// <summary>Configures the optional reasoning and resource budgets for a maintenance cycle.</summary>
     internal sealed record MaintenanceOptions
     {
         public bool EnableReasoningMaintenance { get; init; }

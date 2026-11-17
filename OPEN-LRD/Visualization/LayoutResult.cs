@@ -4,6 +4,7 @@ using System.Numerics;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Identifies the current stage of a 3D graph layout operation.</summary>
     internal enum LayoutStage
     {
         Initializing,
@@ -14,6 +15,7 @@ namespace OPEN_LRD.Visualization
         Cancelled
     }
 
+    /// <summary>Reports iteration, stage, and convergence progress from a layout operation.</summary>
     internal readonly record struct LayoutProgress(
         LayoutStage Stage,
         int Iteration,
@@ -22,6 +24,7 @@ namespace OPEN_LRD.Visualization
         int CompletedComponents,
         int TotalComponents);
 
+    /// <summary>Contains final node positions, bounds, and diagnostics from a layout operation.</summary>
     internal sealed class LayoutResult
     {
         public LayoutResult(

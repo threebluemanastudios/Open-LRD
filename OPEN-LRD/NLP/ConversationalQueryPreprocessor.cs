@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Stores normalized query text and optional entity-exploration intent.</summary>
     internal sealed record ConversationalQuery(
         string QueryText,
         string? ExplorationEntity,
@@ -10,6 +11,7 @@ namespace OPEN_LRD.NLP
         public bool IsExploration => !string.IsNullOrWhiteSpace(ExplorationEntity);
     }
 
+    /// <summary>Normalizes conversational preambles and follow-up question forms before Ask.</summary>
     internal static partial class ConversationalQueryPreprocessor
     {
         private static readonly Regex[] preambles =

@@ -1,0 +1,2227 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>OPEN-LRD.SmokeTests</name>
+    </assembly>
+    <members>
+        <member name="T:OPEN_LRD.SmokeTests.DataFileImporterTests">
+            <summary>Exercises data-file parsing, graph mapping, provenance, trust, and retry behavior.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.RunAll">
+            <summary>Registers the data-file importer regression checks with the smoke runner.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestCsvImportAndChecksumSkip">
+            <summary>Verifies successful CSV ingestion and unchanged high-trust checksum skipping.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestCsvPositionUpsert">
+            <summary>Verifies that changed CSV content updates stable structural positions in place.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestJsonAndXmlImports">
+            <summary>Verifies JSON/XML structured imports and JSON/XML NLP extraction paths.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestDryRunAndFatalCsv">
+            <summary>Verifies structured dry runs are read-only and unterminated CSV quotes stop import.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestNoRecordOutcomeDoesNotCommitChecksum">
+            <summary>Verifies a header-only CSV does not commit a source checksum or inferred trust.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestUserSourceTrustBaseline">
+            <summary>Verifies the fixed trust baselines for user and dictionary source nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestRecoverableRowTrustScore">
+            <summary>Verifies trust scoring includes recoverable failed rows while later rows continue.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestCsvTableAndCellPositions">
+            <summary>Verifies CSV table separators, header rows, ordered cells, and positional pointers.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestCsvNlpTripleMapping">
+            <summary>Verifies subject/predicate/object CSV rows become NLP sentences rather than structural tables.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestJsonPointerEscaping">
+            <summary>Verifies JSON property names are escaped according to JSON Pointer.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestXmlDtdRejected">
+            <summary>Verifies XML DTD processing is prohibited and rejected without graph changes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestStructuredCancellation">
+            <summary>Verifies structured cancellation retains completed records and leaves checksum unset.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestFileAndDepthLimits">
+            <summary>Verifies the file-size and JSON nesting limits reject input before unsafe graph growth.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.TestJsonScalarAndNamespacedXml">
+            <summary>Verifies scalar JSON roots and namespace-expanded XML element names.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.CreateTempFile(System.String,System.String)">
+            <summary>Creates a temporary UTF-8 fixture file with the requested extension.</summary>
+            <param name="extension">The fixture file extension.</param>
+            <param name="contents">The contents to write.</param>
+            <returns>The absolute path to the temporary file.</returns>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.DataFileImporterTests.NewCore">
+            <summary>Initializes and returns the shared core graph for one smoke test.</summary>
+            <returns>The initialized singleton graph core.</returns>
+        </member>
+        <member name="T:OPEN_LRD.SmokeTests.MaintenanceTests">
+            <summary>Contains regression checks for metadata, consolidation, induction, and pruning.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.MaintenanceTests.RunAll">
+            <summary>Registers and executes the maintenance regression checks.</summary>
+        </member>
+        <member name="T:OPEN_LRD.SmokeTests.NlpTests">
+            <summary>Contains regression checks for tokenization, parsing, NLP ingestion, and Ask behavior.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.NlpTests.RunAll">
+            <summary>Registers and executes the NLP regression checks.</summary>
+        </member>
+        <member name="T:OPEN_LRD.SmokeTests.OntologyTests">
+            <summary>Contains regression checks for ontology registration, validation, and GCIDE loading.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.OntologyTests.RunAll">
+            <summary>Registers and executes the ontology regression checks.</summary>
+        </member>
+        <member name="T:OPEN_LRD.SmokeTests.PersistenceTests">
+            <summary>Contains core and transient persistence round-trip and input-safety checks.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.PersistenceTests.RunAll">
+            <summary>Registers and executes the persistence regression checks.</summary>
+        </member>
+        <member name="T:OPEN_LRD.SmokeTests.Program">
+            <summary>Hosts the smoke-test runner and assertions shared by test suites.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.Program.Main">
+            <summary>Runs all smoke suites and sets the process exit code from their results.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.Program.Run(System.String,System.Action)">
+            <summary>Runs one named test action and records its pass or failure.</summary>
+            <param name="name">The title shown in the test report.</param>
+            <param name="test">The test action to execute.</param>
+        </member>
+        <member name="T:OPEN_LRD.SmokeTests.ReasoningTests">
+            <summary>Contains regression checks for graph matching, trust, merges, and contradictions.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.RunAll">
+            <summary>Registers and executes the reasoning regression checks.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.NewCore">
+            <summary>Initializes and returns the singleton graph core.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.AddNode(OPEN_LRD.LRD_Core,OPEN_LRD.Nodes.NodeTypes,System.String,OPEN_LRD.Nodes.NodeLifetime,System.String[])">
+            <summary>Adds a node fixture with labels, aliases, lifetime, and type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.NewQueryNode(OPEN_LRD.Nodes.NodeTypes,System.String,System.String[])">
+            <summary>Creates a labeled chain node fixture for a query graph.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.LinkChain(OPEN_LRD.Nodes.Links.LinkClass,OPEN_LRD.Nodes.Chain_Node[])">
+            <summary>Connects chain nodes with the requested relation class.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestNodeLabelsAndAliases">
+            <summary>Verifies normalized node labels and aliases participate in lookup.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestTrustScaleMath">
+            <summary>Verifies trust confidence and decision calculations for weighted evidence.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestTrustTopicFallback">
+            <summary>Verifies topic-specific trust falls back to global source evidence.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestQueryGraphConstruction">
+            <summary>Verifies query chains map to directed typed query graphs.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestQueryGraphValidation">
+            <summary>Verifies malformed or unsupported query graphs are rejected before matching.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestExactMultiHopMatching">
+            <summary>Verifies exact multi-hop graph paths produce a successful match.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestNoMatchAndAmbiguity">
+            <summary>Verifies no-match and ambiguous graph candidates are reported distinctly.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestNeutralMergeCreatesTemporaryNode">
+            <summary>Verifies neutral evidence creates temporary nodes without promoting them.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestTrustedMergePromotesTemporaryNode">
+            <summary>Verifies trusted verified evidence promotes matching temporary knowledge.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestDiscreditedMergeIsRejected">
+            <summary>Verifies discredited evidence cannot merge a proposed fact.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestMergeIsIdempotent">
+            <summary>Verifies repeating the same accepted merge does not duplicate graph state.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestNeutralContradictionIsRejected">
+            <summary>Verifies neutral evidence cannot replace a conflicting active link.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestTrustedContradictionReplacesLink">
+            <summary>Verifies trusted evidence invalidates a conflicting link and adds its replacement.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestResponseExtractionAvoidsCycles">
+            <summary>Verifies response-path extraction is bounded and cycle-safe.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.ReasoningTests.TestContradictionResolverTrustPolicy">
+            <summary>Verifies contradiction resolution follows source trust policy.</summary>
+        </member>
+        <member name="T:OPEN_LRD.SmokeTests.TextImportTests">
+            <summary>Contains regression checks for text chunking, provenance, limits, and cancellation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.RunAll">
+            <summary>Registers and executes the text-file importer checks.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestParagraphChunking">
+            <summary>Verifies paragraphs are preserved as separate bounded text chunks.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestSentenceFallback">
+            <summary>Verifies oversized paragraphs split at sentence boundaries.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestHardSplit">
+            <summary>Verifies a single oversized sentence is split without dropping text.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestChunkBudgets">
+            <summary>Verifies chunk and sentence budgets are enforced.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestSharedConversation">
+            <summary>Verifies imported chunks share one pipeline conversation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestContinueOnFailure">
+            <summary>Verifies an unsupported or failed chunk does not stop later chunks.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestLimitRetry">
+            <summary>Verifies oversized NLP chunks are retried after safe sentence splitting.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestAutoSourceNode">
+            <summary>Verifies a missing Source selection creates a reusable file-backed Source.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestDryRun">
+            <summary>Verifies a text-import dry run does not mutate graph or conversation state.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestSafetyLimits">
+            <summary>Verifies file-size, chunk-count, and binary-content safety checks.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestLargeFile">
+            <summary>Verifies large text files are streamed and split within configured budgets.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestEncoding">
+            <summary>Verifies supported text encodings and malformed input handling.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.TestCancellation">
+            <summary>Verifies cancellation preserves completed chunks and stops subsequent work.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.NonWhitespace(System.String)">
+            <summary>Removes whitespace from a string for lossless chunk comparisons.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.NewCore">
+            <summary>Initializes and returns the singleton graph core.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.CountNodes(OPEN_LRD.LRD_Core)">
+            <summary>Returns the graph node count for a test core.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.CountLinks(OPEN_LRD.LRD_Core)">
+            <summary>Returns the number of directed links stored across graph nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.AddNode(OPEN_LRD.LRD_Core,OPEN_LRD.Nodes.NodeTypes,System.String,OPEN_LRD.Nodes.NodeLifetime)">
+            <summary>Adds a labeled node fixture to the graph.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.WriteTempFile(System.String,System.Text.Encoding)">
+            <summary>Writes a temporary text fixture using the requested encoding.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.WriteTempBytes(System.Byte[])">
+            <summary>Writes a temporary binary fixture.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.NewTempDirectory">
+            <summary>Creates and returns a unique temporary directory for test data.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.TextImportTests.DeleteFile(System.String)">
+            <summary>Removes a temporary test file if it exists.</summary>
+        </member>
+        <member name="T:OPEN_LRD.SmokeTests.VisualizerTests">
+            <summary>Contains regression checks for visualization snapshots, geometry, projection, and layout.</summary>
+        </member>
+        <member name="M:OPEN_LRD.SmokeTests.VisualizerTests.RunAll">
+            <summary>Registers and executes the visualizer regression checks.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.Chain_Node">
+            <summary>Represents a node in an ordered query or response chain.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.DataPointer">
+            <summary>Identifies an external payload by a validated absolute URI and optional metadata.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.DataPointer.Location">
+            <summary>Gets the absolute URI where the referenced payload is located.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.DataPointer.MediaType">
+            <summary>Gets the optional media type associated with the payload.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.DataPointer.ByteLength">
+            <summary>Gets the optional payload size in bytes.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.DataPointer.Checksum">
+            <summary>Gets the optional checksum used to identify a payload revision.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.DataPointer.#ctor(System.Uri,System.String,System.Nullable{System.Int64},System.String)">
+            <summary>Creates a pointer after validating its URI scheme and metadata.</summary>
+            <param name="location">An absolute file, HTTP, or HTTPS URI.</param>
+            <param name="mediaType">An optional MIME type.</param>
+            <param name="byteLength">An optional non-negative payload size.</param>
+            <param name="checksum">An optional payload checksum.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.DataPointer.FromFilePath(System.String)">
+            <summary>Creates a file pointer from a path after converting it to an absolute path.</summary>
+            <param name="path">The local file path to reference.</param>
+            <returns>A pointer whose location uses the file URI scheme.</returns>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.EventNodeHelper">
+            <summary>Parses, formats, and updates event time-window metadata.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.EventTemporalStatus">
+            <summary>Describes an event's temporal position relative to a reference time.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.EventTemporalStatus.Unknown">
+            <summary>The event has no usable time window.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.EventTemporalStatus.Past">
+            <summary>The event ended before the reference time.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.EventTemporalStatus.Active">
+            <summary>The event overlaps the reference time.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.EventTemporalStatus.Future">
+            <summary>The event begins after the reference time.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.EventTimeVariance">
+            <summary>Contains calculated start, end, duration, and display information for an event window.</summary>
+            <param name="ReferenceTime">The instant used to calculate the variances.</param>
+            <param name="StartVariance">The signed difference between reference time and event start, when present.</param>
+            <param name="EndVariance">The signed difference between reference time and event end, when present.</param>
+            <param name="Duration">The event duration when both endpoints are present.</param>
+            <param name="Status">The event's temporal classification.</param>
+            <param name="FriendlyVariance">A concise human-readable description of the time window.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.EventTimeVariance.#ctor(System.DateTimeOffset,System.Nullable{System.TimeSpan},System.Nullable{System.TimeSpan},System.Nullable{System.TimeSpan},OPEN_LRD.Nodes.EventTemporalStatus,System.String)">
+            <summary>Contains calculated start, end, duration, and display information for an event window.</summary>
+            <param name="ReferenceTime">The instant used to calculate the variances.</param>
+            <param name="StartVariance">The signed difference between reference time and event start, when present.</param>
+            <param name="EndVariance">The signed difference between reference time and event end, when present.</param>
+            <param name="Duration">The event duration when both endpoints are present.</param>
+            <param name="Status">The event's temporal classification.</param>
+            <param name="FriendlyVariance">A concise human-readable description of the time window.</param>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.EventTimeVariance.ReferenceTime">
+            <summary>The instant used to calculate the variances.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.EventTimeVariance.StartVariance">
+            <summary>The signed difference between reference time and event start, when present.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.EventTimeVariance.EndVariance">
+            <summary>The signed difference between reference time and event end, when present.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.EventTimeVariance.Duration">
+            <summary>The event duration when both endpoints are present.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.EventTimeVariance.Status">
+            <summary>The event's temporal classification.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.EventTimeVariance.FriendlyVariance">
+            <summary>A concise human-readable description of the time window.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.EventTimeVarianceCalculator">
+            <summary>Calculates event status, endpoint variance, duration, and friendly relative-time text.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.Links.ForwardLinkTypes">
+            <summary>Represents a registered forward link type with a stable numeric identifier.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.ForwardLinkTypes.basic">
+            <summary>Gets the default forward link type.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.ForwardLinkTypes.Id">
+            <summary>Gets the stable identifier of this link type.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.ForwardLinkTypes.Name">
+            <summary>Gets the canonical name of this link type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.ForwardLinkTypes.Register(System.Int32,System.String)">
+            <summary>Registers or replaces a forward link type by identifier.</summary>
+            <param name="id">The stable numeric identifier.</param>
+            <param name="name">The canonical type name.</param>
+            <returns>The registered link type.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.ForwardLinkTypes.GetAll">
+            <summary>Returns a snapshot of all registered forward link types.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.ForwardLinkTypes.FromId(System.Int32)">
+            <summary>Resolves an identifier, falling back to the basic type when it is unknown.</summary>
+            <param name="id">The registered identifier to resolve.</param>
+            <returns>The matching type or the basic type.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.ForwardLinkTypes.TryFromId(System.Int32,OPEN_LRD.Nodes.Links.ForwardLinkTypes@)">
+            <summary>Attempts to resolve an identifier without applying a fallback.</summary>
+            <param name="id">The identifier to resolve.</param>
+            <param name="linkType">Receives the matching type when it is registered.</param>
+            <returns><see langword="true"/> when the identifier is registered.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.ForwardLinkTypes.FromName(System.String)">
+            <summary>Resolves a registered type name without regard to case.</summary>
+            <param name="name">The name to resolve.</param>
+            <returns>The matching type or the basic type.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.ForwardLinkTypes.ToString">
+            <summary>Returns the canonical link type name.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.Links.InverseLinkTypes">
+            <summary>Represents a registered inverse link type with a stable numeric identifier.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.InverseLinkTypes.basic">
+            <summary>Gets the default inverse link type.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.InverseLinkTypes.Id">
+            <summary>Gets the stable identifier of this link type.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.InverseLinkTypes.Name">
+            <summary>Gets the canonical name of this link type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.InverseLinkTypes.Register(System.Int32,System.String)">
+            <summary>Registers or replaces an inverse link type by identifier.</summary>
+            <param name="id">The stable numeric identifier.</param>
+            <param name="name">The canonical type name.</param>
+            <returns>The registered link type.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.InverseLinkTypes.GetAll">
+            <summary>Returns a snapshot of all registered inverse link types.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.InverseLinkTypes.FromId(System.Int32)">
+            <summary>Resolves an identifier, falling back to the basic type when it is unknown.</summary>
+            <param name="id">The registered identifier to resolve.</param>
+            <returns>The matching type or the basic type.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.InverseLinkTypes.TryFromId(System.Int32,OPEN_LRD.Nodes.Links.InverseLinkTypes@)">
+            <summary>Attempts to resolve an identifier without applying a fallback.</summary>
+            <param name="id">The identifier to resolve.</param>
+            <param name="linkType">Receives the matching type when it is registered.</param>
+            <returns><see langword="true"/> when the identifier is registered.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.InverseLinkTypes.FromName(System.String)">
+            <summary>Resolves a registered type name without regard to case.</summary>
+            <param name="name">The name to resolve.</param>
+            <returns>The matching type or the basic type.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.InverseLinkTypes.ToString">
+            <summary>Returns the canonical link type name.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.Links.Link">
+            <summary>Represents one directed, typed graph edge and its lifecycle metadata.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.Link.SourceID">
+            <summary>Gets the source node identifier.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.Link.DestinationID">
+            <summary>Gets the destination node identifier.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.Link.ForwardLink">
+            <summary>Gets the registered forward relationship type.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.Link.InverseLink">
+            <summary>Gets the registered inverse relationship type.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.Link.Classification">
+            <summary>Gets the semantic link classification.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.Link.IsActive">
+            <summary>Gets whether the edge is active for reasoning and visualization.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.Link.Origins">
+            <summary>Gets the combined origins that contributed this edge.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.Link.Empty">
+            <summary>Gets the sentinel empty link value.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.#ctor(System.Guid,System.Guid)">
+            <summary>Creates a basic-class link using default relationship types.</summary>
+            <param name="sourceID">The source node identifier.</param>
+            <param name="destinationID">The destination node identifier.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.#ctor(System.Guid,System.Guid,OPEN_LRD.Nodes.Links.LinkClass)">
+            <summary>Creates a link with the specified class and default relationship types.</summary>
+            <param name="sourceID">The source node identifier.</param>
+            <param name="destinationID">The destination node identifier.</param>
+            <param name="classification">The semantic link class.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.#ctor(System.Guid,System.Guid,OPEN_LRD.Nodes.Links.ForwardLinkTypes,OPEN_LRD.Nodes.Links.InverseLinkTypes,OPEN_LRD.Nodes.Links.LinkClass)">
+            <summary>Creates a link with explicit registered relationship types and class.</summary>
+            <param name="sourceID">The source node identifier.</param>
+            <param name="destinationID">The destination node identifier.</param>
+            <param name="forwardLink">The forward relationship type.</param>
+            <param name="inverseLink">The inverse relationship type.</param>
+            <param name="classification">The semantic link class.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.#ctor(System.Guid,System.Guid,OPEN_LRD.Nodes.Links.ForwardLinkTypes,OPEN_LRD.Nodes.Links.InverseLinkTypes,OPEN_LRD.Nodes.Links.LinkClass,OPEN_LRD.Nodes.Links.LinkOrigin)">
+            <summary>Creates a link with explicit relationship types, class, and origin.</summary>
+            <param name="sourceID">The source node identifier.</param>
+            <param name="destinationID">The destination node identifier.</param>
+            <param name="forwardLink">The forward relationship type.</param>
+            <param name="inverseLink">The inverse relationship type.</param>
+            <param name="classification">The semantic link class.</param>
+            <param name="origin">The process that created the edge.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.#ctor(System.Guid,System.Guid,System.Int32,System.Int32,OPEN_LRD.Nodes.Links.LinkClass)">
+            <summary>Creates a link from registered numeric relationship identifiers.</summary>
+            <param name="sourceID">The source node identifier.</param>
+            <param name="destinationID">The destination node identifier.</param>
+            <param name="forwardLink">The forward relationship type identifier.</param>
+            <param name="inverseLink">The inverse relationship type identifier.</param>
+            <param name="classification">The semantic link class.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.#ctor(System.Guid,System.Guid,System.Int32,System.Int32,OPEN_LRD.Nodes.Links.LinkClass,OPEN_LRD.Nodes.Links.LinkOrigin)">
+            <summary>Creates a link from registered numeric relationship identifiers and an origin.</summary>
+            <param name="sourceID">The source node identifier.</param>
+            <param name="destinationID">The destination node identifier.</param>
+            <param name="forwardLink">The forward relationship type identifier.</param>
+            <param name="inverseLink">The inverse relationship type identifier.</param>
+            <param name="classification">The semantic link class.</param>
+            <param name="origin">The process that created the edge.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.GetLink">
+            <summary>Returns this immutable link value.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.Invalidate">
+            <summary>Marks this link inactive without removing its history.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.Reactivate">
+            <summary>Marks this link active again.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.HasSameIdentity(OPEN_LRD.Nodes.Links.Link)">
+            <summary>Checks whether another link has the same endpoints, type identifiers, and class.</summary>
+            <param name="other">The candidate link to compare.</param>
+            <returns><see langword="true"/> when both links have the same identity.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.Equals(OPEN_LRD.Nodes.Links.Link)">
+            <summary>Compares this link with another link by semantic identity.</summary>
+            <param name="other">The candidate link.</param>
+            <returns><see langword="true"/> when the links have the same identity.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.Link.GetHashCode">
+            <summary>Computes a hash from the link's identity fields.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.Links.LinkClass">
+            <summary>Classifies graph links into registered semantic groups.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.empty">
+            <summary>Gets the empty link class.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.basic">
+            <summary>Gets the general-purpose link class.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.map_locations">
+            <summary>Gets the location-mapping link class.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.events">
+            <summary>Gets the event link class.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.actions">
+            <summary>Gets the action link class.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.spatial">
+            <summary>Gets the spatial link class.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.temporal">
+            <summary>Gets the temporal link class.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.sources">
+            <summary>Gets the source/provenance link class.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkClass.identities">
+            <summary>Gets the identity link class.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.LinkClass.Id">
+            <summary>Gets the stable numeric identifier of this class.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Links.LinkClass.Name">
+            <summary>Gets the canonical name of this class.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.LinkClass.Register(System.Int32,System.String)">
+            <summary>Registers or replaces a link class by stable identifier.</summary>
+            <param name="id">The stable numeric identifier.</param>
+            <param name="name">The canonical class name.</param>
+            <returns>The registered link class.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.LinkClass.GetAll">
+            <summary>Returns a snapshot of the registered link classes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.LinkClass.FromId(System.Int32)">
+            <summary>Resolves an identifier, using the empty class when it is unknown.</summary>
+            <param name="id">The class identifier.</param>
+            <returns>The matching class or <see cref="F:OPEN_LRD.Nodes.Links.LinkClass.empty"/>.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.LinkClass.TryFromId(System.Int32,OPEN_LRD.Nodes.Links.LinkClass@)">
+            <summary>Attempts to resolve an identifier without applying a fallback.</summary>
+            <param name="id">The class identifier.</param>
+            <param name="linkClass">Receives the matching class when registered.</param>
+            <returns><see langword="true"/> when the identifier is registered.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.LinkClass.FromName(System.String)">
+            <summary>Resolves a registered class name without regard to case.</summary>
+            <param name="name">The name to resolve.</param>
+            <returns>The matching class or <see cref="F:OPEN_LRD.Nodes.Links.LinkClass.empty"/>.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Links.LinkClass.ToString">
+            <summary>Returns the canonical class name.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.Links.LinkOrigin">
+            <summary>Identifies the processes that contributed a graph link.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkOrigin.None">
+            <summary>The link has no recorded origin.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkOrigin.Explicit">
+            <summary>The link was explicitly supplied by a caller or import.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkOrigin.NodeMetadata">
+            <summary>The link was generated from node metadata.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Links.LinkOrigin.Reasoning">
+            <summary>The link was generated by reasoning.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.Node">
+            <summary>Stores the identity, metadata, lifetime, trust, and usage weights of a graph node.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Node.PromotionWeightThreshold">
+            <summary>Gets the upward-weight threshold at which temporary nodes become permanent.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Node.DemotionWeightThreshold">
+            <summary>Gets the downward-weight threshold at which temporary nodes are disposed.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Node.DefaultTimeToLive">
+            <summary>Gets the default lifetime counter assigned to temporary nodes.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Node.ID">
+            <summary>Gets the immutable unique identifier of this node.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Node.nodeType">
+            <summary>Gets the semantic type used by derived node implementations.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Node.weightUp">
+            <summary>Gets or sets the accumulated verified-usage weight for derived node implementations.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Node.weightDown">
+            <summary>Gets or sets the accumulated invalid-evidence weight for derived node implementations.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Node.timeToLive">
+            <summary>Gets or sets the remaining temporary lifetime counter.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.Node.lifetime">
+            <summary>Gets or sets the current lifetime classification.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Node.Label">
+            <summary>Gets the normalized node label, when one is assigned.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Node.Aliases">
+            <summary>Gets a read-only view of the node's normalized aliases.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Node.TrustRating">
+            <summary>Gets the node's optional trust rating in the inclusive range from zero to one.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.#ctor">
+            <summary>Creates a temporary basic node with a generated identifier and the default TTL.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.#ctor(System.Guid)">
+            <summary>Creates a temporary basic node with the supplied identifier and default TTL.</summary>
+            <param name="nodeID">The unique identifier for the node.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.#ctor(OPEN_LRD.Nodes.NodeTypes,System.Guid)">
+            <summary>Creates a temporary node of the specified type with the supplied identifier.</summary>
+            <param name="nodeType">The semantic type of the node.</param>
+            <param name="nodeID">The unique identifier for the node.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.#ctor(System.Guid,OPEN_LRD.Nodes.NodeTypes,System.Int32)">
+            <summary>Creates a temporary node with a specified identifier, type, and TTL.</summary>
+            <param name="id">The unique identifier for the node.</param>
+            <param name="type">The semantic type of the node.</param>
+            <param name="ttl">The initial non-negative time-to-live counter.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.#ctor(System.Guid,OPEN_LRD.Nodes.NodeTypes,OPEN_LRD.Nodes.NodeLifetime,System.Int32)">
+            <summary>Creates a node with an explicit lifetime and TTL.</summary>
+            <param name="id">The unique identifier for the node.</param>
+            <param name="type">The semantic type of the node.</param>
+            <param name="lifetime">The node's initial lifetime classification.</param>
+            <param name="ttl">The initial non-negative time-to-live counter.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.DecrementTTL">
+            <summary>Decrements the temporary lifetime counter when it is positive.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.PerformMaintenance">
+            <summary>Runs one node maintenance step, updating lifetime or disposing expired knowledge.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.RegisterVerifiedReference(System.Single)">
+            <summary>Registers verified usage and promotes the node when its threshold is reached.</summary>
+            <param name="increment">The positive amount to add to upward weight.</param>
+            <returns><see langword="true"/> when this call promotes the node.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.RegisterInvalidReference(System.Single)">
+            <summary>Registers invalid evidence and disposes the node when its threshold is reached.</summary>
+            <param name="increment">The positive amount to add to downward weight.</param>
+            <returns><see langword="true"/> when this call disposes the node.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Dispose">
+            <summary>Disposes the node and releases its external data pointer.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Get_ID">
+            <summary>Returns the node's identifier.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Set_Label(System.String)">
+            <summary>Sets the node label after trimming surrounding whitespace.</summary>
+            <param name="label">The label to assign, or <see langword="null"/> to clear it.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Add_Alias(System.String)">
+            <summary>Adds a normalized alias unless it duplicates the label or an existing alias.</summary>
+            <param name="alias">The alias to add.</param>
+            <returns><see langword="true"/> when a new alias is added.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Remove_Alias(System.String)">
+            <summary>Removes a matching alias without regard to case.</summary>
+            <param name="alias">The alias to remove.</param>
+            <returns><see langword="true"/> when an alias is removed.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Has_Label(System.String,System.StringComparison)">
+            <summary>Checks the label using the specified string comparison.</summary>
+            <param name="value">The label value to compare.</param>
+            <param name="comparison">The string comparison rule.</param>
+            <returns><see langword="true"/> when the label matches.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Has_Alias(System.String,System.StringComparison)">
+            <summary>Checks the aliases using the specified string comparison.</summary>
+            <param name="value">The alias value to compare.</param>
+            <param name="comparison">The string comparison rule.</param>
+            <returns><see langword="true"/> when an alias matches.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Get_DataPointer">
+            <summary>Returns the optional external data pointer.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Set_DataPointer(OPEN_LRD.Nodes.DataPointer)">
+            <summary>Assigns an external data pointer to the node.</summary>
+            <param name="pointer">The validated pointer to store.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Clear_DataPointer">
+            <summary>Removes the external data pointer from the node.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Set_TrustRating(System.Nullable{System.Double})">
+            <summary>Sets the optional trust rating after validating its range and finiteness.</summary>
+            <param name="value">A trust score in [0, 1], or <see langword="null"/> to clear it.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Get_WeightUp">
+            <summary>Returns the accumulated upward usage weight.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Add_WeightUp(System.Single)">
+            <summary>Adds verified usage weight through the promotion policy.</summary>
+            <param name="value">The positive weight increment.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Get_WeightDown">
+            <summary>Returns the accumulated downward usage weight.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Add_WeightDown(System.Single)">
+            <summary>Adds invalid-evidence weight through the disposal policy.</summary>
+            <param name="value">The positive weight increment.</param>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Get_TTL">
+            <summary>Returns the node's current time-to-live counter.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Get_NodeType">
+            <summary>Returns the node's semantic type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.Get_Lifetime">
+            <summary>Returns the node's lifetime classification.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Node.IsTemporary">
+            <summary>Gets whether the node is temporary.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Node.IsPermanent">
+            <summary>Gets whether the node is permanent.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.Node.IsDisposed">
+            <summary>Gets whether the node has been disposed.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.Node.PromoteToPermanent">
+            <summary>Promotes this node to permanent lifetime.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.NodeLifetime">
+            <summary>Specifies whether a graph node is temporary working memory or permanent knowledge.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeLifetime.Temporary">
+            <summary>The node may expire or be disposed by maintenance.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeLifetime.Permanent">
+            <summary>The node is retained across maintenance cycles.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.NodeSearchCriteria">
+            <summary>Defines optional filters for searching graph nodes.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeSearchCriteria.ID">
+            <summary>Gets or initializes an exact node identifier filter.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeSearchCriteria.Type">
+            <summary>Gets or initializes a node type filter.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeSearchCriteria.Lifetime">
+            <summary>Gets or initializes a node lifetime filter.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeSearchCriteria.MinWeightUp">
+            <summary>Gets or initializes the minimum accepted upward weight.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeSearchCriteria.MaxWeightUp">
+            <summary>Gets or initializes the maximum accepted upward weight.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeSearchCriteria.MinWeightDown">
+            <summary>Gets or initializes the minimum accepted downward weight.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeSearchCriteria.MaxWeightDown">
+            <summary>Gets or initializes the maximum accepted downward weight.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeSearchCriteria.LinkClass">
+            <summary>Gets or initializes a required link-class filter.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.NodeTypes">
+            <summary>Describes a registered semantic node category with a stable numeric identifier.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Empties">
+            <summary>Gets the fallback empty node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Basics">
+            <summary>Gets the generic basic node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Dictionaries">
+            <summary>Gets the dictionary node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Objects">
+            <summary>Gets the object node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Concepts">
+            <summary>Gets the concept node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Entities">
+            <summary>Gets the entity node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Names">
+            <summary>Gets the name node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Sources">
+            <summary>Gets the source node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Locations">
+            <summary>Gets the location node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.Events">
+            <summary>Gets the event node type.</summary>
+        </member>
+        <member name="F:OPEN_LRD.Nodes.NodeTypes.RawData">
+            <summary>Gets the raw-data node type.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeTypes.Id">
+            <summary>Gets the stable numeric identifier of this type.</summary>
+        </member>
+        <member name="P:OPEN_LRD.Nodes.NodeTypes.Name">
+            <summary>Gets the canonical display name of this type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.NodeTypes.Register(System.Int32,System.String)">
+            <summary>Registers or replaces a node type by stable identifier.</summary>
+            <param name="id">The stable numeric identifier.</param>
+            <param name="name">The canonical node type name.</param>
+            <returns>The registered node type.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.NodeTypes.GetAll">
+            <summary>Returns the currently registered node types.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.NodeTypes.FromId(System.Int32)">
+            <summary>Resolves an identifier, using the empty type when it is unknown.</summary>
+            <param name="id">The type identifier.</param>
+            <returns>The matching node type or <see cref="F:OPEN_LRD.Nodes.NodeTypes.Empties"/>.</returns>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.NodeTypes.ToString">
+            <summary>Returns the canonical display name.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Nodes.NodeTypes.FromName(System.String)">
+            <summary>Resolves a registered node type name without regard to case.</summary>
+            <param name="name">The name to resolve.</param>
+            <returns>The matching node type or <see cref="F:OPEN_LRD.Nodes.NodeTypes.Empties"/>.</returns>
+        </member>
+        <member name="T:OPEN_LRD.Nodes.Web_Node">
+            <summary>Extends a node with outgoing typed links and reference-link maintenance.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ContradictionResolver">
+            <summary>Applies trust and link-class policies to proposed contradictions.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.GraphSnapshot">
+            <summary>Provides an immutable bounded graph view for matching and response extraction.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.QueryGraphBuilder">
+            <summary>Validates chain nodes and converts them into a bounded query graph.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ReasoningEngine">
+            <summary>Plans and applies trust-aware graph reasoning, matching, and response extraction.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ReasoningMerger">
+            <summary>Builds and applies validated graph mutation plans from subgraph matches.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ExistingNodeWeightUpPolicy">
+            <summary>Controls whether reusing existing semantic nodes increments upward usage weight.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ReasoningOptions">
+            <summary>Configures graph matching, trust, traversal, and merge behavior.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ReasoningStatus">
+            <summary>Describes the outcome of a graph reasoning request.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.TrustDecision">
+            <summary>Classifies the source trust decision for proposed knowledge.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.QueryNode">
+            <summary>Describes one query node and the labels used to find graph candidates.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.QueryNode.#ctor(System.Guid,OPEN_LRD.Nodes.NodeTypes,System.String,System.Collections.Generic.IReadOnlyCollection{System.String})">
+            <summary>Describes one query node and the labels used to find graph candidates.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.QueryEdge">
+            <summary>Describes a directed or inverse query edge between query nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.QueryEdge.#ctor(System.Guid,System.Guid,OPEN_LRD.Nodes.Links.LinkClass,System.Int32,System.Int32,System.Boolean)">
+            <summary>Describes a directed or inverse query edge between query nodes.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.QueryGraph">
+            <summary>Contains the nodes, edges, root, and shape of a validated query.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.QueryGraph.#ctor(System.Collections.Generic.IReadOnlyList{OPEN_LRD.Reasoning.QueryNode},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Reasoning.QueryEdge},System.Boolean,System.Guid)">
+            <summary>Contains the nodes, edges, root, and shape of a validated query.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.GraphPath">
+            <summary>Contains a ranked path through graph nodes and links.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.GraphPath.#ctor(System.Collections.Generic.IReadOnlyList{System.Guid},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Nodes.Links.Link},System.Double,System.Double,System.Int32)">
+            <summary>Contains a ranked path through graph nodes and links.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.LinkConflict">
+            <summary>Records competing existing and proposed links for a functional relationship.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.LinkConflict.#ctor(OPEN_LRD.Nodes.Links.Link,OPEN_LRD.Nodes.Links.Link,OPEN_LRD.Nodes.Links.LinkClass,System.Guid,System.Guid,System.Guid,System.Double,System.Double,System.String)">
+            <summary>Records competing existing and proposed links for a functional relationship.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.SubgraphMatch">
+            <summary>Contains a candidate graph mapping, matched links, conflicts, and quality scores.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.SubgraphMatch.#ctor(System.Guid,System.Collections.Generic.IReadOnlyDictionary{System.Guid,System.Guid},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Nodes.Links.Link},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Reasoning.LinkConflict},System.Collections.Generic.IReadOnlyList{System.Guid},System.Double,System.Double,System.Double,System.Double,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Contains a candidate graph mapping, matched links, conflicts, and quality scores.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.LinkEvidence">
+            <summary>Stores confidence and provenance associated with a graph link.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.LinkEvidence.#ctor(OPEN_LRD.Nodes.Links.Link,System.Double,System.Nullable{System.Guid},System.Nullable{System.Guid},System.Boolean,System.String,System.Nullable{System.DateTimeOffset})">
+            <summary>Stores confidence and provenance associated with a graph link.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.TrustKey">
+            <summary>Identifies trust evidence by source and optional topic.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.TrustKey.#ctor(System.Guid,System.Nullable{System.Guid})">
+            <summary>Identifies trust evidence by source and optional topic.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.TrustEvidence">
+            <summary>Accumulates weighted verified and invalid evidence for a trust key.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.TrustAssessment">
+            <summary>Summarizes evidence totals, confidence, score, and source trust decision.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.TrustAssessment.#ctor(System.Guid,System.Nullable{System.Guid},System.Double,System.Double,System.Double,System.Double,System.Double,System.Double,OPEN_LRD.Reasoning.TrustDecision,System.Boolean,System.Boolean)">
+            <summary>Summarizes evidence totals, confidence, score, and source trust decision.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ReasoningResult">
+            <summary>Contains query matches, answer paths, trust results, graph changes, and diagnostics.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.ReasoningResult.#ctor(OPEN_LRD.Reasoning.ReasoningStatus,OPEN_LRD.Reasoning.QueryGraph,OPEN_LRD.Reasoning.SubgraphMatch,System.Collections.Generic.IReadOnlyList{OPEN_LRD.Reasoning.SubgraphMatch},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Reasoning.GraphPath},System.Collections.Generic.LinkedList{OPEN_LRD.Nodes.Chain_Node},OPEN_LRD.Reasoning.TrustAssessment,System.Collections.Generic.IReadOnlyList{System.Guid},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Reasoning.LinkConflict},System.Boolean,System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyDictionary{System.Guid,System.Guid})">
+            <summary>Contains query matches, answer paths, trust results, graph changes, and diagnostics.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.NodeActionKind">
+            <summary>Identifies a planned action for a node participating in a merge.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.NodeAction">
+            <summary>Describes how one query node maps to or changes a graph node.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.NodeAction.#ctor(OPEN_LRD.Reasoning.NodeActionKind,System.Guid,System.Guid,OPEN_LRD.Nodes.NodeTypes,System.String,System.Collections.Generic.IReadOnlyCollection{System.String},System.String)">
+            <summary>Describes how one query node maps to or changes a graph node.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.EdgeActionKind">
+            <summary>Identifies a planned action for a proposed or existing graph edge.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.EdgeAction">
+            <summary>Describes how a proposed edge is applied, retained, rejected, or invalidated.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.EdgeAction.#ctor(OPEN_LRD.Reasoning.EdgeActionKind,System.Guid,System.Guid,OPEN_LRD.Nodes.Links.LinkClass,System.Int32,System.Int32,OPEN_LRD.Nodes.Links.Link,System.String)">
+            <summary>Describes how a proposed edge is applied, retained, rejected, or invalidated.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.TrustActionKind">
+            <summary>Identifies the trust evidence operation in a merge plan.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.TrustAction">
+            <summary>Describes a source- and topic-scoped trust update.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.TrustAction.#ctor(OPEN_LRD.Reasoning.TrustActionKind,System.Guid,System.Nullable{System.Guid},System.Nullable{System.Guid},System.Double,System.DateTimeOffset)">
+            <summary>Describes a source- and topic-scoped trust update.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.MergePlan">
+            <summary>Collects validated node, edge, and trust actions before graph mutation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.MergeApplyResult">
+            <summary>Reports graph mutations completed when a merge plan is applied.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.MergeApplyResult.#ctor(System.Collections.Generic.IReadOnlyList{System.Guid},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Nodes.Links.Link},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Nodes.Links.Link},System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Reports graph mutations completed when a merge plan is applied.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ContradictionResolution">
+            <summary>Reports whether a contradiction is accepted and which links are affected.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.ContradictionResolution.#ctor(System.Boolean,System.Collections.Generic.IReadOnlyList{OPEN_LRD.Reasoning.LinkConflict},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Nodes.Links.Link})">
+            <summary>Reports whether a contradiction is accepted and which links are affected.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.ResponseExtractor">
+            <summary>Extracts bounded, ranked, cycle-safe answer paths from a graph snapshot.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.SubgraphMatcher">
+            <summary>Matches bounded query graphs to candidate subgraphs and scores their evidence.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.SubgraphMatcher.MatchedEdge">
+            <summary>Stores a selected graph edge and its match score during search.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Reasoning.SubgraphMatcher.MatchedEdge.#ctor(OPEN_LRD.Nodes.Links.Link,System.Double)">
+            <summary>Stores a selected graph edge and its match score during search.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Reasoning.TrustScale">
+            <summary>Stores weighted verified and invalid evidence and computes source/topic trust assessments.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.LinkTypeGenerator">
+            <summary>Generates bounded relation types from configured composition and repeated-path rules.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.LinkTypeGenerator.CompositionRule">
+            <summary>Defines the input and result relation IDs for one composition rule.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Maintenance.LinkTypeGenerator.CompositionRule.#ctor(System.Int32,System.Int32,System.Int32)">
+            <summary>Defines the input and result relation IDs for one composition rule.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.MaintenanceOptions">
+            <summary>Configures the optional reasoning and resource budgets for a maintenance cycle.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.MaintenanceReasoningEngine">
+            <summary>Runs selected bounded maintenance reasoning stages and aggregates their reports.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.MaintenanceReport">
+            <summary>Collects per-stage counts, warnings, and diagnostics from maintenance.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.NodeMetadataReasoner">
+            <summary>Materializes and reconciles node fields as typed metadata graph facts.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.NodeMetadataReasoner.MetadataFact">
+            <summary>Identifies one generated metadata relation and its typed value.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Maintenance.NodeMetadataReasoner.MetadataFact.#ctor(System.String,System.String,System.String,System.String,OPEN_LRD.Nodes.Links.LinkClass,System.Boolean)">
+            <summary>Identifies one generated metadata relation and its typed value.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.OverlappingNodeConsolidator">
+            <summary>Finds and merges supported duplicate graph nodes under trust-first survivor rules.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.OverlappingNodeConsolidator.Candidate">
+            <summary>Stores a candidate node pair and whether its identity evidence is a shared pointer.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Maintenance.OverlappingNodeConsolidator.Candidate.#ctor(System.Guid,System.Guid,System.Boolean)">
+            <summary>Stores a candidate node pair and whether its identity evidence is a shared pointer.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.OverlappingNodeConsolidator.NameBucket">
+            <summary>Groups graph nodes by normalized labels and aliases for duplicate comparison.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Maintenance.SupersededLinkPruner">
+            <summary>Marks superseded generic links inactive while preserving their historical records.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.AnswerGenerator">
+            <summary>Generates answer text and evidence-aware explanations from reasoning results.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ChainBuilder">
+            <summary>Builds bounded linked-list query and fact chains from NLP relation frames.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.CommandProcessor">
+            <summary>Executes recognized read-only NLP commands against graph and conversation state.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.CommandTargetKind">
+            <summary>Identifies the graph or conversation target of a recognized command.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NlpCommand">
+            <summary>Stores a recognized command's verb, target, and clarification state.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpCommand.#ctor(System.String,OPEN_LRD.NLP.CommandTargetKind,System.String,System.Nullable{System.Guid},System.Boolean,System.String,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Stores a recognized command's verb, target, and clarification state.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.CommandRecognizer">
+            <summary>Recognizes supported natural-language command phrases and their targets.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ConversationalQuery">
+            <summary>Stores normalized query text and optional entity-exploration intent.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.ConversationalQuery.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Stores normalized query text and optional entity-exploration intent.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ConversationalQueryPreprocessor">
+            <summary>Normalizes conversational preambles and follow-up question forms before Ask.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.PronounPerson">
+            <summary>Identifies grammatical person for a pronoun.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.PronounNumber">
+            <summary>Identifies grammatical number for a pronoun.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.PronounCase">
+            <summary>Identifies the grammatical case for a pronoun.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.PronounInfo">
+            <summary>Stores normalized grammatical and resolution properties for a pronoun form.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.PronounInfo.#ctor(System.String,System.String,OPEN_LRD.NLP.PronounPerson,OPEN_LRD.NLP.PronounNumber,OPEN_LRD.NLP.PronounCase,System.Boolean,System.Boolean,System.Boolean)">
+            <summary>Stores normalized grammatical and resolution properties for a pronoun form.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ConversationMention">
+            <summary>Stores a resolved conversational mention and its turn and role.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.ConversationMention.#ctor(System.Guid,System.String,System.String,OPEN_LRD.Nodes.NodeTypes,OPEN_LRD.NLP.FrameRole,System.Int32,System.Int32,System.Boolean)">
+            <summary>Stores a resolved conversational mention and its turn and role.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.PronounResolution">
+            <summary>Stores the result and candidate set from pronoun resolution.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.PronounResolution.#ctor(System.Nullable{System.Guid},System.String,OPEN_LRD.Nodes.NodeTypes,System.Collections.Generic.IReadOnlyList{System.Guid},System.Boolean,System.Boolean,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Stores the result and candidate set from pronoun resolution.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.SessionProvenanceEntry">
+            <summary>Stores one ordered provenance outcome produced by conversational NLP.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.SessionProvenanceEntry.#ctor(System.Int32,System.Int32,System.Nullable{System.Int32},System.String,OPEN_LRD.Reasoning.ReasoningStatus,System.String,OPEN_LRD.Nodes.Links.LinkClass,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Nullable{System.Guid},System.Nullable{System.Guid},System.Nullable{System.Guid},System.Nullable{System.Guid},System.Nullable{System.Guid},System.Collections.Generic.IReadOnlyList{System.Guid},System.Collections.Generic.IReadOnlyList{System.Guid},System.Boolean,System.Boolean,System.Collections.Generic.IReadOnlyList{System.String},OPEN_LRD.NLP.CoordinationKind,System.Int32,OPEN_LRD.NLP.NegationKind)">
+            <summary>Stores one ordered provenance outcome produced by conversational NLP.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ConversationContext">
+            <summary>Maintains turn history, mentions, focus, pronoun context, and session provenance.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileFormat">
+            <summary>Identifies the file syntax used by the data-file importer.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileIngestionMode">
+            <summary>Chooses graph-structured ingestion or natural-language extraction.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImportOptions">
+            <summary>Configures format, provenance, safety, progress, and cancellation for a data-file import.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImportProgress">
+            <summary>Reports progress while records or chunks are processed.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImportProgress.#ctor(System.Int32,System.Int32,System.String)">
+            <summary>Reports progress while records or chunks are processed.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImportResult">
+            <summary>Summarizes record outcomes, graph changes, provenance, and diagnostics for an import.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter">
+            <summary>Parses supported file formats and commits bounded records into the graph.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.Import(OPEN_LRD.LRD_Core,OPEN_LRD.NLP.DataFileImportOptions)">
+            <summary>Validates an import request, resolves file identity, and dispatches to its format reader.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportTextFile(OPEN_LRD.NLP.DataFileImporter.DataFileImportState)">
+            <summary>Delegates plain-text chunking and NLP ingestion to the existing text importer.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportCsv(OPEN_LRD.NLP.DataFileImporter.DataFileImportState)">
+            <summary>Reads CSV tables and commits structured rows or extracted NLP text.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.CreateCsvTable(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,System.Guid,System.String[],System.Int32)">
+            <summary>Creates or updates the CSV table node, header row, and header cells.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.BuildCsvDataRow(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,System.Int32,System.Int32,System.String[],System.String[],System.Guid)">
+            <summary>Builds a bounded graph record for one CSV data row and its ordered cells.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.BuildCsvNlpText(System.String[],System.String[])">
+            <summary>Converts a CSV row to a subject-predicate-object sentence or labeled field text.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.FindHeader(System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+            <summary>Finds a CSV header by a case-insensitive trimmed name.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.TryReadCsvRecord(System.IO.TextReader,System.Int32,System.Int32,System.Int32,System.Threading.CancellationToken,OPEN_LRD.NLP.DataFileImporter.CsvRecord@,System.Boolean@)">
+            <summary>Reads and validates one CSV record without buffering the whole input file.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportJson(OPEN_LRD.NLP.DataFileImporter.DataFileImportState)">
+            <summary>Streams JSON root values and imports each array item or single root record.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.CreateJsonRoot(OPEN_LRD.NLP.DataFileImporter.DataFileImportState)">
+            <summary>Creates or updates the structural root node for a JSON array.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportJsonRootRecord(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,System.Text.Json.JsonElement)">
+            <summary>Builds and applies a structured graph record for a non-array JSON root value.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportJsonArrayItem(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,System.Guid,System.Text.Json.JsonElement,System.Int32)">
+            <summary>Builds and applies one structured graph record for a JSON array item.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.AddJsonValueContents(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder,System.Int32,System.Text.Json.JsonElement,System.String,System.Int32)">
+            <summary>Adds typed JSON scalar, object, or array contents to a structured record.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.AddJsonObjectProperties(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder,System.Int32,System.Text.Json.JsonElement,System.String,System.Int32)">
+            <summary>Adds JSON object properties and recursively maps their values.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.AddJsonArrayItems(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder,System.Int32,System.Text.Json.JsonElement,System.String,System.Int32)">
+            <summary>Adds JSON array members with stable index-based position pointers.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ExtractJsonText(System.Text.Json.JsonElement)">
+            <summary>Extracts known prose fields or fallback string leaves from a JSON value.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.CollectJsonStrings(System.Text.Json.JsonElement,System.Collections.Generic.List{System.String},System.Boolean)">
+            <summary>Collects prose-key strings or all string leaves in traversal order.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportXml(OPEN_LRD.NLP.DataFileImporter.DataFileImportState)">
+            <summary>Streams XML records into structural graph data or extracted NLP text.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportXmlText(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,System.Xml.XmlReader)">
+            <summary>Streams XML text records through one NLP session without creating structural nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ReadXmlTextSubtree(System.Xml.XmlReader,System.Int32,System.Threading.CancellationToken,System.Boolean@)">
+            <summary>Collects text and CDATA from one XML subtree within a bounded character budget.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.AddXmlElementNode(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder,System.Xml.XmlReader,System.String)">
+            <summary>Adds one XML element and its attribute properties to a structured record.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ReadXmlElement(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,System.Xml.XmlReader,OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder,System.String,System.Int32)">
+            <summary>Recursively maps an XML element, attributes, child elements, and text values.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ExpandedName(System.Xml.XmlReader)">
+            <summary>Returns an XML element or attribute name with its namespace URI.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.EscapeXmlName(System.String)">
+            <summary>Escapes an XML name for inclusion in a structural position path.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DetectFormat(System.String)">
+            <summary>Infers a supported file format from the file extension.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GetFileUri(System.String)">
+            <summary>Creates a normalized absolute file URI and platform-appropriate comparison metadata.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ComputeSha256(System.String,System.Threading.CancellationToken)">
+            <summary>Computes a streaming SHA-256 checksum while honoring cancellation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ValidateOptions(OPEN_LRD.NLP.DataFileImportOptions)">
+            <summary>Rejects invalid file format, mode, or resource-limit options.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.FileUriInfo">
+            <summary>Stores the canonical URI and comparison metadata for an import file.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.FileUriInfo.#ctor(System.Uri,System.String,System.StringComparison)">
+            <summary>Stores the canonical URI and comparison metadata for an import file.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.DataFileImportState">
+            <summary>Tracks a single import's source identity, counters, diagnostics, and graph operations.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.#ctor(OPEN_LRD.LRD_Core,OPEN_LRD.NLP.DataFileImportOptions,System.String,System.Uri,System.String,System.String,OPEN_LRD.NLP.DataFileFormat)">
+            <summary>Creates import state and indexes current nodes by their data-pointer URI.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.ResolveExistingSource">
+            <summary>Resolves or validates the source node associated with the normalized file URI.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.EnsureSource">
+            <summary>Returns the existing source node or creates its file-backed provenance node.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.FindByPointer(OPEN_LRD.Nodes.DataPointer)">
+            <summary>Finds a graph node indexed by the supplied pointer's location URI.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.Apply(OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder)">
+            <summary>Validates and applies one structured record, upserting nodes by file position.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.AddDiagnostic(System.String)">
+            <summary>Adds a diagnostic while enforcing the configured diagnostic count.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.ReportProgress(System.String)">
+            <summary>Publishes the current record progress to the configured callback.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.CompleteSourceMetadataIfEligible">
+            <summary>Commits source trust and checksum only after a complete import with outcomes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.ToResult">
+            <summary>Creates the immutable result snapshot for the current import state.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.LocationEquals(System.Uri,System.Uri)">
+            <summary>Compares two file locations using the platform's path case rules.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.GetPointerKey(System.Uri)">
+            <summary>Normalizes a pointer URI into its dictionary lookup key.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.DataFileImportState.GetPathComparison">
+            <summary>Returns the path comparison rule for the current operating system.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder">
+            <summary>Builds a bounded graph representation for one CSV/JSON/XML record.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder.#ctor(System.Int32,System.Int32,System.Int32)">
+            <summary>Creates a graph-record builder with explicit node, link, and character budgets.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder.AddNode(OPEN_LRD.NLP.DataFileImporter.GraphNodeSpec)">
+            <summary>Adds a node specification unless the record budget has been exhausted.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder.TryAddNode(OPEN_LRD.NLP.DataFileImporter.GraphNodeSpec,System.Int32@)">
+            <summary>Attempts to add a node and converts record-budget errors into a false result.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder.AddLink(System.Int32,System.Int32,System.String)">
+            <summary>Adds a link between two nodes in this record.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder.AddExternalLink(System.Guid,System.Int32,System.String)">
+            <summary>Adds a link from an existing graph node to a node in this record.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder.MarkError(System.String)">
+            <summary>Marks the record invalid while preserving its first error.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.GraphNodeSpec">
+            <summary>Describes one graph node to create or update from a structured record.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GraphNodeSpec.#ctor(OPEN_LRD.Nodes.NodeTypes,System.String,System.String[],OPEN_LRD.Nodes.DataPointer)">
+            <summary>Describes one graph node to create or update from a structured record.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.GraphLinkSpec">
+            <summary>Describes one local or source-external graph link in a record.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GraphLinkSpec.#ctor(System.Int32,System.Int32,System.String,System.Nullable{System.Guid})">
+            <summary>Describes one local or source-external graph link in a record.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.AppliedGraphRecord">
+            <summary>Contains the graph identifiers produced when a structured record is applied.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.AppliedGraphRecord.#ctor(System.Guid[])">
+            <summary>Contains the graph identifiers produced when a structured record is applied.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.CsvRecord">
+            <summary>Contains one parsed CSV row and its recoverability metadata.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.CsvRecord.#ctor(System.String[],System.String,System.Boolean,System.Boolean)">
+            <summary>Contains one parsed CSV row and its recoverability metadata.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.ImportLimitException">
+            <summary>Signals that a configured file, record, node, or link budget was reached.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportLimitException.#ctor(System.String)">
+            <summary>Creates an exception describing a reached import budget.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.ImportRecordException">
+            <summary>Signals that the current structured record cannot be applied safely.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ImportRecordException.#ctor(System.String)">
+            <summary>Creates an exception describing why a record could not be applied.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.JsonRawValue">
+            <summary>Stores bounded raw JSON input and parser completion flags.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.JsonRawValue.#ctor(System.String,System.Boolean,System.Boolean)">
+            <summary>Stores bounded raw JSON input and parser completion flags.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.JsonCharacterReader">
+            <summary>Reads JSON characters incrementally while supporting one-character lookahead.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.JsonCharacterReader.#ctor(System.IO.TextReader)">
+            <summary>Creates a character reader over the supplied text stream.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.JsonCharacterReader.Read">
+            <summary>Reads one character, returning a buffered lookahead character first.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.JsonCharacterReader.Peek">
+            <summary>Returns the next character without consuming it.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.JsonCharacterReader.ReadNonWhitespace">
+            <summary>Reads the next non-whitespace character or the end-of-stream marker.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.ReadJsonValue(OPEN_LRD.NLP.DataFileImporter.JsonCharacterReader,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>Reads one JSON primitive or compound value into a bounded character buffer.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.GetMediaType(OPEN_LRD.NLP.DataFileFormat)">
+            <summary>Returns the MIME type associated with a data-file format.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.CreateSourceNodeLabel(System.String)">
+            <summary>Creates the display label used for a file-backed Source node.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.NewRecordBuilder(OPEN_LRD.NLP.DataFileImporter.DataFileImportState)">
+            <summary>Creates a graph-record builder using the import's configured budgets.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.CalculateTrust(System.Int32,System.Int32)">
+            <summary>Calculates the import trust score from successful and failed records.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.AddValueNode(OPEN_LRD.NLP.DataFileImporter.DataFileImportState,OPEN_LRD.NLP.DataFileImporter.GraphRecordBuilder,System.String,OPEN_LRD.NLP.DataFileImporter.ValueKind,OPEN_LRD.Nodes.DataPointer,System.Int32,System.String)">
+            <summary>Adds a typed metadata value node and its optional parent relation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.NlpImportSession">
+            <summary>Runs extracted prose records through one NLP pipeline and conversation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.NlpImportSession.#ctor(OPEN_LRD.NLP.DataFileImporter.DataFileImportState)">
+            <summary>Creates a shared NLP pipeline unless the import is a dry run.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.NlpImportSession.ProcessRecord(System.String,System.String)">
+            <summary>Ingests one extracted text record and records its outcome and affected nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.NlpImportSession.Dispose">
+            <summary>Releases the pipeline's attachment to the shared conversation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.DataFileImporter.ValueKind">
+            <summary>Classifies a typed value extracted from JSON, XML, or NLP input.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.InferTextValueKind(System.String)">
+            <summary>Infers the typed value category for a textual scalar.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.CreatePositionPointer(System.Uri,System.String,System.String)">
+            <summary>Creates a data pointer that identifies a stable position within a source file.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.DataFileImporter.EscapeJsonPointer(System.String)">
+            <summary>Escapes a property name according to RFC 6901 JSON Pointer rules.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.EntityResolution">
+            <summary>Stores the resolved label, type, candidates, and diagnostics for one entity mention.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.EntityResolution.#ctor(System.String,System.String,OPEN_LRD.Nodes.NodeTypes,System.Collections.Generic.IReadOnlyList{System.String},System.Nullable{System.Guid},System.Collections.Generic.IReadOnlyList{System.Guid},System.Boolean,System.Boolean,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Stores the resolved label, type, candidates, and diagnostics for one entity mention.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.EntityResolver">
+            <summary>Resolves typed entity mentions against graph nodes and conversation context.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Lemmatizer">
+            <summary>Normalizes inflected words to lexical lemmas using part-of-speech rules.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Lexicon">
+            <summary>Provides bounded lexical sets and grammatical classifications for NLP components.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NamedEntityRecognizer">
+            <summary>Identifies and types named entities and temporal mentions in parsed sentences.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NlpOptions">
+            <summary>Configures bounded NLP parsing, reasoning, conversation, and temporal behavior.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NlpPipeline">
+            <summary>Coordinates NLP parsing, conversational context, reasoning ingestion, and read-only Ask.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpPipeline.#ctor(OPEN_LRD.LRD_Core,OPEN_LRD.NLP.NlpOptions,OPEN_LRD.Reasoning.ReasoningEngine,System.Nullable{System.Guid},OPEN_LRD.Reasoning.ReasoningOptions)">
+            <summary>Creates a pipeline attached to an initialized graph and conversation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpPipeline.ResetConversation">
+            <summary>Clears conversational mentions, focus, provenance, and turn state.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpPipeline.Dispose">
+            <summary>Detaches the pipeline from its graph-managed conversation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpPipeline.Analyze(System.String)">
+            <summary>Parses text into tokens, clauses, mentions, and relation frames without graph mutation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpPipeline.Ask(System.String)">
+            <summary>Answers a supported natural-language query without mutating graph knowledge.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpPipeline.Ingest(System.String,System.Nullable{System.Guid},System.Nullable{System.Guid})">
+            <summary>Parses text and merges supported relation chains into the graph with source/topic trust.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NlpStatus">
+            <summary>Describes the outcome of an NLP parse, ingestion, or Ask operation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.PartOfSpeech">
+            <summary>Identifies the lexical part of speech assigned to a token.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.SentenceType">
+            <summary>Classifies a parsed sentence by its communicative form.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Token">
+            <summary>Stores a token's source span, normalized text, lemma, and grammatical tag.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.Token.#ctor(System.String,System.String,System.String,OPEN_LRD.NLP.PartOfSpeech,System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>Stores a token's source span, normalized text, lemma, and grammatical tag.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ChunkKind">
+            <summary>Identifies a syntactic chunk category produced by shallow parsing.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ClauseRole">
+            <summary>Identifies the grammatical role of a clause argument.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.MentionKind">
+            <summary>Classifies a named or typed entity mention.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Chunk">
+            <summary>Stores the token span and syntactic kind of a parsed phrase.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.Chunk.#ctor(OPEN_LRD.NLP.ChunkKind,System.Int32,System.Int32,System.Int32)">
+            <summary>Stores the token span and syntactic kind of a parsed phrase.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ClauseArgument">
+            <summary>Stores a role-labeled token span within a clause.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.ClauseArgument.#ctor(OPEN_LRD.NLP.ClauseRole,System.Int32,System.Int32)">
+            <summary>Stores a role-labeled token span within a clause.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Clause">
+            <summary>Stores clause boundaries, phrase chunks, and extracted arguments.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.Clause.#ctor(System.Int32,System.Int32,System.Int32,System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.Chunk},System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.ClauseArgument})">
+            <summary>Stores clause boundaries, phrase chunks, and extracted arguments.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Mention">
+            <summary>Stores a typed mention and its confidence and source span.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.Mention.#ctor(System.String,System.String,OPEN_LRD.Nodes.NodeTypes,OPEN_LRD.NLP.MentionKind,System.Int32,System.Int32,System.Int32,System.Double,System.Nullable{System.Guid})">
+            <summary>Stores a typed mention and its confidence and source span.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Sentence">
+            <summary>Stores tokenized and parsed data for one sentence.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.Sentence.#ctor(System.Int32,System.String,System.Int32,System.Int32,OPEN_LRD.NLP.SentenceType,System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.Token})">
+            <summary>Stores tokenized and parsed data for one sentence.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ParsedText">
+            <summary>Stores normalized text, sentences, tokens, parsed chunks, mentions, and diagnostics.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.ParsedText.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.Sentence},System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.Token},System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Stores normalized text, sentences, tokens, parsed chunks, mentions, and diagnostics.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.FrameRole">
+            <summary>Identifies the semantic role of an argument in a relation frame.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Tense">
+            <summary>Identifies the grammatical tense of a relation frame.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.Voice">
+            <summary>Identifies the grammatical voice of a relation frame.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.CoordinationKind">
+            <summary>Describes conjunction or disjunction across coordinated arguments.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NegationKind">
+            <summary>Describes the scope of negation in a relation frame.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.FrameArgument">
+            <summary>Stores a typed relation argument and the span from which it was extracted.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.FrameArgument.#ctor(OPEN_LRD.NLP.FrameRole,System.String,System.String,OPEN_LRD.Nodes.NodeTypes,OPEN_LRD.NLP.MentionKind,System.Int32,System.Int32,System.Int32,System.Boolean,System.String,System.Double)">
+            <summary>Stores a typed relation argument and the span from which it was extracted.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.RelationFrame">
+            <summary>Stores an extracted predicate, typed arguments, qualifiers, and polarity.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.RelationFrame.#ctor(System.String,System.String,OPEN_LRD.Nodes.Links.LinkClass,System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.FrameArgument},System.Boolean,System.String,OPEN_LRD.NLP.Tense,OPEN_LRD.NLP.Voice,System.Int32,System.Int32,System.Int32,System.Int32,System.Double,System.Boolean,System.Collections.Generic.IReadOnlyList{System.String},OPEN_LRD.NLP.CoordinationKind,System.Int32,OPEN_LRD.NLP.NegationKind)">
+            <summary>Stores an extracted predicate, typed arguments, qualifiers, and polarity.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.RelationExtractionResult">
+            <summary>Contains extracted relation frames and parser diagnostics.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.RelationExtractionResult.#ctor(System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.RelationFrame},System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Contains extracted relation frames and parser diagnostics.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ChainBuildResult">
+            <summary>Contains NLP chains prepared for reasoning and any build diagnostics.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.ChainBuildResult.#ctor(System.Collections.Generic.IReadOnlyList{System.Collections.Generic.LinkedList{OPEN_LRD.Nodes.Chain_Node}},System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Contains NLP chains prepared for reasoning and any build diagnostics.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.QuestionType">
+            <summary>Classifies a question by its expected answer position and shape.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.WhKind">
+            <summary>Identifies the interrogative word class used by a question.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.AnswerKind">
+            <summary>Identifies the semantic form expected for an answer.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.AnswerStatus">
+            <summary>Describes the result of a read-only answer operation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.QuestionVariant">
+            <summary>Stores one bounded graph-query alternative for an analyzed question.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.QuestionVariant.#ctor(System.String,System.Collections.Generic.LinkedList{OPEN_LRD.Nodes.Chain_Node},OPEN_LRD.Nodes.NodeTypes,System.String,System.Int32,System.Int32,OPEN_LRD.Nodes.Links.LinkClass,OPEN_LRD.NLP.FrameRole,System.Boolean,System.Boolean)">
+            <summary>Stores one bounded graph-query alternative for an analyzed question.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.QuestionAnalysis">
+            <summary>Stores the normalized answer intent, anchor, and query variants for a question.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.QuestionAnalysis.#ctor(OPEN_LRD.NLP.QuestionType,OPEN_LRD.NLP.WhKind,OPEN_LRD.NLP.AnswerKind,System.String,OPEN_LRD.NLP.FrameArgument,OPEN_LRD.NLP.FrameArgument,OPEN_LRD.NLP.FrameArgument,OPEN_LRD.NLP.FrameArgument,System.String,System.String,OPEN_LRD.Nodes.Links.LinkClass,OPEN_LRD.NLP.Tense,OPEN_LRD.NLP.Voice,System.Boolean,System.Boolean,System.Boolean,System.Boolean,System.Nullable{System.Guid},System.Collections.Generic.IReadOnlyList{System.Guid},OPEN_LRD.NLP.FrameRole,System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.QuestionVariant},System.Collections.Generic.IReadOnlyList{System.String},System.Int32,System.Int32,System.Int32)">
+            <summary>Stores the normalized answer intent, anchor, and query variants for a question.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.AnswerCandidate">
+            <summary>Stores a ranked graph node candidate and its supporting path.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.AnswerCandidate.#ctor(System.Guid,System.String,OPEN_LRD.Nodes.NodeTypes,System.Double,System.Int32,System.Int32,OPEN_LRD.Nodes.Links.LinkClass,System.Collections.Generic.IReadOnlyList{System.Guid},System.Boolean)">
+            <summary>Stores a ranked graph node candidate and its supporting path.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NlpAnswer">
+            <summary>Stores an answer, candidate evidence, confidence, and diagnostics.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpAnswer.#ctor(OPEN_LRD.NLP.AnswerStatus,OPEN_LRD.NLP.AnswerKind,System.String,System.String,System.Nullable{System.Guid},System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.AnswerCandidate},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Reasoning.GraphPath},OPEN_LRD.NLP.QuestionAnalysis,OPEN_LRD.Reasoning.ReasoningResult,System.Boolean,System.Double,System.Collections.Generic.IReadOnlyList{System.String},System.Boolean)">
+            <summary>Stores an answer, candidate evidence, confidence, and diagnostics.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NlpResult">
+            <summary>Stores the result and all optional parse, frame, chain, reasoning, and answer details.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpResult.#ctor(OPEN_LRD.NLP.NlpStatus,System.Collections.Generic.IReadOnlyList{System.String},OPEN_LRD.NLP.ParsedText)">
+            <summary>Stores the result and all optional parse, frame, chain, reasoning, and answer details.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NlpWorkbenchState">
+            <summary>Provides a read-only snapshot of an NLP Workbench session and its conversation state.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.NlpWorkbenchState.#ctor(System.Boolean,System.Boolean,System.Nullable{System.Guid},System.Nullable{System.Guid},System.Int32,System.Nullable{System.Guid},System.Nullable{System.Guid},System.Nullable{System.Guid},System.Nullable{System.Guid},System.Nullable{System.Guid},System.Int32,System.Int32,System.Int32,System.Int32,System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.ConversationMention},System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.SessionProvenanceEntry})">
+            <summary>Provides a read-only snapshot of an NLP Workbench session and its conversation state.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.NlpWorkbench">
+            <summary>Provides UI-independent lifecycle and operation access to NLP pipeline sessions.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.PosTagger">
+            <summary>Assigns deterministic part-of-speech tags to normalized tokens.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.QuestionAnalyzer">
+            <summary>Converts parsed question frames into bounded graph-query variants.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.RelationExtractor">
+            <summary>Extracts typed, qualified relation frames from parsed sentence structures.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.RelationRegistry">
+            <summary>Registers and resolves the stable relationship types used by NLP and ontology data.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.ShallowParser">
+            <summary>Builds shallow phrase chunks, clauses, and semantic arguments from tokens.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.SocialDialogueRecognizer">
+            <summary>Recognizes read-only social and identity dialogue without graph mutation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TemporalExpressionParser">
+            <summary>Parses bounded absolute and relative temporal expressions using a reference time.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextChunkOptions">
+            <summary>Defines maximum character, sentence, and chunk counts for text chunking.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextChunk">
+            <summary>Stores one bounded text segment and its source paragraph metadata.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunk.#ctor(System.Int32,System.String,System.Int32,System.Int32)">
+            <summary>Stores one bounded text segment and its source paragraph metadata.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextChunkingResult">
+            <summary>Contains text chunks, source statistics, and truncation state.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunkingResult.#ctor(System.Collections.Generic.IReadOnlyList{OPEN_LRD.NLP.TextChunk},System.Int32,System.Int32,System.Int32,System.Boolean)">
+            <summary>Contains text chunks, source statistics, and truncation state.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextChunker">
+            <summary>
+            Splits raw text into bounded paragraphs and sentences so that each piece
+            can be handed to a single NLP ingestion call.
+            </summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.Chunk(System.String,OPEN_LRD.NLP.TextChunkOptions)">
+            <summary>Splits raw text into bounded chunks, preferring paragraph and sentence boundaries.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.FindSentenceSpans(System.String)">
+            <summary>
+            Returns the tokenizer's sentence spans without tokenizing.
+            Shared so the chunker and the tokenizer agree on boundaries.
+            </summary>
+            <summary>Finds sentence spans while accounting for punctuation, abbreviations, and decimals.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.TrySplitAtSentenceBoundary(System.String,System.String@,System.String@)">
+            <summary>
+            Splits a chunk in half at the sentence boundary closest to the midpoint.
+            Returns false when the text holds fewer than two sentences.
+            </summary>
+            <summary>Splits text near a sentence boundary when both halves remain non-empty.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.Validate(OPEN_LRD.NLP.TextChunkOptions)">
+            <summary>Validates the configured chunking budgets.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.AddParagraph(OPEN_LRD.NLP.TextChunker.ChunkCollector,System.String,System.Collections.Generic.List{System.ValueTuple{System.Int32,System.Int32}},System.Int32,OPEN_LRD.NLP.TextChunkOptions)">
+            <summary>Adds sentence or hard-split chunks for one normalized paragraph.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.HardSplit(System.String,System.Int32)">
+            <summary>Splits oversized text into bounded spans without dropping characters.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.FindHardSplit(System.String,System.Int32,System.Int32)">
+            <summary>Finds a safe hard-split index near the character budget.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.SplitParagraphs(System.String)">
+            <summary>Splits input into paragraphs separated by blank lines.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.AddSpan(System.Collections.Generic.List{System.ValueTuple{System.Int32,System.Int32}},System.String,System.Int32,System.Int32)">
+            <summary>Adds a trimmed, non-empty text span to a sentence span list.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.IsTerminal(System.Char)">
+            <summary>Checks whether a character may terminate a sentence.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.IsClosingCharacter(System.Char)">
+            <summary>Checks whether a character closes a quoted or bracketed sentence.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.IsBoundary(System.String,System.Int32)">
+            <summary>Determines whether punctuation at an index is a true sentence boundary.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.IsDecimalPoint(System.String,System.Int32)">
+            <summary>Checks whether a period is between digits and therefore part of a decimal.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.IsAbbreviationPoint(System.String,System.Int32)">
+            <summary>Checks whether a period terminates a known abbreviation rather than a sentence.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.ChunkCollector.#ctor(OPEN_LRD.NLP.TextChunkOptions)">
+            <summary>Creates a chunk collector with the specified resource limits.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextChunker.ChunkCollector.Add(System.String,System.Int32,System.Int32)">
+            <summary>Adds text to the current paragraph chunk or marks the result truncated.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextImportProgress">
+            <summary>Reports progress while text chunks are imported.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextImportProgress.#ctor(System.Int32,System.Int32)">
+            <summary>Reports progress while text chunks are imported.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextImportOptions">
+            <summary>Configures text-file chunking, provenance, safety, and cancellation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextImportResult">
+            <summary>Summarizes text chunk outcomes, provenance, and diagnostics.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextFileImporter">
+            <summary>
+            Imports a plain-text file by splitting it into bounded chunks and passing
+            each chunk through a shared <see cref="T:OPEN_LRD.NLP.NlpPipeline"/> and conversation.
+            </summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.Import(OPEN_LRD.LRD_Core,OPEN_LRD.NLP.TextImportOptions)">
+            <summary>Reads, chunks, and ingests a text file using one shared NLP pipeline.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.IngestWithRetry(OPEN_LRD.NLP.NlpPipeline,OPEN_LRD.NLP.TextChunk,System.Nullable{System.Guid},System.Nullable{System.Guid},OPEN_LRD.NLP.TextFileImporter.DiagnosticBag,OPEN_LRD.NLP.TextImportOptions,System.Collections.Generic.ISet{System.Guid},System.Int32)">
+            <summary>Ingests a chunk and recursively retries invalid input at sentence boundaries.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.WithText(OPEN_LRD.NLP.TextChunk,System.String)">
+            <summary>Creates a chunk copy with updated text and sentence metadata.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.Combine(OPEN_LRD.NLP.TextFileImporter.ChunkOutcome,OPEN_LRD.NLP.TextFileImporter.ChunkOutcome)">
+            <summary>Combines the outcomes of two recursively split chunks.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.EnsureSourceNode(OPEN_LRD.LRD_Core,System.String,System.Boolean@)">
+            <summary>Finds or creates the permanent file Source node used for provenance.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.ReadText(System.String,System.Int64)">
+            <summary>Reads a bounded UTF text file and rejects binary content.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.ValidateFilePath(OPEN_LRD.NLP.TextImportOptions)">
+            <summary>Resolves and validates the selected text-file path.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.ValidateOptions(OPEN_LRD.NLP.TextImportOptions)">
+            <summary>Rejects invalid text-file importer limits before reading the file.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.NormalizeGuid(System.Nullable{System.Guid})">
+            <summary>Converts an empty optional GUID to a missing value.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextFileImporter.ChunkOutcome">
+            <summary>Classifies the result of processing one text chunk.</summary>
+            <summary>Classifies the result of processing one text chunk.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextFileImporter.DiagnosticBag">
+            <summary>Stores a bounded diagnostic list and reports when entries are omitted.</summary>
+            <summary>Stores a bounded set of text-import diagnostics.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.DiagnosticBag.#ctor(System.Int32)">
+            <summary>Creates a diagnostic collection with a fixed entry budget.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.DiagnosticBag.Add(System.String)">
+            <summary>Adds a diagnostic while preserving the configured size limit.</summary>
+        </member>
+        <member name="M:OPEN_LRD.NLP.TextFileImporter.DiagnosticBag.ToList">
+            <summary>Returns a copy of the collected diagnostics.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextNormalizer">
+            <summary>Normalizes Unicode, punctuation, whitespace, and sentence text for NLP processing.</summary>
+        </member>
+        <member name="T:OPEN_LRD.NLP.TextTokenizer">
+            <summary>Tokenizes normalized sentences while preserving source spans and question form.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.Gcide.GcideCorpusLoader">
+            <summary>Maps parsed GCIDE entries into lexical graph nodes and relationships.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.Gcide.GcideSense">
+            <summary>Stores one parsed dictionary sense and its lexical metadata.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Ontology.Gcide.GcideSense.#ctor(System.String,System.String,System.String,System.String)">
+            <summary>Stores one parsed dictionary sense and its lexical metadata.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.Gcide.GcideEntry">
+            <summary>Stores a parsed headword and its senses from a GCIDE corpus entry.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Ontology.Gcide.GcideEntry.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{OPEN_LRD.Ontology.Gcide.GcideSense},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>Stores a parsed headword and its senses from a GCIDE corpus entry.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.Gcide.GcideEntryReader">
+            <summary>Streams and parses dictionary entries from bundled GCIDE files.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.Gcide.GcideSubset">
+            <summary>Selects a portion of the bundled GCIDE corpus to load.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.Gcide.GcideLoadOptions">
+            <summary>Configures corpus path, subset, limits, progress, and cancellation for GCIDE loading.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.Gcide.GcideLoadResult">
+            <summary>Summarizes parsed entries, graph additions, and diagnostics from a GCIDE load.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Ontology.Gcide.GcideLoadResult.#ctor(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>Summarizes parsed entries, graph additions, and diagnostics from a GCIDE load.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.Gcide.GcideMarkup">
+            <summary>Decodes GCIDE markup and abbreviations into readable dictionary text.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.OntologyConcept">
+            <summary>Describes a foundational ontology concept and its optional parent.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Ontology.OntologyConcept.#ctor(System.String,System.String)">
+            <summary>Describes a foundational ontology concept and its optional parent.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.OntologyCatalog">
+            <summary>Provides the curated list of foundational ontology concepts.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.OntologyLoader">
+            <summary>Builds and exports the upper ontology and loads curated lexical resources.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.OntologyOptions">
+            <summary>Defines stable ontology loading and validation defaults.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.OntologyRelation">
+            <summary>Describes a stable ontology relation and its inverse and link class.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Ontology.OntologyRelation.#ctor(System.Int32,System.String,System.String,System.String)">
+            <summary>Describes a stable ontology relation and its inverse and link class.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.OntologyRelations">
+            <summary>Registers the fixed structural ontology relationship types.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.OntologyTypes">
+            <summary>Registers stable ontology node and link-class categories.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.OntologyValidator">
+            <summary>Validates ontology relations, node types, and structural constraints.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Ontology.UpperOntologyBootstrap">
+            <summary>Creates permanent foundational ontology nodes and hierarchy links.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogFormat">
+            <summary>Defines stable format identifiers and schema version numbers for persisted logs.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.LogJson">
+            <summary>Provides shared JSON serializer settings for log documents and records.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogDocument">
+            <summary>Represents a complete unsegmented core graph log document.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogManifest">
+            <summary>Describes a segmented core export and its part manifest.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.TransientLogManifest">
+            <summary>Describes a segmented transient-chain export and its part manifest.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.LogPartDefinition">
+            <summary>Describes one numbered log part, including its length, checksum, and record count.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogPartRecord">
+            <summary>Contains one typed record in a segmented core log.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.TransientLogPartRecord">
+            <summary>Contains one positioned chain-node record in a segmented transient log.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.TypeDefinitionLog">
+            <summary>Stores runtime node, link-class, relationship, and inverse-type definitions.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.TypeNameLog">
+            <summary>Stores a stable numeric identifier and name for a registered graph type.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.RelationTypeLog">
+            <summary>Stores the name and inverse name of a relationship type.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.NodeLog">
+            <summary>Stores one graph node and all persisted metadata fields.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.DataPointerLog">
+            <summary>Stores a data pointer using URI and optional payload metadata.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.LinkLog">
+            <summary>Stores one directed edge, its type identifiers, class, and active state.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.ConversationLog">
+            <summary>Stores conversational focus, options, mentions, and provenance.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.MentionLog">
+            <summary>Stores a mention and its resolved node, role, and turn metadata.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.ProvenanceLog">
+            <summary>Stores session provenance for one ingested relation or outcome.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.NlpOptionsLogMapper">
+            <summary>Converts NLP options to and from the persistence DTO schema.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Persistence.NlpOptionsLogMapper.ToLog(OPEN_LRD.NLP.NlpOptions)">
+            <summary>Creates a persistence DTO from runtime NLP options.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Persistence.NlpOptionsLogMapper.FromLog(OPEN_LRD.Persistence.NlpOptionsLog)">
+            <summary>Creates runtime NLP options from a persistence DTO.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.NlpOptionsLog">
+            <summary>Stores versioned NLP option values in a core-log document.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogExporter">
+            <summary>Serializes graph, conversation, and transient-chain state to bounded log files.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogExporter.SegmentedPartWriter">
+            <summary>Writes bounded JSON log parts and tracks their manifest metadata.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogExporter.CappedWriteStream">
+            <summary>Wraps a stream and rejects writes that exceed a fixed byte budget.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogExporter.OutputLimitExceededException">
+            <summary>Signals that a serialized output part exceeded its configured byte budget.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogExporter.OversizedLogRecordException">
+            <summary>Signals that one serialized record cannot fit into an empty log part.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Persistence.CoreLogExporter.OversizedLogRecordException.#ctor(System.String)">
+            <summary>Creates an exception describing the oversized record.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogImporter">
+            <summary>Validates and imports core or transient log documents using merge or replace semantics.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogImporter.LinkIdentity">
+            <summary>Defines stable identity for validating duplicate persisted links.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Persistence.CoreLogImporter.LinkIdentity.#ctor(System.Guid,System.Guid,System.Int32,System.Int32,System.Int32)">
+            <summary>Defines stable identity for validating duplicate persisted links.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogImporter.NodePlan">
+            <summary>Stores staged graph nodes and endpoint-validation sets for a core import.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogImporter.NodePlanningContext">
+            <summary>Tracks source and destination node validation while planning a core import.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogImporter.LinkPlanningContext">
+            <summary>Tracks duplicate and endpoint validation while planning imported links.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogImporter.ConversationPlanningContext">
+            <summary>Tracks duplicate and accepted conversation IDs while planning an import.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogImporter.TransientChainBuilder">
+            <summary>Reconstructs and validates one ordered transient query or response chain.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.ImportMode">
+            <summary>Chooses whether imported persistence records merge with or replace graph state.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.CoreLogExportResult">
+            <summary>Summarizes output paths, graph counts, and warnings from a log export.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.PersistenceImportResult">
+            <summary>Summarizes graph changes and diagnostics from a persistence import.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.TransientLogDocument">
+            <summary>Represents the top-level transient query/response companion log.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Persistence.ChainLog">
+            <summary>Stores the ordered node and link records for one transient chain.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.DistanceLayout3D">
+            <summary>Computes deterministic 3D node positions from semantic link-distance constraints.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.DistanceLayout3D.Component">
+            <summary>Stores a connected graph component and its local layout bounds.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.DistanceLayout3D.PlacedSphere">
+            <summary>Stores an already placed node sphere used by collision avoidance.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.DistanceLayout3D.PlacedSphere.#ctor(System.Numerics.Vector3,System.Single)">
+            <summary>Stores an already placed node sphere used by collision avoidance.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.DistanceLayout3D.SpatialGrid">
+            <summary>Accelerates candidate overlap checks for placed node spheres.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.FlyCamera">
+            <summary>Models camera position and orientation for first-person graph navigation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.GraphColorMap">
+            <summary>Stores default and user-selected graph palette overrides by node, link, and class ID.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.RgbColor">
+            <summary>Represents an immutable RGB color with byte-sized components.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.RgbColor.#ctor(System.Byte,System.Byte,System.Byte)">
+            <summary>Represents an immutable RGB color with byte-sized components.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.ColorChoice">
+            <summary>Associates a user-facing palette name with an RGB color.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.ColorChoice.#ctor(System.String,OPEN_LRD.Visualization.RgbColor)">
+            <summary>Associates a user-facing palette name with an RGB color.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.GraphColorPalette">
+            <summary>Provides the built-in palette and stable color-name lookup.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.GraphMeshBuilder">
+            <summary>Constructs validated mesh data for graph nodes, links, and merged render batches.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.GraphMeshBuilder.CubeFace">
+            <summary>Stores vertex indices and a normal for one cube face.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.GraphMeshBuilder.CubeFace.#ctor(System.Numerics.Vector3,System.Numerics.Vector3,System.Numerics.Vector3,System.Numerics.Vector3,System.Numerics.Vector3)">
+            <summary>Stores vertex indices and a normal for one cube face.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.GraphMeshBuilder.LinkPair">
+            <summary>Stores an ordered pair of node indices joined by a link.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.GraphMeshBuilder.LinkPair.#ctor(System.Int32,System.Int32)">
+            <summary>Stores an ordered pair of node indices joined by a link.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.NodeRecord">
+            <summary>Stores the visualizer-facing data required to render one graph node.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.NodeRecord.#ctor(System.Guid,System.Int32,System.String,OPEN_LRD.Nodes.NodeLifetime,System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},System.Int32)">
+            <summary>Stores the visualizer-facing data required to render one graph node.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.LinkRecord">
+            <summary>Stores the visualizer-facing endpoints and types of one graph link.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.LinkRecord.#ctor(System.Int32,System.Int32,System.Int32,System.String,System.Int32,System.String,System.Double)">
+            <summary>Stores the visualizer-facing endpoints and types of one graph link.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.GraphSnapshot">
+            <summary>Captures a bounded, deduplicated graph view for rendering and picking.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.GraphSnapshot.LinkKey">
+            <summary>Defines stable link identity for reciprocal-edge deduplication.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.GraphSnapshot.LinkKey.#ctor(System.Guid,System.Guid,System.Int32,System.Int32)">
+            <summary>Defines stable link identity for reciprocal-edge deduplication.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.GraphSnapshot.PendingLink">
+            <summary>Stores a source link before its destination index is resolved.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.GraphSnapshot.PendingLink.#ctor(System.Int32,System.Int32,System.Int32,System.String,System.Int32,System.String,System.Double)">
+            <summary>Stores a source link before its destination index is resolved.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.LayoutStage">
+            <summary>Identifies the current stage of a 3D graph layout operation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.LayoutProgress">
+            <summary>Reports iteration, stage, and convergence progress from a layout operation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.LayoutProgress.#ctor(OPEN_LRD.Visualization.LayoutStage,System.Int32,System.Int32,System.Double,System.Int32,System.Int32)">
+            <summary>Reports iteration, stage, and convergence progress from a layout operation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.LayoutResult">
+            <summary>Contains final node positions, bounds, and diagnostics from a layout operation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.LinkDistanceDefinitions">
+            <summary>Resolves and validates semantic rest distances for graph link classes and types.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.MeshData">
+            <summary>Stores indexed vertex, normal, and triangle data for a renderable mesh.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.CameraView">
+            <summary>Stores camera basis vectors and projection parameters for graph rendering.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.ProjectionMath">
+            <summary>Provides projection, frustum, ray, and bounds calculations for the visualizer.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.NodeMeshBatch">
+            <summary>Groups node meshes that share a node type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.NodeMeshBatch.#ctor(System.Int32,System.String,OPEN_LRD.Visualization.MeshData)">
+            <summary>Groups node meshes that share a node type.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.LinkMeshBatch">
+            <summary>Groups link meshes that share a relationship type and link class.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.LinkMeshBatch.#ctor(System.Int32,System.String,System.Int32,OPEN_LRD.Visualization.MeshData)">
+            <summary>Groups link meshes that share a relationship type and link class.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.SceneGeometry">
+            <summary>Contains prepared mesh batches and layout positions for viewport rendering.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.VisualizerSceneBuilder">
+            <summary>Builds bounded, batched scene geometry from a graph snapshot and layout.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.SpatialNodeIndex">
+            <summary>Indexes projected graph nodes in a spatial tree for bounded picking and visibility queries.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.SpatialNodeIndex.Node">
+            <summary>Stores one spatially indexed node's original graph index and position.</summary>
+        </member>
+        <member name="M:OPEN_LRD.Visualization.SpatialNodeIndex.Node.#ctor(System.Numerics.Vector3,System.Numerics.Vector3,System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>Stores one spatially indexed node's original graph index and position.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.SpatialNodeIndex.PositionComparer">
+            <summary>Orders node indices by their coordinate along the active partition axis.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.VisualizerLabelMode">
+            <summary>Controls whether labels focus on current interaction or a bounded visible subset.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.VisualizerOptions">
+            <summary>Configures graph layout, rendering limits, camera behavior, and label presentation.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.VisualizerSettings">
+            <summary>Stores persisted visualizer palette, camera, and rendering settings.</summary>
+        </member>
+        <member name="T:OPEN_LRD.Visualization.VisualizerViewSettings">
+            <summary>Stores persisted view-specific visualizer settings.</summary>
+        </member>
+        <member name="T:OPEN_LRD.LRD_Core">
+            <summary>Owns the graph, runtime registries, conversations, persistence hooks, and lifecycle operations.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.InitializeCore">
+            <summary>Initializes or resets the singleton graph and its runtime state.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.CreateConversation(OPEN_LRD.NLP.NlpOptions)">
+            <summary>Creates and registers a conversation with the supplied NLP options.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.GetConversation(System.Guid)">
+            <summary>Returns the registered conversation or throws when it does not exist.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.TryGetConversation(System.Guid,OPEN_LRD.NLP.ConversationContext@)">
+            <summary>Attempts to retrieve a registered conversation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.ResolveConversation(System.Nullable{System.Guid},OPEN_LRD.NLP.NlpOptions)">
+            <summary>Resolves an existing conversation or creates one when no identifier is supplied.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.RemoveConversation(System.Guid)">
+            <summary>Removes a conversation when no active pipeline depends on it.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.GetConversations">
+            <summary>Returns a read-only snapshot of registered conversations.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.ClearConversations">
+            <summary>Clears registered conversation state and pipeline attachments.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.RegisterPipelineConversation(System.Guid,System.Guid)">
+            <summary>Associates an active pipeline with a registered conversation.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.TryGetPipelineConversation(System.Guid,System.Guid@)">
+            <summary>Attempts to retrieve the conversation attached to a pipeline.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.UnregisterPipelineConversation(System.Guid)">
+            <summary>Removes an active pipeline-to-conversation association.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.GenerateNewNode(OPEN_LRD.Nodes.NodeLifetime,System.Int32)">
+            <summary>Creates and stores a node using a generated identifier.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddExistingNode(OPEN_LRD.Nodes.Web_Node)">
+            <summary>Adds a preconstructed node to the graph.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.CreateEvent(System.String,System.Nullable{System.DateTimeOffset},System.Nullable{System.DateTimeOffset},System.Nullable{System.Guid},System.String,System.Nullable{System.Guid},System.Nullable{System.Guid})">
+            <summary>Creates an Event node with a time window and links its participants, action, and location.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.CreateEvent(System.Guid,System.String,System.Nullable{System.DateTimeOffset},System.Nullable{System.DateTimeOffset},System.Nullable{System.Guid},System.String,System.Nullable{System.Guid},System.Nullable{System.Guid})">
+            <summary>Creates an Event node from an existing event window and relationship identifiers.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindEventsInWindow(System.DateTimeOffset,System.DateTimeOffset,System.Boolean)">
+            <summary>Finds active Event nodes whose time windows overlap the requested interval.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindEventsFor(System.Guid,System.String,System.Nullable{System.Guid},System.Nullable{System.Guid})">
+            <summary>Finds Event nodes matching optional subject, action, and object constraints.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.CalculateEventTimeVariance(System.Guid,System.Nullable{System.DateTimeOffset})">
+            <summary>Calculates an event's temporal status relative to a supplied reference time.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.CalculateEventTimeVariance(OPEN_LRD.Nodes.Web_Node,System.Nullable{System.DateTimeOffset})">
+            <summary>Calculates an event's temporal status relative to the current time.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.IngestNodeMetadata(System.Guid)">
+            <summary>Materializes the selected node's metadata as typed graph facts.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.GetExistingNode(System.Guid)">
+            <summary>Returns a graph node by identifier or null when it is absent.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.TryGetNode(System.Guid,OPEN_LRD.Nodes.Web_Node@)">
+            <summary>Attempts to retrieve a graph node by identifier.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.RemoveExistingNode(OPEN_LRD.Nodes.Web_Node)">
+            <summary>Removes a graph node and cleans links that reference it.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.RemoveExistingNode(System.Guid)">
+            <summary>Removes a graph node by identifier and cleans its links.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddConnection(System.Guid,System.Guid)">
+            <summary>Adds a bidirectional basic-class connection between two nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddConnection(System.Guid,System.Guid,OPEN_LRD.Nodes.Links.LinkClass)">
+            <summary>Adds a bidirectional connection with the supplied semantic class.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddConnection(System.Guid,System.Guid,OPEN_LRD.Nodes.Links.LinkClass,System.Int32)">
+            <summary>Adds a bidirectional connection with the supplied class and relationship type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddDirectedConnection(System.Guid,System.Guid)">
+            <summary>Adds a directed basic-class connection between two nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddDirectedConnection(System.Guid,System.Guid,OPEN_LRD.Nodes.Links.LinkClass)">
+            <summary>Adds a directed connection with the supplied semantic class.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddDirectedConnection(System.Guid,System.Guid,OPEN_LRD.Nodes.Links.LinkClass,System.Int32)">
+            <summary>Adds a directed connection with the supplied class and relationship type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.RemoveConnection(System.Guid,System.Guid)">
+            <summary>Removes links in both directions between two nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.RemoveDirectedConnection(System.Guid,System.Guid)">
+            <summary>Removes only the directed link from source to destination.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.CleanObsoleteLinks(System.Guid)">
+            <summary>Removes links whose destination node no longer exists.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.GetDictionary">
+            <summary>Returns a read-only view of the graph node dictionary.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindNodes(OPEN_LRD.Nodes.NodeSearchCriteria)">
+            <summary>Finds nodes that satisfy the supplied optional search criteria.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindNodes(System.Func{OPEN_LRD.Nodes.Web_Node,System.Boolean})">
+            <summary>Finds nodes accepted by a caller-supplied predicate.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindByType(OPEN_LRD.Nodes.NodeTypes)">
+            <summary>Finds nodes with the specified node type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindByLifetime(OPEN_LRD.Nodes.NodeLifetime)">
+            <summary>Finds nodes with the specified lifetime classification.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindByLabel(System.String,OPEN_LRD.Nodes.NodeTypes)">
+            <summary>Finds nodes by case-insensitive label and optional type.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.TryFindByLabel(System.String,System.Collections.Generic.IReadOnlyList{OPEN_LRD.Nodes.Web_Node}@)">
+            <summary>Attempts to find nodes by label and reports whether any match.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindByLinkClass(OPEN_LRD.Nodes.Links.LinkClass)">
+            <summary>Finds nodes participating in links of the specified class.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.FindLinkedTo(System.Guid)">
+            <summary>Finds nodes connected to the specified node by active links.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.GetLinks(System.Guid)">
+            <summary>Returns the outgoing links stored by the specified node.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.BuildQuery(System.Collections.Generic.LinkedList{OPEN_LRD.Nodes.Chain_Node})">
+            <summary>Replaces the current query chain with a copy of the supplied nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.BuildQuery(OPEN_LRD.Nodes.Chain_Node)">
+            <summary>Replaces the current query chain with a single node.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddQueryNode(OPEN_LRD.Nodes.Chain_Node)">
+            <summary>Appends a node to the current query chain.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.ClearQuery">
+            <summary>Clears the current query chain.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.BuildResponse(System.Collections.Generic.LinkedList{OPEN_LRD.Nodes.Chain_Node})">
+            <summary>Replaces the current response chain with a copy of the supplied nodes.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.BuildResponse(OPEN_LRD.Nodes.Chain_Node)">
+            <summary>Replaces the current response chain with a single node.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.AddResponseNode(OPEN_LRD.Nodes.Chain_Node)">
+            <summary>Appends a node to the current response chain.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.ClearResponse">
+            <summary>Clears the current response chain.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.GetQuery">
+            <summary>Returns a copy of the current query chain.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.GetResponse">
+            <summary>Returns a copy of the current response chain.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.RunMaintenanceCycle">
+            <summary>Runs lifecycle maintenance with reasoning stages disabled.</summary>
+        </member>
+        <member name="M:OPEN_LRD.LRD_Core.RunMaintenanceCycle(OPEN_LRD.Maintenance.MaintenanceOptions)">
+            <summary>Runs lifecycle maintenance and the explicitly selected reasoning stages.</summary>
+        </member>
+    </members>
+</doc>

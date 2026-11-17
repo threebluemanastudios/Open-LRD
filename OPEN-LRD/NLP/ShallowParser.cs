@@ -1,5 +1,6 @@
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Builds shallow phrase chunks, clauses, and semantic arguments from tokens.</summary>
     internal static class ShallowParser
     {
         private static readonly HashSet<string> clauseConjunctions = new HashSet<string>(

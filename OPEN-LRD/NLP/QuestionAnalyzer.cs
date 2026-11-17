@@ -4,6 +4,7 @@ using OPEN_LRD.Ontology;
 
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Converts parsed question frames into bounded graph-query variants.</summary>
     internal static class QuestionAnalyzer
     {
         private static readonly string[] spatialPrepositions =

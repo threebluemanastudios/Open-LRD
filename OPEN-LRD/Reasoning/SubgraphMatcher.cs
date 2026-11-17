@@ -3,8 +3,10 @@ using OPEN_LRD.Nodes.Links;
 
 namespace OPEN_LRD.Reasoning
 {
+    /// <summary>Matches bounded query graphs to candidate subgraphs and scores their evidence.</summary>
     internal static class SubgraphMatcher
     {
+        /// <summary>Stores a selected graph edge and its match score during search.</summary>
         private readonly record struct MatchedEdge(Link Link, double Score);
 
         public static IReadOnlyList<SubgraphMatch> FindMatches(
@@ -31,7 +33,7 @@ namespace OPEN_LRD.Reasoning
             }
 
             Dictionary<Guid, List<(Guid NeighborID, QueryEdge Edge)>> adjacency = BuildAdjacency(query);
-            List<QueryNode> orderedNodes = OrderQueryNodes(query, adjacency);
+            List<QueryNode> orderedNodes = OrderQueryNodes(query, adjacency, candidates);
             Dictionary<(Guid, Guid), List<Link>> linksByPair = BuildLinkIndex(graph);
 
             List<SubgraphMatch> results = new List<SubgraphMatch>();
@@ -72,8 +74,16 @@ namespace OPEN_LRD.Reasoning
                     unmatchedQueryNodeIDs.RemoveAt(unmatchedQueryNodeIDs.Count - 1);
                 }
 
-                if (!candidates.TryGetValue(queryNode.QueryNodeID, out List<GraphNodeSnapshot>? nodeCandidates))
+                if (!candidates.TryGetValue(queryNode.QueryNodeID, out List<GraphNodeSnapshot>? globalCandidates))
                     return;
+
+                IReadOnlyList<GraphNodeSnapshot> nodeCandidates = GetCandidatesForSearch(
+                    queryNode,
+                    adjacency,
+                    mapping,
+                    graph,
+                    globalCandidates,
+                    options);
 
                 foreach (GraphNodeSnapshot candidate in nodeCandidates)
                 {
@@ -309,13 +319,37 @@ namespace OPEN_LRD.Reasoning
 
         private static List<QueryNode> OrderQueryNodes(
             QueryGraph query,
-            Dictionary<Guid, List<(Guid NeighborID, QueryEdge Edge)>> adjacency)
+            Dictionary<Guid, List<(Guid NeighborID, QueryEdge Edge)>> adjacency,
+            Dictionary<Guid, List<GraphNodeSnapshot>> candidates)
         {
             Dictionary<Guid, QueryNode> byID = query.Nodes.ToDictionary(node => node.QueryNodeID);
             List<QueryNode> ordered = new List<QueryNode>(query.Nodes.Count);
             HashSet<Guid> visited = new HashSet<Guid>();
             Queue<Guid> queue = new Queue<Guid>();
-            queue.Enqueue(query.RootQueryNodeID);
+            Guid searchStart = query.RootQueryNodeID;
+            QueryNode rootNode = byID[query.RootQueryNodeID];
+            bool rootHasLabel = !string.IsNullOrWhiteSpace(rootNode.Label)
+                || rootNode.Aliases.Any(alias => !string.IsNullOrWhiteSpace(alias));
+            if (!rootHasLabel)
+            {
+                QueryNode? constrainedStart = query.Nodes
+                    .Where(node => !string.IsNullOrWhiteSpace(node.Label)
+                        || node.Aliases.Any(alias => !string.IsNullOrWhiteSpace(alias)))
+                    .OrderBy(node => candidates.TryGetValue(
+                        node.QueryNodeID,
+                        out List<GraphNodeSnapshot>? list)
+                        ? list.Count
+                        : int.MaxValue)
+                    .ThenByDescending(node => adjacency.TryGetValue(
+                        node.QueryNodeID,
+                        out List<(Guid NeighborID, QueryEdge Edge)>? edges)
+                        ? edges.Count
+                        : 0)
+                    .FirstOrDefault();
+                if (constrainedStart is not null)
+                    searchStart = constrainedStart.QueryNodeID;
+            }
+            queue.Enqueue(searchStart);
 
             while (queue.Count > 0)
             {
@@ -341,6 +375,99 @@ namespace OPEN_LRD.Reasoning
             }
 
             return ordered;
+        }
+
+        private static IReadOnlyList<GraphNodeSnapshot> GetCandidatesForSearch(
+            QueryNode queryNode,
+            Dictionary<Guid, List<(Guid NeighborID, QueryEdge Edge)>> adjacency,
+            IReadOnlyDictionary<Guid, Guid> mapping,
+            GraphSnapshot graph,
+            IReadOnlyList<GraphNodeSnapshot> globalCandidates,
+            ReasoningOptions options)
+        {
+            if (!adjacency.TryGetValue(
+                    queryNode.QueryNodeID,
+                    out List<(Guid NeighborID, QueryEdge Edge)>? neighbors))
+            {
+                return globalCandidates;
+            }
+
+            List<Guid> mappedNeighbors = neighbors
+                .Where(neighbor => mapping.ContainsKey(neighbor.NeighborID))
+                .Select(neighbor => mapping[neighbor.NeighborID])
+                .Distinct()
+                .ToList();
+            if (mappedNeighbors.Count == 0)
+                return globalCandidates;
+
+            Dictionary<Guid, GraphNodeSnapshot> connectedCandidates = new Dictionary<Guid, GraphNodeSnapshot>();
+            foreach (Guid mappedNeighborID in mappedNeighbors)
+            {
+                foreach (Link link in graph.GetIncidentLinks(mappedNeighborID))
+                {
+                    Guid candidateID = link.SourceID == mappedNeighborID
+                        ? link.DestinationID
+                        : link.SourceID;
+                    if (candidateID == mappedNeighborID
+                        || !graph.TryGetNode(candidateID, out GraphNodeSnapshot candidate)
+                        || !MatchesCandidateConstraints(queryNode, candidate, options))
+                    {
+                        continue;
+                    }
+
+                    connectedCandidates[candidateID] = candidate;
+                }
+            }
+
+            List<GraphNodeSnapshot> orderedCandidates = connectedCandidates.Values
+                .OrderByDescending(candidate => ScoreNode(queryNode, candidate, options))
+                .ThenBy(candidate => candidate.ID)
+                .ToList();
+            HashSet<Guid> included = connectedCandidates.Keys.ToHashSet();
+            foreach (GraphNodeSnapshot candidate in globalCandidates)
+            {
+                if (included.Add(candidate.ID))
+                    orderedCandidates.Add(candidate);
+            }
+
+            return orderedCandidates
+                .Take(Math.Max(1, options.MaxCandidateNodesPerQueryNode))
+                .ToList();
+        }
+
+        private static bool MatchesCandidateConstraints(
+            QueryNode queryNode,
+            GraphNodeSnapshot candidate,
+            ReasoningOptions options)
+        {
+            if (!TypesEqual(queryNode.Type, candidate.Type))
+                return false;
+
+            if (options.AllowTypeOnlyCandidates)
+                return true;
+
+            bool hasLabel = !string.IsNullOrWhiteSpace(queryNode.Label)
+                || queryNode.Aliases.Any(alias => !string.IsNullOrWhiteSpace(alias));
+            if (!hasLabel)
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(queryNode.Label)
+                && (string.Equals(queryNode.Label, candidate.Label, StringComparison.OrdinalIgnoreCase)
+                    || candidate.Aliases.Any(alias => string.Equals(
+                        alias,
+                        queryNode.Label,
+                        StringComparison.OrdinalIgnoreCase))))
+            {
+                return true;
+            }
+
+            return queryNode.Aliases.Any(alias =>
+                !string.IsNullOrWhiteSpace(alias)
+                && (string.Equals(alias, candidate.Label, StringComparison.OrdinalIgnoreCase)
+                    || candidate.Aliases.Any(candidateAlias => string.Equals(
+                        candidateAlias,
+                        alias,
+                        StringComparison.OrdinalIgnoreCase))));
         }
 
         private static Dictionary<(Guid, Guid), List<Link>> BuildLinkIndex(GraphSnapshot graph)

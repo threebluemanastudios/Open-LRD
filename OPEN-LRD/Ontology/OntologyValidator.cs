@@ -5,6 +5,7 @@ namespace OPEN_LRD.Ontology
 {
     // Advisory domain/range checks and reality-status resolution. Nothing here
     // blocks ingestion; the matcher enforcement is a later extension.
+    /// <summary>Validates ontology relations, node types, and structural constraints.</summary>
     internal static class OntologyValidator
     {
         private static readonly Dictionary<string, (string[] Domain, string[] Range)> DomainRange =

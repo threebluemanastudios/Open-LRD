@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace OPEN_LRD.Visualization
 {
+    /// <summary>Stores default and user-selected graph palette overrides by node, link, and class ID.</summary>
     internal sealed class GraphColorMap
     {
         private readonly Dictionary<int, RgbColor> nodeColors = new Dictionary<int, RgbColor>();

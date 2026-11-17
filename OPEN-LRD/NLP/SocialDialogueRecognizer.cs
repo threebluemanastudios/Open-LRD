@@ -1,5 +1,6 @@
 namespace OPEN_LRD.NLP
 {
+    /// <summary>Recognizes read-only social and identity dialogue without graph mutation.</summary>
     internal static class SocialDialogueRecognizer
     {
         private static readonly Dictionary<string, (string Text, string ShortAnswer)> replies =
