@@ -1,6 +1,8 @@
 # Open-LRD 1.0 Repository & Build Artifact Cleanup Steps
 
-This guide provides step-by-step instructions to clean up tracked build/IDE artifacts, update `.gitignore` so release documentation and bundled corpus files are properly tracked while generated build outputs stay ignored, and verify a clean Release build before tagging `v1.0.0`.
+**Status:** Completed. Tracked `bin/`, `obj/`, `.vs/`, and `.user` artifacts have been removed from the Git index, `.gitignore` is updated, all 26 `CIDE.A`–`CIDE.Z` corpus files are tracked, and the Release build and test suites (`194/194` smoke tests, `417/417` UI tests) pass with a clean working tree.
+
+This guide documents the steps executed to clean up tracked build/IDE artifacts, update `.gitignore` so release documentation and bundled corpus files are properly tracked while generated build outputs stay ignored, and verify a clean Release build for `v1.0.0`.
 
 ---
 

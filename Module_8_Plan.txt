@@ -2,9 +2,10 @@ OPEN-LRD
 MODULE 8: GCIDE ASK, TOOLS UI, VISUALIZER, AND DATA FILE INGESTION
 IMPLEMENTATION PLAN
 
-Status: Phases 1-6 complete.
+Status: Phases 1-6 complete (1.0.0 release-ready).
 Current verification: 194 smoke tests and 417 WPF UI checks pass; application
-and test builds complete with zero warnings and zero errors.
+and test builds complete with zero warnings and zero errors. All 1.0 release
+gates in RELEASE_READINESS.md are complete.
 Phase 4 Visualizer label/orbit work is implemented and verified. Phase 5 adopted
 design is in Section 8.3 and resolved decisions are listed in Section 8.4.
 Scope: GCIDE dictionary question answering, Tools window organization, Visualizer

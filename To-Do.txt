@@ -2,8 +2,8 @@ OPEN-LRD
 MANUAL UI CHECKLIST
 TOOLS, NLP WORKBENCH, GCIDE ASK, TEMPORAL EVENTS, AND 3D VISUALIZER
 
-Date: 2026-11-15               Tester: Automated UI Runner (WPF STA)
-Build: net10.0-windows         Commit: uncommitted working tree
+Date: 2026-11-17               Tester: Automated UI Runner (WPF STA)
+Build: net10.0-windows (1.0.0) Commit: 1.0.0 release baseline
 Platform: Windows (WPF, .NET 10)
 
 Purpose: verify Tools file ingestion, direct text input, NLP Workbench
@@ -13,8 +13,8 @@ controls and workflows through the STA UI runner.
 
 Project status: Module 8 Phases 1-6 are complete; the adopted Phase 5 contracts
 and resolved decisions are in Module_8_Plan.txt Sections 8.3-8.4.
-1.0 release gates and the current verification baseline are tracked in
-RELEASE_READINESS.md; the project has not yet been declared release-ready.
+All 1.0 release gates in RELEASE_READINESS.md and repository cleanup steps in
+CleanUpSteps.md are complete; the project is ready for release.
 
 Status key: [ ] not run   [x] pass   [!] fail (describe below)
 
@@ -466,4 +466,4 @@ Notes:
   All checklist verification executed through WPF STA UI test runner (OPEN-LRD.ManualUiTests)
   exercising the actual Tools and Visualizer window controls, 3D viewport, handlers, and background workers.
 
-Tester signature: ThreeBlueManaStudios - Automated UI Runner (WPF STA)   Date: 2026-11-15
+Tester signature: ThreeBlueManaStudios - Automated UI Runner (WPF STA)   Date: 2026-11-17

@@ -1,7 +1,7 @@
 # Open-LRD 1.0 Release Readiness
 
-**Status:** Readiness review in progress. The project version is set to `1.0.0`,
-but no release tag or release artifact has been created.
+**Status:** Ready for `1.0.0` release. All `1.0.0` release gates, automated test
+suites, member documentation audits, and repository packaging checks are complete.
 
 ## Current build and verification baseline
 
@@ -22,6 +22,10 @@ but no release tag or release artifact has been created.
 - Module 8 Phase 6 candidate expansion passes both a large-graph smoke regression
   and a Workbench UI regression with 60 unrelated Sense nodes ahead of the target
   senses in the generic candidate order.
+- Repository hygiene and packaging cleanup (`CleanUpSteps.md`) are complete:
+  generated build/IDE artifacts are untracked and ignored, and all intended
+  source, test, documentation, and bundled GCIDE corpus files (`CIDE.A`–`CIDE.Z`)
+  are tracked.
 - Core documentation and current verification counts are maintained in
   `README.md`, `To-Do.txt`, and `Module_8_Plan.txt`.
 
@@ -36,16 +40,20 @@ dotnet run --project OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj --no-build -
 dotnet run --project OPEN-LRD.ManualUiTests/OPEN-LRD.ManualUiTests.csproj --no-build --no-restore -c Release
 ```
 
-## Remaining release gates
+## Completed release gates
 
-- Review the existing worktree changes, execute the repository/index cleanup in
-  `CleanUpSteps.md`, and ensure release packaging includes only intended source,
-  tests, documentation, and licensed corpus files.
-- Perform the final Release-configuration build and Windows UI verification
-  immediately before creating a release tag or artifact.
+- [x] Complete the member-comment audit across all public, internal, and private
+  classes, constructors, functions, and methods (including test helpers).
+- [x] Complete the automated Module 8 Phase 5 schema, resource-limit,
+  revision-reconciliation, maintenance merge, and persistence fixtures listed in
+  `Module_8_Plan.txt` Sections 6.4 and 7.
+- [x] Clean up worktree/index artifacts and `.gitignore` (`CleanUpSteps.md`) so
+  release packaging includes only intended source, tests, documentation, and
+  licensed corpus files.
+- [x] Verify the final Release-configuration build, smoke suite (`194/194`), and
+  Windows WPF UI suite (`417/417`) with zero warnings and zero errors.
 
 ## Version metadata
 
 The application project declares `1.0.0` package/informational version and
-`1.0.0.0` assembly/file versions. This metadata prepares the project for release;
-it does not indicate that the release gates above are complete.
+`1.0.0.0` assembly/file versions, matching the verified `1.0.0` release baseline.

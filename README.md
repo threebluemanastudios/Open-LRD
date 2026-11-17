@@ -1,17 +1,17 @@
-# Open-LRD 1.0 Readiness Overview
+# Open-LRD 1.0 Overview
 
 ## Purpose
 
 Open-LRD is a lightweight cognitive knowledge-graph project written in native C# with no external library dependencies. 
 
-## 1.0 Readiness
+## 1.0 Release Status
 
-The project declares version `1.0.0`. Current Release builds, automated suites
-(194 smoke tests and 417 automated UI checks), Module 8 Phase 5 acceptance
-fixtures, and repository-wide XML member comment coverage are complete; the
-release review remains open for repository/index cleanup (`CleanUpSteps.md`) and
-final pre-tag verification. See `RELEASE_READINESS.md` for the current gates and
-reproducible commands.
+The project is at version `1.0.0` and is release-ready. Release builds, automated
+suites (**194 smoke tests** and **417 automated UI checks**), Module 8 Phases 1–6
+acceptance fixtures, repository-wide XML member comment coverage, and repository
+packaging cleanup are complete with zero warnings and zero errors. See
+`RELEASE_READINESS.md` for the release verification baseline and reproducible
+commands.
 
 
 The goal is a self-organizing semantic memory that can ingest language, represent concepts and relationships as a directed graph, reason over temporary and permanent knowledge, and return explainable answers.
@@ -39,7 +39,7 @@ The goal is a self-organizing semantic memory that can ingest language, represen
 | 5 | Maintenance Reasoning Engine | Optional graph consolidation, relation induction, superseded-link handling, and metadata-driven graph formation | Complete (Phases 1-2) |
 | 6 | Conversational Ask and Natural-Language Responses | Social dialogue, contextual follow-ups, multi-answer synthesis, and natural evidence phrasing | Complete (Phases 1-4) |
 | 7 | Event Representation and Chronological Questions | Reified Event nodes, relative time, date/time searches, and quantity questions | Complete (Phases 1-4) |
-| Tools | Additional Tools & 3D Visualizer | Log persistence, large text file import, and native 3D visualizer | Complete (Phases 1-7) |
+| Tools | Additional Tools & 3D Visualizer | Log persistence, multi-format file import, and native 3D visualizer | Complete (Modules 1-8) |
 
 ## Module 1: The Graph Backend
 
@@ -281,8 +281,8 @@ relation inference during an explicitly enabled maintenance run.
   keeping stale facts inactive for audit while preserving other link origins.
   Generated DataPointer resource values do not carry the owner's pointer, so
   they cannot trigger identity-based node merging.
-- The completed Modules 5-7, Module 8 Phases 1-4, and NLP conversational
-  coverage bring the current suite to 172 passing smoke checks and 401 passing
+- The completed Modules 5-8 and NLP conversational
+  coverage bring the current suite to 194 passing smoke checks and 417 passing
   automated UI checks.
 
 See `Module_5_Plan.txt` for the detailed phased design and acceptance criteria.
@@ -478,8 +478,8 @@ dotnet run --project OPEN-LRD.ManualUiTests/OPEN-LRD.ManualUiTests.csproj --no-b
 ```
 
 The smoke suite is cross-platform; the WPF application and Manual UI suite
-require Windows. Release tagging should follow the documented 1.0 readiness
-review and verification of the current working tree.
+require Windows. All 1.0 release gates documented in `RELEASE_READINESS.md` are
+complete.
 
 Potential follow-on work, not yet assigned to a module, includes broader temporal
 language and recurring-event support, non-linear graph queries, richer causal and
