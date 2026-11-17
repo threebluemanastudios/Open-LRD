@@ -49,6 +49,9 @@ gcide-0.54/
 build/
 Build/
 build-*/
+bin/
+obj/
+*Tests/
 
 # CMake generated files
 CMakeFiles/
