@@ -1,5 +1,7 @@
 <Solution>
-  <Folder Name="/Solution Items/" />
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
   <Project Path="OPEN-LRD/OPEN-LRD.csproj" />
   <Project Path="OPEN-LRD.SmokeTests/OPEN-LRD.SmokeTests.csproj" />
 </Solution>

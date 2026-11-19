@@ -16,10 +16,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Tools\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <InternalsVisibleTo Include="OPEN-LRD.ManualUiTests" />
   </ItemGroup>
 

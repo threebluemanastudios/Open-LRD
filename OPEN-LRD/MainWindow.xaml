@@ -33,33 +33,6 @@
                     Click="Launch_Button_Click"
                     Content="Launch Core"
                     />
-            <Button x:Name="ToolsButton"
-                    Width="103"
-                    Height="59"
-                    Margin="4,0"
-                    Content="Tools"
-                    IsEnabled="False"
-                    ToolTip="Launch Core before opening Tools."
-                    Click="Tools_Button_Click"
-                    />
-            <Button x:Name="VisualizerButton"
-                    Width="110"
-                    Height="59"
-                    Margin="4,0"
-                    Content="Visualizer"
-                    IsEnabled="False"
-                    ToolTip="Launch Core before opening the Visualizer."
-                    Click="Visualizer_Button_Click"
-                    />
-            <Button x:Name="NlpWorkbenchButton"
-                    Width="130"
-                    Height="59"
-                    Margin="4,0"
-                    Content="NLP Workbench"
-                    IsEnabled="False"
-                    ToolTip="Launch Core before opening the NLP Workbench."
-                    Click="NlpWorkbench_Button_Click"
-                    />
         </StackPanel>
     </Grid>
 </Window>
