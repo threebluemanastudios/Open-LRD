@@ -12,6 +12,24 @@ namespace OPEN_LRD.SmokeTests
         {
             AlgebraTests.RunAll();
             MathHelperReuseTests.RunAll();
+            TimeAndDateTests.RunAll();
+            ProbabilityAndStatisticsTests.RunAll();
+            NumericalMethodsTests.RunAll();
+            OptimizationTests.RunAll();
+            DiscreteMathTests.RunAll();
+            InformationTheoryAndMLMathTests.RunAll();
+            Geometry3DAndGraphicsTests.RunAll();
+            TransformsAndSignalsTests.RunAll();
+            FinancialMathTests.RunAll();
+            UnitsAndMeasurementTests.RunAll();
+            BasicPhysicsTests.RunAll();
+            ThermodynamicsTests.RunAll();
+            FluidMechanicsTests.RunAll();
+            ElectromagnetismTests.RunAll();
+            CondensedMatterTests.RunAll();
+            ManyBodyInteractionsTests.RunAll();
+            CurvedSpacetimeTests.RunAll();
+            ExtremeScalarsTests.RunAll();
             GraphAlgorithmsTests.RunAll();
             LinearAlgebraAdvancedTests.RunAll();
 

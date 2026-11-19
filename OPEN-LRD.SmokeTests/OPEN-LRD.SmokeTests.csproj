@@ -21,6 +21,24 @@
     <Compile Include="../OPEN-LRD/Skills/Math_2.cs" />
     <Compile Include="../OPEN-LRD/Skills/Math_3.cs" />
     <Compile Include="../OPEN-LRD/Skills/Math_4.cs" />
+    <Compile Include="../OPEN-LRD/Skills/TimeAndDate.cs" />
+    <Compile Include="../OPEN-LRD/Skills/ProbabilityAndStatistics.cs" />
+    <Compile Include="../OPEN-LRD/Skills/NumericalMethods.cs" />
+    <Compile Include="../OPEN-LRD/Skills/Optimization.cs" />
+    <Compile Include="../OPEN-LRD/Skills/DiscreteMath.cs" />
+    <Compile Include="../OPEN-LRD/Skills/InformationTheoryAndMLMath.cs" />
+    <Compile Include="../OPEN-LRD/Skills/Geometry3DAndGraphics.cs" />
+    <Compile Include="../OPEN-LRD/Skills/TransformsAndSignals.cs" />
+    <Compile Include="../OPEN-LRD/Skills/FinancialMath.cs" />
+    <Compile Include="../OPEN-LRD/Skills/UnitsAndMeasurement.cs" />
+    <Compile Include="../OPEN-LRD/Skills/BasicPhysics.cs" />
+    <Compile Include="../OPEN-LRD/Skills/Thermodynamics.cs" />
+    <Compile Include="../OPEN-LRD/Skills/FluidMechanics.cs" />
+    <Compile Include="../OPEN-LRD/Skills/Electromagnetism.cs" />
+    <Compile Include="../OPEN-LRD/Skills/CondensedMatter.cs" />
+    <Compile Include="../OPEN-LRD/Skills/ManyBodyInteractions.cs" />
+    <Compile Include="../OPEN-LRD/Skills/CurvedSpacetime.cs" />
+    <Compile Include="../OPEN-LRD/Skills/ExtremeScalars.cs" />
     <Compile Include="../OPEN-LRD/Skills/GraphAlgorithms.cs" />
     <Compile Include="../OPEN-LRD/Skills/LinearAlgebraAdvanced.cs" />
   </ItemGroup>

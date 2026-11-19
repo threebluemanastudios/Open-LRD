@@ -13,6 +13,26 @@ namespace OPEN_LRD.Foundations
             Y = y;
         }
 
+        public static Vector2 operator +(Vector2 left, Vector2 right)
+        {
+            return new Vector2(left.X + right.X, left.Y + right.Y);
+        }
+
+        public static Vector2 operator -(Vector2 left, Vector2 right)
+        {
+            return new Vector2(left.X - right.X, left.Y - right.Y);
+        }
+
+        public static Vector2 operator *(Vector2 vector, double scale)
+        {
+            return new Vector2(vector.X * scale, vector.Y * scale);
+        }
+
+        public static Vector2 operator *(double scale, Vector2 vector)
+        {
+            return vector * scale;
+        }
+
         public override string ToString()
         {
             return $"({X}, {Y})";
@@ -30,6 +50,26 @@ namespace OPEN_LRD.Foundations
             X = x;
             Y = y;
             Z = z;
+        }
+
+        public static Vector3 operator +(Vector3 left, Vector3 right)
+        {
+            return new Vector3(left.X + right.X, left.Y + right.Y, left.Z + right.Z);
+        }
+
+        public static Vector3 operator -(Vector3 left, Vector3 right)
+        {
+            return new Vector3(left.X - right.X, left.Y - right.Y, left.Z - right.Z);
+        }
+
+        public static Vector3 operator *(Vector3 vector, double scale)
+        {
+            return new Vector3(vector.X * scale, vector.Y * scale, vector.Z * scale);
+        }
+
+        public static Vector3 operator *(double scale, Vector3 vector)
+        {
+            return vector * scale;
         }
 
         public override string ToString()
