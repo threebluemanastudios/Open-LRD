@@ -11,6 +11,19 @@ namespace OPEN_LRD.Foundations
         public int Denominator { get; private set; }
         public Fraction(int numerator, int denominator)
         {
+            if (denominator == 0)
+            {
+                throw new DivideByZeroException("The denominator of a fraction cannot be zero.");
+            }
+            if (denominator < 0)
+            {
+                if (numerator == int.MinValue)
+                {
+                    throw new OverflowException("The negated numerator is outside the range of Int32.");
+                }
+                numerator = -numerator;
+                denominator = -denominator;
+            }
             Numerator = numerator;
             Denominator = denominator;
         }
