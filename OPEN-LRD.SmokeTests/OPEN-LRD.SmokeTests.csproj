@@ -28,6 +28,7 @@
     <Compile Include="../OPEN-LRD/Foundations/ExpressionParser.cs" />
     <Compile Include="../OPEN-LRD/Foundations/Vectors.cs" />
     <Compile Include="../OPEN-LRD/Foundations/FunctionBox.cs" />
+    <Compile Include="../OPEN-LRD/Tools/Tool_1.cs" />
     <Compile Include="../OPEN-LRD/Persistence/PartitionedBinaryStore.cs" />
     <Compile Include="../OPEN-LRD/Persistence/FoundationBinarySerializer.cs" />
     <Compile Include="../OPEN-LRD/Skills/SymbolicCalculus.cs" />
