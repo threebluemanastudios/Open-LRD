@@ -11,16 +11,32 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../OPEN-LRD/LRD_Core.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/ConversationSymbolic.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/ConversationText.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/GraphSynchronization.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/GroupBox.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/Node.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/SenseBox.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/SentenceBox.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/SourceBox.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/SymbolBox.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/UsageBox.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/WordBox.cs" />
     <Compile Include="../OPEN-LRD/Foundations/Fractions.cs" />
     <Compile Include="../OPEN-LRD/Foundations/Expressions.cs" />
     <Compile Include="../OPEN-LRD/Foundations/ExpressionParser.cs" />
     <Compile Include="../OPEN-LRD/Foundations/Vectors.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/FunctionBox.cs" />
+    <Compile Include="../OPEN-LRD/Persistence/PartitionedBinaryStore.cs" />
+    <Compile Include="../OPEN-LRD/Persistence/FoundationBinarySerializer.cs" />
     <Compile Include="../OPEN-LRD/Skills/SymbolicCalculus.cs" />
     <Compile Include="../OPEN-LRD/Skills/Algebra.cs" />
     <Compile Include="../OPEN-LRD/Skills/Math_1.cs" />
     <Compile Include="../OPEN-LRD/Skills/Math_2.cs" />
     <Compile Include="../OPEN-LRD/Skills/Math_3.cs" />
     <Compile Include="../OPEN-LRD/Skills/Math_4.cs" />
+    <Compile Include="../OPEN-LRD/Skills/MathFunctionDispatcher.cs" />
     <Compile Include="../OPEN-LRD/Skills/TimeAndDate.cs" />
     <Compile Include="../OPEN-LRD/Skills/ProbabilityAndStatistics.cs" />
     <Compile Include="../OPEN-LRD/Skills/NumericalMethods.cs" />

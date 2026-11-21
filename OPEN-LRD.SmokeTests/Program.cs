@@ -10,8 +10,12 @@ namespace OPEN_LRD.SmokeTests
 
         private static void Main()
         {
+            CoreIdentityTests.RunAll();
+            CoreNodeGraphTests.RunAll();
+            CoreDiskStreamingTests.RunAll();
             AlgebraTests.RunAll();
             MathHelperReuseTests.RunAll();
+            MathFunctionDispatcherTests.RunAll();
             TimeAndDateTests.RunAll();
             ProbabilityAndStatisticsTests.RunAll();
             NumericalMethodsTests.RunAll();

@@ -16,81 +16,155 @@ namespace OPEN_LRD.Foundations
             ConversationID = Guid.NewGuid();
             symbolicArray = new Dictionary<UInt128, List<Guid>>();
         }
-        public ConversationSymbolic(Dictionary<UInt128, List<Guid>> symbolicArray)
+
+        public ConversationSymbolic(Guid conversationId)
         {
-            ConversationID = Guid.NewGuid();
-            this.symbolicArray = symbolicArray;
-            currentSymbolicCount = (UInt128)symbolicArray.Count;
+            ValidateConversationId(conversationId);
+            ConversationID = conversationId;
+            symbolicArray = new Dictionary<UInt128, List<Guid>>();
+        }
+
+        public ConversationSymbolic(Dictionary<UInt128, List<Guid>> symbolicArray)
+            : this(Guid.NewGuid(), symbolicArray)
+        {
+        }
+
+        public ConversationSymbolic(Guid conversationId, Dictionary<UInt128, List<Guid>> symbolicArray)
+        {
+            ValidateConversationId(conversationId);
+            ArgumentNullException.ThrowIfNull(symbolicArray);
+            ValidateSymbolicDictionary(symbolicArray, nameof(symbolicArray));
+            ConversationID = conversationId;
+            this.symbolicArray = GraphSynchronization.Execute(() =>
+                symbolicArray.ToDictionary(entry => entry.Key, entry => new List<Guid>(entry.Value)));
+            if (symbolicArray.Count > 0)
+            {
+                currentSymbolicCount = symbolicArray.Keys.Max() + 1;
+            }
         }
 
         public void AddSymbolic(List<Guid> symbols)
         {
-            if (symbolicArray == null)
+            ArgumentNullException.ThrowIfNull(symbols);
+            ValidateSymbolIds(symbols, nameof(symbols));
+            GraphSynchronization.Execute(() =>
             {
-                symbolicArray = new Dictionary<UInt128, List<Guid>>();
-            }
-            symbolicArray[currentSymbolicCount] = symbols;
-            currentSymbolicCount++;
+                if (symbolicArray == null)
+                {
+                    symbolicArray = new Dictionary<UInt128, List<Guid>>();
+                }
+                symbolicArray[currentSymbolicCount] = new List<Guid>(symbols);
+                currentSymbolicCount++;
+            });
         }
 
         public void AddSymbolicRange(List<List<Guid>> symbolsList)
         {
-            if (symbolicArray == null)
+            ArgumentNullException.ThrowIfNull(symbolsList);
+            foreach (List<Guid> symbols in symbolsList)
             {
-                symbolicArray = new Dictionary<UInt128, List<Guid>>();
+                ArgumentNullException.ThrowIfNull(symbols);
+                ValidateSymbolIds(symbols, nameof(symbolsList));
             }
-            foreach (var symbols in symbolsList)
+            GraphSynchronization.Execute(() =>
             {
-                symbolicArray[currentSymbolicCount] = symbols;
-                currentSymbolicCount++;
-            }
+                if (symbolicArray == null)
+                {
+                    symbolicArray = new Dictionary<UInt128, List<Guid>>();
+                }
+                foreach (var symbols in symbolsList)
+                {
+                    ArgumentNullException.ThrowIfNull(symbols);
+                    symbolicArray[currentSymbolicCount] = new List<Guid>(symbols);
+                    currentSymbolicCount++;
+                }
+            });
         }
 
         public void AddSymbolicRange(Dictionary<UInt128, List<Guid>> symbolsDict)
         {
-            if (symbolicArray == null)
+            ArgumentNullException.ThrowIfNull(symbolsDict);
+            ValidateSymbolicDictionary(symbolsDict, nameof(symbolsDict));
+            GraphSynchronization.Execute(() =>
             {
-                symbolicArray = new Dictionary<UInt128, List<Guid>>();
-            }
-            foreach (var kvp in symbolsDict)
-            {
-                symbolicArray[kvp.Key] = kvp.Value;
-                currentSymbolicCount++;
-            }
+                if (symbolicArray == null)
+                {
+                    symbolicArray = new Dictionary<UInt128, List<Guid>>();
+                }
+                foreach (var kvp in symbolsDict)
+                {
+                    ArgumentNullException.ThrowIfNull(kvp.Value);
+                    symbolicArray[kvp.Key] = new List<Guid>(kvp.Value);
+                    if (kvp.Key >= currentSymbolicCount)
+                    {
+                        currentSymbolicCount = kvp.Key + 1;
+                    }
+                }
+            });
         }
 
         public Dictionary<UInt128, List<Guid>>? GetSymbolicArray()
         {
-            return symbolicArray;
+            return GraphSynchronization.Execute(() =>
+                symbolicArray == null
+                    ? null
+                    : symbolicArray.ToDictionary(entry => entry.Key, entry => new List<Guid>(entry.Value)));
         }
 
         public List<Guid>? GetSymbolicById(UInt128 symbolicId)
         {
-            if (symbolicArray != null && symbolicArray.ContainsKey(symbolicId))
-            {
-                return symbolicArray[symbolicId];
-            }
-            return null;
+            return GraphSynchronization.Execute(() =>
+                symbolicArray != null && symbolicArray.TryGetValue(symbolicId, out List<Guid>? symbols)
+                    ? new List<Guid>(symbols)
+                    : null);
         }
 
         public Guid GetConversationID()
         {
-            return ConversationID;
+            return GraphSynchronization.Execute(() => ConversationID);
         }
 
         public void SetCurrentSymbolicIndex(UInt128 index)
         {
-            currentSymbolicIndex = index;
+            GraphSynchronization.Execute(() => currentSymbolicIndex = index);
         }
 
         public UInt128 GetCurrentSymbolicIndex()
         {
-            return currentSymbolicIndex;
+            return GraphSynchronization.Execute(() => currentSymbolicIndex);
         }
 
         public UInt128 GetCurrentSymbolicCount()
         {
-            return currentSymbolicCount;
+            return GraphSynchronization.Execute(() => currentSymbolicCount);
+        }
+
+        private static void ValidateConversationId(Guid conversationId)
+        {
+            if (conversationId == Guid.Empty)
+            {
+                throw new ArgumentException("Conversation identifiers cannot be Guid.Empty.", nameof(conversationId));
+            }
+        }
+
+        private static void ValidateSymbolicDictionary(Dictionary<UInt128, List<Guid>> values, string parameterName)
+        {
+            foreach (KeyValuePair<UInt128, List<Guid>> entry in values)
+            {
+                ArgumentNullException.ThrowIfNull(entry.Value, parameterName);
+                ValidateSymbolIds(entry.Value, parameterName);
+            }
+        }
+
+        private static void ValidateSymbolIds(IEnumerable<Guid> symbols, string parameterName)
+        {
+            foreach (Guid symbolId in symbols)
+            {
+                if (symbolId == Guid.Empty)
+                {
+                    throw new ArgumentException("Symbol identifiers cannot be Guid.Empty.", parameterName);
+                }
+            }
         }
     }
 }

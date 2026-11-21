@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace OPEN_LRD
@@ -54,28 +55,56 @@ namespace OPEN_LRD
     internal class WordBox
     {
         private Guid WordID;
-        private Guid SenseID;
-        private Guid UsageID;
+        private Guid? SenseID;
+        private Guid? UsageID;
         private List<Guid>? _symbols;
         private PartOfSpeech? _partOfSpeech;
+        private bool _identityFrozen;
 
+        public WordBox(List<Guid> symbols)
+        {
+            ValidateIdentityIds(symbols, nameof(symbols));
+            WordID = Guid.NewGuid();
+            SenseID = null;
+            UsageID = null;
+            _symbols = new List<Guid>(symbols);
+        }
         public WordBox( Guid senseId, Guid usageId)
         {
+            ValidateIdentityId(senseId, nameof(senseId));
+            ValidateIdentityId(usageId, nameof(usageId));
             WordID = Guid.NewGuid();
             SenseID = senseId;
             UsageID = usageId;
-            _symbols = new List<Guid>();
+            _symbols = null;
         }
         public WordBox(Guid wordId, Guid senseId, Guid usageId)
         {
+            ValidateIdentityId(wordId, nameof(wordId));
+            ValidateIdentityId(senseId, nameof(senseId));
+            ValidateIdentityId(usageId, nameof(usageId));
             WordID = wordId;
             SenseID = senseId;
             UsageID = usageId;
-            _symbols = new List<Guid>();
+            _symbols = null;
+        }
+
+        public WordBox(Guid wordID, List<Guid> symbols)
+        {
+            ValidateIdentityId(wordID, nameof(wordID));
+            ValidateIdentityIds(symbols, nameof(symbols));
+            WordID = wordID;
+            SenseID = null;
+            UsageID = null;
+            _symbols = new List<Guid>(symbols);
         }
 
         public WordBox(Guid wordId, Guid senseId, Guid usageId, List<Guid> symbols)
         {
+            ValidateIdentityId(wordId, nameof(wordId));
+            ValidateIdentityId(senseId, nameof(senseId));
+            ValidateIdentityId(usageId, nameof(usageId));
+            ValidateIdentityIds(symbols, nameof(symbols));
             WordID = wordId;
             SenseID = senseId;
             UsageID = usageId;
@@ -83,6 +112,9 @@ namespace OPEN_LRD
         }
         public WordBox( Guid senseId, Guid usageId, List<Guid> symbols)
         {
+            ValidateIdentityId(senseId, nameof(senseId));
+            ValidateIdentityId(usageId, nameof(usageId));
+            ValidateIdentityIds(symbols, nameof(symbols));
             WordID = Guid.NewGuid();
             SenseID = senseId;
             UsageID = usageId;
@@ -90,6 +122,10 @@ namespace OPEN_LRD
         }
         public WordBox(Guid wordId, Guid senseId, Guid usageId, List<Guid> symbols, PartOfSpeech pos)
         {
+            ValidateIdentityId(wordId, nameof(wordId));
+            ValidateIdentityId(senseId, nameof(senseId));
+            ValidateIdentityId(usageId, nameof(usageId));
+            ValidateIdentityIds(symbols, nameof(symbols));
             WordID = wordId;
             SenseID = senseId;
             UsageID = usageId;
@@ -98,6 +134,9 @@ namespace OPEN_LRD
         }
         public WordBox(Guid senseId, Guid usageId, List<Guid> symbols, PartOfSpeech pos)
         {
+            ValidateIdentityId(senseId, nameof(senseId));
+            ValidateIdentityId(usageId, nameof(usageId));
+            ValidateIdentityIds(symbols, nameof(symbols));
             WordID = Guid.NewGuid();
             SenseID = senseId;
             UsageID = usageId;
@@ -107,46 +146,217 @@ namespace OPEN_LRD
 
         public void SetSymbols(List<Guid> symbols)
         {
-            if (_symbols == null)
+            ValidateIdentityIds(symbols, nameof(symbols));
+            GraphSynchronization.Execute(() =>
             {
-                _symbols = new List<Guid>(symbols);
-            }
-            else
+                EnsureIdentityMutable();
+                if (_symbols == null)
+                {
+                    _symbols = new List<Guid>(symbols);
+                }
+                else
+                {
+                    throw new InvalidOperationException("Symbols are already set and cannot be changed.");
+                }
+            });
+        }
+
+        public void SetSenseID(Guid senseId)
+        {
+            ValidateIdentityId(senseId, nameof(senseId));
+            GraphSynchronization.Execute(() =>
             {
-                _symbols.Clear();
-                _symbols.AddRange(symbols);
-            }
+                EnsureIdentityMutable();
+                if (SenseID == null)
+                {
+                    SenseID = senseId;
+                }
+                else
+                {
+                    throw new InvalidOperationException("SenseID is already set and cannot be changed.");
+                }
+            });
+        }
+
+        public void SetUsageID(Guid usageId)
+        {
+            ValidateIdentityId(usageId, nameof(usageId));
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureIdentityMutable();
+                if (UsageID == null)
+                {
+                    UsageID = usageId;
+                }
+                else
+                {
+                    throw new InvalidOperationException("UsageID is already set and cannot be changed.");
+                }
+            });
         }
 
         public List<Guid>? GetSymbols()
         {
-            return _symbols;
+            return GraphSynchronization.Execute(() =>
+            {
+                return _symbols == null ? null : new List<Guid>(_symbols);
+            });
         }
 
         public Guid GetWordID()
         {
-            return WordID;
+            return GraphSynchronization.Execute(() => WordID);
         }
 
-        public Guid GetSenseID()
+        public Guid? GetSenseID()
         {
-            return SenseID;
+            return GraphSynchronization.Execute(() => SenseID);
         }
 
-        public Guid GetUsageID()
+        public Guid? GetUsageID()
         {
-            return UsageID;
+            return GraphSynchronization.Execute(() => UsageID);
         }
 
         public void SetPartOfSpeech(PartOfSpeech pos)
         {
-            _partOfSpeech = pos;
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureIdentityMutable();
+                if (_partOfSpeech == null)
+                {
+                    _partOfSpeech = pos;
+                }
+                else
+                {
+                    throw new InvalidOperationException("PartOfSpeech is already set and cannot be changed.");
+                }
+            });
         }
 
         public PartOfSpeech? GetPartOfSpeech()
         {
-            return _partOfSpeech;
+            return GraphSynchronization.Execute(() => _partOfSpeech);
         }
 
+        internal bool HasCompleteIdentity => GraphSynchronization.Execute(() =>
+            WordID != Guid.Empty &&
+            SenseID.HasValue &&
+            SenseID.Value != Guid.Empty &&
+            UsageID.HasValue &&
+            UsageID.Value != Guid.Empty &&
+            _symbols != null &&
+            _partOfSpeech.HasValue);
+
+        internal WordIdentityKey GetIdentityKey()
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                if (!HasCompleteIdentity)
+                {
+                    throw new InvalidOperationException("Word identity is incomplete.");
+                }
+
+                return new WordIdentityKey(_symbols!, SenseID!.Value, UsageID!.Value, _partOfSpeech!.Value);
+            });
+        }
+
+        internal bool IsIdentityFrozen => GraphSynchronization.Execute(() => _identityFrozen);
+
+        internal void FreezeIdentity()
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                if (!HasCompleteIdentity)
+                {
+                    throw new InvalidOperationException("Cannot trust a word with incomplete identity.");
+                }
+
+                _identityFrozen = true;
+            });
+        }
+
+        private void EnsureIdentityMutable()
+        {
+            if (_identityFrozen)
+            {
+                throw new InvalidOperationException("Word identity is frozen after trust.");
+            }
+        }
+
+        private static void ValidateIdentityId(Guid id, string parameterName)
+        {
+            if (id == Guid.Empty)
+            {
+                throw new ArgumentException("Identity identifiers cannot be Guid.Empty.", parameterName);
+            }
+        }
+
+        private static void ValidateIdentityIds(IEnumerable<Guid> ids, string parameterName)
+        {
+            ArgumentNullException.ThrowIfNull(ids, parameterName);
+            foreach (Guid id in ids)
+            {
+                ValidateIdentityId(id, parameterName);
+            }
+        }
+
+    }
+
+    internal sealed class WordIdentityKey : IEquatable<WordIdentityKey>
+    {
+        private readonly Guid[] _symbols;
+
+        internal WordIdentityKey(IEnumerable<Guid> symbols, Guid senseId, Guid usageId, PartOfSpeech partOfSpeech)
+        {
+            ArgumentNullException.ThrowIfNull(symbols);
+            if (senseId == Guid.Empty)
+            {
+                throw new ArgumentException("Identity identifiers cannot be Guid.Empty.", nameof(senseId));
+            }
+            if (usageId == Guid.Empty)
+            {
+                throw new ArgumentException("Identity identifiers cannot be Guid.Empty.", nameof(usageId));
+            }
+            _symbols = symbols.ToArray();
+            if (_symbols.Any(symbolId => symbolId == Guid.Empty))
+            {
+                throw new ArgumentException("Identity sequences cannot contain Guid.Empty.", nameof(symbols));
+            }
+            SenseId = senseId;
+            UsageId = usageId;
+            PartOfSpeech = partOfSpeech;
+        }
+
+        internal Guid SenseId { get; }
+        internal Guid UsageId { get; }
+        internal PartOfSpeech PartOfSpeech { get; }
+
+        public bool Equals(WordIdentityKey? other)
+        {
+            return other != null &&
+                   SenseId == other.SenseId &&
+                   UsageId == other.UsageId &&
+                   PartOfSpeech == other.PartOfSpeech &&
+                   _symbols.SequenceEqual(other._symbols);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is WordIdentityKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(SenseId);
+            hash.Add(UsageId);
+            hash.Add(PartOfSpeech);
+            foreach (Guid symbolId in _symbols)
+            {
+                hash.Add(symbolId);
+            }
+            return hash.ToHashCode();
+        }
     }
 }

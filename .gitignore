@@ -62,4 +62,5 @@ vcpkg_installed/
 Testing/
 .cache/
 .logs/
+.plans/
 session-*.md
