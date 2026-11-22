@@ -573,15 +573,33 @@ namespace OPEN_LRD
             });
         }
 
+        private Node? GetTrustedNodeInternal(Guid nodeId)
+        {
+            return TrustedNodeDictionary.TryGetValue(nodeId, out Node? node)
+                ? node
+                : GetPagedObject(DiskPartition.Nodes, nodeId, payload => FoundationBinarySerializer.DeserializeNode(payload, true), box => { });
+        }
+
+        private IEnumerable<Node> EnumerateTrustedNodesInternal()
+        {
+            if (!_diskPagedReadOnly)
+            {
+                return TrustedNodeDictionary.Values;
+            }
+
+            return TrustedNodeByIdentityIndex.Values
+                .Distinct()
+                .Select(GetTrustedNodeInternal)
+                .Where(node => node != null)
+                .Cast<Node>();
+        }
+
         public Node? GetTrustedNode(Guid nodeId)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
-                return
-                TrustedNodeDictionary.TryGetValue(nodeId, out Node? node)
-                    ? node
-                    : GetPagedObject(DiskPartition.Nodes, nodeId, payload => FoundationBinarySerializer.DeserializeNode(payload, true), box => { });
+                return GetTrustedNodeInternal(nodeId);
             });
         }
 
@@ -970,11 +988,11 @@ namespace OPEN_LRD
         private Dictionary<Guid, NodeDerivationSnapshot> BuildNodeDerivationSnapshots()
         {
             Dictionary<Guid, NodeDerivationSnapshot> snapshots = new Dictionary<Guid, NodeDerivationSnapshot>();
-            foreach (KeyValuePair<Guid, Node> entry in TrustedNodeDictionary.Concat(UntrustedNodeDictionary))
+            foreach (Node node in EnumerateTrustedNodesInternal().Concat(UntrustedNodeDictionary.Values))
             {
-                Node node = entry.Value;
+                Guid nodeId = node.GetNodeID();
                 bool isTrusted = node.IsTrusted;
-                List<NodeDerivationLink> links = BuildNodeDerivationLinks(entry.Key);
+                List<NodeDerivationLink> links = BuildNodeDerivationLinks(nodeId);
                 NodeRelationType? derivedClass = NodePresentationCalculator.CalculateClass(links);
                 double weight = NodePresentationCalculator.CalculateWeight(links);
                 double incidentConfidenceSum = links.Sum(link => link.Weight);
@@ -984,12 +1002,12 @@ namespace OPEN_LRD
                     ? GetTrustedNodeSummary(node) ?? node.GetLabel()
                     : GetUntrustedNodeSummary(node) ?? node.GetLabel();
                 List<Guid> neighbors = links.Select(link => link.OtherNodeId)
-                    .Where(id => id != entry.Key)
+                    .Where(id => id != nodeId)
                     .Distinct()
                     .OrderBy(id => id)
                     .ToList();
-                snapshots[entry.Key] = new NodeDerivationSnapshot(
-                    entry.Key,
+                snapshots[nodeId] = new NodeDerivationSnapshot(
+                    nodeId,
                     node.GetTargetID(),
                     node.GetTargetKind(),
                     isTrusted,
@@ -1367,7 +1385,7 @@ namespace OPEN_LRD
                 SentencesByWordIndex.Clear();
                 GroupsBySentenceIndex.Clear();
                 SourcesByGroupIndex.Clear();
-                foreach (Node node in TrustedNodeDictionary.Values)
+                foreach (Node node in EnumerateTrustedNodesInternal())
                 {
                     node.SetIdentityChangingHandler(null);
                     node.SetIdentityChangedHandler(null);
@@ -2852,15 +2870,7 @@ namespace OPEN_LRD
                 ValidatePaging(limit, offset);
 
                 string? normalizedLabel = NormalizeOptionalLinkText(labelContains);
-                IEnumerable<Node> nodes = _diskPagedReadOnly
-                    ? TrustedNodeByIdentityIndex
-                        .OrderBy(entry => entry.Key.TargetKind)
-                        .ThenBy(entry => entry.Key.TargetId)
-                        .ThenBy(entry => entry.Key.Label, StringComparer.Ordinal)
-                        .Select(entry => GetTrustedNode(entry.Value))
-                        .Where(node => node != null)
-                        .Cast<Node>()
-                    : TrustedNodeDictionary.Values;
+                IEnumerable<Node> nodes = EnumerateTrustedNodesInternal();
                 IEnumerable<Node> query = nodes
                     .Where(node => !kindFilter.HasValue || node.GetTargetKind() == kindFilter.Value)
                     .Where(node => !canonicalOnly || node.GetLabel() == null)
@@ -3050,7 +3060,7 @@ namespace OPEN_LRD
             SentencesByWordIndex.Clear();
             GroupsBySentenceIndex.Clear();
             SourcesByGroupIndex.Clear();
-            foreach (Node node in TrustedNodeDictionary.Values)
+            foreach (Node node in EnumerateTrustedNodesInternal())
             {
                 node.SetIdentityChangingHandler(null);
                 node.SetIdentityChangedHandler(null);
@@ -3359,7 +3369,7 @@ namespace OPEN_LRD
                 [DiskPartition.Groups] = ToDiskRecords(TrustedGroupDictionary.Values, box => box.GetGroupingID(), FoundationBinarySerializer.SerializeGroup),
                 [DiskPartition.Sources] = ToDiskRecords(SourceDictionary.Values, box => box.GetSourceID(), FoundationBinarySerializer.SerializeSource),
                 [DiskPartition.Functions] = ToDiskRecords(TrustedFunctionDictionary.Values, box => box.GetFunctionID(), FoundationBinarySerializer.SerializeFunction),
-                [DiskPartition.Nodes] = ToDiskRecords(TrustedNodeDictionary.Values, box => box.GetNodeID(), FoundationBinarySerializer.SerializeNode),
+                [DiskPartition.Nodes] = ToDiskRecords(EnumerateTrustedNodesInternal(), box => box.GetNodeID(), FoundationBinarySerializer.SerializeNode),
                 [DiskPartition.NodePresentations] = TrustedNodePresentationRecords(),
                 [DiskPartition.LayoutSettings] = new[]
                 {
@@ -4189,7 +4199,7 @@ namespace OPEN_LRD
                 nodeIdMap[record.Key] = mergedNodeId;
             }
             MergeNodePresentations(store, nodeIdMap, existingPresentationNodeIds);
-            foreach (Node trustedNode in TrustedNodeDictionary.Values)
+            foreach (Node trustedNode in EnumerateTrustedNodesInternal())
             {
                 EnsureNodeRepresentation(trustedNode, isTrusted: true);
                 if (trustedNode.GetLabel() == null)
@@ -4661,7 +4671,7 @@ namespace OPEN_LRD
             {
                 return null;
             }
-            return TrustedNodeDictionary.TryGetValue(nodeId, out Node? node) ? node : null;
+            return GetTrustedNodeInternal(nodeId);
         }
 
         private void LinkNodeToTarget(Guid sourceNodeId, NodeTargetKind targetKind, Guid targetId, NodeRelationType relationType)
@@ -5422,7 +5432,7 @@ namespace OPEN_LRD
                 return false;
             }
             return GraphSynchronization.Execute(() =>
-                _initialized && (TrustedNodeDictionary.ContainsKey(nodeId) || IsPagedRecordAvailable(DiskPartition.Nodes, nodeId)));
+                _initialized && (GetTrustedNodeInternal(nodeId) != null));
         }
 
         internal Guid GenerateUntrustedNodeId(Func<Guid>? guidGenerator = null)
