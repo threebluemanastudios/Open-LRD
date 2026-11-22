@@ -199,6 +199,7 @@ namespace OPEN_LRD.Foundations
         internal FunctionDispatchProvenance? DispatchProvenance => GraphSynchronization.Execute(() => dispatchProvenance);
         internal IReadOnlyList<FunctionDispatchProvenance> DispatchProvenanceHistory =>
             GraphSynchronization.Execute<IReadOnlyList<FunctionDispatchProvenance>>(() => new ReadOnlyCollection<FunctionDispatchProvenance>(provenanceHistory.ToList()));
+        internal long ResultDefinitionRevision => GraphSynchronization.Execute(() => resultDefinitionRevision ?? 0);
         internal FunctionResultVerificationState ResultVerificationState => GraphSynchronization.Execute(() => resultVerificationState);
         internal bool IsResultDispatchVerified => GraphSynchronization.Execute(() => resultVerificationState == FunctionResultVerificationState.DispatchVerified);
         internal bool IsTrusted => GraphSynchronization.Execute(() => isTrusted);

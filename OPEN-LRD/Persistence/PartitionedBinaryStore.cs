@@ -24,8 +24,12 @@ namespace OPEN_LRD.Persistence
 
     internal readonly record struct DiskRecord(Guid Key, byte[] Payload);
     internal readonly record struct DiskPartitionDiagnostics(DiskPartition Partition, int RecordCount, long DataBytes, long IndexBytes);
+    /// <summary>Validation counts for trusted function provenance integrity in a checkpoint.</summary>
+    internal sealed record DiskValidationProvenanceSummary(int VerifiedProvenanceCount, int UnverifiedProvenanceCount, int TamperedProvenanceCount);
+
     internal sealed record DiskStoreDiagnostics(string? StorePath, int FormatVersion, bool IsPagedReadOnly,
         long CacheHits, long CacheMisses, string? LastValidationError,
+        DiskValidationProvenanceSummary? LastValidationProvenanceSummary,
         IReadOnlyList<DiskPartitionDiagnostics> Partitions);
 
     internal sealed class PartitionedBinaryStore : IDisposable

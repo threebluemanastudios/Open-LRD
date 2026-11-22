@@ -21,6 +21,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Merge layout options honor configurable precedence", MergeLayoutOptionsHonorPrecedence());
             Program.Run("Merge imports reconcile existing container memberships", MergeReconcilesContainerMemberships());
             Program.Run("Truncated checkpoints are rejected without replacing core", TruncatedCheckpointIsRejected());
+            Program.Run("Malformed foundation payloads are rejected deterministically", MalformedFoundationPayloadsAreRejected());
         }
 
         private static Action CheckpointRoundTripsAndPagesTrustedData()
@@ -165,11 +166,16 @@ namespace OPEN_LRD.SmokeTests
                         .Single();
                     Program.Assert(loadedLink.Label == "distance" && loadedLink.Provenance == provenance,
                         "Weighted labeled link provenance should round-trip exactly.");
+                    core.ValidateDiskStore();
                     DiskStoreDiagnostics diagnostics = core.GetDiskStoreDiagnostics()!;
                     Program.Assert(diagnostics.FormatVersion == 3 && diagnostics.CacheMisses > 0 &&
                                    diagnostics.Partitions.Any(partition => partition.Partition == DiskPartition.Links &&
                                        partition.RecordCount >= 1 && partition.DataBytes > 0 && partition.IndexBytes > 0),
                         "Disk diagnostics should report checkpoint version, paged cache activity, and partition sizes.");
+                    Program.Assert(diagnostics.LastValidationProvenanceSummary != null &&
+                                   diagnostics.LastValidationProvenanceSummary.VerifiedProvenanceCount >= 1 &&
+                                   diagnostics.LastValidationProvenanceSummary.TamperedProvenanceCount == 0,
+                        "Diagnostics should expose provenance validation counts after validation.");
                     Program.Assert(core.GetTrustedLinksByProvenanceTarget(source.GetSourceID()).Count == 1,
                         "Provenance reverse indexes should remain queryable in paged mode.");
 
@@ -920,6 +926,33 @@ namespace OPEN_LRD.SmokeTests
                     if (Directory.Exists(directory)) Directory.Delete(directory, true);
                     if (Directory.Exists(truncatedDirectory)) Directory.Delete(truncatedDirectory, true);
                 }
+            };
+        }
+
+        private static Action MalformedFoundationPayloadsAreRejected()
+        {
+            return () =>
+            {
+                Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeSymbol(Array.Empty<byte>()),
+                    "Empty payloads must be rejected deterministically.");
+                Guid symbolId = Guid.NewGuid();
+                SymbolBox symbol = new SymbolBox(symbolId, 'a');
+                byte[] symbolPayload = FoundationBinarySerializer.SerializeSymbol(symbol);
+                Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeSymbol(symbolPayload.AsSpan(0, symbolPayload.Length - 1).ToArray()),
+                    "Truncated payloads must be rejected deterministically.");
+
+                byte[] badStringLength = FoundationBinarySerializer.SerializeFunction(new FunctionBox(Guid.NewGuid(), typeof(int), "Math_1.Add", null));
+                byte[] corrupted = (byte[])badStringLength.Clone();
+                // Corrupt a type tag/length byte inside payload to make it malformed, not just trailing.
+                corrupted[Math.Min(20, corrupted.Length - 1)] = 0xFF;
+                Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeFunction(corrupted),
+                    "Malformed payload content must be rejected deterministically.");
+
+                byte[] invalidUtf8 = (byte[])symbolPayload.Clone();
+                Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeUsage(new byte[] { 0, 1, 2, 3, 4 }),
+                    "Malformed payload headers must be rejected deterministically.");
+                Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeWord(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF }),
+                    "Malformed truncated word payloads must be rejected deterministically.");
             };
         }
     }

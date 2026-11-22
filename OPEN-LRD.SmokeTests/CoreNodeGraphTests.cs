@@ -676,6 +676,13 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(core.GetAggregatedLinkConfidence(Guid.NewGuid(), Guid.NewGuid(),
                         NodeRelationType.Synonym) == 0.0,
                     "Aggregation should return zero when no active assertions exist.");
+                Guid sourceGroup = Guid.NewGuid();
+                Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Custom, 0.8, "g1", "r", sourceGroupId: sourceGroup), "Grouped evidence 1 should be accepted.");
+                Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Custom, 0.9, "g2", "r", sourceGroupId: sourceGroup), "Grouped evidence 2 should be accepted.");
+                Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Custom, 0.5, "g3", "r"), "Independent evidence should be accepted.");
+                double groupedConfidence = core.GetAggregatedLinkConfidence(firstNodeId, secondNodeId, NodeRelationType.Custom);
+                Program.Assert(Math.Abs(groupedConfidence - 0.95) < 1e-12,
+                    "Aggregation should collapse same SourceGroupId evidence by max before noisy-OR.");
 
                 core.GetTrustedNode(firstNodeId)!.RegisterVerifiedReference(2);
                 List<Node> matchingNodes = core.FindTrustedNodes(NodeTargetKind.Word, minimumNetTrustWeight: 1,
@@ -693,6 +700,7 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(core.GetAllTrustedLinks(limit: 1, offset: 1).Count <= 1,
                     "Trusted link queries should support paging.");
 
+                int customReasoningBeforeBatch = core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count;
                 using (LRD_Core.ReasoningWriteBatch failedBatch = core.BeginReasoningWriteBatch())
                 {
                     failedBatch.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Custom, 0.6, "staged-valid");
@@ -700,15 +708,16 @@ namespace OPEN_LRD.SmokeTests
                     Program.AssertThrows<InvalidOperationException>(failedBatch.Commit,
                         "invalid batch endpoints should abort the transaction");
                 }
-                Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count == 0,
+                Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count == customReasoningBeforeBatch,
                     "failed reasoning batches should roll back earlier staged assertions");
+                int customReasoningAfterFailure = core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count;
                 using (LRD_Core.ReasoningWriteBatch successfulBatch = core.BeginReasoningWriteBatch())
                 {
                     successfulBatch.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Custom, 0.6, "batch-one");
                     successfulBatch.AddReasoningLink(secondNodeId, firstNodeId, NodeRelationType.Custom, 0.7, "batch-two");
                     successfulBatch.Commit();
                 }
-                Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count == 2,
+                Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count == customReasoningAfterFailure + 2,
                     "successful reasoning batches should atomically commit all assertions");
             };
         }

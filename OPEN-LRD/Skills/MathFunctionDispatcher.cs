@@ -160,14 +160,28 @@ namespace OPEN_LRD.Skills
             return Equals(stored.Value, dispatched.Value);
         }
 
-        private static FunctionDispatchProvenance CreateDispatchProvenance(FunctionDescriptor descriptor, FunctionDispatchSnapshot snapshot, FunctionResult result)
+        internal static string ComputeArgumentSnapshotHash(FunctionBox functionBox)
         {
-            string argumentSnapshotHash = ComputeHash(SerializeDispatchPayload(writer =>
+            ArgumentNullException.ThrowIfNull(functionBox);
+            FunctionDispatchSnapshot snapshot = functionBox.GetDispatchSnapshot();
+            FunctionDescriptor descriptor = SelectFunction(snapshot.FunctionKey, snapshot.Variables, snapshot.ExpectedResultType, snapshot.ExpectedResultUnitTitle);
+            return ComputeArgumentSnapshotHash(descriptor.Key, snapshot.DefinitionRevision, snapshot.Variables);
+        }
+
+        internal static string ComputeResultHash(FunctionResult result)
+        {
+            ArgumentNullException.ThrowIfNull(result);
+            return ComputeHash(SerializeDispatchPayload(writer => WriteHashValue(writer, result.Value, result.DataType)));
+        }
+
+        private static string ComputeArgumentSnapshotHash(string functionKey, long definitionRevision, IReadOnlyList<FunctionVariable> variables)
+        {
+            return ComputeHash(SerializeDispatchPayload(writer =>
             {
-                writer.Write(descriptor.Key);
-                writer.Write(snapshot.DefinitionRevision);
-                writer.Write(snapshot.Variables.Count);
-                foreach (FunctionVariable variable in snapshot.Variables)
+                writer.Write(functionKey);
+                writer.Write(definitionRevision);
+                writer.Write(variables.Count);
+                foreach (FunctionVariable variable in variables)
                 {
                     writer.Write(variable.Name);
                     writer.Write(variable.DataType.AssemblyQualifiedName ?? variable.DataType.FullName ?? variable.DataType.Name);
@@ -175,11 +189,14 @@ namespace OPEN_LRD.Skills
                     WriteHashValue(writer, variable.Value, variable.DataType);
                 }
             }));
-            string resultHash = ComputeHash(SerializeDispatchPayload(writer => WriteHashValue(writer, result.Value, result.DataType)));
+        }
+
+        private static FunctionDispatchProvenance CreateDispatchProvenance(FunctionDescriptor descriptor, FunctionDispatchSnapshot snapshot, FunctionResult result)
+        {
             return new FunctionDispatchProvenance(
                 descriptor.Key,
-                argumentSnapshotHash,
-                resultHash,
+                ComputeArgumentSnapshotHash(descriptor.Key, snapshot.DefinitionRevision, snapshot.Variables),
+                ComputeResultHash(result),
                 result.DataType.AssemblyQualifiedName ?? result.DataType.FullName ?? result.DataType.Name,
                 result.UnitTitle,
                 snapshot.DefinitionRevision,

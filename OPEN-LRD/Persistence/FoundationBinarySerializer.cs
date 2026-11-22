@@ -367,6 +367,7 @@ namespace OPEN_LRD.Persistence
             if (provenance.Confidence.HasValue) writer.Write(provenance.Confidence.Value);
             WriteNullableDateTimeOffset(writer, provenance.ValidFrom);
             WriteNullableDateTimeOffset(writer, provenance.ValidUntil);
+            WriteNullableGuid(writer, provenance.SourceGroupId);
         }
 
         private static NodeLinkProvenance ReadProvenance(BinaryReader reader)
@@ -380,10 +381,13 @@ namespace OPEN_LRD.Persistence
             double? confidence = reader.ReadBoolean() ? reader.ReadDouble() : null;
             DateTimeOffset? validFrom = ReadNullableDateTimeOffset(reader);
             DateTimeOffset? validUntil = ReadNullableDateTimeOffset(reader);
+            Guid? sourceGroupId = reader.BaseStream.Position != reader.BaseStream.Length && reader.ReadBoolean()
+                ? ReadGuid(reader)
+                : null;
             try
             {
                 return new NodeLinkProvenance(assertionId, origin, assertedAt, author, sourceTargetId,
-                    evidenceTargetId, confidence, validFrom, validUntil);
+                    evidenceTargetId, confidence, validFrom, validUntil, sourceGroupId);
             }
             catch (ArgumentException exception)
             {

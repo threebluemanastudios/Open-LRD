@@ -90,6 +90,8 @@ namespace OPEN_LRD.Foundations
         public double? Confidence { get; }
         public DateTimeOffset? ValidFrom { get; }
         public DateTimeOffset? ValidUntil { get; }
+        /// <summary>Optional source/inference-chain group used to collapse dependent evidence before aggregation.</summary>
+        public Guid? SourceGroupId { get; }
 
         /// <summary>Returns whether this assertion is active at the supplied instant, including both window endpoints.</summary>
         public bool IsActiveAt(DateTimeOffset instant)
@@ -107,7 +109,8 @@ namespace OPEN_LRD.Foundations
             Guid? evidenceTargetId = null,
             double? confidence = null,
             DateTimeOffset? validFrom = null,
-            DateTimeOffset? validUntil = null)
+            DateTimeOffset? validUntil = null,
+            Guid? sourceGroupId = null)
         {
             if (assertionId == Guid.Empty)
             {
@@ -124,6 +127,10 @@ namespace OPEN_LRD.Foundations
             if (evidenceTargetId == Guid.Empty)
             {
                 throw new ArgumentException("Evidence target identifiers cannot be Guid.Empty.", nameof(evidenceTargetId));
+            }
+            if (sourceGroupId == Guid.Empty)
+            {
+                throw new ArgumentException("Source group identifiers cannot be Guid.Empty.", nameof(sourceGroupId));
             }
             if (confidence.HasValue && (!double.IsFinite(confidence.Value) || confidence.Value < 0.0 || confidence.Value > 1.0))
             {
@@ -143,6 +150,7 @@ namespace OPEN_LRD.Foundations
             Confidence = confidence;
             ValidFrom = validFrom;
             ValidUntil = validUntil;
+            SourceGroupId = sourceGroupId;
         }
 
         internal static NodeLinkProvenance CreateForLink(
@@ -197,10 +205,15 @@ namespace OPEN_LRD.Foundations
             Guid? sourceTargetId,
             Guid? evidenceTargetId,
             DateTimeOffset? validFrom,
-            DateTimeOffset? validUntil)
+            DateTimeOffset? validUntil,
+            Guid? sourceGroupId = null)
         {
             string? normalizedLabel = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
             string? normalizedAuthor = string.IsNullOrWhiteSpace(author) ? null : author.Trim();
+            if (sourceGroupId == Guid.Empty)
+            {
+                throw new ArgumentException("Source group identifiers cannot be Guid.Empty.", nameof(sourceGroupId));
+            }
             if ((relationType is NodeRelationType.Synonym or NodeRelationType.Antonym) &&
                 sourceNodeId.CompareTo(targetNodeId) > 0)
             {
@@ -217,6 +230,7 @@ namespace OPEN_LRD.Foundations
                 writer.Write(normalizedAuthor ?? string.Empty);
                 writer.Write((sourceTargetId ?? Guid.Empty).ToByteArray());
                 writer.Write((evidenceTargetId ?? Guid.Empty).ToByteArray());
+                writer.Write((sourceGroupId ?? Guid.Empty).ToByteArray());
                 writer.Write(validFrom?.UtcDateTime.Ticks ?? long.MinValue);
                 writer.Write(validUntil?.UtcDateTime.Ticks ?? long.MinValue);
             }
@@ -228,13 +242,13 @@ namespace OPEN_LRD.Foundations
                 assertionId = new Guid(hash.AsSpan(16, 16));
             }
             return new NodeLinkProvenance(assertionId, NodeLinkOrigin.Reasoning, DateTimeOffset.UtcNow,
-                normalizedAuthor, sourceTargetId, evidenceTargetId, confidence, validFrom, validUntil);
+                normalizedAuthor, sourceTargetId, evidenceTargetId, confidence, validFrom, validUntil, sourceGroupId);
         }
 
         internal NodeLinkProvenance WithConfidence(double weight)
         {
             return new NodeLinkProvenance(AssertionId, Origin, AssertedAt, Author, SourceTargetId,
-                EvidenceTargetId, Confidence.HasValue ? weight : null, ValidFrom, ValidUntil);
+                EvidenceTargetId, Confidence.HasValue ? weight : null, ValidFrom, ValidUntil, SourceGroupId);
         }
     }
 

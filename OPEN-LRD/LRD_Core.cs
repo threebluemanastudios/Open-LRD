@@ -43,11 +43,12 @@ namespace OPEN_LRD
             public void AddReasoningLink(Guid sourceNodeId, Guid targetNodeId, NodeRelationType relationType,
                 double confidence = 1.0, string? label = null, string? author = null,
                 Guid? sourceTargetId = null, Guid? evidenceTargetId = null,
-                DateTimeOffset? validFrom = null, DateTimeOffset? validUntil = null)
+                DateTimeOffset? validFrom = null, DateTimeOffset? validUntil = null,
+                Guid? sourceGroupId = null)
             {
                 EnsureOpen();
                 NodeLinkProvenance provenance = NodeLinkProvenance.CreateReasoning(sourceNodeId, targetNodeId,
-                    relationType, label, confidence, author, sourceTargetId, evidenceTargetId, validFrom, validUntil);
+                    relationType, label, confidence, author, sourceTargetId, evidenceTargetId, validFrom, validUntil, sourceGroupId);
                 pending.Add(new NodeLink(sourceNodeId, targetNodeId, relationType, confidence, label, provenance));
             }
 
@@ -181,6 +182,7 @@ namespace OPEN_LRD
         private long _pagedCacheHits;
         private long _pagedCacheMisses;
         private string? _lastDiskStoreValidationError;
+        private DiskValidationProvenanceSummary? _lastDiskStoreValidationProvenanceSummary;
         private int _maxPagedObjects = 1024;
         private readonly Dictionary<(DiskPartition Partition, Guid Id), object> _pagedObjectCache = new Dictionary<(DiskPartition Partition, Guid Id), object>();
         private readonly Dictionary<(DiskPartition Partition, Guid Id), LinkedListNode<(DiskPartition Partition, Guid Id)>> _pagedObjectLruNodes = new Dictionary<(DiskPartition Partition, Guid Id), LinkedListNode<(DiskPartition Partition, Guid Id)>>();
@@ -738,7 +740,7 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>Aggregates independent active assertions between two endpoints using a noisy-OR Bayesian update.</summary>
+        /// <summary>Aggregates active assertions between two endpoints using noisy-OR, collapsing dependent source groups.</summary>
         /// <param name="sourceNodeId">Trusted source node identifier.</param>
         /// <param name="targetNodeId">Trusted target node identifier.</param>
         /// <param name="relationType">Relation type shared by the assertions.</param>
@@ -764,16 +766,21 @@ namespace OPEN_LRD
                     ? outgoing.Where(link => link.TargetNodeId == targetNodeId && link.RelationType == relationType &&
                         link.Provenance.IsActiveAt(instant))
                     : Enumerable.Empty<NodeLink>();
-                double independenceProduct = 1.0;
+                Dictionary<Guid, double> independentConfidences = new Dictionary<Guid, double>();
                 foreach (NodeLink link in links)
                 {
                     double confidence = link.Provenance.Confidence ?? link.Weight;
-                    if (!double.IsFinite(confidence) || confidence < 0.0 || confidence > 1.0)
-                    {
-                        confidence = Math.Clamp(confidence, 0.0, 1.0);
-                    }
-                    independenceProduct *= 1.0 - confidence;
+                    if (!double.IsFinite(confidence)) confidence = 0.0;
+                    confidence = Math.Clamp(confidence, 0.0, 1.0);
+                    Guid groupKey = link.Provenance.SourceGroupId ?? link.Provenance.AssertionId;
+                    if (independentConfidences.TryGetValue(groupKey, out double existing))
+                        independentConfidences[groupKey] = Math.Max(existing, confidence);
+                    else
+                        independentConfidences[groupKey] = confidence;
                 }
+                double independenceProduct = 1.0;
+                foreach (double confidence in independentConfidences.Values)
+                    independenceProduct *= 1.0 - confidence;
                 return 1.0 - independenceProduct;
             });
         }
@@ -2570,14 +2577,15 @@ namespace OPEN_LRD
             Guid? sourceTargetId = null,
             Guid? evidenceTargetId = null,
             DateTimeOffset? validFrom = null,
-            DateTimeOffset? validUntil = null)
+            DateTimeOffset? validUntil = null,
+            Guid? sourceGroupId = null)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureMutableStorageMode();
                 NodeLinkProvenance provenance = NodeLinkProvenance.CreateReasoning(
                     sourceNodeId, targetNodeId, relationType, label, confidence, author,
-                    sourceTargetId, evidenceTargetId, validFrom, validUntil);
+                    sourceTargetId, evidenceTargetId, validFrom, validUntil, sourceGroupId);
                 NodeLink link = new NodeLink(sourceNodeId, targetNodeId, relationType,
                     confidence, label, provenance);
                 bool valid = !IsStructuralRelation(relationType) && IsValidLinkKindCombination(link) &&
@@ -3280,23 +3288,24 @@ namespace OPEN_LRD
                 try
                 {
                     _diskStore.Validate();
-                    ValidateDiskStoreContents(_diskStore);
+                    _lastDiskStoreValidationProvenanceSummary = ValidateDiskStoreContents(_diskStore);
                     _lastDiskStoreValidationError = null;
                 }
                 catch (Exception exception)
                 {
                     _lastDiskStoreValidationError = $"{exception.GetType().Name}: {exception.Message}";
+                    _lastDiskStoreValidationProvenanceSummary = null;
                     throw;
                 }
             });
         }
 
-        /// <summary>Returns checkpoint partition sizes/counts, paged-cache counters, and the latest validation error.</summary>
+        /// <summary>Returns checkpoint partition sizes/counts, paged-cache counters, and the latest validation/provenance summary.</summary>
         public DiskStoreDiagnostics? GetDiskStoreDiagnostics()
         {
             return GraphSynchronization.Execute(() => _diskStore == null ? null : new DiskStoreDiagnostics(
                 _diskStorePath, _diskStore.FormatVersion, _diskPagedReadOnly, _pagedCacheHits, _pagedCacheMisses,
-                _lastDiskStoreValidationError, _diskStore.GetPartitionDiagnostics()));
+                _lastDiskStoreValidationError, _lastDiskStoreValidationProvenanceSummary, _diskStore.GetPartitionDiagnostics()));
         }
 
         public bool IsDiskPagedReadOnly => GraphSynchronization.Execute(() => _diskPagedReadOnly);
@@ -3396,7 +3405,7 @@ namespace OPEN_LRD
             foreach (T box in boxes) yield return new DiskRecord(getId(box), serialize(box));
         }
 
-        private void ValidateDiskStoreContents(PartitionedBinaryStore store)
+        private DiskValidationProvenanceSummary ValidateDiskStoreContents(PartitionedBinaryStore store)
         {
             Dictionary<Guid, SymbolBox> symbolBoxes = ReadDiskBoxes(store, DiskPartition.Symbols,
                 payload => FoundationBinarySerializer.DeserializeSymbol(payload, store.IsLegacyFormat),
@@ -3503,6 +3512,9 @@ namespace OPEN_LRD
                 if (!(box.GetGroupingIDs() ?? new List<Guid>()).All(groups.Contains))
                     throw new InvalidDataException("Source partition contains an unresolved group.");
             }
+            int verifiedProvenanceCount = 0;
+            int unverifiedProvenanceCount = 0;
+            int tamperedProvenanceCount = 0;
             foreach (FunctionBox box in functionBoxes.Values)
             {
                 try
@@ -3513,6 +3525,7 @@ namespace OPEN_LRD
                 {
                     throw new InvalidDataException("Function partition contains an incomplete or invalid trusted definition.", exception);
                 }
+                ClassifyFunctionProvenance(box, ref verifiedProvenanceCount, ref unverifiedProvenanceCount, ref tamperedProvenanceCount);
             }
             foreach (DiskRecord record in store.ReadAll(DiskPartition.Nodes))
             {
@@ -3669,6 +3682,32 @@ namespace OPEN_LRD
                     throw new InvalidDataException("Duplicate assertion IDs are allowed only on matching symmetric reverse links.");
                 }
             }
+            return new DiskValidationProvenanceSummary(verifiedProvenanceCount, unverifiedProvenanceCount, tamperedProvenanceCount);
+        }
+
+        private static void ClassifyFunctionProvenance(FunctionBox box, ref int verified, ref int unverified, ref int tampered)
+        {
+            FunctionDispatchProvenance? provenance = box.DispatchProvenance;
+            if (provenance == null)
+            {
+                unverified++;
+                return;
+            }
+            string expectedArgHash = MathFunctionDispatcher.ComputeArgumentSnapshotHash(box);
+            string expectedResultHash = MathFunctionDispatcher.ComputeResultHash(box.Result!);
+            string expectedResultType = box.Result!.DataType.AssemblyQualifiedName ?? box.Result.DataType.FullName ?? box.Result.DataType.Name;
+            bool hashMismatch = !string.Equals(provenance.ArgumentSnapshotHash, expectedArgHash, StringComparison.Ordinal) ||
+                !string.Equals(provenance.ResultHash, expectedResultHash, StringComparison.Ordinal) ||
+                provenance.DefinitionRevision != box.ResultDefinitionRevision ||
+                !string.Equals(provenance.ResultType, expectedResultType, StringComparison.Ordinal) ||
+                !string.Equals(provenance.ResultUnitTitle ?? string.Empty, box.Result.UnitTitle ?? string.Empty, StringComparison.Ordinal);
+            if (hashMismatch)
+            {
+                tampered++;
+                return;
+            }
+            if (box.IsResultDispatchVerified && provenance.IsDeterministic) verified++;
+            else unverified++;
         }
 
         private static Dictionary<Guid, T> ReadDiskBoxes<T>(PartitionedBinaryStore store, DiskPartition partition,
