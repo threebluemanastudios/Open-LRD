@@ -88,9 +88,17 @@ Registry and query operations require initialization.
 ### Initialization and reset
 
 - `InitializeCore()` creates an empty ready core and is
-  idempotent.
+  idempotent. A fresh core includes stable trusted
+  sources and groups:
+  - `Dictionary`: `GCIDE`.
+  - `User`: `TextBox`, `FileLoad`.
+  - `Import`: `FileLoad`.
+  - `Unknown`: `TextBox`, `FileLoad`.
+- Each source owns distinct group identities, even when
+  group names repeat.
 - Opening or streaming a validated checkpoint also
   initializes the core.
+- Loading a checkpoint does not inject missing defaults.
 - `ResetCore()` clears registries, graph indexes,
   presentations, caches, and disk handles.
 

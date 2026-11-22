@@ -215,10 +215,13 @@ namespace OPEN_LRD.SmokeTests
                 {
                     core.ResetCore();
                     core.InitializeCore();
-                    core.StreamTrustedDictionariesToDisk(directory);
-                    core.MaterializeDiskStore();
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> emptyPartitions =
+                        Enum.GetValues<DiskPartition>().ToDictionary(
+                            partition => partition,
+                            _ => (IEnumerable<DiskRecord>)Array.Empty<DiskRecord>());
+                    WriteCheckpoint(directory, emptyPartitions);
                     Program.Assert(core.AddTrustedSense(new SenseBox(Guid.NewGuid())),
-                        "A retained entry should be added after saving the empty checkpoint.");
+                        "A retained entry should be added before opening the empty checkpoint.");
                     core.StreamTrustedDictionariesFromDisk(directory);
                     Program.Assert(core.initialized && core.GetTrustedNodeCount() == 0 && core.GetNodePresentationCount() == 0,
                         "Opening an empty checkpoint should replace state with an initialized empty core.");

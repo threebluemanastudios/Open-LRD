@@ -22,6 +22,7 @@ namespace OPEN_LRD.SmokeTests
         internal static void RunAll()
         {
             Program.Run("Foundation identity identifiers reject Guid.Empty", EmptyIdentityIdsAreRejected());
+            Program.Run("Fresh core initializes stable default sources and groups", DefaultSourcesAreInitializedAndStable());
             Program.Run("Node presentations follow trusted and untrusted Node lifecycles", NodePresentationsFollowNodeLifecycle());
             Program.Run("GroupBox stores sentence IDs and snapshots", GroupBoxStoresSentenceIdsAndSnapshots());
             Program.Run("Trusted reverse and containment indexes", ReverseIndexesTrackTrustedIdentities());
@@ -33,6 +34,87 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Trusted graph membership and link lifecycle are hardened", TrustedMembershipAndLinkLifecycleAreHardened());
             Program.Run("Reasoning links support provenance and validity queries", ReasoningLinksSupportProvenanceAndTimeQueries());
             Program.Run("Conversation and function APIs return validated snapshots", ConversationAndFunctionApisAreHardened());
+        }
+
+        private static Action DefaultSourcesAreInitializedAndStable()
+        {
+            return () =>
+            {
+                ResetCore();
+                LRD_Core core = LRD_Core.Instance;
+                core.InitializeCore();
+
+                Dictionary<string, string[]> expectedGroups = new Dictionary<string, string[]>(StringComparer.Ordinal)
+                {
+                    ["Dictionary"] = new[] { "GCIDE" },
+                    ["User"] = new[] { "TextBox", "FileLoad" },
+                    ["Import"] = new[] { "FileLoad" },
+                    ["Unknown"] = new[] { "TextBox", "FileLoad" }
+                };
+                Dictionary<string, SourceBox> sources = GetTrustedSourcesByName(core);
+                Program.Assert(sources.Count == expectedGroups.Count &&
+                    expectedGroups.Keys.All(sources.ContainsKey),
+                    "Fresh initialization should create the four named default sources.");
+
+                foreach (KeyValuePair<string, string[]> expected in expectedGroups)
+                {
+                    SourceBox source = sources[expected.Key];
+                    List<Guid> groupIds = source.GetGroupingIDs()!;
+                    string[] actualNames = groupIds
+                        .Select(groupId => core.GetTrustedGroupBox(groupId)!.GetGroupingName()!)
+                        .ToArray();
+                    Program.Assert(actualNames.SequenceEqual(expected.Value),
+                        $"Default source '{expected.Key}' should have its configured groups in order.");
+
+                    Node sourceNode = core.GetTrustedNodeByTarget(
+                        NodeTargetKind.Source, source.GetSourceID())!;
+                    List<NodeLink> structuralLinks = core.GetOutgoingLinks(
+                        sourceNode.GetNodeID(), NodeRelationType.ContainsGroup);
+                    Guid[] linkedGroupIds = structuralLinks
+                        .Where(link => link.Provenance.Origin == NodeLinkOrigin.Structural)
+                        .Select(link => core.GetTrustedNode(link.TargetNodeId)!.GetTargetID())
+                        .OrderBy(id => id)
+                        .ToArray();
+                    Program.Assert(linkedGroupIds.SequenceEqual(groupIds.OrderBy(id => id)),
+                        $"Default source '{expected.Key}' should have canonical structural group links.");
+                }
+
+                Dictionary<string, Guid> initialIds = GetDefaultEntryIds(core, sources);
+                Program.Assert(initialIds.Count == 10 && initialIds.Values.Distinct().Count() == 10,
+                    "Every default source and group should have a unique stable identity.");
+
+                core.ResetCore();
+                core.InitializeCore();
+                Dictionary<string, Guid> reinitializedIds = GetDefaultEntryIds(
+                    core, GetTrustedSourcesByName(core));
+                Program.Assert(initialIds.Count == reinitializedIds.Count &&
+                    initialIds.All(entry => reinitializedIds.TryGetValue(entry.Key, out Guid id) && id == entry.Value),
+                    "Default source and group identities should remain stable across reset and initialization.");
+            };
+        }
+
+        private static Dictionary<string, SourceBox> GetTrustedSourcesByName(LRD_Core core)
+        {
+            return core.GetTrustedNodes(NodeTargetKind.Source)
+                .Select(node => core.GetTrustedSourceBox(node.GetTargetID())!)
+                .ToDictionary(source => source.GetSourceName()!, StringComparer.Ordinal);
+        }
+
+        private static Dictionary<string, Guid> GetDefaultEntryIds(
+            LRD_Core core,
+            IReadOnlyDictionary<string, SourceBox> sources)
+        {
+            Dictionary<string, Guid> ids = new Dictionary<string, Guid>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, SourceBox> entry in sources)
+            {
+                ids.Add($"source:{entry.Key}", entry.Value.GetSourceID());
+                foreach (Guid groupId in entry.Value.GetGroupingIDs()!)
+                {
+                    string groupName = core.GetTrustedGroupBox(groupId)!.GetGroupingName()!;
+                    ids.Add($"group:{entry.Key}:{groupName}", groupId);
+                }
+            }
+            return ids;
         }
 
         private static Action EmptyIdentityIdsAreRejected()
@@ -71,6 +153,7 @@ namespace OPEN_LRD.SmokeTests
             {
                 ResetCore();
                 LRD_Core core = LRD_Core.Instance;
+                int initialPresentationCount = core.GetNodePresentationCount();
 
                 Guid orphanTargetId = Guid.NewGuid();
                 Node orphan = new Node(NodeTargetKind.Symbol, orphanTargetId);
@@ -79,31 +162,33 @@ namespace OPEN_LRD.SmokeTests
                 NodeRepresentation? orphanRepresentation = firstPresentationId.HasValue
                     ? core.GetNodeRepresentation(firstPresentationId.Value)
                     : null;
-                Program.Assert(firstPresentationId == UInt128.Zero &&
+                Program.Assert(firstPresentationId == (UInt128)initialPresentationCount &&
                     orphanRepresentation?.GetNodeID() == orphan.GetNodeID(),
-                    "First registered node should receive sequential presentation ID zero and link to its Node.");
+                    "New Nodes should receive the next presentation ID and link to their representation.");
                 Program.Assert(orphanRepresentation!.GetSize() >= 0.6 && orphanRepresentation.GetSize() <= 2.0 &&
                     orphanRepresentation.GetPosition().IsFinite &&
                     orphanRepresentation.GetTextLabel()!.StartsWith("Symbol ", StringComparison.Ordinal),
                     "Derived presentation fields should be initialized for an untrusted node.");
-                Program.Assert(core.GetNodePresentationCount() == 1,
-                    "Each registered untrusted node should have exactly one presentation.");
+                Program.Assert(core.GetNodePresentationCount() == initialPresentationCount + 1,
+                    "Each registered untrusted node should add one presentation.");
                 IReadOnlyDictionary<UInt128, NodeRepresentation> presentationSnapshot = core.GetNodePresentations();
                 Program.Assert(core.RemoveUntrustedNode(orphan.GetNodeID()), "Untrusted node should be removable.");
                 Program.Assert(core.GetNodeRepresentationByNodeId(orphan.GetNodeID()) == null &&
-                    core.GetNodePresentationCount() == 0 && presentationSnapshot.Count == 1,
+                    core.GetNodePresentationCount() == initialPresentationCount &&
+                    presentationSnapshot.Count == initialPresentationCount + 1,
                     "Removing an untrusted node should remove its presentation while returned snapshots remain isolated.");
 
                 Guid senseId = AddSense(core);
                 Guid senseNodeId = core.GetTrustedNodeByTarget(NodeTargetKind.Sense, senseId)!.GetNodeID();
-                Program.Assert(core.GetNodePresentationId(senseNodeId) == (UInt128)1,
+                Program.Assert(core.GetNodePresentationId(senseNodeId) == (UInt128)initialPresentationCount + 1,
                     "Sequential presentation IDs should advance without reusing removed IDs.");
                 Guid symbolId = Guid.NewGuid();
                 Node promotable = new Node(NodeTargetKind.Symbol, symbolId);
                 Program.Assert(core.SetUntrustedNode(promotable), "Promotable node should be staged.");
                 NodeRepresentation representation = core.GetNodeRepresentationByNodeId(promotable.GetNodeID())!;
                 UInt128 presentationId = core.GetNodePresentationId(promotable.GetNodeID())!.Value;
-                Program.Assert(presentationId == (UInt128)2, "Each new Node should receive the next sequential presentation ID.");
+                Program.Assert(presentationId == (UInt128)initialPresentationCount + 2,
+                    "Each new Node should receive the next sequential presentation ID.");
                 Program.Assert(core.UpdateNodeRepresentation(
                     promotable.GetNodeID(), new Vector3(1.25, -2.5, 3.75), 2.5, 0xFF123456, "custom display"),
                     "Core presentation update API should update a registered NodeRepresentation.");

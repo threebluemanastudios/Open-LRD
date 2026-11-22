@@ -88,6 +88,16 @@ namespace OPEN_LRD
         private bool _nodePresentationIdSpaceExhausted;
         private NodeLayoutOptions _nodeLayoutOptions = new NodeLayoutOptions();
         private bool _suspendNodePresentationRecalculation;
+        private static readonly Guid DefaultDictionarySourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000001");
+        private static readonly Guid DefaultUserSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000002");
+        private static readonly Guid DefaultImportSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000003");
+        private static readonly Guid DefaultUnknownSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000004");
+        private static readonly Guid DefaultGcideGroupId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000101");
+        private static readonly Guid DefaultUserTextBoxGroupId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000102");
+        private static readonly Guid DefaultUserFileLoadGroupId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000103");
+        private static readonly Guid DefaultImportFileLoadGroupId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000104");
+        private static readonly Guid DefaultUnknownTextBoxGroupId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000105");
+        private static readonly Guid DefaultUnknownFileLoadGroupId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000106");
         private static readonly HashSet<NodeTargetKind> SplitNodePresentationKinds = new HashSet<NodeTargetKind>
         {
             NodeTargetKind.Symbol,
@@ -122,7 +132,7 @@ namespace OPEN_LRD
 
         public static LRD_Core Instance => _instance;
 
-        /// <summary>Initializes or resets the singleton graph and its runtime state.</summary>
+        /// <summary>Initializes the singleton graph with its default source catalog.</summary>
         public void InitializeCore()
         {
             GraphSynchronization.Execute(() =>
@@ -133,7 +143,57 @@ namespace OPEN_LRD
                 }
                 ClearAllDictionaries();
                 _initialized = true;
+                try
+                {
+                    InitializeDefaultSources();
+                }
+                catch
+                {
+                    ClearAllDictionaries();
+                    throw;
+                }
             });
+        }
+
+        private void InitializeDefaultSources()
+        {
+            GroupBox[] defaultGroups =
+            {
+                new GroupBox(DefaultGcideGroupId, "GCIDE", Array.Empty<Guid>(), true),
+                new GroupBox(DefaultUserTextBoxGroupId, "TextBox", Array.Empty<Guid>(), true),
+                new GroupBox(DefaultUserFileLoadGroupId, "FileLoad", Array.Empty<Guid>(), true),
+                new GroupBox(DefaultImportFileLoadGroupId, "FileLoad", Array.Empty<Guid>(), true),
+                new GroupBox(DefaultUnknownTextBoxGroupId, "TextBox", Array.Empty<Guid>(), true),
+                new GroupBox(DefaultUnknownFileLoadGroupId, "FileLoad", Array.Empty<Guid>(), true)
+            };
+            foreach (GroupBox group in defaultGroups)
+            {
+                if (!AddTrustedGroup(group))
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to initialize default group '{group.GetGroupingName()}'.");
+                }
+            }
+
+            SourceBox[] defaultSources =
+            {
+                new SourceBox(DefaultDictionarySourceId, "Dictionary",
+                    new[] { DefaultGcideGroupId }, true),
+                new SourceBox(DefaultUserSourceId, "User",
+                    new[] { DefaultUserTextBoxGroupId, DefaultUserFileLoadGroupId }, true),
+                new SourceBox(DefaultImportSourceId, "Import",
+                    new[] { DefaultImportFileLoadGroupId }, true),
+                new SourceBox(DefaultUnknownSourceId, "Unknown",
+                    new[] { DefaultUnknownTextBoxGroupId, DefaultUnknownFileLoadGroupId }, true)
+            };
+            foreach (SourceBox source in defaultSources)
+            {
+                if (!AddTrustedSource(source))
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to initialize default source '{source.GetSourceName()}'.");
+                }
+            }
         }
 
         /// <summary>
