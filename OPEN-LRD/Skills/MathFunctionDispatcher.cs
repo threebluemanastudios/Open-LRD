@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using System.Text;
 using System.Threading;
 using OPEN_LRD.Foundations;
 
@@ -34,7 +36,8 @@ namespace OPEN_LRD.Skills
             Type[] ParameterTypes,
             Type ReturnType,
             IReadOnlyDictionary<int, string> InputUnits,
-            string? OutputUnit);
+            string? OutputUnit,
+            bool IsDeterministic = true);
 
         private static readonly Type[] DispatchSkillTypes =
         {
@@ -57,12 +60,19 @@ namespace OPEN_LRD.Skills
             typeof(Complex), typeof(double[]), typeof(int[])
         };
 
+        private static readonly HashSet<string> NonDeterministicFunctionKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+        };
+
         private static readonly List<string> DiscoveryRejections = new List<string>();
         private static readonly IReadOnlyList<FunctionDescriptor> Functions = BuildFunctionRegistry();
         private static readonly IReadOnlyList<FunctionDescriptor> ScalarFunctions = BuildScalarFunctionRegistry();
 
         /// <summary>Returns stable diagnostics for allowlisted methods excluded from function dispatch.</summary>
         public static IReadOnlyList<string> GetDiscoveryDiagnostics() => DiscoveryRejections.AsReadOnly();
+
+        internal static bool IsDeterministicFunctionKey(string? functionKey)
+            => !string.IsNullOrWhiteSpace(functionKey) && !NonDeterministicFunctionKeys.Contains(functionKey.Trim());
 
         /// <summary>Dispatches a FunctionBox definition and stores the successful result if its revision is unchanged.</summary>
         public static FunctionResult Dispatch(FunctionBox functionBox)
@@ -108,6 +118,15 @@ namespace OPEN_LRD.Skills
             if (!string.Equals(result.UnitTitle, descriptor.OutputUnit, StringComparison.Ordinal))
             {
                 throw new ArgumentException("The stored function result unit does not match the selected function signature.", nameof(functionBox));
+            }
+            FunctionDispatchProvenance? provenance = functionBox.DispatchProvenance;
+            if (provenance == null || functionBox.ResultVerificationState != FunctionResultVerificationState.DispatchVerified)
+            {
+                throw new ArgumentException("The stored function result must have verified dispatch provenance before trust.", nameof(functionBox));
+            }
+            if (!descriptor.IsDeterministic || !provenance.IsDeterministic)
+            {
+                throw new ArgumentException("Non-deterministic function results cannot become trusted.", nameof(functionBox));
             }
             FunctionResult dispatched = Invoke(descriptor, functionBox.Variables);
             if (!ResultsEquivalent(result, dispatched))
@@ -165,7 +184,8 @@ namespace OPEN_LRD.Skills
                 result.UnitTitle,
                 snapshot.DefinitionRevision,
                 DateTimeOffset.UtcNow,
-                typeof(MathFunctionDispatcher).Assembly.GetName().Version?.ToString() ?? "0.0.0.0");
+                typeof(MathFunctionDispatcher).Assembly.GetName().Version?.ToString() ?? "0.0.0.0",
+                descriptor.IsDeterministic);
         }
 
         private static byte[] SerializeDispatchPayload(Action<BinaryWriter> write)
@@ -726,14 +746,16 @@ namespace OPEN_LRD.Skills
                     {
                         continue;
                     }
+                    string key = $"{scalarType.Name}.{method.Name}";
                     functions.Add(new FunctionDescriptor(
-                        $"{scalarType.Name}.{method.Name}",
+                        key,
                         method.Name,
                         method,
                         parameters.Select(parameter => parameter.ParameterType).ToArray(),
                         method.ReturnType,
                         new Dictionary<int, string>(),
-                        null));
+                        null,
+                        IsDeterministicFunctionKey(key)));
                 }
             }
             return functions.AsReadOnly();
@@ -772,14 +794,16 @@ namespace OPEN_LRD.Skills
                         DiscoveryRejections.Add($"{mathType.FullName}.{method.Name}: unsupported or non-persistable signature excluded.");
                         continue;
                     }
+                    string key = $"{mathType.Name}.{method.Name}";
                     functions.Add(new FunctionDescriptor(
-                        $"{mathType.Name}.{method.Name}",
+                        key,
                         method.Name,
                         method,
                         parameters.Select(parameter => parameter.ParameterType).ToArray(),
                         method.ReturnType,
                         new Dictionary<int, string>(),
-                        null));
+                        null,
+                        IsDeterministicFunctionKey(key)));
                 }
             }
 
@@ -800,7 +824,9 @@ namespace OPEN_LRD.Skills
             AddUnits(functions, "BasicPhysics.Force", new[] { typeof(double), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "kg", "m/s²" }, "N");
             AddUnits(functions, "BasicPhysics.MassFromForce", new[] { typeof(double), typeof(double) }, new[] { "N", "m/s²" }, "kg");
             AddUnits(functions, "BasicPhysics.Acceleration", new[] { typeof(double), typeof(double) }, new[] { "N", "kg" }, "m/s²");
+            AddUnits(functions, "BasicPhysics.Acceleration", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(double) }, new[] { "N", "kg" }, "m/s²");
             AddUnits(functions, "BasicPhysics.Weight", new[] { typeof(double) }, new[] { "kg" }, "N");
+            AddUnits(functions, "BasicPhysics.Weight", new[] { typeof(double), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "kg", "m/s²" }, "N");
             AddUnits(functions, "BasicPhysics.Distance", new[] { typeof(double), typeof(double) }, new[] { "m/s", "s" }, "m");
             AddUnits(functions, "BasicPhysics.Distance", new[] { typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "m" }, "m");
             AddUnits(functions, "BasicPhysics.TravelTime", new[] { typeof(double), typeof(double) }, new[] { "m", "m/s" }, "s");
@@ -813,6 +839,12 @@ namespace OPEN_LRD.Skills
             AddUnits(functions, "BasicPhysics.Power", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "N", "m/s" }, "W");
             AddUnits(functions, "BasicPhysics.Torque", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "m", "N" }, "N·m");
             AddUnits(functions, "BasicPhysics.RotationalPower", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "N·m", "rad/s" }, "W");
+            AddUnits(functions, "BasicPhysics.PositionAtTime", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(double) }, new[] { "m", "m/s", "m/s²", "s" }, "m");
+            AddUnits(functions, "BasicPhysics.VelocityAtTime", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(double) }, new[] { "m/s", "m/s²", "s" }, "m/s");
+            AddUnits(functions, "BasicPhysics.GravitationalForce", new[] { typeof(double), typeof(double), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "kg", "kg", "m" }, "N");
+            AddUnits(functions, "BasicPhysics.EscapeVelocity", new[] { typeof(double), typeof(double) }, new[] { "kg", "m" }, "m/s");
+            AddUnits(functions, "BasicPhysics.CircularOrbitSpeed", new[] { typeof(double), typeof(double) }, new[] { "kg", "m" }, "m/s");
+            AddUnits(functions, "BasicPhysics.ProjectilePosition", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(double) }, new[] { "m", "m/s", "m/s²", "s" }, "m");
             AddUnits(functions, "Thermodynamics.IdealGasPressure", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "mol", "m³", "K" }, "Pa");
             AddUnits(functions, "Thermodynamics.IdealGasVolume", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "mol", "Pa", "K" }, "m³");
             AddUnits(functions, "Thermodynamics.IdealGasTemperature", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "mol", "Pa", "m³" }, "K");
@@ -821,6 +853,7 @@ namespace OPEN_LRD.Skills
             AddUnits(functions, "Thermodynamics.LatentHeat", new[] { typeof(double), typeof(double) }, new[] { "kg", "J/kg" }, "J");
             AddUnits(functions, "Thermodynamics.InternalEnergyChange", new[] { typeof(double), typeof(double) }, new[] { "J", "J" }, "J");
             AddUnits(functions, "Thermodynamics.ThermalExpansion", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "m", "1/K", "K" }, "m");
+            AddUnits(functions, "Thermodynamics.CarnotEfficiency", new[] { typeof(double), typeof(double) }, new[] { "K", "K" }, null);
             AddUnits(functions, "Thermodynamics.EntropyChange", new[] { typeof(double), typeof(double) }, new[] { "J", "K" }, "J/K");
             AddUnits(functions, "Thermodynamics.IdealGasIsothermalEntropyChange", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "mol", "m³", "m³" }, "J/K");
             AddUnits(functions, "Thermodynamics.IdealGasConstantVolumeEntropyChange", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "mol", "K", "K", "J/(mol·K)" }, "J/K");
@@ -843,7 +876,23 @@ namespace OPEN_LRD.Skills
             AddUnits(functions, "Electromagnetism.CapacitanceCharge", new[] { typeof(double), typeof(double) }, new[] { "F", "V" }, "C");
             AddUnits(functions, "Electromagnetism.CapacitorEnergy", new[] { typeof(double), typeof(double) }, new[] { "F", "V" }, "J");
             AddUnits(functions, "Electromagnetism.RcVoltage", new[] { typeof(double), typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "V", "V", "s", "Ω", "F" }, "V");
+            AddUnits(functions, "Electromagnetism.LorentzForce", new[] { typeof(double), typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "C", "N/C", "m/s", "T" }, "N");
+            AddUnits(functions, "Electromagnetism.MagneticForceOnWire", new[] { typeof(double), typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "A", "m", "T" }, "N");
             AddUnits(functions, "Electromagnetism.MagneticFieldLongStraightWire", new[] { typeof(double), typeof(double) }, new[] { "A", "m" }, "T");
+            AddUnits(functions, "CondensedMatter.UnitCellMassDensity", new[] { typeof(double), typeof(double) }, new[] { "kg", "m³" }, "kg/m³");
+            AddUnitMetadata(functions, "CondensedMatter.CubicInterplanarSpacing", new[] { typeof(double), typeof(int), typeof(int), typeof(int) }, new Dictionary<int, string> { [0] = "m" }, "m");
+            AddUnitMetadata(functions, "CondensedMatter.BraggAngle", new[] { typeof(double), typeof(double), typeof(int) }, new Dictionary<int, string> { [0] = "m", [1] = "m" }, "rad");
+            AddUnits(functions, "CondensedMatter.ReciprocalLatticeVector", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "m", "m", "m" }, "1/m");
+            AddUnitMetadata(functions, "CondensedMatter.ReciprocalLatticeVector", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3), typeof(int), typeof(int), typeof(int) }, new Dictionary<int, string> { [0] = "m", [1] = "m", [2] = "m" }, "1/m");
+            AddUnits(functions, "CondensedMatter.TightBindingDispersion", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "J", "J", "m", "1/m" }, "J");
+            AddUnits(functions, "CondensedMatter.TightBindingGroupVelocity", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "J", "m", "1/m" }, "m/s");
+            AddUnits(functions, "CondensedMatter.MonatomicChainPhononFrequency", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "kg", "N/m", "m", "1/m" }, "rad/s");
+            AddUnits(functions, "CondensedMatter.FermiWaveNumber", new[] { typeof(double) }, new[] { "1/m³" }, "1/m");
+            AddUnits(functions, "CondensedMatter.FreeElectronFermiEnergy", new[] { typeof(double), typeof(double) }, new[] { "1/m³", "kg" }, "J");
+            AddUnits(functions, "CurvedSpacetime.SchwarzschildRadius", new[] { typeof(double) }, new[] { "kg" }, "m");
+            AddUnits(functions, "CurvedSpacetime.SchwarzschildMassLength", new[] { typeof(double) }, new[] { "kg" }, "m");
+            AddUnits(functions, "CurvedSpacetime.SchwarzschildGravitationalRedshift", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "m", "m", "m" }, null);
+            AddUnits(functions, "CurvedSpacetime.SchwarzschildKretschmannScalar", new[] { typeof(double), typeof(double) }, new[] { "m", "m" }, "1/m⁴");
             return functions.AsReadOnly();
         }
 

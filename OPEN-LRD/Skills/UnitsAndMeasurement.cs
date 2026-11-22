@@ -60,6 +60,10 @@ namespace OPEN_LRD.Skills
         private static readonly UnitDimension ThermalExpansionCoefficientDimension = UnitsAndMeasurement.Power(TemperatureDimension, -1);
         private static readonly UnitDimension ElectricFieldDimension = UnitsAndMeasurement.Divide(ForceDimension, ChargeDimension);
         private static readonly UnitDimension LinearMomentumDimension = UnitsAndMeasurement.Multiply(MassDimension, VelocityDimension);
+        private static readonly UnitDimension WaveNumberDimension = UnitsAndMeasurement.Power(LengthDimension, -1);
+        private static readonly UnitDimension NumberDensityDimension = UnitsAndMeasurement.Power(LengthDimension, -3);
+        private static readonly UnitDimension SpringConstantDimension = UnitsAndMeasurement.Divide(ForceDimension, LengthDimension);
+        private static readonly UnitDimension KretschmannScalarDimension = UnitsAndMeasurement.Power(LengthDimension, -4);
 
         public static Unit DimensionlessUnit { get; } = new Unit("", 1.0, 0.0, Dimensionless);
         public static Unit Meter { get; } = new Unit("m", 1.0, 0.0, LengthDimension);
@@ -142,6 +146,12 @@ namespace OPEN_LRD.Skills
         public static Unit ElectricField { get; } = new Unit("N/C", 1.0, 0.0, ElectricFieldDimension);
         public static Unit LinearMomentum { get; } = new Unit("kg·m/s", 1.0, 0.0, LinearMomentumDimension);
         public static Unit Impulse { get; } = new Unit("N·s", 1.0, 0.0, LinearMomentumDimension);
+        public static Unit Radian { get; } = new Unit("rad", 1.0, 0.0, Dimensionless);
+        public static Unit RadianPerSecond { get; } = new Unit("rad/s", 1.0, 0.0, FrequencyDimension);
+        public static Unit ReciprocalMeter { get; } = new Unit("1/m", 1.0, 0.0, WaveNumberDimension);
+        public static Unit ReciprocalCubicMeter { get; } = new Unit("1/m³", 1.0, 0.0, NumberDensityDimension);
+        public static Unit NewtonPerMeter { get; } = new Unit("N/m", 1.0, 0.0, SpringConstantDimension);
+        public static Unit ReciprocalQuarticMeter { get; } = new Unit("1/m⁴", 1.0, 0.0, KretschmannScalarDimension);
         private static readonly IReadOnlyDictionary<string, Unit> Units = BuildUnits();
 
         private static readonly IReadOnlyDictionary<string, int> PrefixPowers = new Dictionary<string, int>(StringComparer.Ordinal)
@@ -369,7 +379,14 @@ namespace OPEN_LRD.Skills
                 ["N/C"] = ElectricField,
                 ["kg·m/s"] = LinearMomentum,
                 ["N·s"] = Impulse,
-                ["rad/s"] = Hertz
+                ["rad"] = Radian,
+                ["rad/s"] = RadianPerSecond,
+                ["1/m"] = ReciprocalMeter,
+                ["1/m3"] = ReciprocalCubicMeter,
+                ["1/m³"] = ReciprocalCubicMeter,
+                ["N/m"] = NewtonPerMeter,
+                ["1/m4"] = ReciprocalQuarticMeter,
+                ["1/m⁴"] = ReciprocalQuarticMeter
             };
             return units;
         }

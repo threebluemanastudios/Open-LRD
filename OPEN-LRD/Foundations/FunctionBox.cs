@@ -47,8 +47,8 @@ namespace OPEN_LRD.Foundations
         }
     }
 
-    /// <summary>Immutable provenance for a FunctionBox result produced by dispatcher verification/dispatch.</summary>
-    internal sealed record FunctionDispatchProvenance(
+    /// <summary>Immutable audit metadata for a function result produced by dispatcher verification or dispatch.</summary>
+    public sealed record FunctionDispatchProvenance(
         string FunctionKey,
         string ArgumentSnapshotHash,
         string ResultHash,
@@ -56,7 +56,44 @@ namespace OPEN_LRD.Foundations
         string? ResultUnitTitle,
         long DefinitionRevision,
         DateTimeOffset DispatchedAtUtc,
-        string DispatcherVersion);
+        string DispatcherVersion,
+        bool IsDeterministic = true);
+
+    /// <summary>Immutable snapshot of a function result's dispatch provenance and trust status.</summary>
+    public sealed class FunctionDispatchAudit
+    {
+        /// <summary>Gets the identity of the function box this audit describes.</summary>
+        public Guid FunctionId { get; }
+
+        /// <summary>Gets whether the function box is trusted.</summary>
+        public bool IsTrusted { get; }
+
+        /// <summary>Gets whether the current result has dispatch verification.</summary>
+        public bool IsResultVerified { get; }
+
+        /// <summary>Gets provenance for the current result, when available.</summary>
+        public FunctionDispatchProvenance? ActiveProvenance { get; }
+
+        /// <summary>Gets a read-only snapshot of provenance entries retained for this function box.</summary>
+        public IReadOnlyList<FunctionDispatchProvenance> ProvenanceHistory { get; }
+
+        internal FunctionDispatchAudit(Guid functionId, bool isTrusted, bool isResultVerified,
+            FunctionDispatchProvenance? activeProvenance, IEnumerable<FunctionDispatchProvenance> provenanceHistory)
+        {
+            FunctionId = functionId;
+            IsTrusted = isTrusted;
+            IsResultVerified = isResultVerified;
+            ActiveProvenance = activeProvenance;
+            ProvenanceHistory = new ReadOnlyCollection<FunctionDispatchProvenance>(provenanceHistory.ToList());
+        }
+    }
+
+    /// <summary>Tracks dispatch verification state for a FunctionBox result.</summary>
+    internal enum FunctionResultVerificationState
+    {
+        Unverified = 0,
+        DispatchVerified = 1
+    }
 
     internal static class FunctionValueValidation
     {
@@ -115,6 +152,8 @@ namespace OPEN_LRD.Foundations
         private FunctionResult? result;
         private long? resultDefinitionRevision;
         private FunctionDispatchProvenance? dispatchProvenance;
+        private readonly List<FunctionDispatchProvenance> provenanceHistory = new List<FunctionDispatchProvenance>();
+        private FunctionResultVerificationState resultVerificationState = FunctionResultVerificationState.Unverified;
         private bool isTrusted;
         private bool isReadOnly;
         private long definitionRevision;
@@ -158,6 +197,11 @@ namespace OPEN_LRD.Foundations
 
         public FunctionResult? Result => GraphSynchronization.Execute(() => result);
         internal FunctionDispatchProvenance? DispatchProvenance => GraphSynchronization.Execute(() => dispatchProvenance);
+        internal IReadOnlyList<FunctionDispatchProvenance> DispatchProvenanceHistory =>
+            GraphSynchronization.Execute<IReadOnlyList<FunctionDispatchProvenance>>(() => new ReadOnlyCollection<FunctionDispatchProvenance>(provenanceHistory.ToList()));
+        internal FunctionResultVerificationState ResultVerificationState => GraphSynchronization.Execute(() => resultVerificationState);
+        internal bool IsResultDispatchVerified => GraphSynchronization.Execute(() => resultVerificationState == FunctionResultVerificationState.DispatchVerified);
+        internal bool IsTrusted => GraphSynchronization.Execute(() => isTrusted);
 
         public FunctionBox(Type expectedResultType, string? functionKey = null, string? expectedResultUnitTitle = null)
             : this(LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Function), expectedResultType, functionKey, expectedResultUnitTitle, allowRegisteredTrustedId: true)
@@ -289,9 +333,12 @@ namespace OPEN_LRD.Foundations
                 result = null;
                 resultDefinitionRevision = null;
                 dispatchProvenance = null;
+                provenanceHistory.Clear();
+                resultVerificationState = FunctionResultVerificationState.Unverified;
             });
         }
 
+        /// <summary>Stores a function result manually and marks it unverified until dispatch verification occurs.</summary>
         internal void StoreResult(FunctionResult result)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -302,6 +349,8 @@ namespace OPEN_LRD.Foundations
                 this.result = result;
                 resultDefinitionRevision = definitionRevision;
                 dispatchProvenance = null;
+                provenanceHistory.Clear();
+                resultVerificationState = FunctionResultVerificationState.Unverified;
             });
         }
 
@@ -322,9 +371,48 @@ namespace OPEN_LRD.Foundations
                 }
                 this.result = result;
                 resultDefinitionRevision = definitionRevision;
-                dispatchProvenance = provenance;
+                RecordDispatchProvenance(provenance);
+                resultVerificationState = provenance.IsDeterministic
+                    ? FunctionResultVerificationState.DispatchVerified
+                    : FunctionResultVerificationState.Unverified;
                 return true;
             });
+        }
+
+        internal void MarkResultUnverified()
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                resultVerificationState = FunctionResultVerificationState.Unverified;
+            });
+        }
+
+        internal void RecordDispatchProvenance(FunctionDispatchProvenance provenance)
+        {
+            ArgumentNullException.ThrowIfNull(provenance);
+            if (dispatchProvenance != null && !ProvenanceEquivalent(dispatchProvenance, provenance))
+            {
+                provenanceHistory.Add(dispatchProvenance);
+            }
+            dispatchProvenance = provenance;
+            if (!provenanceHistory.Any(existing => ProvenanceEquivalent(existing, provenance)))
+            {
+                provenanceHistory.Add(provenance);
+            }
+        }
+
+        private static bool ProvenanceEquivalent(FunctionDispatchProvenance left, FunctionDispatchProvenance right)
+        {
+            return string.Equals(left.FunctionKey, right.FunctionKey, StringComparison.Ordinal) &&
+                   string.Equals(left.ArgumentSnapshotHash, right.ArgumentSnapshotHash, StringComparison.Ordinal) &&
+                   string.Equals(left.ResultHash, right.ResultHash, StringComparison.Ordinal) &&
+                   string.Equals(left.ResultType, right.ResultType, StringComparison.Ordinal) &&
+                   string.Equals(left.ResultUnitTitle, right.ResultUnitTitle, StringComparison.Ordinal) &&
+                   left.DefinitionRevision == right.DefinitionRevision &&
+                   left.DispatchedAtUtc == right.DispatchedAtUtc &&
+                   string.Equals(left.DispatcherVersion, right.DispatcherVersion, StringComparison.Ordinal) &&
+                   left.IsDeterministic == right.IsDeterministic;
         }
 
         internal void ValidateDefinition()
@@ -352,6 +440,18 @@ namespace OPEN_LRD.Foundations
                     throw new InvalidOperationException("The FunctionBox result is stale; dispatch the current definition before trusting it.");
                 }
                 ValidateResult(result);
+                if (resultVerificationState != FunctionResultVerificationState.DispatchVerified || dispatchProvenance == null)
+                {
+                    throw new InvalidOperationException("A FunctionBox result must be dispatch-verified before it can be trusted.");
+                }
+                if (!dispatchProvenance.IsDeterministic)
+                {
+                    throw new InvalidOperationException("Non-deterministic function results cannot become trusted.");
+                }
+                if (dispatchProvenance.DefinitionRevision != definitionRevision)
+                {
+                    throw new InvalidOperationException("Dispatch provenance is stale for the current FunctionBox definition.");
+                }
             });
         }
 
@@ -361,6 +461,42 @@ namespace OPEN_LRD.Foundations
             {
                 EnsureWritable();
                 dispatchProvenance = provenance;
+                provenanceHistory.Clear();
+                if (provenance != null)
+                {
+                    provenanceHistory.Add(provenance);
+                }
+                resultVerificationState = provenance?.IsDeterministic == true
+                    ? FunctionResultVerificationState.DispatchVerified
+                    : FunctionResultVerificationState.Unverified;
+            });
+        }
+
+        internal void ReplaceDispatchProvenanceHistory(IEnumerable<FunctionDispatchProvenance>? provenanceHistoryEntries, FunctionDispatchProvenance? activeProvenance)
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                provenanceHistory.Clear();
+                if (provenanceHistoryEntries != null)
+                {
+                    foreach (FunctionDispatchProvenance entry in provenanceHistoryEntries)
+                    {
+                        if (entry == null) continue;
+                        if (!provenanceHistory.Any(existing => ProvenanceEquivalent(existing, entry)))
+                        {
+                            provenanceHistory.Add(entry);
+                        }
+                    }
+                }
+                dispatchProvenance = activeProvenance;
+                if (activeProvenance != null && !provenanceHistory.Any(existing => ProvenanceEquivalent(existing, activeProvenance)))
+                {
+                    provenanceHistory.Add(activeProvenance);
+                }
+                resultVerificationState = activeProvenance?.IsDeterministic == true
+                    ? FunctionResultVerificationState.DispatchVerified
+                    : FunctionResultVerificationState.Unverified;
             });
         }
 

@@ -462,6 +462,35 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets a read-only dispatch-provenance audit for a trusted or staged function box.</summary>
+        /// <param name="functionId">The function-box identity to inspect.</param>
+        /// <returns>An immutable audit snapshot, or <see langword="null"/> if the function is not registered.</returns>
+        public FunctionDispatchAudit? GetFunctionDispatchAudit(Guid functionId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                FunctionBox? functionBox = UntrustedFunctionDictionary.TryGetValue(functionId, out FunctionBox? staged)
+                    ? staged
+                    : TrustedFunctionDictionary.TryGetValue(functionId, out FunctionBox? trusted)
+                        ? trusted
+                        : GetPagedObject(DiskPartition.Functions, functionId,
+                            payload => FoundationBinarySerializer.DeserializeFunction(payload, _diskStore?.IsLegacyFormat ?? false),
+                            box => box.MarkReadOnly());
+                if (functionBox == null)
+                {
+                    return null;
+                }
+
+                return new FunctionDispatchAudit(
+                    functionId,
+                    functionBox.IsTrusted,
+                    functionBox.IsResultDispatchVerified,
+                    functionBox.DispatchProvenance,
+                    functionBox.DispatchProvenanceHistory);
+            });
+        }
+
         public FunctionBox? GetUntrustedFunctionBox(Guid functionId)
         {
             return GraphSynchronization.Execute(() =>
@@ -4057,9 +4086,27 @@ namespace OPEN_LRD
                 FunctionBox incoming = FoundationBinarySerializer.DeserializeFunction(record.Payload, store.IsLegacyFormat);
                 if (TrustedFunctionDictionary.TryGetValue(incoming.GetFunctionID(), out FunctionBox? existing))
                 {
-                    if (!FoundationBinarySerializer.SerializeFunction(existing).AsSpan().SequenceEqual(
-                            FoundationBinarySerializer.SerializeFunction(incoming)))
-                        throw new InvalidDataException("Merge contains a conflicting trusted FunctionBox definition.");
+                    bool definitionsMatch = string.Equals(existing.FunctionKey, incoming.FunctionKey, StringComparison.Ordinal) &&
+                        existing.ExpectedResultType == incoming.ExpectedResultType &&
+                        string.Equals(existing.ExpectedResultUnitTitle, incoming.ExpectedResultUnitTitle, StringComparison.Ordinal) &&
+                        existing.Variables.Count == incoming.Variables.Count &&
+                        existing.Variables.Zip(incoming.Variables).All(pair =>
+                            string.Equals(pair.First.Name, pair.Second.Name, StringComparison.Ordinal) &&
+                            pair.First.DataType == pair.Second.DataType &&
+                            string.Equals(pair.First.UnitTitle, pair.Second.UnitTitle, StringComparison.Ordinal) &&
+                            FunctionValuesEqual(pair.First.Value, pair.Second.Value));
+                    FunctionResult? er = existing.Result; FunctionResult? ir = incoming.Result;
+                    bool resultsMatch = (er == null && ir == null) || (er != null && ir != null &&
+                        er.DataType == ir.DataType && string.Equals(er.UnitTitle, ir.UnitTitle, StringComparison.Ordinal) && FunctionValuesEqual(er.Value, ir.Value));
+                    if (!definitionsMatch || !resultsMatch)
+                        throw new InvalidDataException($"Merge contains a conflicting trusted FunctionBox definition for {incoming.GetFunctionID()} ({incoming.FunctionKey}): def={definitionsMatch} res={resultsMatch}.");
+                    if (resultsMatch)
+                    {
+                        foreach (FunctionDispatchProvenance provenance in incoming.DispatchProvenanceHistory)
+                        {
+                            existing.RecordDispatchProvenance(provenance);
+                        }
+                    }
                 }
                 else if (!AddTrustedFunction(incoming))
                 {
@@ -5095,6 +5142,20 @@ namespace OPEN_LRD
                 throw new ArgumentOutOfRangeException(nameof(offset), "Offset must be non-negative.");
             if (limit.HasValue && limit.Value < 0)
                 throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be non-negative.");
+        }
+
+        private static bool FunctionValuesEqual(object? left, object? right)
+        {
+            if (ReferenceEquals(left, right)) return true;
+            if (left is null || right is null) return false;
+            if (left is Array leftArray && right is Array rightArray)
+            {
+                if (leftArray.GetType() != rightArray.GetType() || leftArray.Length != rightArray.Length) return false;
+                for (int i = 0; i < leftArray.Length; i++)
+                    if (!FunctionValuesEqual(leftArray.GetValue(i), rightArray.GetValue(i))) return false;
+                return true;
+            }
+            return Equals(left, right);
         }
 
         private static bool MatchesLinkQuery(

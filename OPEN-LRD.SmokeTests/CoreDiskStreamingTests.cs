@@ -58,8 +58,8 @@ namespace OPEN_LRD.SmokeTests
                     Program.Assert(core.AddTrustedSource(source), "Source should be trusted.");
 
                     FunctionBox function = new FunctionBox(Guid.NewGuid(), typeof(double), "Math_2.CalculateCircleArea", "m²");
-                    function.AddVariable(new FunctionVariable("x", 2.5, typeof(double), "m"));
-                    function.StoreResult(new FunctionResult(Math.PI * 6.25, typeof(double), "m²"));
+                    function.AddVariable(new FunctionVariable("radius", 2.5, typeof(double), "m"));
+                    MathFunctionDispatcher.Dispatch(function);
                     Program.Assert(core.AddTrustedFunction(function), "Function should be trusted.");
 
                     FunctionBox fractionFunction = new FunctionBox(typeof(Fraction), "Math_1.SimplifyFraction");
@@ -80,6 +80,8 @@ namespace OPEN_LRD.SmokeTests
                     arrayFunction.AddVariable(new FunctionVariable("probabilities", new[] { 0.25, 0.75 }, typeof(double[])));
                     MathFunctionDispatcher.Dispatch(arrayFunction);
                     Program.Assert(core.AddTrustedFunction(arrayFunction), "Numeric-array function should be trusted.");
+                    FunctionDispatchProvenance? fractionProvenance = fractionFunction.DispatchProvenance;
+                    Program.Assert(fractionProvenance != null, "dispatch should record in-memory provenance");
                     DateTimeOffset assertedAt = DateTimeOffset.UtcNow;
                     NodeLinkProvenance provenance = new NodeLinkProvenance(
                         Guid.NewGuid(), NodeLinkOrigin.User, assertedAt, "reviewer",
@@ -135,7 +137,9 @@ namespace OPEN_LRD.SmokeTests
                         "Function variables should round-trip from disk.");
                     Program.Assert(core.GetTrustedFunctionBox(function.FunctionID)?.Result?.Value is double result && result == Math.PI * 6.25,
                         "Function result should round-trip from disk.");
-                    Program.Assert(core.GetTrustedFunctionBox(fractionFunction.FunctionID)?.Result?.Value is Fraction restoredFraction &&
+                    FunctionBox? restoredFractionFunction = core.GetTrustedFunctionBox(fractionFunction.FunctionID);
+                    FunctionDispatchProvenance? restoredProvenance = restoredFractionFunction?.DispatchProvenance;
+                    Program.Assert(restoredFractionFunction?.Result?.Value is Fraction restoredFraction &&
                                    restoredFraction.Equals(new Fraction(3, 4)) &&
                                    core.GetTrustedFunctionBox(bigIntegerFunction.FunctionID)?.Result?.Value is BigInteger restoredGcd &&
                                    restoredGcd == BigInteger.Pow(10, 60) &&
@@ -144,6 +148,12 @@ namespace OPEN_LRD.SmokeTests
                                    core.GetTrustedFunctionBox(arrayFunction.FunctionID)?.Variables.Single().Value is double[] restoredProbabilities &&
                                    restoredProbabilities.SequenceEqual(new[] { 0.25, 0.75 }),
                         "Extended BigInteger, Fraction, Vector3, and numeric-array function values should round-trip in checkpoints.");
+                    Program.Assert(restoredProvenance != null &&
+                                   restoredProvenance.FunctionKey == fractionProvenance!.FunctionKey &&
+                                   restoredProvenance.ArgumentSnapshotHash == fractionProvenance.ArgumentSnapshotHash &&
+                                   restoredProvenance.ResultHash == fractionProvenance.ResultHash &&
+                                   restoredProvenance.DefinitionRevision == fractionProvenance.DefinitionRevision,
+                        "Function dispatch provenance should survive checkpoint round-trip.");
                     Program.Assert(core.GetTrustedGroupsContainingSentence(sentenceId).Contains(group.GetGroupingID()),
                         "Group reverse index should be rebuilt during paging.");
                     Program.Assert(core.GetTrustedSourcesContainingGroup(group.GetGroupingID()).Contains(source.GetSourceID()),
@@ -493,20 +503,21 @@ namespace OPEN_LRD.SmokeTests
                     missingPresentation[DiskPartition.NodePresentations] = presentationRecords;
                     WriteCheckpoint(missingPresentationDirectory, missingPresentation);
 
-                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> malformedPresentation = ReadCheckpointPartitions(sourceDirectory);
-                    presentationRecords = malformedPresentation[DiskPartition.NodePresentations].ToList();
-                    DiskRecord originalPresentation = presentationRecords[0];
-                    presentationRecords[0] = new DiskRecord(originalPresentation.Key,
-                        originalPresentation.Payload.Concat(new byte[] { 0x5A }).ToArray());
-                    malformedPresentation[DiskPartition.NodePresentations] = presentationRecords;
-                    WriteCheckpoint(malformedPresentationDirectory, malformedPresentation);
-
                     Dictionary<DiskPartition, IEnumerable<DiskRecord>> duplicatePresentation = ReadCheckpointPartitions(sourceDirectory);
                     presentationRecords = duplicatePresentation[DiskPartition.NodePresentations].ToList();
-                    originalPresentation = presentationRecords[0];
+                    DiskRecord originalPresentation = presentationRecords[0];
                     presentationRecords.Add(new DiskRecord(Guid.NewGuid(), (byte[])originalPresentation.Payload.Clone()));
                     duplicatePresentation[DiskPartition.NodePresentations] = presentationRecords;
                     WriteCheckpoint(duplicatePresentationDirectory, duplicatePresentation);
+
+                    // v3 extensibility (10.16): explicitly versioned/extensible records may carry unknown trailing bytes.
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> extensiblePresentation = ReadCheckpointPartitions(sourceDirectory);
+                    List<DiskRecord> extensibleRecords = extensiblePresentation[DiskPartition.NodePresentations].ToList();
+                    DiskRecord extensibleOriginal = extensibleRecords[0];
+                    extensibleRecords[0] = new DiskRecord(extensibleOriginal.Key,
+                        extensibleOriginal.Payload.Concat(new byte[] { 0x5A }).ToArray());
+                    extensiblePresentation[DiskPartition.NodePresentations] = extensibleRecords;
+                    WriteCheckpoint(malformedPresentationDirectory, extensiblePresentation);
 
                     core.ResetCore();
                     core.InitializeCore();
@@ -516,7 +527,6 @@ namespace OPEN_LRD.SmokeTests
                              {
                                  invalidLayoutDirectory,
                                  missingPresentationDirectory,
-                                 malformedPresentationDirectory,
                                  duplicatePresentationDirectory
                              })
                     {
@@ -526,6 +536,10 @@ namespace OPEN_LRD.SmokeTests
                         Program.Assert(core.GetTrustedSenseBox(retainedSenseId) != null,
                             "Rejected checkpoint data must not replace the current core.");
                     }
+                    core.ResetCore();
+                    core.StreamTrustedDictionariesFromDisk(malformedPresentationDirectory);
+                    Program.Assert(core.GetTrustedNodeCount() > 0,
+                        "Extensible v3 records with unknown trailing bytes should be accepted.");
                 }
                 finally
                 {

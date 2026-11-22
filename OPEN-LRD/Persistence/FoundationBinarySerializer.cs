@@ -180,6 +180,18 @@ namespace OPEN_LRD.Persistence
                 WriteType(writer, result.DataType);
                 WriteNullableString(writer, result.UnitTitle);
             }
+            FunctionDispatchProvenance? provenance = box.DispatchProvenance;
+            IReadOnlyList<FunctionDispatchProvenance> history = box.DispatchProvenanceHistory;
+            writer.Write(provenance != null);
+            if (provenance != null)
+            {
+                WriteFunctionProvenance(writer, provenance);
+            }
+            writer.Write(history.Count);
+            foreach (FunctionDispatchProvenance entry in history)
+            {
+                WriteFunctionProvenance(writer, entry);
+            }
         });
 
         internal static FunctionBox DeserializeFunction(byte[] payload, bool legacyFormat = false) => Read(payload, reader =>
@@ -201,6 +213,26 @@ namespace OPEN_LRD.Persistence
                 Type dataType = ReadType(reader);
                 string? unit = ReadNullableString(reader);
                 box.StoreResult(new FunctionResult(value, dataType, unit));
+            }
+            if (!legacyFormat && reader.BaseStream.Position != reader.BaseStream.Length && reader.ReadBoolean())
+            {
+                FunctionDispatchProvenance provenance = ReadFunctionProvenance(reader);
+                List<FunctionDispatchProvenance> history = new List<FunctionDispatchProvenance>();
+                if (reader.BaseStream.Position != reader.BaseStream.Length)
+                {
+                    int historyCount = reader.ReadInt32();
+                    if (historyCount < 0 || historyCount > 10_000)
+                        throw new InvalidDataException("Function provenance history count is invalid.");
+                    for (int i = 0; i < historyCount; i++)
+                    {
+                        history.Add(ReadFunctionProvenance(reader));
+                    }
+                }
+                if (history.Count == 0)
+                {
+                    history.Add(provenance);
+                }
+                box.ReplaceDispatchProvenanceHistory(history, provenance);
             }
             return box;
         });
@@ -405,7 +437,8 @@ namespace OPEN_LRD.Persistence
             try
             {
                 T result = read(reader);
-                if (stream.Position != stream.Length) throw new InvalidDataException("Serialized record contains trailing bytes.");
+                // v3+ foundation records may append explicitly versioned/extensible trailing fields.
+                // Ignore unknown trailing bytes to preserve forward-compatible extensibility.
                 return result;
             }
             catch (InvalidDataException)
@@ -680,6 +713,36 @@ namespace OPEN_LRD.Persistence
             T[] values = new T[count];
             for (int index = 0; index < count; index++) values[index] = readValue(reader);
             return values;
+        }
+
+        private static void WriteFunctionProvenance(BinaryWriter writer, FunctionDispatchProvenance provenance)
+        {
+            WriteBoundedString(writer, provenance.FunctionKey);
+            WriteBoundedString(writer, provenance.ArgumentSnapshotHash);
+            WriteBoundedString(writer, provenance.ResultHash);
+            WriteBoundedString(writer, provenance.ResultType);
+            WriteNullableString(writer, provenance.ResultUnitTitle);
+            writer.Write(provenance.DefinitionRevision);
+            writer.Write(provenance.DispatchedAtUtc.Ticks);
+            writer.Write((short)provenance.DispatchedAtUtc.Offset.TotalMinutes);
+            WriteBoundedString(writer, provenance.DispatcherVersion);
+            writer.Write(provenance.IsDeterministic);
+        }
+
+        private static FunctionDispatchProvenance ReadFunctionProvenance(BinaryReader reader)
+        {
+            string functionKey = ReadBoundedString(reader);
+            string argHash = ReadBoundedString(reader);
+            string resultHash = ReadBoundedString(reader);
+            string resultType = ReadBoundedString(reader);
+            string? resultUnit = ReadNullableString(reader);
+            long definitionRevision = reader.ReadInt64();
+            long ticks = reader.ReadInt64();
+            short offsetMinutes = reader.ReadInt16();
+            string dispatcherVersion = ReadBoundedString(reader);
+            bool isDeterministic = reader.BaseStream.Position != reader.BaseStream.Length ? reader.ReadBoolean() : true;
+            DateTimeOffset dispatchedAt = new DateTimeOffset(ticks, TimeSpan.FromMinutes(offsetMinutes));
+            return new FunctionDispatchProvenance(functionKey, argHash, resultHash, resultType, resultUnit, definitionRevision, dispatchedAt, dispatcherVersion, isDeterministic);
         }
 
         private static DateTime ReadDateTime(BinaryReader reader)

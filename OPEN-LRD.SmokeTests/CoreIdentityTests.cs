@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using OPEN_LRD.Foundations;
+using OPEN_LRD.Skills;
 
 namespace OPEN_LRD.SmokeTests
 {
@@ -300,6 +301,7 @@ namespace OPEN_LRD.SmokeTests
                 FunctionBox trustedFunction = new FunctionBox(trustedFunctionId, typeof(double), "Math_2.CalculateCircleArea", "m²");
                 trustedFunction.AddVariable(new FunctionVariable("radius", 2.0, typeof(double), "m"));
                 trustedFunction.StoreResult(new FunctionResult(Math.PI * 4.0, typeof(double), "m²"));
+                MathFunctionDispatcher.Dispatch(trustedFunction);
                 Program.Assert(core.AddTrustedFunction(trustedFunction), "Trusted function should be registered.");
 
                 Guid trustedNodeId = core.GetTrustedNodeByTarget(NodeTargetKind.Word, trustedWordId)!.GetNodeID();

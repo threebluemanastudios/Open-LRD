@@ -124,8 +124,11 @@ namespace OPEN_LRD.SmokeTests
                     Program.Assert(core.SetUntrustedFunction(function), "A valid function should enter untrusted staging.");
                     Program.Assert(core.GetUntrustedFunctionBox(function.FunctionID) == function,
                         "The untrusted FunctionBox should be retrievable by ID.");
+                    Program.AssertThrows<InvalidOperationException>(() => core.ConvertUntrustedFunctionToTrusted(function.FunctionID),
+                        "Manual results are unverified and cannot be trusted without dispatch verification.");
+                    MathFunctionDispatcher.Dispatch(function);
                     Program.Assert(core.ConvertUntrustedFunctionToTrusted(function.FunctionID),
-                        "A complete, uniquely dispatchable function should promote to trusted.");
+                        "A dispatch-verified function should promote to trusted.");
                     FunctionBox trusted = core.GetTrustedFunctionBox(function.FunctionID)!;
                     FunctionResult original = trusted.Result!;
                     Program.AssertThrows<InvalidOperationException>(() => trusted.AddVariable(new FunctionVariable("other", 1.0, typeof(double))),

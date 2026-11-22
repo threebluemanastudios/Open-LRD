@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OPEN_LRD.Foundations;
+using OPEN_LRD.Skills;
 using OPEN_LRD.Persistence;
 
 namespace OPEN_LRD.SmokeTests
@@ -246,6 +247,7 @@ namespace OPEN_LRD.SmokeTests
                 "Math_2.CalculateCircleArea", "m²");
             trustedFunction.AddVariable(new FunctionVariable("x", 2.0, typeof(double), "m"));
             trustedFunction.StoreResult(new FunctionResult(Math.PI * 4.0, typeof(double), "m²"));
+            MathFunctionDispatcher.Dispatch(trustedFunction);
             Program.Assert(core.AddTrustedFunction(trustedFunction), "Trusted Function should be registered.");
             FunctionBox untrustedFunction = new FunctionBox(Guid.NewGuid(), typeof(double), "untrusted-test-function");
             Program.Assert(core.SetUntrustedFunction(untrustedFunction), "Untrusted Function should be registered.");
