@@ -1,27 +1,26 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Linq;
 
 namespace OPEN_LRD.Foundations
 {
-    internal class ConversationSymbolic
+    internal sealed class ConversationSymbolic
     {
-        private Guid ConversationID;
-        private Dictionary<UInt128, List<Guid>>? symbolicArray;
-        private UInt128 currentSymbolicCount = 0;
-        private UInt128 currentSymbolicIndex = 0;
+        private readonly Guid conversationId;
+        private Dictionary<UInt128, List<Guid>> symbolicArray = new Dictionary<UInt128, List<Guid>>();
+        private UInt128 currentSymbolicCount;
+        private UInt128 currentSymbolicIndex;
+        private bool idSpaceExhausted;
 
         public ConversationSymbolic()
+            : this(Guid.NewGuid())
         {
-            ConversationID = Guid.NewGuid();
-            symbolicArray = new Dictionary<UInt128, List<Guid>>();
         }
 
         public ConversationSymbolic(Guid conversationId)
         {
             ValidateConversationId(conversationId);
-            ConversationID = conversationId;
-            symbolicArray = new Dictionary<UInt128, List<Guid>>();
+            this.conversationId = conversationId;
         }
 
         public ConversationSymbolic(Dictionary<UInt128, List<Guid>> symbolicArray)
@@ -33,137 +32,216 @@ namespace OPEN_LRD.Foundations
         {
             ValidateConversationId(conversationId);
             ArgumentNullException.ThrowIfNull(symbolicArray);
-            ValidateSymbolicDictionary(symbolicArray, nameof(symbolicArray));
-            ConversationID = conversationId;
-            this.symbolicArray = GraphSynchronization.Execute(() =>
-                symbolicArray.ToDictionary(entry => entry.Key, entry => new List<Guid>(entry.Value)));
-            if (symbolicArray.Count > 0)
+            KeyValuePair<UInt128, List<Guid>>[] snapshot = SnapshotAndValidate(symbolicArray, nameof(symbolicArray));
+            this.conversationId = conversationId;
+            this.symbolicArray = snapshot.ToDictionary(entry => entry.Key, entry => new List<Guid>(entry.Value));
+            SetNextIdFromExistingKeys(snapshot.Select(entry => entry.Key).DefaultIfEmpty().Max());
+            if (snapshot.Length == 0)
             {
-                currentSymbolicCount = symbolicArray.Keys.Max() + 1;
+                currentSymbolicCount = 0;
             }
         }
 
         public void AddSymbolic(List<Guid> symbols)
         {
             ArgumentNullException.ThrowIfNull(symbols);
-            ValidateSymbolIds(symbols, nameof(symbols));
+            Guid[] snapshot = SnapshotAndValidateSymbols(symbols, nameof(symbols));
             GraphSynchronization.Execute(() =>
             {
-                if (symbolicArray == null)
-                {
-                    symbolicArray = new Dictionary<UInt128, List<Guid>>();
-                }
-                symbolicArray[currentSymbolicCount] = new List<Guid>(symbols);
-                currentSymbolicCount++;
+                EnsureIdAvailable(idSpaceExhausted, nameof(AddSymbolic));
+                UInt128 assignedId = currentSymbolicCount;
+                symbolicArray.Add(assignedId, new List<Guid>(snapshot));
+                AdvanceAfterAssignedId(assignedId, out currentSymbolicCount, out idSpaceExhausted);
             });
         }
 
         public void AddSymbolicRange(List<List<Guid>> symbolsList)
         {
             ArgumentNullException.ThrowIfNull(symbolsList);
-            foreach (List<Guid> symbols in symbolsList)
+            List<Guid[]> snapshot = new List<Guid[]>(symbolsList.Count);
+            foreach (List<Guid>? symbols in symbolsList)
             {
-                ArgumentNullException.ThrowIfNull(symbols);
-                ValidateSymbolIds(symbols, nameof(symbolsList));
+                if (symbols == null)
+                {
+                    throw new ArgumentException("Symbolic ranges cannot contain null entries.", nameof(symbolsList));
+                }
+                snapshot.Add(SnapshotAndValidateSymbols(symbols, nameof(symbolsList)));
             }
+
             GraphSynchronization.Execute(() =>
             {
-                if (symbolicArray == null)
+                (UInt128 nextId, bool exhausted) = PreflightSequentialIds(currentSymbolicCount, idSpaceExhausted, snapshot.Count);
+                UInt128 assignedId = currentSymbolicCount;
+                for (int index = 0; index < snapshot.Count; index++)
                 {
-                    symbolicArray = new Dictionary<UInt128, List<Guid>>();
+                    symbolicArray.Add(assignedId, new List<Guid>(snapshot[index]));
+                    if (index + 1 < snapshot.Count && assignedId != UInt128.MaxValue)
+                    {
+                        assignedId++;
+                    }
                 }
-                foreach (var symbols in symbolsList)
-                {
-                    ArgumentNullException.ThrowIfNull(symbols);
-                    symbolicArray[currentSymbolicCount] = new List<Guid>(symbols);
-                    currentSymbolicCount++;
-                }
+                currentSymbolicCount = nextId;
+                idSpaceExhausted = exhausted;
             });
         }
 
         public void AddSymbolicRange(Dictionary<UInt128, List<Guid>> symbolsDict)
         {
             ArgumentNullException.ThrowIfNull(symbolsDict);
-            ValidateSymbolicDictionary(symbolsDict, nameof(symbolsDict));
+            KeyValuePair<UInt128, List<Guid>>[] snapshot = SnapshotAndValidate(symbolsDict, nameof(symbolsDict));
             GraphSynchronization.Execute(() =>
             {
-                if (symbolicArray == null)
+                (UInt128 nextId, bool exhausted) = AdvanceForExplicitIds(currentSymbolicCount,
+                    idSpaceExhausted, snapshot.Select(entry => entry.Key));
+                foreach (KeyValuePair<UInt128, List<Guid>> entry in snapshot)
                 {
-                    symbolicArray = new Dictionary<UInt128, List<Guid>>();
+                    symbolicArray[entry.Key] = new List<Guid>(entry.Value);
                 }
-                foreach (var kvp in symbolsDict)
-                {
-                    ArgumentNullException.ThrowIfNull(kvp.Value);
-                    symbolicArray[kvp.Key] = new List<Guid>(kvp.Value);
-                    if (kvp.Key >= currentSymbolicCount)
-                    {
-                        currentSymbolicCount = kvp.Key + 1;
-                    }
-                }
+                currentSymbolicCount = nextId;
+                idSpaceExhausted = exhausted;
             });
         }
 
-        public Dictionary<UInt128, List<Guid>>? GetSymbolicArray()
+        public Dictionary<UInt128, List<Guid>> GetSymbolicArray()
         {
-            return GraphSynchronization.Execute(() =>
-                symbolicArray == null
-                    ? null
-                    : symbolicArray.ToDictionary(entry => entry.Key, entry => new List<Guid>(entry.Value)));
+            return GraphSynchronization.Execute(() => symbolicArray.ToDictionary(
+                entry => entry.Key, entry => new List<Guid>(entry.Value)));
         }
 
         public List<Guid>? GetSymbolicById(UInt128 symbolicId)
         {
-            return GraphSynchronization.Execute(() =>
-                symbolicArray != null && symbolicArray.TryGetValue(symbolicId, out List<Guid>? symbols)
-                    ? new List<Guid>(symbols)
-                    : null);
+            return GraphSynchronization.Execute(() => symbolicArray.TryGetValue(symbolicId, out List<Guid>? symbols)
+                ? new List<Guid>(symbols)
+                : null);
         }
 
-        public Guid GetConversationID()
-        {
-            return GraphSynchronization.Execute(() => ConversationID);
-        }
+        public Guid GetConversationID() => GraphSynchronization.Execute(() => conversationId);
+        public UInt128 GetCurrentSymbolicIndex() => GraphSynchronization.Execute(() => currentSymbolicIndex);
+        public void SetCurrentSymbolicIndex(UInt128 index) => GraphSynchronization.Execute(() => currentSymbolicIndex = index);
+        public UInt128 GetCurrentSymbolicCount() => GraphSynchronization.Execute(() => currentSymbolicCount);
+        public int GetEntryCount() => GraphSynchronization.Execute(() => symbolicArray.Count);
+        public bool IsIdSpaceExhausted => GraphSynchronization.Execute(() => idSpaceExhausted);
+        public bool ContainsId(UInt128 id) => GraphSynchronization.Execute(() => symbolicArray.ContainsKey(id));
+        public bool Remove(UInt128 id) => GraphSynchronization.Execute(() => symbolicArray.Remove(id));
 
-        public void SetCurrentSymbolicIndex(UInt128 index)
+        public void Clear()
         {
-            GraphSynchronization.Execute(() => currentSymbolicIndex = index);
-        }
-
-        public UInt128 GetCurrentSymbolicIndex()
-        {
-            return GraphSynchronization.Execute(() => currentSymbolicIndex);
-        }
-
-        public UInt128 GetCurrentSymbolicCount()
-        {
-            return GraphSynchronization.Execute(() => currentSymbolicCount);
-        }
-
-        private static void ValidateConversationId(Guid conversationId)
-        {
-            if (conversationId == Guid.Empty)
+            GraphSynchronization.Execute(() =>
             {
-                throw new ArgumentException("Conversation identifiers cannot be Guid.Empty.", nameof(conversationId));
+                symbolicArray.Clear();
+                currentSymbolicCount = 0;
+                currentSymbolicIndex = 0;
+                idSpaceExhausted = false;
+            });
+        }
+
+        private void SetNextIdFromExistingKeys(UInt128 maximumKey)
+        {
+            if (symbolicArray.Count == 0)
+            {
+                currentSymbolicCount = 0;
+                return;
+            }
+            if (maximumKey == UInt128.MaxValue)
+            {
+                currentSymbolicCount = UInt128.MaxValue;
+                idSpaceExhausted = true;
+            }
+            else
+            {
+                currentSymbolicCount = maximumKey + 1;
             }
         }
 
-        private static void ValidateSymbolicDictionary(Dictionary<UInt128, List<Guid>> values, string parameterName)
+        private static (UInt128 NextId, bool Exhausted) PreflightSequentialIds(UInt128 nextId, bool exhausted, int count)
         {
-            foreach (KeyValuePair<UInt128, List<Guid>> entry in values)
+            for (int index = 0; index < count; index++)
             {
-                ArgumentNullException.ThrowIfNull(entry.Value, parameterName);
-                ValidateSymbolIds(entry.Value, parameterName);
+                EnsureIdAvailable(exhausted, nameof(count));
+                AdvanceAfterAssignedId(nextId, out nextId, out exhausted);
             }
+            return (nextId, exhausted);
         }
 
-        private static void ValidateSymbolIds(IEnumerable<Guid> symbols, string parameterName)
+        private static (UInt128 NextId, bool Exhausted) AdvanceForExplicitIds(
+            UInt128 currentId,
+            bool exhausted,
+            IEnumerable<UInt128> ids)
         {
-            foreach (Guid symbolId in symbols)
+            foreach (UInt128 id in ids)
             {
-                if (symbolId == Guid.Empty)
+                if (exhausted || id < currentId)
                 {
-                    throw new ArgumentException("Symbol identifiers cannot be Guid.Empty.", parameterName);
+                    continue;
                 }
+                if (id == UInt128.MaxValue)
+                {
+                    currentId = UInt128.MaxValue;
+                    exhausted = true;
+                }
+                else
+                {
+                    currentId = id + 1;
+                }
+            }
+            return (currentId, exhausted);
+        }
+
+        private static KeyValuePair<UInt128, List<Guid>>[] SnapshotAndValidate(
+            Dictionary<UInt128, List<Guid>> values,
+            string parameterName)
+        {
+            KeyValuePair<UInt128, List<Guid>>[] snapshot = values.ToArray();
+            for (int index = 0; index < snapshot.Length; index++)
+            {
+                List<Guid>? symbols = snapshot[index].Value;
+                if (symbols == null)
+                {
+                    throw new ArgumentException("Symbolic entries cannot contain null lists.", parameterName);
+                }
+                snapshot[index] = new KeyValuePair<UInt128, List<Guid>>(
+                    snapshot[index].Key, new List<Guid>(SnapshotAndValidateSymbols(symbols, parameterName)));
+            }
+            return snapshot;
+        }
+
+        private static Guid[] SnapshotAndValidateSymbols(IEnumerable<Guid> symbols, string parameterName)
+        {
+            Guid[] snapshot = symbols.ToArray();
+            if (snapshot.Any(symbolId => symbolId == Guid.Empty))
+            {
+                throw new ArgumentException("Symbol identifiers cannot be Guid.Empty.", parameterName);
+            }
+            return snapshot;
+        }
+
+        private static void EnsureIdAvailable(bool exhausted, string parameterName)
+        {
+            if (exhausted)
+            {
+                throw new OverflowException($"No further UInt128 IDs are available for {parameterName}.");
+            }
+        }
+
+        private static void AdvanceAfterAssignedId(UInt128 assignedId, out UInt128 nextId, out bool exhausted)
+        {
+            if (assignedId == UInt128.MaxValue)
+            {
+                nextId = UInt128.MaxValue;
+                exhausted = true;
+            }
+            else
+            {
+                nextId = assignedId + 1;
+                exhausted = false;
+            }
+        }
+
+        private static void ValidateConversationId(Guid id)
+        {
+            if (id == Guid.Empty)
+            {
+                throw new ArgumentException("Conversation identifiers cannot be Guid.Empty.", nameof(id));
             }
         }
     }

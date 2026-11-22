@@ -1,6 +1,6 @@
 using System;
 
-namespace OPEN_LRD
+namespace OPEN_LRD.Foundations
 {
     internal static class GraphSynchronization
     {

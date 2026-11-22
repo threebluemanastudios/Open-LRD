@@ -191,6 +191,15 @@ namespace OPEN_LRD.SmokeTests
             Assert(graph.EdgeCount == 1, "undirected edge should be stored once in the edge list");
             Assert(graph.ContainsNode("A") && graph.ContainsNode("B"), "edge should add both nodes");
             Assert(graph.GetNeighbors("A").SequenceEqual(new[] { "B" }), "neighbor lookup");
+            AssertThrows<NotSupportedException>(() => ((IList<string>)graph.Nodes).Add("C"),
+                "node snapshots should not expose a mutable backing list");
+            AssertThrows<NotSupportedException>(() => ((IList<GraphEdge<string>>)graph.Edges).Clear(),
+                "edge snapshots should not expose a mutable backing list");
+            AssertThrows<NotSupportedException>(() => ((IList<GraphEdge<string>>)graph.GetOutgoingEdges("A")).Clear(),
+                "adjacency views should not expose mutable backing lists");
+            graph.AddEdge("A", "B");
+            Assert(graph.EdgeCount == 2 && graph.GetOutgoingEdges("A").Count == 2,
+                "Parallel and exact duplicate insertions should be retained as separate edge instances.");
             AssertThrows<ArgumentOutOfRangeException>(
                 () => graph.AddEdge("A", "C", double.NaN),
                 "non-finite weight should be rejected");

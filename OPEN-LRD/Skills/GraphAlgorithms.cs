@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace OPEN_LRD.Skills
 {
@@ -31,9 +32,9 @@ namespace OPEN_LRD.Skills
 
         public int EdgeCount => edges.Count;
 
-        public IReadOnlyList<TNode> Nodes => nodes;
+        public IReadOnlyList<TNode> Nodes => new ReadOnlyCollection<TNode>(new List<TNode>(nodes));
 
-        public IReadOnlyList<GraphEdge<TNode>> Edges => edges;
+        public IReadOnlyList<GraphEdge<TNode>> Edges => new ReadOnlyCollection<GraphEdge<TNode>>(new List<GraphEdge<TNode>>(edges));
 
         public void AddNode(TNode node)
         {
@@ -50,6 +51,13 @@ namespace OPEN_LRD.Skills
             incomingEdges.Add(node, new List<GraphEdge<TNode>>());
         }
 
+        /// <summary>
+        /// Adds one finite-weight edge. Negative weights and parallel/duplicate
+        /// insertions are retained; algorithms that cannot support negative
+        /// weights validate their own preconditions. For undirected graphs,
+        /// EdgeCount and Edges count each inserted edge once while adjacency
+        /// contains the generated reverse view.
+        /// </summary>
         public void AddEdge(TNode from, TNode to, double weight = 1.0)
         {
             if (!double.IsFinite(weight))
@@ -85,7 +93,7 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentException("The node is not present in the graph.", nameof(node));
             }
-            return result;
+            return result.AsReadOnly();
         }
 
         public IReadOnlyList<GraphEdge<TNode>> GetIncomingEdges(TNode node)
@@ -94,7 +102,7 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentException("The node is not present in the graph.", nameof(node));
             }
-            return result;
+            return result.AsReadOnly();
         }
 
         public IReadOnlyList<TNode> GetNeighbors(TNode node)
@@ -105,7 +113,7 @@ namespace OPEN_LRD.Skills
             {
                 result.Add(edge.To);
             }
-            return result;
+            return result.AsReadOnly();
         }
     }
 

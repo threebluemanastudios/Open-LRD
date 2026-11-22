@@ -131,6 +131,17 @@ namespace OPEN_LRD.SmokeTests
                 AssertContainsLink(core.GetOutgoingLinks(sentenceNode!.GetNodeID(), NodeRelationType.ContainsWord), fixture.WordNodeId, "Sentence should link to its word.");
                 AssertContainsLink(core.GetOutgoingLinks(sentenceNode.GetNodeID(), NodeRelationType.LeadingWord), fixture.WordNodeId, "Sentence should link to its leading word.");
                 AssertContainsLink(core.GetOutgoingLinks(sentenceNode.GetNodeID(), NodeRelationType.TrailingWord), fixture.WordNodeId, "Sentence should link to its trailing word.");
+                NodeLink structuralSenseLink = core.GetOutgoingLinks(symbolNode.GetNodeID(), NodeRelationType.HasSense).Single();
+                Program.Assert(structuralSenseLink.Provenance.Origin == NodeLinkOrigin.Structural,
+                    "Automatically wired links should carry structural provenance.");
+                Program.Assert(!core.AddTrustedLink(structuralSenseLink),
+                    "External callers cannot spoof an automatically wired structural link.");
+                Program.Assert(!core.UpdateTrustedLinkWeight(symbolNode.GetNodeID(), fixture.SenseNodeId,
+                    NodeRelationType.HasSense, 0.5), "Structural link weights cannot be externally changed.");
+                Program.Assert(!core.RemoveTrustedLink(symbolNode.GetNodeID(), fixture.SenseNodeId,
+                    NodeRelationType.HasSense), "Structural links cannot be externally removed.");
+                Program.Assert(!core.AddTrustedLink(symbolNode.GetNodeID(), fixture.UsageNodeId,
+                    NodeRelationType.HasUsage), "Relation kinds must match the endpoint target kinds.");
 
                 SenseBox? senseBox = core.GetTrustedSenseBox(fixture.SenseId);
                 UsageBox? usageBox = core.GetTrustedUsageBox(fixture.UsageId);
@@ -342,19 +353,19 @@ namespace OPEN_LRD.SmokeTests
                 core = LRD_Core.Instance;
                 Guid from = fixture.WordNodeId;
                 Guid to = fixture.SenseNodeId;
-                Program.Assert(core.AddTrustedLink(from, to, NodeRelationType.Custom, 2.0, "context-a"),
+                Program.Assert(core.AddTrustedLink(from, to, NodeRelationType.Custom, 0.2, "context-a"),
                     "First qualified custom link should be added.");
-                Program.Assert(core.AddTrustedLink(from, to, NodeRelationType.Custom, 4.0, "context-b"),
+                Program.Assert(core.AddTrustedLink(from, to, NodeRelationType.Custom, 0.4, "context-b"),
                     "Different labels should allow parallel qualified links.");
-                Program.Assert(!core.AddTrustedLink(from, to, NodeRelationType.Custom, 5.0, " context-a "),
+                Program.Assert(!core.AddTrustedLink(from, to, NodeRelationType.Custom, 0.5, " context-a "),
                     "Normalized exact duplicate should be rejected.");
-                Program.Assert(core.UpdateTrustedLinkWeight(from, to, NodeRelationType.Custom, 3.5, "context-a"),
+                Program.Assert(core.UpdateTrustedLinkWeight(from, to, NodeRelationType.Custom, 0.35, "context-a"),
                     "Existing qualified link weight should update.");
                 Program.AssertEqual(core.GetOutgoingLinks(from, NodeRelationType.Custom)
-                    .Single(link => link.Label == "context-a").Weight, 3.5,
+                    .Single(link => link.Label == "context-a").Weight, 0.35,
                     "Adjacency should expose updated link weight.");
                 Graph<Guid> updatedGraph = core.BuildSkillsGraphSnapshot();
-                Program.Assert(updatedGraph.GetOutgoingEdges(from).Any(edge => edge.To == to && edge.Weight == 3.5),
+                Program.Assert(updatedGraph.GetOutgoingEdges(from).Any(edge => edge.To == to && edge.Weight == 0.35),
                     "Skills graph should reflect updated link weight.");
                 Program.Assert(core.RemoveTrustedLink(from, to, NodeRelationType.Custom, "context-b"),
                     "Qualified link should be removable by label.");
@@ -362,26 +373,48 @@ namespace OPEN_LRD.SmokeTests
                     "Removal should keep adjacency synchronized.");
                 Program.Assert(!core.RemoveTrustedLink(from, to, NodeRelationType.Custom, "missing"),
                     "Removing an absent qualified link should return false.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(() =>
+                    new NodeLink(from, to, NodeRelationType.Custom, 1.01),
+                    "Link confidence must remain in [0, 1].");
+
+                DateTimeOffset assertionTime = DateTimeOffset.UtcNow;
+                NodeLinkProvenance assertionA = new NodeLinkProvenance(Guid.NewGuid(), NodeLinkOrigin.User,
+                    assertionTime, "author-a", confidence: 0.6);
+                NodeLinkProvenance assertionB = new NodeLinkProvenance(Guid.NewGuid(), NodeLinkOrigin.User,
+                    assertionTime, "author-b", confidence: 0.6);
+                Program.Assert(core.AddTrustedLink(from, to, NodeRelationType.Custom, 0.6, "shared-evidence", assertionA) &&
+                               core.AddTrustedLink(from, to, NodeRelationType.Custom, 0.6, "shared-evidence", assertionB),
+                    "Separate provenance assertion IDs should allow parallel evidence-backed links.");
+                Program.Assert(!core.AddTrustedLink(from, to, NodeRelationType.Custom, 0.6, "shared-evidence", assertionA),
+                    "An exact provenance assertion duplicate should be rejected.");
+                Program.Assert(core.UpdateTrustedLinkWeight(assertionA.AssertionId, 0.7) &&
+                               core.GetOutgoingLinks(from, NodeRelationType.Custom).Single(link =>
+                                   link.Provenance.AssertionId == assertionA.AssertionId).Weight == 0.7,
+                    "Weights should update by stable assertion ID without replacing other assertions.");
+                Program.Assert(core.RemoveTrustedLink(assertionA.AssertionId) &&
+                               core.GetOutgoingLinks(from, NodeRelationType.Custom).Any(link =>
+                                   link.Provenance.AssertionId == assertionB.AssertionId),
+                    "Removing one evidence assertion should preserve parallel assertions.");
 
                 Guid alternateSymbolId = AddTrustedSymbol(core, fixture.SenseId, 'p');
                 Guid alternateWordId = AddTrustedWord(core, fixture.SenseId, fixture.UsageId, alternateSymbolId);
                 Guid alternateWordNodeId = NodeIdFor(core, NodeTargetKind.Word, alternateWordId);
                 foreach (NodeRelationType symmetricType in new[] { NodeRelationType.Synonym, NodeRelationType.Antonym })
                 {
-                    Program.Assert(core.AddTrustedLink(from, alternateWordNodeId, symmetricType, 1.75, "pair"),
+                    Program.Assert(core.AddTrustedLink(from, alternateWordNodeId, symmetricType, 0.75, "pair"),
                         $"{symmetricType} edge should be accepted.");
                     NodeLink forward = core.GetOutgoingLinks(from, symmetricType).Single(link =>
                         link.TargetNodeId == alternateWordNodeId && link.Label == "pair");
                     NodeLink reverse = core.GetOutgoingLinks(alternateWordNodeId, symmetricType).Single(link =>
                         link.TargetNodeId == from && link.Label == "pair");
-                    Program.Assert(!core.AddTrustedLink(alternateWordNodeId, from, symmetricType, 1.75, "pair"),
+                    Program.Assert(!core.AddTrustedLink(alternateWordNodeId, from, symmetricType, 0.75, "pair"),
                         $"Explicitly adding the stored reverse {symmetricType} edge should be a duplicate.");
                     Program.AssertEqual(forward.Weight, reverse.Weight,
                         $"Both directed {symmetricType} links should have the same weight.");
-                    Program.Assert(core.UpdateTrustedLinkWeight(from, alternateWordNodeId, symmetricType, 2.5, "pair"),
+                    Program.Assert(core.UpdateTrustedLinkWeight(from, alternateWordNodeId, symmetricType, 0.25, "pair"),
                         $"Updating {symmetricType} should update both directions.");
                     Program.AssertEqual(core.GetOutgoingLinks(alternateWordNodeId, symmetricType)
-                        .Single(link => link.TargetNodeId == from && link.Label == "pair").Weight, 2.5,
+                        .Single(link => link.TargetNodeId == from && link.Label == "pair").Weight, 0.25,
                         $"Reverse {symmetricType} weight should stay synchronized.");
                     Program.Assert(core.RemoveTrustedLink(from, alternateWordNodeId, symmetricType, "pair"),
                         $"Removing {symmetricType} should remove both directions.");
@@ -509,6 +542,7 @@ namespace OPEN_LRD.SmokeTests
         private static void ResetCore()
         {
             LRD_Core.Instance.ResetCore();
+            LRD_Core.Instance.InitializeCore();
         }
     }
 }

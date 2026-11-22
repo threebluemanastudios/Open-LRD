@@ -4,11 +4,13 @@ using System.Text;
 
 namespace OPEN_LRD.Foundations
 {
+    /// <summary>Stores usage sentence memberships; trusted memberships are append-only.</summary>
     internal class UsageBox
     {
         private Guid UsageID;
         private List<Guid>? _sentences;
         private HashSet<Guid> _sentenceSet;
+        private bool _isTrusted;
         private bool _isReadOnly;
 
         /// <summary>
@@ -67,6 +69,16 @@ namespace OPEN_LRD.Foundations
                 _sentences == null ? null : new List<Guid>(_sentences));
         }
 
+        public int GetSentenceCount()
+        {
+            return GraphSynchronization.Execute(() => _sentences?.Count ?? 0);
+        }
+
+        public bool ContainsSentence(Guid sentenceId)
+        {
+            return GraphSynchronization.Execute(() => _sentenceSet.Contains(sentenceId));
+        }
+
         /// <summary>
         /// 
         /// </summary>
@@ -77,7 +89,7 @@ namespace OPEN_LRD.Foundations
             ValidateIdentityId(sentenceId, nameof(sentenceId));
             return GraphSynchronization.Execute(() =>
             {
-                EnsureWritable();
+                EnsureUntrustedMutable();
                 if (_sentences == null)
                 {
                     _sentences = new List<Guid>();
@@ -91,7 +103,31 @@ namespace OPEN_LRD.Foundations
             });
         }
 
-        internal void MarkReadOnly() => GraphSynchronization.Execute(() => _isReadOnly = true);
+        internal bool AddSentenceFromCore(Guid sentenceId)
+        {
+            ValidateIdentityId(sentenceId, nameof(sentenceId));
+            return GraphSynchronization.Execute(() =>
+            {
+                if (_isReadOnly)
+                {
+                    throw new InvalidOperationException("Disk-paged boxes are read-only; materialize the disk store before mutation.");
+                }
+                if (_sentences == null)
+                {
+                    _sentences = new List<Guid>();
+                }
+                if (_sentenceSet.Add(sentenceId))
+                {
+                    _sentences.Add(sentenceId);
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        internal void MarkTrusted() => GraphSynchronization.Execute(() => _isTrusted = true);
+
+        internal void MarkReadOnly() => GraphSynchronization.Execute(() => { _isTrusted = true; _isReadOnly = true; });
 
         private static void ValidateIdentityId(Guid id, string parameterName)
         {
@@ -109,9 +145,10 @@ namespace OPEN_LRD.Foundations
             }
         }
 
-        private void EnsureWritable()
+        private void EnsureUntrustedMutable()
         {
             if (_isReadOnly) throw new InvalidOperationException("Disk-paged boxes are read-only; materialize the disk store before mutation.");
+            if (_isTrusted) throw new InvalidOperationException("Trusted usage memberships can only be appended through LRD_Core.");
         }
     }
 }

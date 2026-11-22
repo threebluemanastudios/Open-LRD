@@ -8,32 +8,67 @@ namespace OPEN_LRD.Foundations
         public abstract override string ToString();
     }
 
-    internal sealed record ConstantExpression(double Value) : Expression
+    internal sealed record ConstantExpression : Expression
     {
-        public override string ToString()
+        public double Value { get; }
+
+        public ConstantExpression(double value)
         {
-            return Value.ToString("G", CultureInfo.InvariantCulture);
+            if (!double.IsFinite(value))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), "Expression constants must be finite.");
+            }
+            Value = value;
         }
+
+        public override string ToString() => Value.ToString("R", CultureInfo.InvariantCulture);
     }
 
-    internal sealed record VariableExpression(string Name) : Expression
+    internal sealed record VariableExpression : Expression
     {
-        public override string ToString()
+        public string Name { get; }
+
+        public VariableExpression(string name)
         {
-            return Name;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("A variable name is required.", nameof(name));
+            }
+            Name = name.Trim();
         }
+
+        public override string ToString() => Name;
     }
 
-    internal sealed record NegateExpression(Expression Operand) : Expression
+    internal sealed record NegateExpression : Expression
     {
-        public override string ToString()
+        public Expression Operand { get; }
+
+        public NegateExpression(Expression operand)
         {
-            return $"-{Operand}";
+            Operand = operand ?? throw new ArgumentNullException(nameof(operand));
         }
+
+        public override string ToString() => $"-{Operand}";
     }
 
-    internal sealed record BinaryExpression(BinaryOperator Operator, Expression Left, Expression Right) : Expression
+    internal sealed record BinaryExpression : Expression
     {
+        public BinaryOperator Operator { get; }
+        public Expression Left { get; }
+        public Expression Right { get; }
+
+        public BinaryExpression(BinaryOperator @operator, Expression left, Expression right)
+        {
+            if (!Enum.IsDefined(@operator))
+            {
+                throw new ArgumentOutOfRangeException(nameof(@operator));
+            }
+            Operator = @operator;
+            Left = left ?? throw new ArgumentNullException(nameof(left));
+            Right = right ?? throw new ArgumentNullException(nameof(right));
+        }
+
         public override string ToString()
         {
             string symbol = Operator switch
@@ -43,18 +78,28 @@ namespace OPEN_LRD.Foundations
                 BinaryOperator.Multiply => "*",
                 BinaryOperator.Divide => "/",
                 BinaryOperator.Power => "^",
-                _ => "?"
+                _ => throw new InvalidOperationException("Expression operator is invalid.")
             };
             return $"({Left} {symbol} {Right})";
         }
     }
 
-    internal sealed record FunctionExpression(FunctionKind Function, Expression Argument) : Expression
+    internal sealed record FunctionExpression : Expression
     {
-        public override string ToString()
+        public FunctionKind Function { get; }
+        public Expression Argument { get; }
+
+        public FunctionExpression(FunctionKind function, Expression argument)
         {
-            return $"{FunctionName(Function)}({Argument})";
+            if (!Enum.IsDefined(function))
+            {
+                throw new ArgumentOutOfRangeException(nameof(function));
+            }
+            Function = function;
+            Argument = argument ?? throw new ArgumentNullException(nameof(argument));
         }
+
+        public override string ToString() => $"{FunctionName(Function)}({Argument})";
 
         private static string FunctionName(FunctionKind function)
         {
@@ -82,7 +127,7 @@ namespace OPEN_LRD.Foundations
                 FunctionKind.Cbrt => "cbrt",
                 FunctionKind.Abs => "abs",
                 FunctionKind.Sign => "sign",
-                _ => "unknown"
+                _ => throw new InvalidOperationException("Expression function is invalid.")
             };
         }
     }
@@ -124,49 +169,14 @@ namespace OPEN_LRD.Foundations
 
     internal static class ExpressionBuilder
     {
-        internal static Expression Constant(double value)
-        {
-            return new ConstantExpression(value);
-        }
-
-        internal static Expression Variable(string name)
-        {
-            return new VariableExpression(name);
-        }
-
-        internal static Expression Negate(Expression operand)
-        {
-            return new NegateExpression(operand);
-        }
-
-        internal static Expression Add(Expression left, Expression right)
-        {
-            return new BinaryExpression(BinaryOperator.Add, left, right);
-        }
-
-        internal static Expression Subtract(Expression left, Expression right)
-        {
-            return new BinaryExpression(BinaryOperator.Subtract, left, right);
-        }
-
-        internal static Expression Multiply(Expression left, Expression right)
-        {
-            return new BinaryExpression(BinaryOperator.Multiply, left, right);
-        }
-
-        internal static Expression Divide(Expression left, Expression right)
-        {
-            return new BinaryExpression(BinaryOperator.Divide, left, right);
-        }
-
-        internal static Expression Power(Expression left, Expression right)
-        {
-            return new BinaryExpression(BinaryOperator.Power, left, right);
-        }
-
-        internal static Expression Function(FunctionKind function, Expression argument)
-        {
-            return new FunctionExpression(function, argument);
-        }
+        internal static Expression Constant(double value) => new ConstantExpression(value);
+        internal static Expression Variable(string name) => new VariableExpression(name);
+        internal static Expression Negate(Expression operand) => new NegateExpression(operand);
+        internal static Expression Add(Expression left, Expression right) => new BinaryExpression(BinaryOperator.Add, left, right);
+        internal static Expression Subtract(Expression left, Expression right) => new BinaryExpression(BinaryOperator.Subtract, left, right);
+        internal static Expression Multiply(Expression left, Expression right) => new BinaryExpression(BinaryOperator.Multiply, left, right);
+        internal static Expression Divide(Expression left, Expression right) => new BinaryExpression(BinaryOperator.Divide, left, right);
+        internal static Expression Power(Expression left, Expression right) => new BinaryExpression(BinaryOperator.Power, left, right);
+        internal static Expression Function(FunctionKind function, Expression argument) => new FunctionExpression(function, argument);
     }
 }

@@ -8,12 +8,36 @@ namespace OPEN_LRD.SmokeTests
     {
         internal static void RunAll()
         {
+            Program.Run("Core initialization lifecycle", InitializationLifecycleIsExplicit());
             Program.Run("Core identity assignment and freezing", IdentityFieldsAreAssignedOnceAndFrozen());
             Program.Run("Trusted word identity uniqueness", TrustedWordsUseTheCompleteIdentityTuple());
             Program.Run("Duplicate word promotion rejection", DuplicatePromotionLeavesWordUntrusted());
             Program.Run("Incomplete node promotion rejection", IncompleteNodesCannotBecomeTrusted());
             Program.Run("Sentence and symbol semantic indexes", FactoriesUseSenseAwareIdentities());
             Program.Run("Concurrent graph mutations", ConcurrentAddsPreserveIdentityIndexes());
+        }
+
+        private static Action InitializationLifecycleIsExplicit()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                Program.Assert(!core.initialized, "ResetCore should leave the core uninitialized.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedSense(new SenseBox(Guid.NewGuid())),
+                    "Registry mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.GetTrustedSenseBox(Guid.NewGuid()),
+                    "Registry queries should require initialization.");
+                core.InitializeCore();
+                Program.Assert(core.initialized, "InitializeCore should establish the ready state.");
+                Guid senseId = Guid.NewGuid();
+                Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Initialized core should accept registry mutations.");
+                core.InitializeCore();
+                Program.Assert(core.GetTrustedSenseBox(senseId) != null,
+                    "InitializeCore should be idempotent after initialization.");
+                core.ResetCore();
+                Program.Assert(!core.initialized, "ResetCore should clear initialized status.");
+            };
         }
 
         private static Action IdentityFieldsAreAssignedOnceAndFrozen()
@@ -261,6 +285,7 @@ namespace OPEN_LRD.SmokeTests
         private static void ResetCore()
         {
             LRD_Core.Instance.ResetCore();
+            LRD_Core.Instance.InitializeCore();
         }
     }
 }

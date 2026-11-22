@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 
-namespace OPEN_LRD
+namespace OPEN_LRD.Foundations
 {
     /// <summary>
     /// Identifies the Foundation box wrapped by a graph node.
@@ -66,14 +68,132 @@ namespace OPEN_LRD
         Custom
     }
 
-    internal readonly record struct NodeLink
+    internal enum NodeLinkOrigin
+    {
+        Structural,
+        User,
+        Import,
+        Reasoning,
+        LegacyImport
+    }
+
+    internal readonly record struct NodeLinkProvenance
+    {
+        public Guid AssertionId { get; }
+        public NodeLinkOrigin Origin { get; }
+        public DateTimeOffset AssertedAt { get; }
+        public string? Author { get; }
+        public Guid? SourceTargetId { get; }
+        public Guid? EvidenceTargetId { get; }
+        public double? Confidence { get; }
+        public DateTimeOffset? ValidFrom { get; }
+        public DateTimeOffset? ValidUntil { get; }
+
+        public NodeLinkProvenance(
+            Guid assertionId,
+            NodeLinkOrigin origin,
+            DateTimeOffset assertedAt,
+            string? author = null,
+            Guid? sourceTargetId = null,
+            Guid? evidenceTargetId = null,
+            double? confidence = null,
+            DateTimeOffset? validFrom = null,
+            DateTimeOffset? validUntil = null)
+        {
+            if (assertionId == Guid.Empty)
+            {
+                throw new ArgumentException("Assertion identifiers cannot be Guid.Empty.", nameof(assertionId));
+            }
+            if (!Enum.IsDefined(origin))
+            {
+                throw new ArgumentOutOfRangeException(nameof(origin));
+            }
+            if (sourceTargetId == Guid.Empty)
+            {
+                throw new ArgumentException("Source target identifiers cannot be Guid.Empty.", nameof(sourceTargetId));
+            }
+            if (evidenceTargetId == Guid.Empty)
+            {
+                throw new ArgumentException("Evidence target identifiers cannot be Guid.Empty.", nameof(evidenceTargetId));
+            }
+            if (confidence.HasValue && (!double.IsFinite(confidence.Value) || confidence.Value < 0.0 || confidence.Value > 1.0))
+            {
+                throw new ArgumentOutOfRangeException(nameof(confidence), "Confidence must be finite and in [0, 1].");
+            }
+            if (validFrom.HasValue && validUntil.HasValue && validFrom.Value > validUntil.Value)
+            {
+                throw new ArgumentException("The validity window start cannot be later than its end.");
+            }
+
+            AssertionId = assertionId;
+            Origin = origin;
+            AssertedAt = assertedAt;
+            Author = string.IsNullOrWhiteSpace(author) ? null : author.Trim();
+            SourceTargetId = sourceTargetId;
+            EvidenceTargetId = evidenceTargetId;
+            Confidence = confidence;
+            ValidFrom = validFrom;
+            ValidUntil = validUntil;
+        }
+
+        internal static NodeLinkProvenance CreateForLink(
+            Guid sourceNodeId,
+            Guid targetNodeId,
+            NodeRelationType relationType,
+            string? label,
+            NodeLinkOrigin origin,
+            double weight)
+        {
+            if ((relationType is NodeRelationType.Synonym or NodeRelationType.Antonym) && sourceNodeId.CompareTo(targetNodeId) > 0)
+            {
+                (sourceNodeId, targetNodeId) = (targetNodeId, sourceNodeId);
+            }
+            byte[] labelBytes = Encoding.UTF8.GetBytes(label ?? string.Empty);
+            byte[] identity = new byte[44 + labelBytes.Length];
+            sourceNodeId.TryWriteBytes(identity.AsSpan(0, 16));
+            targetNodeId.TryWriteBytes(identity.AsSpan(16, 16));
+            BinaryPrimitives.WriteInt32LittleEndian(identity.AsSpan(32, 4), (int)relationType);
+            BinaryPrimitives.WriteInt32LittleEndian(identity.AsSpan(36, 4), (int)origin);
+            BinaryPrimitives.WriteInt32LittleEndian(identity.AsSpan(40, 4), labelBytes.Length);
+            labelBytes.CopyTo(identity.AsSpan(44));
+            byte[] hash = SHA256.HashData(identity);
+            Guid assertionId = new Guid(hash.AsSpan(0, 16));
+            if (assertionId == Guid.Empty)
+            {
+                assertionId = new Guid(hash.AsSpan(16, 16));
+            }
+            return new NodeLinkProvenance(assertionId, origin, DateTimeOffset.UtcNow, confidence: weight);
+        }
+
+        internal static NodeLinkProvenance CreateLegacy(
+            Guid sourceNodeId,
+            Guid targetNodeId,
+            NodeRelationType relationType,
+            string? label,
+            double weight)
+        {
+            NodeLinkProvenance deterministic = CreateForLink(
+                sourceNodeId, targetNodeId, relationType, label, NodeLinkOrigin.LegacyImport, weight);
+            return new NodeLinkProvenance(deterministic.AssertionId, NodeLinkOrigin.LegacyImport,
+                DateTimeOffset.UnixEpoch, confidence: weight);
+        }
+
+        internal NodeLinkProvenance WithConfidence(double weight)
+        {
+            return new NodeLinkProvenance(AssertionId, Origin, AssertedAt, Author, SourceTargetId,
+                EvidenceTargetId, Confidence.HasValue ? weight : null, ValidFrom, ValidUntil);
+        }
+    }
+
+    internal readonly struct NodeLink : IEquatable<NodeLink>
     {
         public NodeLink(
             Guid sourceNodeId,
             Guid targetNodeId,
             NodeRelationType relationType,
             double weight = 1.0,
-            string? label = null)
+            string? label = null,
+            NodeLinkProvenance? provenance = null)
         {
             if (sourceNodeId == Guid.Empty)
             {
@@ -83,9 +203,9 @@ namespace OPEN_LRD
             {
                 throw new ArgumentException("Node identifiers cannot be Guid.Empty.", nameof(targetNodeId));
             }
-            if (!double.IsFinite(weight) || weight <= 0.0)
+            if (!double.IsFinite(weight) || weight < 0.0 || weight > 1.0)
             {
-                throw new ArgumentOutOfRangeException(nameof(weight), "The link weight must be finite and greater than zero.");
+                throw new ArgumentOutOfRangeException(nameof(weight), "The link confidence must be finite and in [0, 1].");
             }
             if (!Enum.IsDefined(typeof(NodeRelationType), relationType))
             {
@@ -97,6 +217,12 @@ namespace OPEN_LRD
             RelationType = relationType;
             Weight = weight;
             Label = NormalizeOptionalText(label);
+            Provenance = provenance ?? NodeLinkProvenance.CreateForLink(
+                sourceNodeId, targetNodeId, relationType, Label, NodeLinkOrigin.User, weight);
+            if (Provenance.Confidence.HasValue && Provenance.Confidence.Value != weight)
+            {
+                throw new ArgumentException("Provenance confidence must match the NodeLink weight.", nameof(provenance));
+            }
         }
 
         public Guid SourceNodeId { get; }
@@ -104,6 +230,24 @@ namespace OPEN_LRD
         public NodeRelationType RelationType { get; }
         public double Weight { get; }
         public string? Label { get; }
+        public NodeLinkProvenance Provenance { get; }
+
+        internal NodeLink WithWeight(double weight)
+        {
+            return new NodeLink(SourceNodeId, TargetNodeId, RelationType, weight, Label, Provenance.WithConfidence(weight));
+        }
+
+        public bool Equals(NodeLink other)
+        {
+            return SourceNodeId == other.SourceNodeId && TargetNodeId == other.TargetNodeId &&
+                   RelationType == other.RelationType && string.Equals(Label, other.Label, StringComparison.Ordinal) &&
+                   Provenance.AssertionId == other.Provenance.AssertionId;
+        }
+
+        public override bool Equals(object? obj) => obj is NodeLink other && Equals(other);
+        public override int GetHashCode() => HashCode.Combine(SourceNodeId, TargetNodeId, RelationType, Label, Provenance.AssertionId);
+        public static bool operator ==(NodeLink left, NodeLink right) => left.Equals(right);
+        public static bool operator !=(NodeLink left, NodeLink right) => !left.Equals(right);
 
         private static string? NormalizeOptionalText(string? value)
         {
@@ -111,7 +255,28 @@ namespace OPEN_LRD
         }
     }
 
-    internal sealed class Node
+    internal readonly record struct NodeIdentityKey(NodeTargetKind TargetKind, Guid TargetId, string? Label)
+    {
+        internal static NodeIdentityKey Create(NodeTargetKind targetKind, Guid targetId, string? label)
+        {
+            if (!Enum.IsDefined(targetKind))
+            {
+                throw new ArgumentOutOfRangeException(nameof(targetKind));
+            }
+            if (targetId == Guid.Empty)
+            {
+                throw new ArgumentException("Target identifiers cannot be Guid.Empty.", nameof(targetId));
+            }
+            return new NodeIdentityKey(targetKind, targetId, NormalizeOptionalText(label));
+        }
+
+        private static string? NormalizeOptionalText(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+    }
+
+    internal sealed class Node : IEquatable<Node>
     {
         private Guid nodeID;
         private NodeTargetKind targetKind;
@@ -121,6 +286,7 @@ namespace OPEN_LRD
         private int invalidReferences;
         private bool isTrusted;
         private bool isReadOnly;
+        private Func<NodeIdentityKey, NodeIdentityKey, bool>? identityChanging;
 
         public Node(NodeTargetKind targetKind, Guid targetId, string? label = null)
             : this(Guid.NewGuid(), targetKind, targetId, label)
@@ -152,6 +318,12 @@ namespace OPEN_LRD
         public Guid TargetID => GraphSynchronization.Execute(() => targetID);
         public string? Label => GraphSynchronization.Execute(() => label);
         public bool IsTrusted => GraphSynchronization.Execute(() => isTrusted);
+        internal bool IsReadOnly => GraphSynchronization.Execute(() => isReadOnly);
+
+        internal NodeIdentityKey GetIdentityKey()
+        {
+            return GraphSynchronization.Execute(() => NodeIdentityKey.Create(targetKind, targetID, label));
+        }
 
         public Guid GetNodeID()
         {
@@ -175,7 +347,27 @@ namespace OPEN_LRD
 
         public void SetLabel(string? value)
         {
-            GraphSynchronization.Execute(() => { EnsureWritable(); label = NormalizeOptionalText(value); });
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                if (isTrusted)
+                {
+                    throw new InvalidOperationException("A trusted node label is immutable; create a new labeled node instead.");
+                }
+                string? normalized = NormalizeOptionalText(value);
+                NodeIdentityKey oldKey = NodeIdentityKey.Create(targetKind, targetID, label);
+                NodeIdentityKey newKey = NodeIdentityKey.Create(targetKind, targetID, normalized);
+                if (!oldKey.Equals(newKey) && identityChanging != null && !identityChanging(oldKey, newKey))
+                {
+                    throw new InvalidOperationException("Another node already has the requested target and label identity.");
+                }
+                label = normalized;
+            });
+        }
+
+        internal void SetIdentityChangingHandler(Func<NodeIdentityKey, NodeIdentityKey, bool>? handler)
+        {
+            GraphSynchronization.Execute(() => identityChanging = handler);
         }
 
         public int GetVerifiedReferences()
@@ -190,19 +382,38 @@ namespace OPEN_LRD
 
         public int GetNetTrustWeight()
         {
-            return GraphSynchronization.Execute(() => verifiedReferences - invalidReferences);
+            return GraphSynchronization.Execute(() => checked(verifiedReferences - invalidReferences));
         }
 
         public void RegisterVerifiedReference(int count = 1)
         {
             ValidateCount(count);
-            GraphSynchronization.Execute(() => { EnsureWritable(); verifiedReferences += count; });
+            GraphSynchronization.Execute(() => { EnsureWritable(); verifiedReferences = checked(verifiedReferences + count); });
         }
 
         public void RegisterInvalidReference(int count = 1)
         {
             ValidateCount(count);
-            GraphSynchronization.Execute(() => { EnsureWritable(); invalidReferences += count; });
+            GraphSynchronization.Execute(() => { EnsureWritable(); invalidReferences = checked(invalidReferences + count); });
+        }
+
+        internal void ReconcileReferenceCounts(int verified, int invalid)
+        {
+            if (verified < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(verified));
+            }
+            if (invalid < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(invalid));
+            }
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                verifiedReferences = verified;
+                invalidReferences = invalid;
+                _ = checked(verifiedReferences - invalidReferences);
+            });
         }
 
         internal void MarkTrusted()
@@ -210,7 +421,7 @@ namespace OPEN_LRD
             GraphSynchronization.Execute(() => { EnsureWritable(); isTrusted = true; });
         }
 
-        internal void MarkReadOnly() => GraphSynchronization.Execute(() => isReadOnly = true);
+        internal void MarkReadOnly() => GraphSynchronization.Execute(() => { isTrusted = true; isReadOnly = true; });
 
         internal void MarkWritable() => GraphSynchronization.Execute(() => isReadOnly = false);
 
@@ -231,5 +442,13 @@ namespace OPEN_LRD
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
+
+        public bool Equals(Node? other)
+        {
+            return other != null && GetIdentityKey().Equals(other.GetIdentityKey());
+        }
+
+        public override bool Equals(object? obj) => obj is Node other && Equals(other);
+        public override int GetHashCode() => GetIdentityKey().GetHashCode();
     }
 }

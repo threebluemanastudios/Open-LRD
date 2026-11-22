@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace OPEN_LRD
+namespace OPEN_LRD.Foundations
 {
     /// <summary>
     /// A public foundation type representing the part of speech of a word, used in the WordBox class.
@@ -126,6 +126,7 @@ namespace OPEN_LRD
             ValidateIdentityId(senseId, nameof(senseId));
             ValidateIdentityId(usageId, nameof(usageId));
             ValidateIdentityIds(symbols, nameof(symbols));
+            ValidatePartOfSpeech(pos, nameof(pos));
             WordID = wordId;
             SenseID = senseId;
             UsageID = usageId;
@@ -137,6 +138,7 @@ namespace OPEN_LRD
             ValidateIdentityId(senseId, nameof(senseId));
             ValidateIdentityId(usageId, nameof(usageId));
             ValidateIdentityIds(symbols, nameof(symbols));
+            ValidatePartOfSpeech(pos, nameof(pos));
             WordID = Guid.NewGuid();
             SenseID = senseId;
             UsageID = usageId;
@@ -158,6 +160,30 @@ namespace OPEN_LRD
                 {
                     throw new InvalidOperationException("Symbols are already set and cannot be changed.");
                 }
+            });
+        }
+
+        internal bool ReplaceSymbolReference(Guid oldSymbolId, Guid canonicalSymbolId)
+        {
+            ValidateIdentityId(oldSymbolId, nameof(oldSymbolId));
+            ValidateIdentityId(canonicalSymbolId, nameof(canonicalSymbolId));
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureIdentityMutable();
+                if (_symbols == null)
+                {
+                    return false;
+                }
+                bool replaced = false;
+                for (int index = 0; index < _symbols.Count; index++)
+                {
+                    if (_symbols[index] == oldSymbolId)
+                    {
+                        _symbols[index] = canonicalSymbolId;
+                        replaced = true;
+                    }
+                }
+                return replaced;
             });
         }
 
@@ -220,6 +246,7 @@ namespace OPEN_LRD
 
         public void SetPartOfSpeech(PartOfSpeech pos)
         {
+            ValidatePartOfSpeech(pos, nameof(pos));
             GraphSynchronization.Execute(() =>
             {
                 EnsureIdentityMutable();
@@ -301,6 +328,14 @@ namespace OPEN_LRD
             }
         }
 
+        private static void ValidatePartOfSpeech(PartOfSpeech value, string parameterName)
+        {
+            if (!Enum.IsDefined(value))
+            {
+                throw new ArgumentOutOfRangeException(parameterName, "The part-of-speech value is undefined.");
+            }
+        }
+
     }
 
     internal sealed class WordIdentityKey : IEquatable<WordIdentityKey>
@@ -317,6 +352,10 @@ namespace OPEN_LRD
             if (usageId == Guid.Empty)
             {
                 throw new ArgumentException("Identity identifiers cannot be Guid.Empty.", nameof(usageId));
+            }
+            if (!Enum.IsDefined(partOfSpeech))
+            {
+                throw new ArgumentOutOfRangeException(nameof(partOfSpeech), "The part-of-speech value is undefined.");
             }
             _symbols = symbols.ToArray();
             if (_symbols.Any(symbolId => symbolId == Guid.Empty))

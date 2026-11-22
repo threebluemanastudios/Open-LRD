@@ -43,15 +43,47 @@ namespace OPEN_LRD.Skills
                 throw new ArgumentNullException(nameof(functionBox));
             }
 
-            functionBox.ClearResult();
+            bool storeResult = !functionBox.IsReadOnly;
+            if (storeResult)
+            {
+                functionBox.ClearResult();
+            }
             FunctionDescriptor descriptor = SelectFunction(
                 functionBox.FunctionKey,
                 functionBox.Variables,
                 functionBox.ExpectedResultType,
                 functionBox.ExpectedResultUnitTitle);
             FunctionResult result = Invoke(descriptor, functionBox.Variables);
-            functionBox.StoreResult(result);
+            if (storeResult)
+            {
+                functionBox.StoreResult(result);
+            }
             return result;
+        }
+
+        internal static void ValidateDefinition(FunctionBox functionBox)
+        {
+            ArgumentNullException.ThrowIfNull(functionBox);
+            functionBox.ValidateDefinition();
+            FunctionDescriptor descriptor = SelectFunction(
+                functionBox.FunctionKey,
+                functionBox.Variables,
+                functionBox.ExpectedResultType,
+                functionBox.ExpectedResultUnitTitle);
+            FunctionResult result = functionBox.Result!;
+            if (result.DataType != descriptor.ReturnType)
+            {
+                throw new ArgumentException("The stored function result type does not match the selected function signature.", nameof(functionBox));
+            }
+            if (result.Value != null && !descriptor.ReturnType.IsInstanceOfType(result.Value))
+            {
+                throw new ArgumentException("The stored function result value does not match the selected function signature.", nameof(functionBox));
+            }
+            if (result.UnitTitle != null &&
+                !string.Equals(result.UnitTitle, descriptor.OutputUnit, StringComparison.Ordinal))
+            {
+                throw new ArgumentException("The stored function result unit does not match the selected function signature.", nameof(functionBox));
+            }
         }
 
         public static FunctionResult Dispatch(

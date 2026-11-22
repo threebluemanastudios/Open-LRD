@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Text;
 using OPEN_LRD.Foundations;
 
@@ -624,60 +625,56 @@ namespace OPEN_LRD.Skills
 
         public static Fraction AddFraction(Fraction fraction1, Fraction fraction2)
         {
-            int numerator = (fraction1.Numerator * fraction2.Denominator) + (fraction2.Numerator * fraction1.Denominator);
-            int denominator = fraction1.Denominator * fraction2.Denominator;
-            return SimplifyFraction(numerator, denominator);
+            ArgumentNullException.ThrowIfNull(fraction1);
+            ArgumentNullException.ThrowIfNull(fraction2);
+            return fraction1 + fraction2;
         }
 
         public static Fraction SubtractFraction(Fraction fraction1, Fraction fraction2)
         {
-            int numerator = (fraction1.Numerator * fraction2.Denominator) - (fraction2.Numerator * fraction1.Denominator);
-            int denominator = fraction1.Denominator * fraction2.Denominator;
-            return SimplifyFraction(numerator, denominator);
+            ArgumentNullException.ThrowIfNull(fraction1);
+            ArgumentNullException.ThrowIfNull(fraction2);
+            return fraction1 - fraction2;
         }
 
         public static Fraction MultiplyFraction(Fraction fraction1, Fraction fraction2)
         {
-            int numerator = fraction1.Numerator * fraction2.Numerator;
-            int denominator = fraction1.Denominator * fraction2.Denominator;
-            return SimplifyFraction(numerator, denominator);
+            ArgumentNullException.ThrowIfNull(fraction1);
+            ArgumentNullException.ThrowIfNull(fraction2);
+            return fraction1 * fraction2;
         }
 
         public static  Fraction DivideFraction(Fraction fraction1, Fraction fraction2)
         {
-            if (fraction2.Numerator == 0)
-            {
-                throw new DivideByZeroException("Cannot divide by a fraction with a numerator of zero.");
-            }
-            int numerator = fraction1.Numerator * fraction2.Denominator;
-            int denominator = fraction1.Denominator * fraction2.Numerator;
-            return SimplifyFraction(numerator, denominator);
+            ArgumentNullException.ThrowIfNull(fraction1);
+            ArgumentNullException.ThrowIfNull(fraction2);
+            return fraction1 / fraction2;
         }
 
         public static  Fraction SimplifyFraction(Fraction fraction)
         {
-            int gcd = CalculateGCD(fraction.Numerator, fraction.Denominator);
-            return new Fraction(fraction.Numerator / gcd, fraction.Denominator / gcd);
+            ArgumentNullException.ThrowIfNull(fraction);
+            return new Fraction(fraction.Numerator, fraction.Denominator);
         }
 
-        public static Fraction SimplifyFraction(int numerator, int denominator)
+        public static Fraction SimplifyFraction(BigInteger numerator, BigInteger denominator)
         {
-            int gcd = CalculateGCD(numerator, denominator);
-            return new Fraction(numerator / gcd, denominator / gcd);
+            return new Fraction(numerator, denominator);
         }
+
+        public static Fraction SimplifyFraction(int numerator, int denominator) =>
+            SimplifyFraction(new BigInteger(numerator), new BigInteger(denominator));
 
         public static Fraction InvertFraction(Fraction fraction)
         {
-            if (fraction.Numerator == 0)
-            {
-                throw new InvalidOperationException("Cannot invert a fraction with a numerator of zero.");
-            }
-            return new Fraction(fraction.Denominator, fraction.Numerator);
+            ArgumentNullException.ThrowIfNull(fraction);
+            return fraction.Invert();
         }
 
         public static Fraction NegateFraction(Fraction fraction)
         {
-            return new Fraction(-fraction.Numerator, fraction.Denominator);
+            ArgumentNullException.ThrowIfNull(fraction);
+            return -fraction;
         }
 
         public static Fraction AddFractions(List<Fraction> fractions)
@@ -696,13 +693,13 @@ namespace OPEN_LRD.Skills
 
         public static int CalculateGCD(int a, int b)
         {
-            while (b != 0)
-            {
-                int temp = b;
-                b = a % b;
-                a = temp;
-            }
-            return a;
+            BigInteger gcd = CalculateGCD(new BigInteger(a), new BigInteger(b));
+            return gcd > int.MaxValue ? throw new OverflowException("The greatest common divisor is outside the range of Int32.") : (int)gcd;
+        }
+
+        public static BigInteger CalculateGCD(BigInteger a, BigInteger b)
+        {
+            return BigInteger.GreatestCommonDivisor(BigInteger.Abs(a), BigInteger.Abs(b));
         }
 
         public static int SubtractRange(List<int> numbers)
@@ -1757,9 +1754,9 @@ namespace OPEN_LRD.Skills
 
         public static int CompareFractions(Fraction fraction1, Fraction fraction2)
         {
-            long left = (long)fraction1.Numerator * fraction2.Denominator;
-            long right = (long)fraction2.Numerator * fraction1.Denominator;
-            return left.CompareTo(right);
+            ArgumentNullException.ThrowIfNull(fraction1);
+            ArgumentNullException.ThrowIfNull(fraction2);
+            return fraction1.CompareTo(fraction2);
         }
 
         public static int CalculateLCD(int a, int b)
@@ -1773,17 +1770,18 @@ namespace OPEN_LRD.Skills
 
         public static string ConvertToMixedNumber(Fraction fraction)
         {
-            int whole = fraction.Numerator / fraction.Denominator;
-            int remainder = fraction.Numerator % fraction.Denominator;
-            if (remainder == 0)
+            ArgumentNullException.ThrowIfNull(fraction);
+            BigInteger whole = fraction.Numerator / fraction.Denominator;
+            BigInteger remainder = fraction.Numerator % fraction.Denominator;
+            if (remainder.IsZero)
             {
-                return whole.ToString();
+                return whole.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
-            if (whole == 0)
+            if (whole.IsZero)
             {
-                return $"{remainder}/{fraction.Denominator}";
+                return $"{remainder.ToString(System.Globalization.CultureInfo.InvariantCulture)}/{fraction.Denominator.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
             }
-            return $"{whole} {Math.Abs(remainder)}/{fraction.Denominator}";
+            return $"{whole.ToString(System.Globalization.CultureInfo.InvariantCulture)} {BigInteger.Abs(remainder).ToString(System.Globalization.CultureInfo.InvariantCulture)}/{fraction.Denominator.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
         }
 
 

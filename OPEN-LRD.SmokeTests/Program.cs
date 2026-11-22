@@ -13,6 +13,7 @@ namespace OPEN_LRD.SmokeTests
             CoreIdentityTests.RunAll();
             CoreNodeGraphTests.RunAll();
             CoreDiskStreamingTests.RunAll();
+            FoundationHardeningTests.RunAll();
             ToolFileParsingTests.RunAll();
             AlgebraTests.RunAll();
             MathHelperReuseTests.RunAll();

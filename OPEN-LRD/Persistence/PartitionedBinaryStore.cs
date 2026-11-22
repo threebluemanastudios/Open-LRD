@@ -24,7 +24,10 @@ namespace OPEN_LRD.Persistence
 
     internal sealed class PartitionedBinaryStore : IDisposable
     {
-        private const int FormatVersion = 1;
+        private const int CurrentFormatVersion = 2;
+        private const int LegacyFormatVersion = 1;
+        private const int MaximumRecordPayloadLength = 64 * 1024 * 1024;
+        private const int MaximumRecordsPerPartition = 5_000_000;
         private const int DataMagic = 0x44524C4F; // OLRD, little-endian
         private const int IndexMagic = 0x49524C4F;
         private const int ManifestMagic = 0x4D524C4F;
@@ -34,6 +37,8 @@ namespace OPEN_LRD.Persistence
         private readonly int maxCachedRecords;
         private readonly Dictionary<DiskPartition, PartitionReader> readers = new Dictionary<DiskPartition, PartitionReader>();
         private bool disposed;
+        internal int FormatVersion { get; private set; }
+        internal bool IsLegacyFormat => FormatVersion == LegacyFormatVersion;
 
         private PartitionedBinaryStore(string directoryPath, int maxCachedRecords)
         {
@@ -153,7 +158,9 @@ namespace OPEN_LRD.Persistence
 
         private void OpenAndValidate()
         {
-            Dictionary<DiskPartition, PartitionManifestEntry> manifest = ReadManifest(directoryPath);
+            var manifestInfo = ReadManifest(directoryPath);
+            FormatVersion = manifestInfo.FormatVersion;
+            Dictionary<DiskPartition, PartitionManifestEntry> manifest = manifestInfo.Entries;
             foreach (DiskPartition partition in AllPartitions)
             {
                 if (!manifest.TryGetValue(partition, out PartitionManifestEntry item))
@@ -164,7 +171,7 @@ namespace OPEN_LRD.Persistence
                 string indexPath = IndexPath(directoryPath, partition);
                 ValidateHash(dataPath, item.DataHash);
                 ValidateHash(indexPath, item.IndexHash);
-                PartitionReader reader = new PartitionReader(dataPath, indexPath, partition);
+                PartitionReader reader = new PartitionReader(dataPath, indexPath, partition, FormatVersion);
                 if (reader.Index.Count != item.RecordCount)
                 {
                     reader.Dispose();
@@ -185,20 +192,24 @@ namespace OPEN_LRD.Persistence
             using (BinaryWriter writer = new BinaryWriter(data))
             {
                 writer.Write(DataMagic);
-                writer.Write(FormatVersion);
+                writer.Write(CurrentFormatVersion);
                 writer.Write((byte)partition);
                 using FileStream index = new FileStream(indexPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.SequentialScan);
                 using BinaryWriter indexWriter = new BinaryWriter(index);
                 indexWriter.Write(IndexMagic);
-                indexWriter.Write(FormatVersion);
+                indexWriter.Write(CurrentFormatVersion);
                 indexWriter.Write(0);
                 foreach (DiskRecord record in records)
                 {
+                    if (count >= MaximumRecordsPerPartition)
+                    {
+                        throw new InvalidDataException($"Partition {partition} exceeds the record-count limit.");
+                    }
                     if (record.Key == Guid.Empty || !keys.Add(record.Key))
                     {
                         throw new InvalidDataException($"Partition {partition} contains an empty or duplicate key.");
                     }
-                    if (record.Payload == null || record.Payload.Length > int.MaxValue - 28)
+                    if (record.Payload == null || record.Payload.Length > MaximumRecordPayloadLength)
                     {
                         throw new InvalidDataException($"Partition {partition} contains an invalid payload.");
                     }
@@ -228,7 +239,7 @@ namespace OPEN_LRD.Persistence
             using FileStream stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             using BinaryWriter writer = new BinaryWriter(stream);
             writer.Write(ManifestMagic);
-            writer.Write(FormatVersion);
+            writer.Write(CurrentFormatVersion);
             writer.Write(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             writer.Write(entries.Count);
             foreach (DiskPartition partition in AllPartitions)
@@ -243,12 +254,14 @@ namespace OPEN_LRD.Persistence
             stream.Flush(true);
         }
 
-        private static Dictionary<DiskPartition, PartitionManifestEntry> ReadManifest(string directory)
+        private static (int FormatVersion, Dictionary<DiskPartition, PartitionManifestEntry> Entries) ReadManifest(string directory)
         {
             string path = Path.Combine(directory, "manifest.lrdmeta");
             using FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             using BinaryReader reader = new BinaryReader(stream);
-            if (reader.ReadInt32() != ManifestMagic || reader.ReadInt32() != FormatVersion)
+            int magic = reader.ReadInt32();
+            int formatVersion = reader.ReadInt32();
+            if (magic != ManifestMagic || formatVersion is not (LegacyFormatVersion or CurrentFormatVersion))
             {
                 throw new InvalidDataException("Unsupported or invalid disk-store manifest.");
             }
@@ -262,14 +275,15 @@ namespace OPEN_LRD.Persistence
                 int recordCount = reader.ReadInt32();
                 byte[] dataHash = reader.ReadBytes(32);
                 byte[] indexHash = reader.ReadBytes(32);
-                if (!Enum.IsDefined(partition) || recordCount < 0 || dataHash.Length != 32 || indexHash.Length != 32 ||
+                if (!Enum.IsDefined(partition) || recordCount < 0 || recordCount > MaximumRecordsPerPartition ||
+                    dataHash.Length != 32 || indexHash.Length != 32 ||
                     !result.TryAdd(partition, new PartitionManifestEntry(recordCount, dataHash, indexHash)))
                 {
                     throw new InvalidDataException("Manifest contains an invalid partition entry.");
                 }
             }
             if (stream.Position != stream.Length) throw new InvalidDataException("Manifest has trailing data.");
-            return result;
+            return (formatVersion, result);
         }
 
         private static void ValidateHash(string path, byte[] expected)
@@ -322,24 +336,25 @@ namespace OPEN_LRD.Persistence
             private readonly Dictionary<Guid, LinkedListNode<Guid>> lruNodes = new Dictionary<Guid, LinkedListNode<Guid>>();
             internal Dictionary<Guid, IndexEntry> Index { get; } = new Dictionary<Guid, IndexEntry>();
 
-            internal PartitionReader(string dataPath, string indexPath, DiskPartition partition)
+            internal PartitionReader(string dataPath, string indexPath, DiskPartition partition, int formatVersion)
             {
                 data = new FileStream(dataPath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.RandomAccess);
                 try
                 {
                     using BinaryReader dataReader = new BinaryReader(data, System.Text.Encoding.UTF8, true);
-                    if (dataReader.ReadInt32() != DataMagic || dataReader.ReadInt32() != FormatVersion || dataReader.ReadByte() != (byte)partition)
+                    if (dataReader.ReadInt32() != DataMagic || dataReader.ReadInt32() != formatVersion || dataReader.ReadByte() != (byte)partition)
                     {
                         throw new InvalidDataException($"Invalid data header for {partition} partition.");
                     }
                     using FileStream indexStream = new FileStream(indexPath, FileMode.Open, FileAccess.Read, FileShare.Read);
                     using BinaryReader indexReader = new BinaryReader(indexStream);
-                    if (indexReader.ReadInt32() != IndexMagic || indexReader.ReadInt32() != FormatVersion)
+                    if (indexReader.ReadInt32() != IndexMagic || indexReader.ReadInt32() != formatVersion)
                     {
                         throw new InvalidDataException($"Invalid index header for {partition} partition.");
                     }
                     int count = indexReader.ReadInt32();
-                    if (count < 0 || count > (indexStream.Length - 12) / 28 || indexStream.Length != 12L + (long)count * 28)
+                    if (count < 0 || count > MaximumRecordsPerPartition || count > (indexStream.Length - 12) / 28 ||
+                        indexStream.Length != 12L + (long)count * 28)
                     {
                         throw new InvalidDataException($"Invalid index length for {partition} partition.");
                     }
@@ -350,7 +365,7 @@ namespace OPEN_LRD.Persistence
                         Guid key = new Guid(guidBytes);
                         long offset = indexReader.ReadInt64();
                         int payloadLength = indexReader.ReadInt32();
-                        if (key == Guid.Empty || offset < HeaderLength || payloadLength < 0 ||
+                        if (key == Guid.Empty || offset < HeaderLength || payloadLength < 0 || payloadLength > MaximumRecordPayloadLength ||
                             offset > data.Length - payloadLength - 24 || !Index.TryAdd(key, new IndexEntry(offset, payloadLength)))
                         {
                             throw new InvalidDataException($"Invalid index entry in {partition} partition.");
@@ -381,7 +396,8 @@ namespace OPEN_LRD.Persistence
                         throw new InvalidDataException("Record key does not match its offset index.");
                     }
                     int length = reader.ReadInt32();
-                    if (length != entry.PayloadLength) throw new InvalidDataException("Record length does not match its offset index.");
+                    if (length != entry.PayloadLength || length < 0 || length > MaximumRecordPayloadLength)
+                        throw new InvalidDataException("Record length does not match its offset index or exceeds the payload limit.");
                     byte[] payload = reader.ReadBytes(length);
                     if (payload.Length != length || reader.ReadUInt32() != Crc32(payload))
                     {

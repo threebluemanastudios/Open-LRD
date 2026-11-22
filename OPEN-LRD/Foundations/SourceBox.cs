@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
+using OPEN_LRD;
 
-namespace OPEN_LRD
+namespace OPEN_LRD.Foundations
 {
+    /// <summary>Stores an append-only trusted set of group memberships.</summary>
     internal class SourceBox
     {
         private Guid SourceID;
@@ -28,15 +31,15 @@ namespace OPEN_LRD
             _groupingSet = new HashSet<Guid>();
         }
 
-        public SourceBox(Guid sourceId, string sourceName)
+        public SourceBox(Guid sourceId, string? sourceName)
         {
             ValidateIdentityId(sourceId, nameof(sourceId));
             SourceID = sourceId;
-            SourceName = sourceName;
+            SourceName = NormalizeOptionalText(sourceName);
             _groupings = new List<Guid>();
             _groupingSet = new HashSet<Guid>();
         }
-        public SourceBox(Guid sourceId, string sourceName, Dictionary<Guid, GroupBox> groupings)
+        public SourceBox(Guid sourceId, string? sourceName, Dictionary<Guid, GroupBox> groupings)
         {
             ValidateIdentityId(sourceId, nameof(sourceId));
             ArgumentNullException.ThrowIfNull(groupings);
@@ -55,7 +58,7 @@ namespace OPEN_LRD
                 }
             }
             SourceID = sourceId;
-            SourceName = sourceName;
+            SourceName = NormalizeOptionalText(sourceName);
             _groupings = GraphSynchronization.Execute(() => groupings.Values.Select(group => group.GetGroupingID()).Distinct().ToList());
             _groupingSet = GraphSynchronization.Execute(() => new HashSet<Guid>(_groupings));
         }
@@ -76,7 +79,7 @@ namespace OPEN_LRD
             ArgumentNullException.ThrowIfNull(groupingIds);
             ValidateIdentityIds(groupingIds, nameof(groupingIds));
             SourceID = sourceId;
-            SourceName = sourceName;
+            SourceName = NormalizeOptionalText(sourceName);
             _groupings = GraphSynchronization.Execute(() => groupingIds.Distinct().ToList());
             _groupingSet = GraphSynchronization.Execute(() => new HashSet<Guid>(_groupings));
         }
@@ -88,10 +91,11 @@ namespace OPEN_LRD
             foreach (Guid id in ids)
             {
                 GroupBox? group = LRD_Core.Instance.GetTrustedGroupBox(id);
-                if (group != null)
+                if (group == null)
                 {
-                    groups[id] = group;
+                    throw new InvalidDataException($"Source '{SourceID}' references missing trusted group '{id}'.");
                 }
+                groups[id] = group;
             }
             return groups;
         }
@@ -106,14 +110,24 @@ namespace OPEN_LRD
             return GraphSynchronization.Execute(() => SourceID);
         }
 
+        public int GetGroupingCount()
+        {
+            return GraphSynchronization.Execute(() => _groupings.Count);
+        }
+
+        public bool ContainsGrouping(Guid groupingId)
+        {
+            return GraphSynchronization.Execute(() => _groupingSet.Contains(groupingId));
+        }
+
         public string? GetSourceName()
         {
             return GraphSynchronization.Execute(() => SourceName);
         }
 
-        public void SetSourceName(string sourceName)
+        public void SetSourceName(string? sourceName)
         {
-            GraphSynchronization.Execute(() => { EnsureIdentityMutable(); SourceName = sourceName; });
+            GraphSynchronization.Execute(() => { EnsureIdentityMutable(); SourceName = NormalizeOptionalText(sourceName); });
         }
 
         public bool AddGrouping(GroupBox grouping)
@@ -185,6 +199,11 @@ namespace OPEN_LRD
             {
                 throw new InvalidOperationException("Source identity is frozen after trust.");
             }
+        }
+
+        private static string? NormalizeOptionalText(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
     }
 }

@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace OPEN_LRD
+namespace OPEN_LRD.Foundations
 {
+    /// <summary>Stores an append-only trusted set of sentence memberships.</summary>
     internal class GroupBox
     {
         private Guid GroupingID;
@@ -22,7 +23,7 @@ namespace OPEN_LRD
         public GroupBox(string groupingName)
         {
             GroupingID = Guid.NewGuid();
-            GroupingName = groupingName;
+            GroupingName = NormalizeOptionalText(groupingName);
             _sentences = new List<Guid>();
             _sentenceSet = new HashSet<Guid>();
         }
@@ -66,7 +67,7 @@ namespace OPEN_LRD
             ArgumentNullException.ThrowIfNull(sentenceIds);
             ValidateIdentityIds(sentenceIds, nameof(sentenceIds));
             GroupingID = groupingId;
-            GroupingName = groupingName;
+            GroupingName = NormalizeOptionalText(groupingName);
             _sentences = GraphSynchronization.Execute(() => new List<Guid>(sentenceIds.Distinct()));
             _sentenceSet = GraphSynchronization.Execute(() => new HashSet<Guid>(_sentences));
         }
@@ -84,6 +85,16 @@ namespace OPEN_LRD
         public Guid GetGroupingID()
         {
             return GraphSynchronization.Execute(() => GroupingID);
+        }
+
+        public int GetSentenceCount()
+        {
+            return GraphSynchronization.Execute(() => _sentences.Count);
+        }
+
+        public bool ContainsSentence(Guid sentenceId)
+        {
+            return GraphSynchronization.Execute(() => _sentenceSet.Contains(sentenceId));
         }
 
         public bool AddSentence(SentenceBox sentence)
@@ -142,6 +153,10 @@ namespace OPEN_LRD
                     }
                     Guid sentenceId = entry.Value.GetSentenceID();
                     ValidateIdentityId(sentenceId, nameof(sentences));
+                    if (entry.Key != sentenceId)
+                    {
+                        throw new ArgumentException("Sentence keys must match the contained SentenceBox IDs.", nameof(sentences));
+                    }
                     sentenceIds.Add(sentenceId);
                 }
                 return sentenceIds;
@@ -180,6 +195,11 @@ namespace OPEN_LRD
             {
                 throw new InvalidOperationException("Group identity is frozen after trust.");
             }
+        }
+
+        private static string? NormalizeOptionalText(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
     }
 }

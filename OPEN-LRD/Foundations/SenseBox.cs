@@ -4,6 +4,7 @@ using System.Text;
 
 namespace OPEN_LRD.Foundations
 {
+    /// <summary>Stores sense metrics and sentence/word memberships; trusted memberships are append-only.</summary>
     internal class SenseBox
     {
         private Guid SenseID;
@@ -13,6 +14,7 @@ namespace OPEN_LRD.Foundations
         private HashSet<Guid> _sentenceSet;
         private HashSet<Guid> _leadingWordSet;
         private HashSet<Guid> _trailingWordSet;
+        private bool _isTrusted;
         private bool _isReadOnly;
         private float AverageWordPosition;
         private float AverageSentencePosition;
@@ -44,7 +46,7 @@ namespace OPEN_LRD.Foundations
             ValidateIdentityId(sentenceId, nameof(sentenceId));
             return GraphSynchronization.Execute(() =>
             {
-                EnsureWritable();
+                EnsureUntrustedMutable();
                 if (_sentenceSet.Add(sentenceId))
                 {
                     _sentences.Add(sentenceId);
@@ -52,6 +54,12 @@ namespace OPEN_LRD.Foundations
                 }
                 return false;
             });
+        }
+
+        internal bool AddSentenceFromCore(Guid sentenceId)
+        {
+            ValidateIdentityId(sentenceId, nameof(sentenceId));
+            return GraphSynchronization.Execute(() => AddUnique(_sentences, _sentenceSet, sentenceId));
         }
 
         public void AddLeadingWord(WordBox word)
@@ -65,7 +73,7 @@ namespace OPEN_LRD.Foundations
             ValidateIdentityId(wordId, nameof(wordId));
             return GraphSynchronization.Execute(() =>
             {
-                EnsureWritable();
+                EnsureUntrustedMutable();
                 if (_leadingWordSet.Add(wordId))
                 {
                     _leadingWords.Add(wordId);
@@ -73,6 +81,12 @@ namespace OPEN_LRD.Foundations
                 }
                 return false;
             });
+        }
+
+        internal bool AddLeadingWordFromCore(Guid wordId)
+        {
+            ValidateIdentityId(wordId, nameof(wordId));
+            return GraphSynchronization.Execute(() => AddUnique(_leadingWords, _leadingWordSet, wordId));
         }
 
         public void AddTrailingWord(WordBox word)
@@ -86,7 +100,7 @@ namespace OPEN_LRD.Foundations
             ValidateIdentityId(wordId, nameof(wordId));
             return GraphSynchronization.Execute(() =>
             {
-                EnsureWritable();
+                EnsureUntrustedMutable();
                 if (_trailingWordSet.Add(wordId))
                 {
                     _trailingWords.Add(wordId);
@@ -94,6 +108,12 @@ namespace OPEN_LRD.Foundations
                 }
                 return false;
             });
+        }
+
+        internal bool AddTrailingWordFromCore(Guid wordId)
+        {
+            ValidateIdentityId(wordId, nameof(wordId));
+            return GraphSynchronization.Execute(() => AddUnique(_trailingWords, _trailingWordSet, wordId));
         }
 
         public Guid GetSenseID()
@@ -112,6 +132,30 @@ namespace OPEN_LRD.Foundations
         {
             return GraphSynchronization.Execute(() => new List<Guid>(_trailingWords));
         }
+        public int GetSentenceCount()
+        {
+            return GraphSynchronization.Execute(() => _sentences.Count);
+        }
+        public int GetLeadingWordCount()
+        {
+            return GraphSynchronization.Execute(() => _leadingWords.Count);
+        }
+        public int GetTrailingWordCount()
+        {
+            return GraphSynchronization.Execute(() => _trailingWords.Count);
+        }
+        public bool ContainsSentence(Guid sentenceId)
+        {
+            return GraphSynchronization.Execute(() => _sentenceSet.Contains(sentenceId));
+        }
+        public bool ContainsLeadingWord(Guid wordId)
+        {
+            return GraphSynchronization.Execute(() => _leadingWordSet.Contains(wordId));
+        }
+        public bool ContainsTrailingWord(Guid wordId)
+        {
+            return GraphSynchronization.Execute(() => _trailingWordSet.Contains(wordId));
+        }
         public float GetAverageWordPosition()
         {
             return GraphSynchronization.Execute(() => AverageWordPosition);
@@ -128,20 +172,26 @@ namespace OPEN_LRD.Foundations
         }
         public void SetAverageWordPosition(float avgWordPos)
         {
+            ValidateMetric(avgWordPos, nameof(avgWordPos));
             GraphSynchronization.Execute(() => { EnsureWritable(); AverageWordPosition = avgWordPos; });
         }
 
         public void SetAverageSentencePosition(float avgSentPos)
         {
+            ValidateMetric(avgSentPos, nameof(avgSentPos));
             GraphSynchronization.Execute(() => { EnsureWritable(); AverageSentencePosition = avgSentPos; });
         }
 
         public void SetAverageSpread(float avgSpread)
         {
+            ValidateMetric(avgSpread, nameof(avgSpread));
             GraphSynchronization.Execute(() => { EnsureWritable(); AverageSpread = avgSpread; });
         }
         public void UpdateAverageMetrics(float avgWordPos, float avgSentPos, float avgSpread)
         {
+            ValidateMetric(avgWordPos, nameof(avgWordPos));
+            ValidateMetric(avgSentPos, nameof(avgSentPos));
+            ValidateMetric(avgSpread, nameof(avgSpread));
             GraphSynchronization.Execute(() =>
             {
                 EnsureWritable();
@@ -160,34 +210,36 @@ namespace OPEN_LRD.Foundations
                 AverageSpread = 0.0f;
             });
         }
-        public void ClearSentences()
+        internal void ClearSentences()
         {
-            GraphSynchronization.Execute(() => { EnsureWritable(); _sentences.Clear(); _sentenceSet.Clear(); });
+            GraphSynchronization.Execute(() => { EnsureUntrustedMutable(); _sentences.Clear(); _sentenceSet.Clear(); });
         }
-        public void RemoveSentence(Guid sentenceId)
+        internal void RemoveSentence(Guid sentenceId)
         {
-            GraphSynchronization.Execute(() => { EnsureWritable(); _sentences.Remove(sentenceId); _sentenceSet.Remove(sentenceId); });
-        }
-
-        public void ClearLeadingWords()
-        {
-            GraphSynchronization.Execute(() => { EnsureWritable(); _leadingWords.Clear(); _leadingWordSet.Clear(); });
+            GraphSynchronization.Execute(() => { EnsureUntrustedMutable(); _sentences.Remove(sentenceId); _sentenceSet.Remove(sentenceId); });
         }
 
-        public void RemoveLeadingWord(Guid wordId)
+        internal void ClearLeadingWords()
         {
-            GraphSynchronization.Execute(() => { EnsureWritable(); _leadingWords.Remove(wordId); _leadingWordSet.Remove(wordId); });
-        }
-        public void ClearTrailingWords()
-        {
-            GraphSynchronization.Execute(() => { EnsureWritable(); _trailingWords.Clear(); _trailingWordSet.Clear(); });
-        }
-        public void RemoveTrailingWord(Guid wordId)
-        {
-            GraphSynchronization.Execute(() => { EnsureWritable(); _trailingWords.Remove(wordId); _trailingWordSet.Remove(wordId); });
+            GraphSynchronization.Execute(() => { EnsureUntrustedMutable(); _leadingWords.Clear(); _leadingWordSet.Clear(); });
         }
 
-        internal void MarkReadOnly() => GraphSynchronization.Execute(() => _isReadOnly = true);
+        internal void RemoveLeadingWord(Guid wordId)
+        {
+            GraphSynchronization.Execute(() => { EnsureUntrustedMutable(); _leadingWords.Remove(wordId); _leadingWordSet.Remove(wordId); });
+        }
+        internal void ClearTrailingWords()
+        {
+            GraphSynchronization.Execute(() => { EnsureUntrustedMutable(); _trailingWords.Clear(); _trailingWordSet.Clear(); });
+        }
+        internal void RemoveTrailingWord(Guid wordId)
+        {
+            GraphSynchronization.Execute(() => { EnsureUntrustedMutable(); _trailingWords.Remove(wordId); _trailingWordSet.Remove(wordId); });
+        }
+
+        internal void MarkTrusted() => GraphSynchronization.Execute(() => _isTrusted = true);
+
+        internal void MarkReadOnly() => GraphSynchronization.Execute(() => { _isTrusted = true; _isReadOnly = true; });
 
         private static void ValidateIdentityId(Guid id, string parameterName)
         {
@@ -197,9 +249,37 @@ namespace OPEN_LRD.Foundations
             }
         }
 
+        private void EnsureUntrustedMutable()
+        {
+            if (_isReadOnly) throw new InvalidOperationException("Disk-paged boxes are read-only; materialize the disk store before mutation.");
+            if (_isTrusted) throw new InvalidOperationException("Trusted sense memberships can only be appended through LRD_Core.");
+        }
+
         private void EnsureWritable()
         {
             if (_isReadOnly) throw new InvalidOperationException("Disk-paged boxes are read-only; materialize the disk store before mutation.");
+        }
+
+        private static void ValidateMetric(float value, string parameterName)
+        {
+            if (!float.IsFinite(value))
+            {
+                throw new ArgumentOutOfRangeException(parameterName, "Sense metrics must be finite.");
+            }
+        }
+
+        private bool AddUnique(List<Guid> values, HashSet<Guid> index, Guid id)
+        {
+            if (_isReadOnly)
+            {
+                throw new InvalidOperationException("Disk-paged boxes are read-only; materialize the disk store before mutation.");
+            }
+            if (index.Add(id))
+            {
+                values.Add(id);
+                return true;
+            }
+            return false;
         }
     }
 }

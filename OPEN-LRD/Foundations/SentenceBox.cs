@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace OPEN_LRD
+namespace OPEN_LRD.Foundations
 {
     internal class SentenceBox
     {
@@ -66,8 +66,13 @@ namespace OPEN_LRD
             ValidateOptionalIdentityId(senseId, nameof(senseId));
             ArgumentNullException.ThrowIfNull(words);
             List<Guid> wordIds = new List<Guid>();
-            foreach (WordBox word in words.Values)
+            foreach (KeyValuePair<int, WordBox> entry in words.OrderBy(entry => entry.Key))
             {
+                if (entry.Key < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(words), "Sentence word positions cannot be negative.");
+                }
+                WordBox word = entry.Value;
                 if (word == null)
                 {
                     throw new ArgumentException("Word entries cannot be null.", nameof(words));
@@ -131,6 +136,30 @@ namespace OPEN_LRD
                 {
                     throw new InvalidOperationException("Words are already set and cannot be changed.");
                 }
+            });
+        }
+
+        internal bool ReplaceWordReference(Guid oldWordId, Guid canonicalWordId)
+        {
+            ValidateIdentityId(oldWordId, nameof(oldWordId));
+            ValidateIdentityId(canonicalWordId, nameof(canonicalWordId));
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureIdentityMutable();
+                if (_words == null)
+                {
+                    return false;
+                }
+                bool replaced = false;
+                for (int index = 0; index < _words.Count; index++)
+                {
+                    if (_words[index] == oldWordId)
+                    {
+                        _words[index] = canonicalWordId;
+                        replaced = true;
+                    }
+                }
+                return replaced;
             });
         }
 

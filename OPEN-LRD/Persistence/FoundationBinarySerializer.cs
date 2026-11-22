@@ -8,6 +8,9 @@ namespace OPEN_LRD.Persistence
 {
     internal static class FoundationBinarySerializer
     {
+        private const int MaximumStringByteLength = 1_048_576;
+        private const int MaximumCollectionCount = 1_000_000;
+        private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
         private static readonly Type[] SupportedTypes =
         {
             typeof(object), typeof(string), typeof(bool), typeof(byte), typeof(sbyte), typeof(short),
@@ -19,16 +22,20 @@ namespace OPEN_LRD.Persistence
         internal static byte[] SerializeSymbol(SymbolBox box) => Write(writer =>
         {
             writer.Write(box.GetSymbolID().ToByteArray());
-            writer.Write(box.GetSymbolChar());
+            writer.Write(box.HasSymbolChar);
+            writer.Write((ushort)box.GetSymbolChar());
             WriteNullableGuid(writer, box.GetSenseID());
         });
 
-        internal static SymbolBox DeserializeSymbol(byte[] payload) => Read(payload, reader =>
+        internal static SymbolBox DeserializeSymbol(byte[] payload, bool legacyFormat = false) => Read(payload, reader =>
         {
             Guid id = ReadGuid(reader);
-            char value = reader.ReadChar();
+            bool hasSymbolChar = !legacyFormat && reader.ReadBoolean();
+            char value = legacyFormat ? reader.ReadChar() : (char)reader.ReadUInt16();
             Guid? senseId = ReadNullableGuid(reader);
-            SymbolBox box = new SymbolBox(id, value);
+            if (!legacyFormat && !hasSymbolChar && value != '\0')
+                throw new InvalidDataException("An unassigned SymbolBox cannot store a non-NUL character.");
+            SymbolBox box = hasSymbolChar || legacyFormat ? new SymbolBox(id, value) : new SymbolBox(id);
             if (senseId.HasValue) box.SetSenseID(senseId.Value);
             box.FreezeIdentity();
             return box;
@@ -54,19 +61,11 @@ namespace OPEN_LRD.Persistence
             PartOfSpeech? partOfSpeech = hasPartOfSpeech ? (PartOfSpeech)reader.ReadInt32() : null;
             if (partOfSpeech.HasValue && !Enum.IsDefined(partOfSpeech.Value))
                 throw new InvalidDataException("Stored part-of-speech value is invalid.");
-            WordBox box;
-            if (sense.HasValue && usage.HasValue && symbols != null && partOfSpeech.HasValue)
+            if (!sense.HasValue || !usage.HasValue || symbols == null || !partOfSpeech.HasValue)
             {
-                box = new WordBox(id, sense.Value, usage.Value, symbols, partOfSpeech.Value);
+                throw new InvalidDataException("Stored trusted WordBox identity is incomplete.");
             }
-            else
-            {
-                box = new WordBox(id, symbols ?? new List<Guid>());
-                if (sense.HasValue) box.SetSenseID(sense.Value);
-                if (usage.HasValue) box.SetUsageID(usage.Value);
-                if (symbols == null) box.SetSymbols(new List<Guid>());
-                if (partOfSpeech.HasValue) box.SetPartOfSpeech(partOfSpeech.Value);
-            }
+            WordBox box = new WordBox(id, sense.Value, usage.Value, symbols, partOfSpeech.Value);
             box.FreezeIdentity();
             return box;
         });
@@ -163,7 +162,7 @@ namespace OPEN_LRD.Persistence
             writer.Write(variables.Count);
             foreach (FunctionVariable variable in variables)
             {
-                writer.Write(variable.Name);
+                WriteBoundedString(writer, variable.Name);
                 WriteScalar(writer, variable.Value);
                 WriteType(writer, variable.DataType);
                 WriteNullableString(writer, variable.UnitTitle);
@@ -178,22 +177,22 @@ namespace OPEN_LRD.Persistence
             }
         });
 
-        internal static FunctionBox DeserializeFunction(byte[] payload) => Read(payload, reader =>
+        internal static FunctionBox DeserializeFunction(byte[] payload, bool legacyFormat = false) => Read(payload, reader =>
         {
             Guid id = ReadGuid(reader);
             FunctionBox box = new FunctionBox(id, ReadType(reader), ReadNullableString(reader), ReadNullableString(reader));
             int variableCount = ReadCount(reader);
             for (int i = 0; i < variableCount; i++)
             {
-                string name = reader.ReadString();
-                object? value = ReadScalar(reader);
+                string name = ReadBoundedString(reader);
+                object? value = ReadScalar(reader, legacyFormat);
                 Type dataType = ReadType(reader);
                 string? unit = ReadNullableString(reader);
                 box.AddVariable(new FunctionVariable(name, value, dataType, unit));
             }
             if (reader.ReadBoolean())
             {
-                object? value = ReadScalar(reader);
+                object? value = ReadScalar(reader, legacyFormat);
                 Type dataType = ReadType(reader);
                 string? unit = ReadNullableString(reader);
                 box.StoreResult(new FunctionResult(value, dataType, unit));
@@ -237,11 +236,88 @@ namespace OPEN_LRD.Persistence
             writer.Write((int)link.RelationType);
             writer.Write(link.Weight);
             WriteNullableString(writer, link.Label);
+            WriteProvenance(writer, link.Provenance);
         });
 
-        internal static NodeLink DeserializeLink(byte[] payload) => Read(payload, reader =>
-            new NodeLink(ReadGuid(reader), ReadGuid(reader), (NodeRelationType)reader.ReadInt32(),
-                reader.ReadDouble(), ReadNullableString(reader)));
+        internal static NodeLink DeserializeLink(byte[] payload, bool legacyFormat = false) => Read(payload, reader =>
+        {
+            Guid sourceNodeId = ReadGuid(reader);
+            Guid targetNodeId = ReadGuid(reader);
+            NodeRelationType relationType = (NodeRelationType)reader.ReadInt32();
+            double weight = reader.ReadDouble();
+            string? label = ReadNullableString(reader);
+            NodeLinkProvenance provenance = legacyFormat
+                ? NodeLinkProvenance.CreateLegacy(sourceNodeId, targetNodeId, relationType, label, weight)
+                : ReadProvenance(reader);
+            return new NodeLink(sourceNodeId, targetNodeId, relationType, weight, label, provenance);
+        });
+
+        private static void WriteProvenance(BinaryWriter writer, NodeLinkProvenance provenance)
+        {
+            writer.Write(provenance.AssertionId.ToByteArray());
+            writer.Write((byte)provenance.Origin);
+            WriteDateTimeOffset(writer, provenance.AssertedAt);
+            WriteNullableString(writer, provenance.Author);
+            WriteNullableGuid(writer, provenance.SourceTargetId);
+            WriteNullableGuid(writer, provenance.EvidenceTargetId);
+            writer.Write(provenance.Confidence.HasValue);
+            if (provenance.Confidence.HasValue) writer.Write(provenance.Confidence.Value);
+            WriteNullableDateTimeOffset(writer, provenance.ValidFrom);
+            WriteNullableDateTimeOffset(writer, provenance.ValidUntil);
+        }
+
+        private static NodeLinkProvenance ReadProvenance(BinaryReader reader)
+        {
+            Guid assertionId = ReadGuid(reader);
+            NodeLinkOrigin origin = (NodeLinkOrigin)reader.ReadByte();
+            DateTimeOffset assertedAt = ReadDateTimeOffset(reader);
+            string? author = ReadNullableString(reader);
+            Guid? sourceTargetId = ReadNullableGuid(reader);
+            Guid? evidenceTargetId = ReadNullableGuid(reader);
+            double? confidence = reader.ReadBoolean() ? reader.ReadDouble() : null;
+            DateTimeOffset? validFrom = ReadNullableDateTimeOffset(reader);
+            DateTimeOffset? validUntil = ReadNullableDateTimeOffset(reader);
+            try
+            {
+                return new NodeLinkProvenance(assertionId, origin, assertedAt, author, sourceTargetId,
+                    evidenceTargetId, confidence, validFrom, validUntil);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidDataException("Stored link provenance is invalid.", exception);
+            }
+        }
+
+        private static void WriteDateTimeOffset(BinaryWriter writer, DateTimeOffset value)
+        {
+            writer.Write(value.Ticks);
+            writer.Write(checked((short)value.Offset.TotalMinutes));
+        }
+
+        private static DateTimeOffset ReadDateTimeOffset(BinaryReader reader)
+        {
+            long ticks = reader.ReadInt64();
+            short offsetMinutes = reader.ReadInt16();
+            try
+            {
+                return new DateTimeOffset(ticks, TimeSpan.FromMinutes(offsetMinutes));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidDataException("Stored timestamp is invalid.", exception);
+            }
+        }
+
+        private static void WriteNullableDateTimeOffset(BinaryWriter writer, DateTimeOffset? value)
+        {
+            writer.Write(value.HasValue);
+            if (value.HasValue) WriteDateTimeOffset(writer, value.Value);
+        }
+
+        private static DateTimeOffset? ReadNullableDateTimeOffset(BinaryReader reader)
+        {
+            return reader.ReadBoolean() ? ReadDateTimeOffset(reader) : null;
+        }
 
         private static byte[] Write(Action<BinaryWriter> write)
         {
@@ -252,11 +328,24 @@ namespace OPEN_LRD.Persistence
 
         private static T Read<T>(byte[] payload, Func<BinaryReader, T> read)
         {
+            ArgumentNullException.ThrowIfNull(payload);
             using MemoryStream stream = new MemoryStream(payload, false);
             using BinaryReader reader = new BinaryReader(stream, Encoding.UTF8, true);
-            T result = read(reader);
-            if (stream.Position != stream.Length) throw new InvalidDataException("Serialized record contains trailing bytes.");
-            return result;
+            try
+            {
+                T result = read(reader);
+                if (stream.Position != stream.Length) throw new InvalidDataException("Serialized record contains trailing bytes.");
+                return result;
+            }
+            catch (InvalidDataException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is EndOfStreamException or ArgumentException or
+                OverflowException or FormatException or InvalidOperationException)
+            {
+                throw new InvalidDataException("Serialized foundation record is malformed.", exception);
+            }
         }
 
         private static Guid ReadGuid(BinaryReader reader)
@@ -291,7 +380,7 @@ namespace OPEN_LRD.Persistence
         {
             int count = reader.ReadInt32();
             if (count == -1) return null;
-            if (count < 0 || count > 100_000_000 || count > (reader.BaseStream.Length - reader.BaseStream.Position) / 16)
+            if (count < 0 || count > MaximumCollectionCount || count > (reader.BaseStream.Length - reader.BaseStream.Position) / 16)
                 throw new InvalidDataException("Stored sequence length is invalid.");
             List<Guid> result = new List<Guid>(count);
             for (int i = 0; i < count; i++) result.Add(ReadGuid(reader));
@@ -301,17 +390,70 @@ namespace OPEN_LRD.Persistence
         private static int ReadCount(BinaryReader reader)
         {
             int count = reader.ReadInt32();
-            if (count < 0 || count > 1_000_000) throw new InvalidDataException("Stored item count is invalid.");
+            if (count < 0 || count > MaximumCollectionCount) throw new InvalidDataException("Stored item count is invalid.");
             return count;
         }
 
         private static void WriteNullableString(BinaryWriter writer, string? value)
         {
             writer.Write(value != null);
-            if (value != null) writer.Write(value);
+            if (value != null) WriteBoundedString(writer, value);
         }
 
-        private static string? ReadNullableString(BinaryReader reader) => reader.ReadBoolean() ? reader.ReadString() : null;
+        private static void WriteBoundedString(BinaryWriter writer, string value)
+        {
+            byte[] bytes;
+            try
+            {
+                bytes = StrictUtf8.GetBytes(value);
+            }
+            catch (EncoderFallbackException exception)
+            {
+                throw new ArgumentException("Strings must contain valid UTF-16 data.", nameof(value), exception);
+            }
+            if (bytes.Length > MaximumStringByteLength)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), $"Strings cannot exceed {MaximumStringByteLength} UTF-8 bytes.");
+            }
+            Write7BitEncodedInt(writer, bytes.Length);
+            writer.Write(bytes);
+        }
+
+        private static void Write7BitEncodedInt(BinaryWriter writer, int value)
+        {
+            uint remaining = (uint)value;
+            while (remaining >= 0x80)
+            {
+                writer.Write((byte)(remaining | 0x80));
+                remaining >>= 7;
+            }
+            writer.Write((byte)remaining);
+        }
+
+        private static string? ReadNullableString(BinaryReader reader) => reader.ReadBoolean() ? ReadBoundedString(reader) : null;
+
+        private static string ReadBoundedString(BinaryReader reader)
+        {
+            int byteLength = reader.Read7BitEncodedInt();
+            if (byteLength < 0 || byteLength > MaximumStringByteLength ||
+                byteLength > reader.BaseStream.Length - reader.BaseStream.Position)
+            {
+                throw new InvalidDataException("Stored string length is invalid.");
+            }
+            byte[] bytes = reader.ReadBytes(byteLength);
+            if (bytes.Length != byteLength)
+            {
+                throw new InvalidDataException("Stored string is truncated.");
+            }
+            try
+            {
+                return StrictUtf8.GetString(bytes);
+            }
+            catch (DecoderFallbackException exception)
+            {
+                throw new InvalidDataException("Stored string is not valid UTF-8.", exception);
+            }
+        }
 
         private static void WriteType(BinaryWriter writer, Type type)
         {
@@ -332,7 +474,7 @@ namespace OPEN_LRD.Persistence
             switch (value)
             {
                 case null: writer.Write((byte)0); break;
-                case string item: writer.Write((byte)1); writer.Write(item); break;
+                case string item: writer.Write((byte)1); WriteBoundedString(writer, item); break;
                 case bool item: writer.Write((byte)2); writer.Write(item); break;
                 case byte item: writer.Write((byte)3); writer.Write(item); break;
                 case sbyte item: writer.Write((byte)4); writer.Write(item); break;
@@ -345,7 +487,7 @@ namespace OPEN_LRD.Persistence
                 case float item: writer.Write((byte)11); writer.Write(item); break;
                 case double item: writer.Write((byte)12); writer.Write(item); break;
                 case decimal item: writer.Write((byte)13); writer.Write(item); break;
-                case char item: writer.Write((byte)14); writer.Write(item); break;
+                case char item: writer.Write((byte)14); writer.Write((ushort)item); break;
                 case Guid item: writer.Write((byte)15); writer.Write(item.ToByteArray()); break;
                 case DateTime item: writer.Write((byte)16); writer.Write(item.Ticks); writer.Write((byte)item.Kind); break;
                 case DateTimeOffset item: writer.Write((byte)17); writer.Write(item.Ticks); writer.Write((short)item.Offset.TotalMinutes); break;
@@ -354,12 +496,12 @@ namespace OPEN_LRD.Persistence
             }
         }
 
-        private static object? ReadScalar(BinaryReader reader)
+        private static object? ReadScalar(BinaryReader reader, bool legacyFormat)
         {
             return reader.ReadByte() switch
             {
                 0 => null,
-                1 => reader.ReadString(),
+                1 => ReadBoundedString(reader),
                 2 => reader.ReadBoolean(),
                 3 => reader.ReadByte(),
                 4 => reader.ReadSByte(),
@@ -372,13 +514,42 @@ namespace OPEN_LRD.Persistence
                 11 => reader.ReadSingle(),
                 12 => reader.ReadDouble(),
                 13 => reader.ReadDecimal(),
-                14 => reader.ReadChar(),
+                14 => legacyFormat ? reader.ReadChar() : (char)reader.ReadUInt16(),
                 15 => ReadGuid(reader),
-                16 => new DateTime(reader.ReadInt64(), (DateTimeKind)reader.ReadByte()),
-                17 => new DateTimeOffset(reader.ReadInt64(), TimeSpan.FromMinutes(reader.ReadInt16())),
+                16 => ReadDateTime(reader),
+                17 => ReadDateTimeOffsetScalar(reader),
                 18 => TimeSpan.FromTicks(reader.ReadInt64()),
                 _ => throw new InvalidDataException("Stored scalar tag is invalid.")
             };
+        }
+
+        private static DateTime ReadDateTime(BinaryReader reader)
+        {
+            long ticks = reader.ReadInt64();
+            DateTimeKind kind = (DateTimeKind)reader.ReadByte();
+            if (!Enum.IsDefined(kind)) throw new InvalidDataException("Stored DateTime kind is invalid.");
+            try
+            {
+                return new DateTime(ticks, kind);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidDataException("Stored DateTime value is invalid.", exception);
+            }
+        }
+
+        private static DateTimeOffset ReadDateTimeOffsetScalar(BinaryReader reader)
+        {
+            long ticks = reader.ReadInt64();
+            short offsetMinutes = reader.ReadInt16();
+            try
+            {
+                return new DateTimeOffset(ticks, TimeSpan.FromMinutes(offsetMinutes));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidDataException("Stored DateTimeOffset value is invalid.", exception);
+            }
         }
     }
 }

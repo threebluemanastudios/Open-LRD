@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace OPEN_LRD
+namespace OPEN_LRD.Foundations
 { 
     /// <summary>
     /// Represents the type of a symbol.
@@ -20,8 +20,14 @@ namespace OPEN_LRD
         private bool _hasSymbolChar;
         private bool _identityFrozen;
         public SymbolBox()
+            : this(Guid.NewGuid())
         {
-            SymbolID = Guid.NewGuid();
+        }
+
+        public SymbolBox(Guid id)
+        {
+            ValidateIdentityId(id, nameof(id));
+            SymbolID = id;
             SymbolChar = '\0';
             SenseID = null;
             SType = UnicodeCategory.OtherNotAssigned;
@@ -42,6 +48,8 @@ namespace OPEN_LRD
         {
             return GraphSynchronization.Execute(() => SymbolID);
         }
+
+        public bool HasSymbolChar => GraphSynchronization.Execute(() => _hasSymbolChar);
 
         public char GetSymbolChar()
         {
