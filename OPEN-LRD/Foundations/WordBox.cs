@@ -64,7 +64,7 @@ namespace OPEN_LRD.Foundations
         public WordBox(List<Guid> symbols)
         {
             ValidateIdentityIds(symbols, nameof(symbols));
-            WordID = Guid.NewGuid();
+            WordID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Word);
             SenseID = null;
             UsageID = null;
             _symbols = new List<Guid>(symbols);
@@ -73,14 +73,14 @@ namespace OPEN_LRD.Foundations
         {
             ValidateIdentityId(senseId, nameof(senseId));
             ValidateIdentityId(usageId, nameof(usageId));
-            WordID = Guid.NewGuid();
+            WordID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Word);
             SenseID = senseId;
             UsageID = usageId;
             _symbols = null;
         }
         public WordBox(Guid wordId, Guid senseId, Guid usageId)
         {
-            ValidateIdentityId(wordId, nameof(wordId));
+            ValidateWordId(wordId, nameof(wordId), allowRegisteredTrustedId: false);
             ValidateIdentityId(senseId, nameof(senseId));
             ValidateIdentityId(usageId, nameof(usageId));
             WordID = wordId;
@@ -91,7 +91,7 @@ namespace OPEN_LRD.Foundations
 
         public WordBox(Guid wordID, List<Guid> symbols)
         {
-            ValidateIdentityId(wordID, nameof(wordID));
+            ValidateWordId(wordID, nameof(wordID), allowRegisteredTrustedId: false);
             ValidateIdentityIds(symbols, nameof(symbols));
             WordID = wordID;
             SenseID = null;
@@ -101,7 +101,7 @@ namespace OPEN_LRD.Foundations
 
         public WordBox(Guid wordId, Guid senseId, Guid usageId, List<Guid> symbols)
         {
-            ValidateIdentityId(wordId, nameof(wordId));
+            ValidateWordId(wordId, nameof(wordId), allowRegisteredTrustedId: false);
             ValidateIdentityId(senseId, nameof(senseId));
             ValidateIdentityId(usageId, nameof(usageId));
             ValidateIdentityIds(symbols, nameof(symbols));
@@ -115,14 +115,18 @@ namespace OPEN_LRD.Foundations
             ValidateIdentityId(senseId, nameof(senseId));
             ValidateIdentityId(usageId, nameof(usageId));
             ValidateIdentityIds(symbols, nameof(symbols));
-            WordID = Guid.NewGuid();
+            WordID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Word);
             SenseID = senseId;
             UsageID = usageId;
             _symbols = new List<Guid>(symbols);
         }
         public WordBox(Guid wordId, Guid senseId, Guid usageId, List<Guid> symbols, PartOfSpeech pos)
+            : this(wordId, senseId, usageId, symbols, pos, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(wordId, nameof(wordId));
+        }
+        internal WordBox(Guid wordId, Guid senseId, Guid usageId, List<Guid> symbols, PartOfSpeech pos, bool allowRegisteredTrustedId)
+        {
+            ValidateWordId(wordId, nameof(wordId), allowRegisteredTrustedId);
             ValidateIdentityId(senseId, nameof(senseId));
             ValidateIdentityId(usageId, nameof(usageId));
             ValidateIdentityIds(symbols, nameof(symbols));
@@ -139,7 +143,7 @@ namespace OPEN_LRD.Foundations
             ValidateIdentityId(usageId, nameof(usageId));
             ValidateIdentityIds(symbols, nameof(symbols));
             ValidatePartOfSpeech(pos, nameof(pos));
-            WordID = Guid.NewGuid();
+            WordID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Word);
             SenseID = senseId;
             UsageID = usageId;
             _symbols = new List<Guid>(symbols);
@@ -308,6 +312,18 @@ namespace OPEN_LRD.Foundations
             if (_identityFrozen)
             {
                 throw new InvalidOperationException("Word identity is frozen after trust.");
+            }
+        }
+
+        private static void ValidateWordId(Guid id, string parameterName, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
+            {
+                ValidateIdentityId(id, parameterName);
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedId(NodeTargetKind.Word, id, parameterName);
             }
         }
 

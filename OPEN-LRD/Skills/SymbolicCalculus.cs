@@ -62,14 +62,47 @@ namespace OPEN_LRD.Skills
                     Expression right = SimplifyOnce(binary.Right);
                     return SimplifyBinary(binary.Operator, left, right);
                 }
+                case ConditionalExpression conditional:
+                {
+                    Expression condition = SimplifyOnce(conditional.Condition);
+                    Expression whenTrue = SimplifyOnce(conditional.WhenTrue);
+                    Expression whenFalse = SimplifyOnce(conditional.WhenFalse);
+                    if (TryGetConstant(condition, out double conditionValue))
+                    {
+                        return conditionValue != 0.0 ? whenTrue : whenFalse;
+                    }
+                    if (whenTrue.Equals(whenFalse))
+                    {
+                        return whenTrue;
+                    }
+                    return ExpressionBuilder.Conditional(condition, whenTrue, whenFalse);
+                }
                 case FunctionExpression function:
                 {
                     Expression argument = SimplifyOnce(function.Argument);
+                    if (TryGetFunctionIdentity(function.Function, argument, out Expression? identity))
+                    {
+                        return identity!;
+                    }
                     if (TryGetConstant(argument, out double value) && TryEvaluateFunction(function.Function, value, out double result))
                     {
                         return ExpressionBuilder.Constant(result);
                     }
                     return ExpressionBuilder.Function(function.Function, argument);
+                }
+                case CallExpression call:
+                {
+                    Expression[] arguments = SimplifyCallArguments(call);
+                    if (TryGetConstantArguments(arguments, out double[] values)
+                        && TryEvaluateCall(call.FunctionName, values, out double result))
+                    {
+                        return ExpressionBuilder.Constant(result);
+                    }
+                    if (TryGetCallIdentity(call.FunctionName, arguments, out Expression? callIdentity))
+                    {
+                        return callIdentity!;
+                    }
+                    return ExpressionBuilder.Call(call.FunctionName, arguments);
                 }
                 default:
                     return expression;
@@ -270,6 +303,67 @@ namespace OPEN_LRD.Skills
                     }
                     return ExpressionBuilder.Power(left, right);
                 }
+                case BinaryOperator.LessThan:
+                case BinaryOperator.LessThanOrEqual:
+                case BinaryOperator.GreaterThan:
+                case BinaryOperator.GreaterThanOrEqual:
+                case BinaryOperator.Equal:
+                case BinaryOperator.NotEqual:
+                case BinaryOperator.And:
+                case BinaryOperator.Or:
+                {
+                    if (leftConstant && rightConstant && TryEvaluateBooleanOperator(op, leftValue, rightValue, out double booleanResult))
+                    {
+                        return ExpressionBuilder.Constant(booleanResult);
+                    }
+                    if (op == BinaryOperator.Equal && left.Equals(right))
+                    {
+                        return ExpressionBuilder.Constant(1.0);
+                    }
+                    if (op == BinaryOperator.NotEqual && left.Equals(right))
+                    {
+                        return ExpressionBuilder.Constant(0.0);
+                    }
+                    if (op == BinaryOperator.And)
+                    {
+                        if (IsZero(left))
+                        {
+                            return ExpressionBuilder.Constant(0.0);
+                        }
+                        if (leftConstant)
+                        {
+                            return right;
+                        }
+                        if (IsZero(right))
+                        {
+                            return ExpressionBuilder.Constant(0.0);
+                        }
+                        if (rightConstant)
+                        {
+                            return left;
+                        }
+                    }
+                    if (op == BinaryOperator.Or)
+                    {
+                        if (leftConstant && leftValue != 0.0)
+                        {
+                            return ExpressionBuilder.Constant(1.0);
+                        }
+                        if (IsZero(left))
+                        {
+                            return right;
+                        }
+                        if (rightConstant && rightValue != 0.0)
+                        {
+                            return ExpressionBuilder.Constant(1.0);
+                        }
+                        if (IsZero(right))
+                        {
+                            return left;
+                        }
+                    }
+                    return ExpressionBuilder.Binary(op, left, right);
+                }
                 default:
                     return ExpressionBuilder.Add(left, right);
             }
@@ -343,6 +437,23 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        private static bool TryEvaluateBooleanOperator(BinaryOperator op, double left, double right, out double result)
+        {
+            result = op switch
+            {
+                BinaryOperator.LessThan => left < right ? 1.0 : 0.0,
+                BinaryOperator.LessThanOrEqual => left <= right ? 1.0 : 0.0,
+                BinaryOperator.GreaterThan => left > right ? 1.0 : 0.0,
+                BinaryOperator.GreaterThanOrEqual => left >= right ? 1.0 : 0.0,
+                BinaryOperator.Equal => left == right ? 1.0 : 0.0,
+                BinaryOperator.NotEqual => left != right ? 1.0 : 0.0,
+                BinaryOperator.And => left != 0.0 && right != 0.0 ? 1.0 : 0.0,
+                BinaryOperator.Or => left != 0.0 || right != 0.0 ? 1.0 : 0.0,
+                _ => double.NaN
+            };
+            return !double.IsNaN(result);
+        }
+
         private static bool IsZero(Expression expression)
         {
             return expression is ConstantExpression constant && constant.Value == 0.0;
@@ -351,6 +462,351 @@ namespace OPEN_LRD.Skills
         private static bool IsOne(Expression expression)
         {
             return expression is ConstantExpression constant && constant.Value == 1.0;
+        }
+
+        private static bool TryGetFunctionIdentity(FunctionKind function, Expression argument, out Expression? result)
+        {
+            result = null;
+            switch (function)
+            {
+                case FunctionKind.Ln when argument is FunctionExpression { Function: FunctionKind.Exp } exponential:
+                    result = exponential.Argument;
+                    return true;
+                case FunctionKind.Log10 when IsBasePower(argument, 10.0, out Expression? commonLogarithm):
+                    result = commonLogarithm;
+                    return true;
+                case FunctionKind.Log2 when IsBasePower(argument, 2.0, out Expression? binaryLogarithm):
+                    result = binaryLogarithm;
+                    return true;
+                case FunctionKind.RadiansToDegrees when argument is FunctionExpression { Function: FunctionKind.DegreesToRadians } toRadians:
+                    result = toRadians.Argument;
+                    return true;
+                case FunctionKind.DegreesToRadians when argument is FunctionExpression { Function: FunctionKind.RadiansToDegrees } toDegrees:
+                    result = toDegrees.Argument;
+                    return true;
+                case FunctionKind.Abs when argument is FunctionExpression { Function: FunctionKind.Abs }:
+                    result = argument;
+                    return true;
+                case FunctionKind.Abs when argument is NegateExpression negate:
+                    result = ExpressionBuilder.Function(FunctionKind.Abs, negate.Operand);
+                    return true;
+                case FunctionKind.Floor when argument is FunctionExpression { Function: FunctionKind.Floor }:
+                    result = argument;
+                    return true;
+                case FunctionKind.Ceiling when argument is FunctionExpression { Function: FunctionKind.Ceiling }:
+                    result = argument;
+                    return true;
+                case FunctionKind.Truncate when argument is FunctionExpression { Function: FunctionKind.Truncate }:
+                    result = argument;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsBasePower(Expression expression, double baseValue, out Expression? exponent)
+        {
+            exponent = null;
+            if (expression is BinaryExpression { Operator: BinaryOperator.Power } power
+                && power.Left is ConstantExpression constant
+                && constant.Value == baseValue)
+            {
+                exponent = power.Right;
+                return true;
+            }
+            if (expression is FunctionExpression { Function: FunctionKind.Exp, Argument: BinaryExpression { Operator: BinaryOperator.Power } exponentialPower }
+                && exponentialPower.Left is ConstantExpression exponentialConstant
+                && exponentialConstant.Value == baseValue)
+            {
+                exponent = exponentialPower.Right;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryGetCallIdentity(string functionName, IReadOnlyList<Expression> arguments, out Expression? result)
+        {
+            result = null;
+            switch (functionName.ToLowerInvariant())
+            {
+                case "log" when arguments.Count == 2
+                    && arguments[0].Equals(arguments[1])
+                    && (!TryGetConstant(arguments[0], out double logBase) || (logBase > 0.0 && logBase != 1.0)):
+                    result = ExpressionBuilder.Constant(1.0);
+                    return true;
+                case "lerp" when arguments.Count == 3 && IsZero(arguments[2]):
+                    result = arguments[0];
+                    return true;
+                case "lerp" when arguments.Count == 3 && IsOne(arguments[2]):
+                    result = arguments[1];
+                    return true;
+                case "lerp" when arguments.Count == 3 && arguments[0].Equals(arguments[1]):
+                    result = arguments[0];
+                    return true;
+                case "min" or "max" when arguments.Count > 1:
+                {
+                    for (int index = 1; index < arguments.Count; index++)
+                    {
+                        if (!arguments[0].Equals(arguments[index]))
+                        {
+                            return false;
+                        }
+                    }
+                    result = arguments[0];
+                    return true;
+                }
+                default:
+                    return false;
+            }
+        }
+
+        private static Expression[] SimplifyCallArguments(CallExpression call)
+        {
+            Expression[] arguments = new Expression[call.Arguments.Count];
+            for (int index = 0; index < arguments.Length; index++)
+            {
+                arguments[index] = SimplifyOnce(call.Arguments[index]);
+            }
+            return arguments;
+        }
+
+        private static bool TryGetConstantArguments(IReadOnlyList<Expression> arguments, out double[] values)
+        {
+            values = new double[arguments.Count];
+            for (int index = 0; index < arguments.Count; index++)
+            {
+                if (!TryGetConstant(arguments[index], out values[index]))
+                {
+                    return false;
+                }
+            }
+            return values.Length > 0;
+        }
+
+        private static bool TryEvaluateCall(string functionName, IReadOnlyList<double> arguments, out double result)
+        {
+            result = 0.0;
+            string name = functionName.ToLowerInvariant();
+            try
+            {
+                switch (name)
+                {
+                    case "log" when arguments.Count == 2:
+                    {
+                        double value = arguments[0];
+                        double @base = arguments[1];
+                        if (value <= 0.0 || @base <= 0.0 || @base == 1.0)
+                        {
+                            return false;
+                        }
+                        return TrySetResult(Math.Log(value) / Math.Log(@base), out result);
+                    }
+                    case "nthroot" when arguments.Count == 2:
+                    {
+                        if (!TryGetInt32(arguments[1], out int degree) || degree == 0)
+                        {
+                            return false;
+                        }
+                        return TrySetResult(Algebra.NthRoot(arguments[0], degree), out result);
+                    }
+                    case "atan2" when arguments.Count == 2:
+                        return TrySetResult(Math.Atan2(arguments[0], arguments[1]), out result);
+                    case "hypot" when arguments.Count >= 2:
+                    {
+                        double sumOfSquares = 0.0;
+                        foreach (double argument in arguments)
+                        {
+                            sumOfSquares += argument * argument;
+                        }
+                        return TrySetResult(Math.Sqrt(sumOfSquares), out result);
+                    }
+                    case "min" when arguments.Count >= 2:
+                    {
+                        double minimum = arguments[0];
+                        for (int index = 1; index < arguments.Count; index++)
+                        {
+                            minimum = Math.Min(minimum, arguments[index]);
+                        }
+                        return TrySetResult(minimum, out result);
+                    }
+                    case "max" when arguments.Count >= 2:
+                    {
+                        double maximum = arguments[0];
+                        for (int index = 1; index < arguments.Count; index++)
+                        {
+                            maximum = Math.Max(maximum, arguments[index]);
+                        }
+                        return TrySetResult(maximum, out result);
+                    }
+                    case "sum" when arguments.Count >= 2:
+                    {
+                        double total = 0.0;
+                        foreach (double argument in arguments)
+                        {
+                            total += argument;
+                        }
+                        return TrySetResult(total, out result);
+                    }
+                    case "prod" when arguments.Count >= 2:
+                    {
+                        double product = 1.0;
+                        foreach (double argument in arguments)
+                        {
+                            product *= argument;
+                        }
+                        return TrySetResult(product, out result);
+                    }
+                    case "avg" or "mean" when arguments.Count >= 2:
+                    {
+                        double total = 0.0;
+                        foreach (double argument in arguments)
+                        {
+                            total += argument;
+                        }
+                        return TrySetResult(total / arguments.Count, out result);
+                    }
+                    case "not" when arguments.Count == 1:
+                        return TrySetResult(arguments[0] == 0.0 ? 1.0 : 0.0, out result);
+                    case "clamp" when arguments.Count == 3:
+                    {
+                        if (arguments[1] > arguments[2])
+                        {
+                            return false;
+                        }
+                        return TrySetResult(Math.Clamp(arguments[0], arguments[1], arguments[2]), out result);
+                    }
+                    case "lerp" when arguments.Count == 3:
+                        return TrySetResult(arguments[0] + ((arguments[1] - arguments[0]) * arguments[2]), out result);
+                    case "gcd" when arguments.Count == 2:
+                    {
+                        if (!TryGetInt32(arguments[0], out int left) || !TryGetInt32(arguments[1], out int right))
+                        {
+                            return false;
+                        }
+                        return TrySetResult(Math_1.CalculateGCD(left, right), out result);
+                    }
+                    case "lcm" when arguments.Count == 2:
+                    {
+                        if (!TryGetInt32(arguments[0], out int left) || !TryGetInt32(arguments[1], out int right))
+                        {
+                            return false;
+                        }
+                        return TrySetResult(Math_1.CalculateLCM(left, right), out result);
+                    }
+                    case "mod" when arguments.Count == 2:
+                    {
+                        if (!TryGetInt64(arguments[0], out long value) || !TryGetInt64(arguments[1], out long modulus))
+                        {
+                            return false;
+                        }
+                        return TrySetResult(DiscreteMath.Mod(value, modulus), out result);
+                    }
+                    case "modpow" when arguments.Count == 3:
+                    {
+                        if (!TryGetInt64(arguments[0], out long value)
+                            || !TryGetInt64(arguments[1], out long exponent)
+                            || !TryGetInt64(arguments[2], out long modulus))
+                        {
+                            return false;
+                        }
+                        return TrySetResult(DiscreteMath.ModPow(value, exponent, modulus), out result);
+                    }
+                    case "ncr" when arguments.Count == 2:
+                    {
+                        if (!TryGetInt32(arguments[0], out int n) || !TryGetInt32(arguments[1], out int r))
+                        {
+                            return false;
+                        }
+                        return TrySetResult(Math_1.CalculateCombinations(n, r), out result);
+                    }
+                    case "npr" when arguments.Count == 2:
+                    {
+                        if (!TryGetInt32(arguments[0], out int n) || !TryGetInt32(arguments[1], out int r))
+                        {
+                            return false;
+                        }
+                        return TrySetResult(Math_1.CalculatePermutations(n, r), out result);
+                    }
+                    case "beta" when arguments.Count == 2:
+                    {
+                        double alpha = arguments[0];
+                        double beta = arguments[1];
+                        double logBeta = ProbabilityAndStatistics.LogGamma(alpha)
+                            + ProbabilityAndStatistics.LogGamma(beta)
+                            - ProbabilityAndStatistics.LogGamma(alpha + beta);
+                        return TrySetResult(Math.Exp(logBeta), out result);
+                    }
+                    case "gammap" when arguments.Count == 2:
+                        return TrySetResult(ProbabilityAndStatistics.RegularizedGammaP(arguments[0], arguments[1]), out result);
+                    case "gammaq" when arguments.Count == 2:
+                        return TrySetResult(ProbabilityAndStatistics.RegularizedGammaQ(arguments[0], arguments[1]), out result);
+                    case "betainc" when arguments.Count == 3:
+                        return TrySetResult(ProbabilityAndStatistics.IncompleteBeta(arguments[0], arguments[1], arguments[2]), out result);
+                    default:
+                        return MathFunctionDispatcher.TryInvokeScalarExpressionCall(functionName, arguments, out result);
+                }
+            }
+            catch (ArgumentException)
+            {
+                result = 0.0;
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                result = 0.0;
+                return false;
+            }
+            catch (OverflowException)
+            {
+                result = 0.0;
+                return false;
+            }
+        }
+
+        private static double EvaluateCallStrict(string functionName, IReadOnlyList<double> arguments)
+        {
+            if (!TryEvaluateCall(functionName, arguments, out double result))
+            {
+                throw new ArgumentException($"Function '{functionName}' cannot be evaluated with the supplied arguments.", nameof(functionName));
+            }
+            return result;
+        }
+
+        private static double EvaluateFunctionStrict(FunctionKind function, double argument)
+        {
+            if (!TryEvaluateFunction(function, argument, out double result))
+            {
+                throw new ArgumentException($"Function '{function}' cannot be evaluated with the supplied argument.", nameof(function));
+            }
+            return result;
+        }
+
+        private static bool TrySetResult(double candidate, out double result)
+        {
+            result = candidate;
+            return double.IsFinite(candidate);
+        }
+
+        private static bool TryGetInt32(double value, out int result)
+        {
+            result = 0;
+            if (!double.IsFinite(value) || value != Math.Truncate(value) || value < int.MinValue || value > int.MaxValue)
+            {
+                return false;
+            }
+            result = (int)value;
+            return true;
+        }
+
+        private static bool TryGetInt64(double value, out long result)
+        {
+            result = 0;
+            if (!double.IsFinite(value) || value != Math.Truncate(value) || value < long.MinValue || value > long.MaxValue)
+            {
+                return false;
+            }
+            result = (long)value;
+            return true;
         }
 
         private static bool TryEvaluateFunction(FunctionKind function, double value, out double result)
@@ -473,6 +929,119 @@ namespace OPEN_LRD.Skills
                 case FunctionKind.Sign:
                     result = Math.Sign(value);
                     return true;
+                case FunctionKind.Log2:
+                    if (value <= 0.0)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                    return TrySetResult(Math.Log2(value), out result);
+                case FunctionKind.Sech:
+                    return TrySetResult(1.0 / Math.Cosh(value), out result);
+                case FunctionKind.Csch:
+                    if (value == 0.0)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                    return TrySetResult(1.0 / Math.Sinh(value), out result);
+                case FunctionKind.Coth:
+                {
+                    double hyperbolicSine = Math.Sinh(value);
+                    if (hyperbolicSine == 0.0)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                    return TrySetResult(Math.Cosh(value) / hyperbolicSine, out result);
+                }
+                case FunctionKind.Asech:
+                    if (value <= 0.0 || value > 1.0)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                    return TrySetResult(Math.Acosh(1.0 / value), out result);
+                case FunctionKind.Acsch:
+                    if (value == 0.0)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                    return TrySetResult(Math.Asinh(1.0 / value), out result);
+                case FunctionKind.Acoth:
+                    if (Math.Abs(value) <= 1.0)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                    return TrySetResult(0.5 * Math.Log((value + 1.0) / (value - 1.0)), out result);
+                case FunctionKind.Erf:
+                    return TrySetResult(ProbabilityAndStatistics.Erf(value), out result);
+                case FunctionKind.Erfc:
+                    return TrySetResult(ProbabilityAndStatistics.Erfc(value), out result);
+                case FunctionKind.Gamma:
+                case FunctionKind.LogGamma:
+                    try
+                    {
+                        double logGamma = ProbabilityAndStatistics.LogGamma(value);
+                        return TrySetResult(function == FunctionKind.Gamma ? Math.Exp(logGamma) : logGamma, out result);
+                    }
+                    catch (ArgumentException)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                case FunctionKind.NormalPdf:
+                    return TrySetResult(ProbabilityAndStatistics.NormalPdf(value, 0.0, 1.0), out result);
+                case FunctionKind.NormalCdf:
+                    return TrySetResult(ProbabilityAndStatistics.NormalCdf(value, 0.0, 1.0), out result);
+                case FunctionKind.NormalQuantile:
+                    if (value <= 0.0 || value >= 1.0)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                    return TrySetResult(ProbabilityAndStatistics.NormalQuantile(value, 0.0, 1.0), out result);
+                case FunctionKind.Sigmoid:
+                    return TrySetResult(InformationTheoryAndMLMath.Sigmoid(value), out result);
+                case FunctionKind.Softplus:
+                    return TrySetResult(InformationTheoryAndMLMath.Softplus(value), out result);
+                case FunctionKind.Relu:
+                    return TrySetResult(InformationTheoryAndMLMath.Relu(value), out result);
+                case FunctionKind.Gelu:
+                    return TrySetResult(InformationTheoryAndMLMath.Gelu(value), out result);
+                case FunctionKind.Floor:
+                    return TrySetResult(Math.Floor(value), out result);
+                case FunctionKind.Ceiling:
+                    return TrySetResult(Math.Ceiling(value), out result);
+                case FunctionKind.Round:
+                    return TrySetResult(Math.Round(value), out result);
+                case FunctionKind.Truncate:
+                    return TrySetResult(Math.Truncate(value), out result);
+                case FunctionKind.FractionalPart:
+                    return TrySetResult(value - Math.Truncate(value), out result);
+                case FunctionKind.DegreesToRadians:
+                    return TrySetResult(value * Math.PI / 180.0, out result);
+                case FunctionKind.RadiansToDegrees:
+                    return TrySetResult(value * 180.0 / Math.PI, out result);
+                case FunctionKind.Factorial:
+                {
+                    if (!TryGetInt32(value, out int number))
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                    try
+                    {
+                        return TrySetResult(Math_1.CalculateFactorial(number), out result);
+                    }
+                    catch (OverflowException)
+                    {
+                        result = 0.0;
+                        return false;
+                    }
+                }
                 default:
                     result = 0.0;
                     return false;
@@ -518,6 +1087,14 @@ namespace OPEN_LRD.Skills
                     return ExpressionBuilder.Negate(DifferentiateOnce(negate.Operand, variable));
                 case BinaryExpression binary:
                 {
+                    if (IsBooleanOperator(binary.Operator))
+                    {
+                        if (DependsOn(binary, variable))
+                        {
+                            throw new NotSupportedException($"Operator '{binary.Operator}' is not symbolically differentiable with respect to '{variable}'.");
+                        }
+                        return ExpressionBuilder.Constant(0.0);
+                    }
                     Expression left = binary.Left;
                     Expression right = binary.Right;
                     Expression leftDerivative = DifferentiateOnce(left, variable);
@@ -685,14 +1262,250 @@ namespace OPEN_LRD.Skills
                                 ExpressionBuilder.Function(FunctionKind.Sign, argument),
                                 argumentDerivative);
                         case FunctionKind.Sign:
-                            return ExpressionBuilder.Constant(0.0);
+                            return RequireDifferentiable(function, argument, variable);
+                        case FunctionKind.Log2:
+                            return ExpressionBuilder.Divide(
+                                argumentDerivative,
+                                ExpressionBuilder.Multiply(argument, ExpressionBuilder.Constant(Math.Log(2.0))));
+                        case FunctionKind.Sech:
+                            return ExpressionBuilder.Negate(ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Multiply(
+                                    ExpressionBuilder.Function(FunctionKind.Sech, argument),
+                                    ExpressionBuilder.Function(FunctionKind.Tanh, argument)),
+                                argumentDerivative));
+                        case FunctionKind.Csch:
+                            return ExpressionBuilder.Negate(ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Multiply(
+                                    ExpressionBuilder.Function(FunctionKind.Csch, argument),
+                                    ExpressionBuilder.Function(FunctionKind.Coth, argument)),
+                                argumentDerivative));
+                        case FunctionKind.Coth:
+                            return ExpressionBuilder.Negate(ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Power(ExpressionBuilder.Function(FunctionKind.Csch, argument), ExpressionBuilder.Constant(2.0)),
+                                argumentDerivative));
+                        case FunctionKind.Asech:
+                            return ExpressionBuilder.Divide(
+                                ExpressionBuilder.Negate(argumentDerivative),
+                                ExpressionBuilder.Multiply(
+                                    argument,
+                                    ExpressionBuilder.Function(
+                                        FunctionKind.Sqrt,
+                                        ExpressionBuilder.Subtract(
+                                            ExpressionBuilder.Constant(1.0),
+                                            ExpressionBuilder.Power(argument, ExpressionBuilder.Constant(2.0))))));
+                        case FunctionKind.Acsch:
+                            return ExpressionBuilder.Divide(
+                                ExpressionBuilder.Negate(argumentDerivative),
+                                ExpressionBuilder.Multiply(
+                                    ExpressionBuilder.Function(FunctionKind.Abs, argument),
+                                    ExpressionBuilder.Function(
+                                        FunctionKind.Sqrt,
+                                        ExpressionBuilder.Add(
+                                            ExpressionBuilder.Power(argument, ExpressionBuilder.Constant(2.0)),
+                                            ExpressionBuilder.Constant(1.0)))));
+                        case FunctionKind.Acoth:
+                            return ExpressionBuilder.Divide(
+                                argumentDerivative,
+                                ExpressionBuilder.Subtract(
+                                    ExpressionBuilder.Constant(1.0),
+                                    ExpressionBuilder.Power(argument, ExpressionBuilder.Constant(2.0))));
+                        case FunctionKind.Erf:
+                        case FunctionKind.Erfc:
+                        {
+                            Expression gaussianFactor = ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Constant(2.0 / Math.Sqrt(Math.PI)),
+                                ExpressionBuilder.Function(
+                                    FunctionKind.Exp,
+                                    ExpressionBuilder.Negate(ExpressionBuilder.Power(argument, ExpressionBuilder.Constant(2.0)))));
+                            Expression derivative = ExpressionBuilder.Multiply(gaussianFactor, argumentDerivative);
+                            return function.Function == FunctionKind.Erf ? derivative : ExpressionBuilder.Negate(derivative);
+                        }
+                        case FunctionKind.NormalPdf:
+                            return ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Negate(ExpressionBuilder.Multiply(
+                                    argument,
+                                    ExpressionBuilder.Function(FunctionKind.NormalPdf, argument))),
+                                argumentDerivative);
+                        case FunctionKind.NormalCdf:
+                            return ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Function(FunctionKind.NormalPdf, argument),
+                                argumentDerivative);
+                        case FunctionKind.NormalQuantile:
+                            return ExpressionBuilder.Divide(
+                                argumentDerivative,
+                                ExpressionBuilder.Function(
+                                    FunctionKind.NormalPdf,
+                                    ExpressionBuilder.Function(FunctionKind.NormalQuantile, argument)));
+                        case FunctionKind.Sigmoid:
+                        {
+                            Expression sigmoid = ExpressionBuilder.Function(FunctionKind.Sigmoid, argument);
+                            return ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Multiply(
+                                    sigmoid,
+                                    ExpressionBuilder.Subtract(ExpressionBuilder.Constant(1.0), sigmoid)),
+                                argumentDerivative);
+                        }
+                        case FunctionKind.Softplus:
+                            return ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Function(FunctionKind.Sigmoid, argument),
+                                argumentDerivative);
+                        case FunctionKind.DegreesToRadians:
+                            return ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Constant(Math.PI / 180.0),
+                                argumentDerivative);
+                        case FunctionKind.RadiansToDegrees:
+                            return ExpressionBuilder.Multiply(
+                                ExpressionBuilder.Constant(180.0 / Math.PI),
+                                argumentDerivative);
+                        case FunctionKind.Relu:
+                        case FunctionKind.Gelu:
+                        case FunctionKind.Floor:
+                        case FunctionKind.Ceiling:
+                        case FunctionKind.Round:
+                        case FunctionKind.Truncate:
+                        case FunctionKind.FractionalPart:
+                        case FunctionKind.Gamma:
+                        case FunctionKind.LogGamma:
+                        case FunctionKind.Factorial:
+                            return RequireDifferentiable(function, argument, variable);
                         default:
                             return ExpressionBuilder.Constant(0.0);
+                    }
+                }
+                case ConditionalExpression conditional:
+                {
+                    Expression trueDerivative = DifferentiateOnce(conditional.WhenTrue, variable);
+                    Expression falseDerivative = DifferentiateOnce(conditional.WhenFalse, variable);
+                    return ExpressionBuilder.Conditional(conditional.Condition, trueDerivative, falseDerivative);
+                }
+                case CallExpression call:
+                {
+                    string name = call.FunctionName.ToLowerInvariant();
+                    switch (name)
+                    {
+                        case "log" when call.Arguments.Count == 2:
+                            return DifferentiateOnce(
+                                ExpressionBuilder.Divide(
+                                    ExpressionBuilder.Function(FunctionKind.Ln, call.Arguments[0]),
+                                    ExpressionBuilder.Function(FunctionKind.Ln, call.Arguments[1])),
+                                variable);
+                        case "nthroot" when call.Arguments.Count == 2:
+                            return DifferentiateOnce(
+                                ExpressionBuilder.Power(
+                                    call.Arguments[0],
+                                    ExpressionBuilder.Divide(ExpressionBuilder.Constant(1.0), call.Arguments[1])),
+                                variable);
+                        case "atan2" when call.Arguments.Count == 2:
+                        {
+                            Expression y = call.Arguments[0];
+                            Expression x = call.Arguments[1];
+                            Expression yDerivative = DifferentiateOnce(y, variable);
+                            Expression xDerivative = DifferentiateOnce(x, variable);
+                            return ExpressionBuilder.Divide(
+                                ExpressionBuilder.Subtract(
+                                    ExpressionBuilder.Multiply(x, yDerivative),
+                                    ExpressionBuilder.Multiply(y, xDerivative)),
+                                ExpressionBuilder.Add(
+                                    ExpressionBuilder.Power(x, ExpressionBuilder.Constant(2.0)),
+                                    ExpressionBuilder.Power(y, ExpressionBuilder.Constant(2.0))));
+                        }
+                        case "hypot" when call.Arguments.Count >= 2:
+                        {
+                            Expression numerator = ExpressionBuilder.Constant(0.0);
+                            foreach (Expression argument in call.Arguments)
+                            {
+                                numerator = ExpressionBuilder.Add(
+                                    numerator,
+                                    ExpressionBuilder.Multiply(argument, DifferentiateOnce(argument, variable)));
+                            }
+                            return ExpressionBuilder.Divide(numerator, ExpressionBuilder.Call("hypot", call.Arguments));
+                        }
+                        case "sum" when call.Arguments.Count >= 2:
+                        {
+                            Expression derivative = ExpressionBuilder.Constant(0.0);
+                            foreach (Expression argument in call.Arguments)
+                            {
+                                derivative = ExpressionBuilder.Add(derivative, DifferentiateOnce(argument, variable));
+                            }
+                            return derivative;
+                        }
+                        case "avg" or "mean" when call.Arguments.Count >= 2:
+                        {
+                            Expression derivative = ExpressionBuilder.Constant(0.0);
+                            foreach (Expression argument in call.Arguments)
+                            {
+                                derivative = ExpressionBuilder.Add(derivative, DifferentiateOnce(argument, variable));
+                            }
+                            return ExpressionBuilder.Divide(derivative, ExpressionBuilder.Constant(call.Arguments.Count));
+                        }
+                        case "prod" when call.Arguments.Count >= 2:
+                        {
+                            Expression derivative = ExpressionBuilder.Constant(0.0);
+                            for (int index = 0; index < call.Arguments.Count; index++)
+                            {
+                                Expression term = DifferentiateOnce(call.Arguments[index], variable);
+                                for (int other = 0; other < call.Arguments.Count; other++)
+                                {
+                                    if (other != index)
+                                    {
+                                        term = ExpressionBuilder.Multiply(term, call.Arguments[other]);
+                                    }
+                                }
+                                derivative = ExpressionBuilder.Add(derivative, term);
+                            }
+                            return derivative;
+                        }
+                        case "not" when call.Arguments.Count == 1:
+                            if (DependsOn(call, variable))
+                            {
+                                throw new NotSupportedException($"Operator 'not' is not symbolically differentiable with respect to '{variable}'.");
+                            }
+                            return ExpressionBuilder.Constant(0.0);
+                        case "lerp" when call.Arguments.Count == 3:
+                        {
+                            Expression start = call.Arguments[0];
+                            Expression end = call.Arguments[1];
+                            Expression amount = call.Arguments[2];
+                            return ExpressionBuilder.Add(
+                                DifferentiateOnce(start, variable),
+                                ExpressionBuilder.Add(
+                                    ExpressionBuilder.Multiply(
+                                        ExpressionBuilder.Subtract(end, start),
+                                        DifferentiateOnce(amount, variable)),
+                                    ExpressionBuilder.Multiply(
+                                        amount,
+                                        ExpressionBuilder.Subtract(
+                                            DifferentiateOnce(end, variable),
+                                            DifferentiateOnce(start, variable)))));
+                        }
+                        default:
+                            return RequireDifferentiable(call, call, variable);
                     }
                 }
                 default:
                     return ExpressionBuilder.Constant(0.0);
             }
+        }
+
+        private static Expression RequireDifferentiable(Expression original, Expression argument, string variable)
+        {
+            if (!DependsOn(argument, variable))
+            {
+                return ExpressionBuilder.Constant(0.0);
+            }
+            throw new NotSupportedException($"Function '{original}' is not symbolically differentiable with respect to '{variable}'.");
+        }
+
+        private static bool IsBooleanOperator(BinaryOperator op)
+        {
+            return op is BinaryOperator.LessThan
+                or BinaryOperator.LessThanOrEqual
+                or BinaryOperator.GreaterThan
+                or BinaryOperator.GreaterThanOrEqual
+                or BinaryOperator.Equal
+                or BinaryOperator.NotEqual
+                or BinaryOperator.And
+                or BinaryOperator.Or;
         }
 
         internal static bool TryIntegrate(Expression expression, string variable, out Expression? result)
@@ -766,8 +1579,51 @@ namespace OPEN_LRD.Skills
                         return false;
                 }
             }
+            if (integrand is ConditionalExpression conditional)
+            {
+                if (DependsOn(conditional.Condition, variable))
+                {
+                    throw new NotSupportedException("Conditionals with variable-dependent conditions are not symbolically integrable.");
+                }
+                if (TryIntegrateInternal(conditional.WhenTrue, variable, depth + 1, out Expression? trueIntegral)
+                    && TryIntegrateInternal(conditional.WhenFalse, variable, depth + 1, out Expression? falseIntegral))
+                {
+                    result = Simplify(ExpressionBuilder.Conditional(
+                        conditional.Condition,
+                        trueIntegral!,
+                        falseIntegral!));
+                    return true;
+                }
+                return false;
+            }
+            if (integrand is CallExpression call)
+            {
+                return TryIntegrateCall(call, variable, depth, out result);
+            }
             if (integrand is FunctionExpression function)
             {
+                if (function.Function == FunctionKind.DegreesToRadians)
+                {
+                    if (TryIntegrateInternal(function.Argument, variable, depth + 1, out Expression? degreesIntegral))
+                    {
+                        result = Simplify(ExpressionBuilder.Multiply(
+                            ExpressionBuilder.Constant(Math.PI / 180.0),
+                            degreesIntegral!));
+                        return true;
+                    }
+                    return false;
+                }
+                if (function.Function == FunctionKind.RadiansToDegrees)
+                {
+                    if (TryIntegrateInternal(function.Argument, variable, depth + 1, out Expression? radiansIntegral))
+                    {
+                        result = Simplify(ExpressionBuilder.Multiply(
+                            ExpressionBuilder.Constant(180.0 / Math.PI),
+                            radiansIntegral!));
+                        return true;
+                    }
+                    return false;
+                }
                 if (TryGetLinearArgument(function.Argument, variable, out double coefficient, out _)
                     && coefficient != 0.0
                     && TryIntegrateFunction(function.Function, function.Argument, coefficient, variable, out Expression linearResult))
@@ -776,6 +1632,74 @@ namespace OPEN_LRD.Skills
                     return true;
                 }
                 return TrySubstitution(integrand, variable, depth, out result);
+            }
+            return false;
+        }
+
+        private static bool TryIntegrateCall(CallExpression call, string variable, int depth, out Expression? result)
+        {
+            result = null;
+            string name = call.FunctionName.ToLowerInvariant();
+            if (name == "log" && call.Arguments.Count == 2)
+            {
+                Expression logarithmicBase = Simplify(call.Arguments[1]);
+                if (!DependsOn(logarithmicBase, variable)
+                    && (!TryGetConstant(logarithmicBase, out double baseValue) || (baseValue > 0.0 && baseValue != 1.0))
+                    && TryIntegrateInternal(
+                        ExpressionBuilder.Function(FunctionKind.Ln, call.Arguments[0]),
+                        variable,
+                        depth + 1,
+                        out Expression? naturalLogIntegral))
+                {
+                    result = Simplify(ExpressionBuilder.Divide(
+                        naturalLogIntegral!,
+                        ExpressionBuilder.Function(FunctionKind.Ln, logarithmicBase)));
+                    return true;
+                }
+                return false;
+            }
+            if (name == "nthroot" && call.Arguments.Count == 2)
+            {
+                Expression degree = Simplify(call.Arguments[1]);
+                if (!DependsOn(degree, variable)
+                    && (!TryGetConstant(degree, out double degreeValue) || degreeValue != 0.0)
+                    && TryIntegrateInternal(
+                        ExpressionBuilder.Power(
+                            call.Arguments[0],
+                            ExpressionBuilder.Divide(ExpressionBuilder.Constant(1.0), degree)),
+                        variable,
+                        depth + 1,
+                        out Expression? powerIntegral))
+                {
+                    result = powerIntegral;
+                    return true;
+                }
+                return false;
+            }
+            if (name == "lerp" && call.Arguments.Count == 3)
+            {
+                Expression expanded = ExpressionBuilder.Add(
+                    call.Arguments[0],
+                    ExpressionBuilder.Multiply(
+                        ExpressionBuilder.Subtract(call.Arguments[1], call.Arguments[0]),
+                        call.Arguments[2]));
+                return TryIntegrateInternal(expanded, variable, depth + 1, out result);
+            }
+            if ((name == "sum" || name == "avg" || name == "mean") && call.Arguments.Count >= 2)
+            {
+                Expression integral = ExpressionBuilder.Constant(0.0);
+                foreach (Expression argument in call.Arguments)
+                {
+                    if (!TryIntegrateInternal(argument, variable, depth + 1, out Expression? termIntegral))
+                    {
+                        return false;
+                    }
+                    integral = ExpressionBuilder.Add(integral, termIntegral!);
+                }
+                result = name == "sum"
+                    ? Simplify(integral)
+                    : Simplify(ExpressionBuilder.Divide(integral, ExpressionBuilder.Constant(call.Arguments.Count)));
+                return true;
             }
             return false;
         }
@@ -898,25 +1822,33 @@ namespace OPEN_LRD.Skills
             }
             Expression baseExpression = power.Left;
             Expression exponent = power.Right;
-            if (TryGetConstant(exponent, out double exponentValue))
+            if (!DependsOn(exponent, variable))
             {
                 Expression derivative = Simplify(Differentiate(baseExpression, variable));
                 if (TryGetConstant(derivative, out double derivativeValue) && derivativeValue != 0.0)
                 {
-                    if (exponentValue == -1.0)
+                    if (TryGetConstant(exponent, out double exponentValue))
                     {
+                        if (exponentValue == -1.0)
+                        {
+                            result = Simplify(ExpressionBuilder.Divide(
+                                ExpressionBuilder.Function(
+                                    FunctionKind.Ln,
+                                    ExpressionBuilder.Function(FunctionKind.Abs, baseExpression)),
+                                ExpressionBuilder.Constant(derivativeValue)));
+                            return true;
+                        }
                         result = Simplify(ExpressionBuilder.Divide(
-                            ExpressionBuilder.Function(
-                                FunctionKind.Ln,
-                                ExpressionBuilder.Function(FunctionKind.Abs, baseExpression)),
-                            ExpressionBuilder.Constant(derivativeValue)));
+                            ExpressionBuilder.Power(
+                                baseExpression,
+                                ExpressionBuilder.Constant(exponentValue + 1.0)),
+                            ExpressionBuilder.Constant(derivativeValue * (exponentValue + 1.0))));
                         return true;
                     }
+                    Expression nextExponent = Simplify(ExpressionBuilder.Add(exponent, ExpressionBuilder.Constant(1.0)));
                     result = Simplify(ExpressionBuilder.Divide(
-                        ExpressionBuilder.Power(
-                            baseExpression,
-                            ExpressionBuilder.Constant(exponentValue + 1.0)),
-                        ExpressionBuilder.Constant(derivativeValue * (exponentValue + 1.0))));
+                        ExpressionBuilder.Power(baseExpression, nextExponent),
+                        ExpressionBuilder.Multiply(ExpressionBuilder.Constant(derivativeValue), nextExponent)));
                     return true;
                 }
             }
@@ -1143,6 +2075,90 @@ namespace OPEN_LRD.Skills
                         absArgument,
                         ExpressionBuilder.Constant(coefficient));
                     return true;
+                case FunctionKind.Log2:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Subtract(
+                            ExpressionBuilder.Multiply(argument, ExpressionBuilder.Function(FunctionKind.Ln, argument)),
+                            argument),
+                        ExpressionBuilder.Constant(coefficient * Math.Log(2.0)));
+                    return true;
+                case FunctionKind.Sech:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Function(
+                            FunctionKind.Atan,
+                            ExpressionBuilder.Function(FunctionKind.Sinh, argument)),
+                        ExpressionBuilder.Constant(coefficient));
+                    return true;
+                case FunctionKind.Csch:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Function(
+                            FunctionKind.Ln,
+                            ExpressionBuilder.Function(
+                                FunctionKind.Abs,
+                                ExpressionBuilder.Function(
+                                    FunctionKind.Tanh,
+                                    ExpressionBuilder.Divide(argument, ExpressionBuilder.Constant(2.0))))),
+                        ExpressionBuilder.Constant(coefficient));
+                    return true;
+                case FunctionKind.Coth:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Function(
+                            FunctionKind.Ln,
+                            ExpressionBuilder.Function(
+                                FunctionKind.Abs,
+                                ExpressionBuilder.Function(FunctionKind.Sinh, argument))),
+                        ExpressionBuilder.Constant(coefficient));
+                    return true;
+                case FunctionKind.Erf:
+                case FunctionKind.Erfc:
+                {
+                    Expression gaussian = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Function(
+                            FunctionKind.Exp,
+                            ExpressionBuilder.Negate(ExpressionBuilder.Power(argument, ExpressionBuilder.Constant(2.0)))),
+                        ExpressionBuilder.Constant(Math.Sqrt(Math.PI)));
+                    Expression numerator = ExpressionBuilder.Multiply(
+                        argument,
+                        ExpressionBuilder.Function(function, argument));
+                    numerator = function == FunctionKind.Erf
+                        ? ExpressionBuilder.Add(numerator, gaussian)
+                        : ExpressionBuilder.Subtract(numerator, gaussian);
+                    result = ExpressionBuilder.Divide(numerator, ExpressionBuilder.Constant(coefficient));
+                    return true;
+                }
+                case FunctionKind.Sigmoid:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Function(FunctionKind.Softplus, argument),
+                        ExpressionBuilder.Constant(coefficient));
+                    return true;
+                case FunctionKind.NormalPdf:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Function(FunctionKind.NormalCdf, argument),
+                        ExpressionBuilder.Constant(coefficient));
+                    return true;
+                case FunctionKind.NormalCdf:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Add(
+                            ExpressionBuilder.Multiply(
+                                argument,
+                                ExpressionBuilder.Function(FunctionKind.NormalCdf, argument)),
+                            ExpressionBuilder.Function(FunctionKind.NormalPdf, argument)),
+                        ExpressionBuilder.Constant(coefficient));
+                    return true;
+                case FunctionKind.DegreesToRadians:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Multiply(
+                            ExpressionBuilder.Constant(Math.PI / 180.0),
+                            ExpressionBuilder.Power(argument, ExpressionBuilder.Constant(2.0))),
+                        ExpressionBuilder.Constant(2.0 * coefficient));
+                    return true;
+                case FunctionKind.RadiansToDegrees:
+                    result = ExpressionBuilder.Divide(
+                        ExpressionBuilder.Multiply(
+                            ExpressionBuilder.Constant(180.0 / Math.PI),
+                            ExpressionBuilder.Power(argument, ExpressionBuilder.Constant(2.0))),
+                        ExpressionBuilder.Constant(2.0 * coefficient));
+                    return true;
                 default:
                     return false;
             }
@@ -1343,6 +2359,25 @@ namespace OPEN_LRD.Skills
                     }
                     CollectCandidates(function.Argument, variable, candidates);
                     return;
+                case CallExpression call:
+                    if (DependsOn(call, variable) && !ContainsEquivalent(candidates, call))
+                    {
+                        candidates.Add(call);
+                    }
+                    foreach (Expression argument in call.Arguments)
+                    {
+                        CollectCandidates(argument, variable, candidates);
+                    }
+                    return;
+                case ConditionalExpression conditional:
+                    if (DependsOn(conditional, variable) && !ContainsEquivalent(candidates, conditional))
+                    {
+                        candidates.Add(conditional);
+                    }
+                    CollectCandidates(conditional.Condition, variable, candidates);
+                    CollectCandidates(conditional.WhenTrue, variable, candidates);
+                    CollectCandidates(conditional.WhenFalse, variable, candidates);
+                    return;
             }
         }
 
@@ -1377,6 +2412,20 @@ namespace OPEN_LRD.Skills
                     return ExpressionBuilder.Function(
                         function.Function,
                         ReplaceExpression(function.Argument, target, replacement));
+                case CallExpression call:
+                {
+                    Expression[] arguments = new Expression[call.Arguments.Count];
+                    for (int index = 0; index < arguments.Length; index++)
+                    {
+                        arguments[index] = ReplaceExpression(call.Arguments[index], target, replacement);
+                    }
+                    return ExpressionBuilder.Call(call.FunctionName, arguments);
+                }
+                case ConditionalExpression conditional:
+                    return ExpressionBuilder.Conditional(
+                        ReplaceExpression(conditional.Condition, target, replacement),
+                        ReplaceExpression(conditional.WhenTrue, target, replacement),
+                        ReplaceExpression(conditional.WhenFalse, target, replacement));
                 default:
                     return expression;
             }
@@ -1396,6 +2445,19 @@ namespace OPEN_LRD.Skills
                     return DependsOn(binary.Left, variable) || DependsOn(binary.Right, variable);
                 case FunctionExpression function:
                     return DependsOn(function.Argument, variable);
+                case CallExpression call:
+                    foreach (Expression argument in call.Arguments)
+                    {
+                        if (DependsOn(argument, variable))
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
+                case ConditionalExpression conditional:
+                    return DependsOn(conditional.Condition, variable)
+                        || DependsOn(conditional.WhenTrue, variable)
+                        || DependsOn(conditional.WhenFalse, variable);
                 default:
                     return false;
             }
@@ -2304,6 +3366,16 @@ namespace OPEN_LRD.Skills
                     return -EvaluateInternal(negate.Operand, resolve);
                 case BinaryExpression binary:
                 {
+                    if (binary.Operator == BinaryOperator.And)
+                    {
+                        return EvaluateInternal(binary.Left, resolve) != 0.0
+                            && EvaluateInternal(binary.Right, resolve) != 0.0 ? 1.0 : 0.0;
+                    }
+                    if (binary.Operator == BinaryOperator.Or)
+                    {
+                        return EvaluateInternal(binary.Left, resolve) != 0.0
+                            || EvaluateInternal(binary.Right, resolve) != 0.0 ? 1.0 : 0.0;
+                    }
                     double left = EvaluateInternal(binary.Left, resolve);
                     double right = EvaluateInternal(binary.Right, resolve);
                     switch (binary.Operator)
@@ -2322,10 +3394,25 @@ namespace OPEN_LRD.Skills
                             return left / right;
                         case BinaryOperator.Power:
                             return Math.Pow(left, right);
+                        case BinaryOperator.LessThan:
+                        case BinaryOperator.LessThanOrEqual:
+                        case BinaryOperator.GreaterThan:
+                        case BinaryOperator.GreaterThanOrEqual:
+                        case BinaryOperator.Equal:
+                        case BinaryOperator.NotEqual:
+                            if (TryEvaluateBooleanOperator(binary.Operator, left, right, out double booleanResult))
+                            {
+                                return booleanResult;
+                            }
+                            return 0.0;
                         default:
                             return 0.0;
                     }
                 }
+                case ConditionalExpression conditional:
+                    return EvaluateInternal(conditional.Condition, resolve) != 0.0
+                        ? EvaluateInternal(conditional.WhenTrue, resolve)
+                        : EvaluateInternal(conditional.WhenFalse, resolve);
                 case FunctionExpression function:
                 {
                     double argument = EvaluateInternal(function.Argument, resolve);
@@ -2424,9 +3511,45 @@ namespace OPEN_LRD.Skills
                             return Math.Abs(argument);
                         case FunctionKind.Sign:
                             return Math.Sign(argument);
+                        case FunctionKind.Log2:
+                        case FunctionKind.Sech:
+                        case FunctionKind.Csch:
+                        case FunctionKind.Coth:
+                        case FunctionKind.Asech:
+                        case FunctionKind.Acsch:
+                        case FunctionKind.Acoth:
+                        case FunctionKind.Erf:
+                        case FunctionKind.Erfc:
+                        case FunctionKind.Gamma:
+                        case FunctionKind.LogGamma:
+                        case FunctionKind.NormalPdf:
+                        case FunctionKind.NormalCdf:
+                        case FunctionKind.NormalQuantile:
+                        case FunctionKind.Sigmoid:
+                        case FunctionKind.Softplus:
+                        case FunctionKind.Relu:
+                        case FunctionKind.Gelu:
+                        case FunctionKind.Floor:
+                        case FunctionKind.Ceiling:
+                        case FunctionKind.Round:
+                        case FunctionKind.Truncate:
+                        case FunctionKind.FractionalPart:
+                        case FunctionKind.DegreesToRadians:
+                        case FunctionKind.RadiansToDegrees:
+                        case FunctionKind.Factorial:
+                            return EvaluateFunctionStrict(function.Function, argument);
                         default:
                             return 0.0;
                     }
+                }
+                case CallExpression call:
+                {
+                    double[] arguments = new double[call.Arguments.Count];
+                    for (int index = 0; index < arguments.Length; index++)
+                    {
+                        arguments[index] = EvaluateInternal(call.Arguments[index], resolve);
+                    }
+                    return EvaluateCallStrict(call.FunctionName, arguments);
                 }
                 default:
                     return 0.0;

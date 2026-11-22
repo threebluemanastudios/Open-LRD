@@ -22,6 +22,7 @@ namespace OPEN_LRD.SmokeTests
         internal static void RunAll()
         {
             Program.Run("Foundation identity identifiers reject Guid.Empty", EmptyIdentityIdsAreRejected());
+            Program.Run("Node presentations follow trusted and untrusted Node lifecycles", NodePresentationsFollowNodeLifecycle());
             Program.Run("GroupBox stores sentence IDs and snapshots", GroupBoxStoresSentenceIdsAndSnapshots());
             Program.Run("Trusted reverse and containment indexes", ReverseIndexesTrackTrustedIdentities());
             Program.Run("Trusted boxes create nodes and structural links", TrustedBoxesCreateNodesAndStructuralLinks());
@@ -30,6 +31,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Skills graph snapshots support graph algorithms", SkillsGraphSnapshotsSupportGraphAlgorithms());
             Program.Run("Subgraph identity collisions do not partially promote", SubgraphIdentityCollisionsAreAtomic());
             Program.Run("Trusted graph membership and link lifecycle are hardened", TrustedMembershipAndLinkLifecycleAreHardened());
+            Program.Run("Reasoning links support provenance and validity queries", ReasoningLinksSupportProvenanceAndTimeQueries());
             Program.Run("Conversation and function APIs return validated snapshots", ConversationAndFunctionApisAreHardened());
         }
 
@@ -60,6 +62,91 @@ namespace OPEN_LRD.SmokeTests
                 Program.AssertThrows<ArgumentException>(() => word.SetSymbols(new List<Guid> { Guid.Empty }), "Word symbol IDs cannot be empty.");
                 Program.AssertThrows<ArgumentException>(() => sentence.SetWords(new List<Guid> { Guid.Empty }), "Sentence word IDs cannot be empty.");
                 Program.AssertThrows<ArgumentException>(() => sentence.SetSenseID(Guid.Empty), "Sentence sense IDs cannot be empty.");
+            };
+        }
+
+        private static Action NodePresentationsFollowNodeLifecycle()
+        {
+            return () =>
+            {
+                ResetCore();
+                LRD_Core core = LRD_Core.Instance;
+
+                Guid orphanTargetId = Guid.NewGuid();
+                Node orphan = new Node(NodeTargetKind.Symbol, orphanTargetId);
+                Program.Assert(core.SetUntrustedNode(orphan), "Untrusted node should register.");
+                UInt128? firstPresentationId = core.GetNodePresentationId(orphan.GetNodeID());
+                NodeRepresentation? orphanRepresentation = firstPresentationId.HasValue
+                    ? core.GetNodeRepresentation(firstPresentationId.Value)
+                    : null;
+                Program.Assert(firstPresentationId == UInt128.Zero &&
+                    orphanRepresentation?.GetNodeID() == orphan.GetNodeID(),
+                    "First registered node should receive sequential presentation ID zero and link to its Node.");
+                Program.Assert(orphanRepresentation!.GetSize() >= 0.6 && orphanRepresentation.GetSize() <= 2.0 &&
+                    orphanRepresentation.GetPosition().IsFinite &&
+                    orphanRepresentation.GetTextLabel()!.StartsWith("Symbol ", StringComparison.Ordinal),
+                    "Derived presentation fields should be initialized for an untrusted node.");
+                Program.Assert(core.GetNodePresentationCount() == 1,
+                    "Each registered untrusted node should have exactly one presentation.");
+                IReadOnlyDictionary<UInt128, NodeRepresentation> presentationSnapshot = core.GetNodePresentations();
+                Program.Assert(core.RemoveUntrustedNode(orphan.GetNodeID()), "Untrusted node should be removable.");
+                Program.Assert(core.GetNodeRepresentationByNodeId(orphan.GetNodeID()) == null &&
+                    core.GetNodePresentationCount() == 0 && presentationSnapshot.Count == 1,
+                    "Removing an untrusted node should remove its presentation while returned snapshots remain isolated.");
+
+                Guid senseId = AddSense(core);
+                Guid senseNodeId = core.GetTrustedNodeByTarget(NodeTargetKind.Sense, senseId)!.GetNodeID();
+                Program.Assert(core.GetNodePresentationId(senseNodeId) == (UInt128)1,
+                    "Sequential presentation IDs should advance without reusing removed IDs.");
+                Guid symbolId = Guid.NewGuid();
+                Node promotable = new Node(NodeTargetKind.Symbol, symbolId);
+                Program.Assert(core.SetUntrustedNode(promotable), "Promotable node should be staged.");
+                NodeRepresentation representation = core.GetNodeRepresentationByNodeId(promotable.GetNodeID())!;
+                UInt128 presentationId = core.GetNodePresentationId(promotable.GetNodeID())!.Value;
+                Program.Assert(presentationId == (UInt128)2, "Each new Node should receive the next sequential presentation ID.");
+                Program.Assert(core.UpdateNodeRepresentation(
+                    promotable.GetNodeID(), new Vector3(1.25, -2.5, 3.75), 2.5, 0xFF123456, "custom display"),
+                    "Core presentation update API should update a registered NodeRepresentation.");
+
+                SymbolBox symbol = new SymbolBox(symbolId, 'p');
+                symbol.SetSenseID(senseId);
+                Program.Assert(core.AddTrustedSymbol(symbol), "Trusted symbol should promote its matching untrusted node.");
+                Node trustedNode = core.GetTrustedNodeByTarget(NodeTargetKind.Symbol, symbolId)!;
+                NodeRepresentation promotedRepresentation = core.GetNodeRepresentationByNodeId(trustedNode.GetNodeID())!;
+                Program.Assert(trustedNode.GetNodeID() == promotable.GetNodeID() &&
+                    core.GetNodePresentationId(trustedNode.GetNodeID()) == presentationId &&
+                    ReferenceEquals(promotedRepresentation, representation),
+                    "Node promotion should preserve the presentation ID and object.");
+                Program.Assert(promotedRepresentation.GetColor() != 0xFF123456 &&
+                    promotedRepresentation.GetSize() != 2.5 &&
+                    promotedRepresentation.GetTextLabel()!.EndsWith("[HasSense]", StringComparison.Ordinal) &&
+                    promotedRepresentation.GetPosition() != new Vector3(1.25, -2.5, 3.75),
+                    "Node promotion should recalculate derived presentation fields while preserving the representation object.");
+                Program.Assert(core.GetNodePresentationCount() == core.GetTrustedNodeCount() + core.GetUntrustedNodeCount(),
+                    "Presentation registry should contain exactly one record for every registered Node.");
+
+                Guid relabelTargetId = Guid.NewGuid();
+                Node relabelNode = new Node(NodeTargetKind.Word, relabelTargetId);
+                Program.Assert(core.SetUntrustedNode(relabelNode), "Relabel test node should register.");
+                NodeRepresentation relabelRepresentation = core.GetNodeRepresentationByNodeId(relabelNode.GetNodeID())!;
+                relabelNode.SetLabel("draft label");
+                Program.Assert(relabelRepresentation.GetTextLabel() == "draft label",
+                    "Derived display labels should follow untrusted Node label changes.");
+                relabelRepresentation.SetTextLabel("override");
+                relabelNode.SetLabel("second draft");
+                Program.Assert(relabelRepresentation.GetTextLabel() == "second draft",
+                    "Derived display labels should remain authoritative after label changes.");
+                Program.Assert(core.RemoveUntrustedNode(relabelNode.GetNodeID()), "Relabel test node should be removable.");
+
+                Program.AssertThrows<ArgumentException>(
+                    () => new NodeRepresentation(Guid.Empty, 0xFFFFFFFF),
+                    "NodeRepresentation must reject Guid.Empty Node IDs.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(
+                    () => new NodeRepresentation(Guid.NewGuid(), 0xFFFFFFFF, 0.0),
+                    "NodeRepresentation must reject non-positive sizes.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(
+                    () => new Vector3(double.NaN, 0.0, 0.0),
+                    "NodeRepresentation position components must be finite.");
             };
         }
 
@@ -424,6 +511,59 @@ namespace OPEN_LRD.SmokeTests
                 }
                 Program.AssertThrows<ArgumentOutOfRangeException>(() =>
                     core.AddTrustedLink(from, to, (NodeRelationType)999), "Undefined link relation should be rejected.");
+            };
+        }
+
+        private static Action ReasoningLinksSupportProvenanceAndTimeQueries()
+        {
+            return () =>
+            {
+                LexicalFixture fixture = BuildLexicalChain();
+                LRD_Core core = LRD_Core.Instance;
+                Guid secondSymbolId = AddTrustedSymbol(core, fixture.SenseId, 'r');
+                Guid secondWordId = AddTrustedWord(core, fixture.SenseId, fixture.UsageId, secondSymbolId);
+                Guid firstNodeId = fixture.WordNodeId;
+                Guid secondNodeId = NodeIdFor(core, NodeTargetKind.Word, secondWordId);
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                DateTimeOffset validFrom = now.AddMinutes(-5);
+                DateTimeOffset validUntil = now.AddMinutes(5);
+
+                Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Synonym,
+                    0.82, "derived", "researcher", fixture.WordId, fixture.SenseId, validFrom, validUntil),
+                    "Reasoning helper should add a trusted assertion with provenance and a validity interval.");
+                Program.Assert(!core.AddReasoningLink(secondNodeId, firstNodeId, NodeRelationType.Synonym,
+                    0.82, " derived ", " researcher ", fixture.WordId, fixture.SenseId, validFrom, validUntil),
+                    "Reasoning assertion IDs should be stable across symmetric endpoint order and normalized text.");
+
+                List<NodeLink> activeReasoningLinks = core.GetAllTrustedLinks(NodeRelationType.Synonym,
+                    NodeLinkOrigin.Reasoning, " RESEARCHER ", 0.8, now);
+                Program.Assert(activeReasoningLinks.Count == 2 && activeReasoningLinks.All(link =>
+                    link.Provenance.IsActiveAt(now) && link.Provenance.IsActiveAt(validFrom) &&
+                    link.Provenance.IsActiveAt(validUntil) && link.Provenance.Origin == NodeLinkOrigin.Reasoning),
+                    "Provenance filters should return both active directed edges for a symmetric assertion.");
+                Guid reasoningAssertionId = activeReasoningLinks[0].Provenance.AssertionId;
+                Program.Assert(core.UpdateReasoningLinkWeight(reasoningAssertionId, 0.9) &&
+                    core.GetAllTrustedLinks(NodeRelationType.Synonym, NodeLinkOrigin.Reasoning,
+                        "researcher", 0.9, now).Count == 2,
+                    "Reasoning confidence updates should preserve assertion identity and update both symmetric edges.");
+                Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Synonym, NodeLinkOrigin.Reasoning,
+                    "researcher", 0.8, now.AddHours(1)).Count == 0,
+                    "Validity windows should exclude assertions outside their interval.");
+                Program.Assert(core.BuildSkillsGraphSnapshot(NodeRelationType.Synonym, NodeLinkOrigin.Reasoning,
+                    "researcher", 0.8, now).EdgeCount == 2,
+                    "Filtered graph snapshots should honor provenance and temporal filters.");
+                Program.Assert(core.GetTrustedLinksByProvenanceTarget(fixture.SenseId,
+                    includeSourceTarget: false).Count == 1,
+                    "Reverse provenance lookup should return one assertion rather than both symmetric edges.");
+
+                core.GetTrustedNode(firstNodeId)!.RegisterVerifiedReference(2);
+                List<Node> matchingNodes = core.FindTrustedNodes(NodeTargetKind.Word, minimumNetTrustWeight: 1,
+                    relationFilter: NodeRelationType.Synonym, minimumIncidentLinkConfidence: 0.8, canonicalOnly: true);
+                Program.Assert(matchingNodes.Count == 1 && matchingNodes[0].GetNodeID() == firstNodeId,
+                    "Node queries should combine target kind, canonical identity, trust, relation, and confidence filters.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(() =>
+                    core.GetAllTrustedLinks(minimumConfidence: double.NaN),
+                    "Link query confidence thresholds must be finite and in range.");
             };
         }
 

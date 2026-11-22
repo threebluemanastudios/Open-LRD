@@ -20,9 +20,19 @@ namespace OPEN_LRD.Foundations
         private float AverageSentencePosition;
         private float AverageSpread;
 
-        public SenseBox(Guid senseId)
+        public SenseBox()
+            : this(LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Sense), allowRegisteredTrustedId: true)
         {
-            ValidateIdentityId(senseId, nameof(senseId));
+        }
+
+        public SenseBox(Guid senseId)
+            : this(senseId, allowRegisteredTrustedId: false)
+        {
+        }
+
+        internal SenseBox(Guid senseId, bool allowRegisteredTrustedId)
+        {
+            ValidateSenseId(senseId, nameof(senseId), allowRegisteredTrustedId);
             SenseID = senseId;
             AverageWordPosition = 0.0f;
             AverageSentencePosition = 0.0f;
@@ -240,6 +250,18 @@ namespace OPEN_LRD.Foundations
         internal void MarkTrusted() => GraphSynchronization.Execute(() => _isTrusted = true);
 
         internal void MarkReadOnly() => GraphSynchronization.Execute(() => { _isTrusted = true; _isReadOnly = true; });
+
+        private static void ValidateSenseId(Guid id, string parameterName, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
+            {
+                ValidateIdentityId(id, parameterName);
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedId(NodeTargetKind.Sense, id, parameterName);
+            }
+        }
 
         private static void ValidateIdentityId(Guid id, string parameterName)
         {

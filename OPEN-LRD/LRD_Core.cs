@@ -82,6 +82,19 @@ namespace OPEN_LRD
         private readonly Dictionary<Guid, OrderedGuidIndexList> SourcesByGroupIndex = new Dictionary<Guid, OrderedGuidIndexList>();
         private readonly Dictionary<Guid, Node> TrustedNodeDictionary = new Dictionary<Guid, Node>();
         private readonly Dictionary<Guid, Node> UntrustedNodeDictionary = new Dictionary<Guid, Node>();
+        private readonly Dictionary<UInt128, NodeRepresentation> NodePresentation = new Dictionary<UInt128, NodeRepresentation>();
+        private readonly Dictionary<Guid, UInt128> NodePresentationKeyByNodeId = new Dictionary<Guid, UInt128>();
+        private UInt128 _nextNodePresentationId;
+        private bool _nodePresentationIdSpaceExhausted;
+        private NodeLayoutOptions _nodeLayoutOptions = new NodeLayoutOptions();
+        private bool _suspendNodePresentationRecalculation;
+        private static readonly HashSet<NodeTargetKind> SplitNodePresentationKinds = new HashSet<NodeTargetKind>
+        {
+            NodeTargetKind.Symbol,
+            NodeTargetKind.Word,
+            NodeTargetKind.Sentence,
+            NodeTargetKind.Function
+        };
         private readonly Dictionary<NodeIdentityKey, Guid> TrustedNodeByIdentityIndex = new Dictionary<NodeIdentityKey, Guid>();
         private readonly Dictionary<NodeIdentityKey, Guid> UntrustedNodeByIdentityIndex = new Dictionary<NodeIdentityKey, Guid>();
         // These target-only indexes point exclusively to the canonical null-label node.
@@ -328,9 +341,15 @@ namespace OPEN_LRD
                 {
                     return false;
                 }
+                if (UntrustedFunctionDictionary.TryGetValue(functionId, out FunctionBox? existing) &&
+                    !ReferenceEquals(existing, functionBox))
+                {
+                    return false;
+                }
                 functionBox.MarkWritable();
                 UntrustedFunctionDictionary[functionId] = functionBox;
-                EnsureUntrustedNode(NodeTargetKind.Function, functionId);
+                if (!EnsureUntrustedNode(NodeTargetKind.Function, functionId))
+                    RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
@@ -518,16 +537,21 @@ namespace OPEN_LRD
             });
         }
 
-        public List<NodeLink> GetAllTrustedLinks(NodeRelationType? relationFilter = null)
+        public List<NodeLink> GetAllTrustedLinks(
+            NodeRelationType? relationFilter = null,
+            NodeLinkOrigin? originFilter = null,
+            string? authorFilter = null,
+            double? minimumConfidence = null,
+            DateTimeOffset? activeAt = null)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
-                if (relationFilter.HasValue && !Enum.IsDefined(relationFilter.Value))
-                    throw new ArgumentOutOfRangeException(nameof(relationFilter));
+                ValidateLinkQuery(relationFilter, originFilter, minimumConfidence);
+                string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
                 return TrustedOutgoingLinks.Values
                 .SelectMany(links => links)
-                .Where(link => !relationFilter.HasValue || link.RelationType == relationFilter.Value)
+                .Where(link => MatchesLinkQuery(link, relationFilter, originFilter, normalizedAuthor, minimumConfidence, activeAt))
                 .ToList();
             });
         }
@@ -536,10 +560,289 @@ namespace OPEN_LRD
         public int GetUntrustedNodeCount() => GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return UntrustedNodeDictionary.Count; });
         public int GetTrustedLinkCount() => GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return TrustedLinkKeys.Count; });
 
+        public NodeRepresentation? GetNodeRepresentation(UInt128 presentationId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                return NodePresentation.TryGetValue(presentationId, out NodeRepresentation? representation)
+                    ? representation
+                    : null;
+            });
+        }
+
+        public NodeRepresentation? GetNodeRepresentationByNodeId(Guid nodeId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                return NodePresentationKeyByNodeId.TryGetValue(nodeId, out UInt128 presentationId)
+                    && NodePresentation.TryGetValue(presentationId, out NodeRepresentation? representation)
+                    ? representation
+                    : null;
+            });
+        }
+
+        public UInt128? GetNodePresentationId(Guid nodeId)
+        {
+            return GraphSynchronization.Execute<UInt128?>(() =>
+            {
+                EnsureCoreInitialized();
+                return NodePresentationKeyByNodeId.TryGetValue(nodeId, out UInt128 presentationId)
+                    ? presentationId
+                    : null;
+            });
+        }
+
+        public IReadOnlyDictionary<UInt128, NodeRepresentation> GetNodePresentations()
+        {
+            return GraphSynchronization.Execute<IReadOnlyDictionary<UInt128, NodeRepresentation>>(() =>
+            {
+                EnsureCoreInitialized();
+                return new ReadOnlyDictionary<UInt128, NodeRepresentation>(
+                    new Dictionary<UInt128, NodeRepresentation>(NodePresentation));
+            });
+        }
+
+        public int GetNodePresentationCount() => GraphSynchronization.Execute(() =>
+        {
+            EnsureCoreInitialized();
+            return NodePresentation.Count;
+        });
+
+        public bool UpdateNodeRepresentation(
+            Guid nodeId,
+            Vector3? position = null,
+            double? size = null,
+            uint? color = null,
+            string? textLabel = null)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureMutableStorageMode();
+                if (!NodePresentationKeyByNodeId.TryGetValue(nodeId, out UInt128 presentationId) ||
+                    !NodePresentation.TryGetValue(presentationId, out NodeRepresentation? representation))
+                {
+                    return false;
+                }
+                if (position.HasValue) representation.SetPosition(position.Value);
+                if (size.HasValue) representation.SetSize(size.Value);
+                if (color.HasValue) representation.SetColor(color.Value);
+                if (textLabel != null) representation.SetTextLabel(textLabel);
+                return true;
+            });
+        }
+
+        public NodeLayoutOptions GetNodeLayoutOptions()
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                return new NodeLayoutOptions(_nodeLayoutOptions.NodeWeightBias, _nodeLayoutOptions.NeighborPositionBias);
+            });
+        }
+
+        public void UpdateNodeLayoutOptions(double nodeWeightBias, double neighborPositionBias)
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureMutableStorageMode();
+                _nodeLayoutOptions = new NodeLayoutOptions(nodeWeightBias, neighborPositionBias);
+                RecalculateAllNodePresentationsInternal();
+            });
+        }
+
+        public void RecalculateAllNodePresentations()
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureMutableStorageMode();
+                RecalculateAllNodePresentationsInternal();
+            });
+        }
+
+        public bool RecalculateNodePresentation(Guid nodeId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureMutableStorageMode();
+                Dictionary<Guid, NodeDerivationSnapshot> snapshots = BuildNodeDerivationSnapshots();
+                if (!snapshots.TryGetValue(nodeId, out NodeDerivationSnapshot? snapshot)) return false;
+                NodeLayoutResult layout = NodeLayoutCalculator.Calculate(snapshots, DeriveNodeSizes(snapshots),
+                    SplitNodePresentationKinds, _nodeLayoutOptions);
+                return layout.Positions.TryGetValue(nodeId, out Vector3 position) &&
+                       ApplyNodePresentationDerivation(snapshot, position);
+            });
+        }
+
+        internal NodeLayoutResult GetNodeLayoutResult()
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                Dictionary<Guid, NodeDerivationSnapshot> snapshots = BuildNodeDerivationSnapshots();
+                return NodeLayoutCalculator.Calculate(snapshots, DeriveNodeSizes(snapshots),
+                    SplitNodePresentationKinds, _nodeLayoutOptions);
+            });
+        }
+
+        internal NodeDerivationSnapshot? GetNodeDerivationSnapshot(Guid nodeId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                return BuildNodeDerivationSnapshots().TryGetValue(nodeId, out NodeDerivationSnapshot? snapshot)
+                    ? snapshot
+                    : null;
+            });
+        }
+
+        private void RecalculateAllNodePresentationsInternal()
+        {
+            if (_suspendNodePresentationRecalculation) return;
+            Dictionary<Guid, NodeDerivationSnapshot> snapshots = BuildNodeDerivationSnapshots();
+            Dictionary<Guid, double> sizes = DeriveNodeSizes(snapshots);
+            NodeLayoutResult layout = NodeLayoutCalculator.Calculate(snapshots, sizes,
+                SplitNodePresentationKinds, _nodeLayoutOptions);
+            foreach (KeyValuePair<Guid, NodeDerivationSnapshot> entry in snapshots.OrderBy(pair => pair.Key))
+            {
+                if (layout.Positions.TryGetValue(entry.Key, out Vector3 position))
+                {
+                    ApplyNodePresentationDerivation(entry.Value, position);
+                }
+            }
+        }
+
+        private Dictionary<Guid, double> DeriveNodeSizes(
+            IReadOnlyDictionary<Guid, NodeDerivationSnapshot> snapshots)
+        {
+            Dictionary<Guid, double> sizes = new Dictionary<Guid, double>();
+            foreach (KeyValuePair<Guid, NodeDerivationSnapshot> entry in snapshots)
+            {
+                sizes[entry.Key] = NodePresentationCalculator.CalculateSize(entry.Value);
+            }
+            return sizes;
+        }
+
+        private bool ApplyNodePresentationDerivation(NodeDerivationSnapshot snapshot, Vector3 position)
+        {
+            if (!NodePresentationKeyByNodeId.TryGetValue(snapshot.NodeId, out UInt128 presentationId) ||
+                !NodePresentation.TryGetValue(presentationId, out NodeRepresentation? representation))
+            {
+                return false;
+            }
+            representation.SetColor(NodePresentationCalculator.CalculateColor(snapshot));
+            representation.SetSize(NodePresentationCalculator.CalculateSize(snapshot));
+            representation.SetTextLabel(NodePresentationCalculator.CalculateLabel(snapshot));
+            representation.SetPosition(position);
+            return true;
+        }
+
+        private Dictionary<Guid, NodeDerivationSnapshot> BuildNodeDerivationSnapshots()
+        {
+            Dictionary<Guid, NodeDerivationSnapshot> snapshots = new Dictionary<Guid, NodeDerivationSnapshot>();
+            foreach (KeyValuePair<Guid, Node> entry in TrustedNodeDictionary.Concat(UntrustedNodeDictionary))
+            {
+                Node node = entry.Value;
+                bool isTrusted = node.IsTrusted;
+                List<NodeDerivationLink> links = BuildNodeDerivationLinks(entry.Key);
+                NodeRelationType? derivedClass = NodePresentationCalculator.CalculateClass(links);
+                double weight = NodePresentationCalculator.CalculateWeight(links);
+                double incidentConfidenceSum = links.Sum(link => link.Weight);
+                double trustRating = NodePresentationCalculator.CalculateTrustRating(
+                    node.GetVerifiedReferences(), node.GetInvalidReferences(), incidentConfidenceSum, isTrusted);
+                string? summary = isTrusted
+                    ? GetTrustedNodeSummary(node) ?? node.GetLabel()
+                    : GetUntrustedNodeSummary(node) ?? node.GetLabel();
+                List<Guid> neighbors = links.Select(link => link.OtherNodeId)
+                    .Where(id => id != entry.Key)
+                    .Distinct()
+                    .OrderBy(id => id)
+                    .ToList();
+                snapshots[entry.Key] = new NodeDerivationSnapshot(
+                    entry.Key,
+                    node.GetTargetID(),
+                    node.GetTargetKind(),
+                    isTrusted,
+                    derivedClass,
+                    weight,
+                    trustRating,
+                    summary,
+                    links.OrderBy(link => link.AssertionId).ThenBy(link => link.RelationType)
+                        .ThenBy(link => link.OtherNodeId).ToList(),
+                    neighbors);
+            }
+            return snapshots;
+        }
+
+        private List<NodeDerivationLink> BuildNodeDerivationLinks(Guid nodeId)
+        {
+            Dictionary<Guid, NodeDerivationLink> links = new Dictionary<Guid, NodeDerivationLink>();
+            foreach (List<NodeLink> outgoing in TrustedOutgoingLinks.Values)
+            {
+                foreach (NodeLink link in outgoing)
+                {
+                    if (link.SourceNodeId != nodeId && link.TargetNodeId != nodeId) continue;
+                    Guid otherNodeId = link.SourceNodeId == nodeId ? link.TargetNodeId : link.SourceNodeId;
+                    if (otherNodeId == nodeId) continue;
+                    NodeDerivationLink derived = new NodeDerivationLink(
+                        link.Provenance.AssertionId, link.RelationType, link.Weight, otherNodeId);
+                    if (!links.TryGetValue(derived.AssertionId, out NodeDerivationLink existing) ||
+                        PreferDerivationLink(derived, existing))
+                    {
+                        links[derived.AssertionId] = derived;
+                    }
+                }
+            }
+            return links.Values.ToList();
+        }
+
+        private static bool PreferDerivationLink(NodeDerivationLink candidate, NodeDerivationLink existing)
+        {
+            int relationComparison = candidate.RelationType.CompareTo(existing.RelationType);
+            if (relationComparison != 0) return relationComparison < 0;
+            int nodeComparison = candidate.OtherNodeId.CompareTo(existing.OtherNodeId);
+            if (nodeComparison != 0) return nodeComparison < 0;
+            return candidate.Weight > existing.Weight;
+        }
+
         public string? GetTrustedNodeSummary(Node node)
         {
             ArgumentNullException.ThrowIfNull(node);
             return GetTrustedNodeSummary(node.GetTargetKind(), node.GetTargetID(), node.GetLabel());
+        }
+
+        private string? GetUntrustedNodeSummary(Node node)
+        {
+            Guid targetId = node.GetTargetID();
+            string? summary = node.GetTargetKind() switch
+            {
+                NodeTargetKind.Symbol => GetUntrustedSymbolBox(targetId) is SymbolBox untrustedSymbol && untrustedSymbol.HasSymbolChar
+                    ? untrustedSymbol.GetSymbolChar().ToString()
+                    : GetTrustedSymbolBox(targetId) is SymbolBox trustedSymbol && trustedSymbol.HasSymbolChar
+                        ? trustedSymbol.GetSymbolChar().ToString()
+                        : null,
+                NodeTargetKind.Word => GetUntrustedWordBox(targetId) is WordBox untrustedWord
+                    ? GetTextFromWordBox(untrustedWord, true)
+                    : GetTrustedWordBox(targetId) is WordBox trustedWord
+                        ? GetTextFromWordBox(trustedWord, true)
+                        : null,
+                NodeTargetKind.Sentence => GetUntrustedSentenceBox(targetId) is SentenceBox untrustedSentence
+                    ? GetTextFromSentenceBox(untrustedSentence, true)
+                    : GetTrustedSentenceBox(targetId) is SentenceBox trustedSentence
+                        ? GetTextFromSentenceBox(trustedSentence, true)
+                        : null,
+                NodeTargetKind.Sense => $"Sense {targetId:N}",
+                NodeTargetKind.Usage => $"Usage {targetId:N}",
+                NodeTargetKind.Group => GetTrustedGroupBox(targetId)?.GetGroupingName(),
+                NodeTargetKind.Source => GetTrustedSourceBox(targetId)?.GetSourceName(),
+                NodeTargetKind.Function => GetUntrustedFunctionBox(targetId)?.FunctionKey ??
+                    GetTrustedFunctionBox(targetId)?.FunctionKey,
+                _ => null
+            };
+            if (string.IsNullOrWhiteSpace(summary)) return null;
+            string? label = node.GetLabel();
+            return string.IsNullOrWhiteSpace(label) ? summary : $"{label.Trim()}: {summary}";
         }
 
         public string? GetTrustedNodeSummary(NodeTargetKind kind, Guid targetId, string? label = null)
@@ -719,25 +1022,27 @@ namespace OPEN_LRD
             return GraphSynchronization.Execute(() =>
             {
                 SentenceBox? sentenceBox = GetTrustedSentenceBox(sentenceId);
-                if (sentenceBox == null)
-                {
-                    return string.Empty;
-                }
-
-                List<string> wordTexts = new List<string>();
-                foreach (Guid wordId in sentenceBox.GetWords() ?? new List<Guid>())
-                {
-                    WordBox? wordBox = GetTrustedWordBox(wordId);
-                    if (wordBox != null)
-                    {
-                        wordTexts.Add(GetTextFromWordBox(wordBox));
-                    }
-                }
-                return string.Join(" ", wordTexts);
+                return sentenceBox == null ? string.Empty : GetTextFromSentenceBox(sentenceBox, false);
             });
         }
 
-        private string GetTextFromWordBox(WordBox wordBox)
+        private string GetTextFromSentenceBox(SentenceBox sentenceBox, bool includeUntrusted)
+        {
+            List<string> wordTexts = new List<string>();
+            foreach (Guid wordId in sentenceBox.GetWords() ?? new List<Guid>())
+            {
+                WordBox? wordBox = includeUntrusted && UntrustedWordDictionary.TryGetValue(wordId, out WordBox? untrustedWord)
+                    ? untrustedWord
+                    : GetTrustedWordBox(wordId);
+                if (wordBox != null)
+                {
+                    wordTexts.Add(GetTextFromWordBox(wordBox, includeUntrusted));
+                }
+            }
+            return string.Join(" ", wordTexts);
+        }
+
+        private string GetTextFromWordBox(WordBox wordBox, bool includeUntrustedSymbols = false)
         {
             var symbols = wordBox.GetSymbols();
             if (symbols == null)
@@ -748,7 +1053,9 @@ namespace OPEN_LRD
             var text = new System.Text.StringBuilder(symbols.Count);
             foreach (Guid symbolId in symbols)
             {
-                SymbolBox? symbolBox = GetTrustedSymbolBox(symbolId);
+                SymbolBox? symbolBox = includeUntrustedSymbols && UntrustedSymbolDictionary.TryGetValue(symbolId, out SymbolBox? untrustedSymbol)
+                    ? untrustedSymbol
+                    : GetTrustedSymbolBox(symbolId);
                 if (symbolBox != null)
                 {
                     text.Append(symbolBox.GetSymbolChar());
@@ -770,6 +1077,7 @@ namespace OPEN_LRD
                 _diskPagedReadOnly = false;
                 _legacyDiskStoreReadOnly = false;
                 _maxPagedObjects = 1024;
+                _nodeLayoutOptions = new NodeLayoutOptions();
                 ClearPagedObjectCache();
                 SourceDictionary.Clear();
                 TextConversationDictionary.Clear();
@@ -794,10 +1102,22 @@ namespace OPEN_LRD
                 SentencesByWordIndex.Clear();
                 GroupsBySentenceIndex.Clear();
                 SourcesByGroupIndex.Clear();
+                foreach (Node node in TrustedNodeDictionary.Values)
+                {
+                    node.SetIdentityChangingHandler(null);
+                    node.SetIdentityChangedHandler(null);
+                    node.SetReferenceCountsChangedHandler(null);
+                }
                 TrustedNodeDictionary.Clear();
+                NodePresentation.Clear();
+                NodePresentationKeyByNodeId.Clear();
+                _nextNodePresentationId = 0;
+                _nodePresentationIdSpaceExhausted = false;
                 foreach (Node node in UntrustedNodeDictionary.Values)
                 {
                     node.SetIdentityChangingHandler(null);
+                    node.SetIdentityChangedHandler(null);
+                    node.SetReferenceCountsChangedHandler(null);
                 }
                 UntrustedNodeDictionary.Clear();
                 TrustedNodeByIdentityIndex.Clear();
@@ -898,6 +1218,7 @@ namespace OPEN_LRD
                 if (UntrustedSymbolDictionary.TryGetValue(symbolId, out SymbolBox? symbolBox))
                 {
                     symbolBox.SetSenseID(senseId);
+                    RecalculateAllNodePresentationsInternal();
                     return true;
                 }
                 return false;
@@ -912,6 +1233,7 @@ namespace OPEN_LRD
                 if (UntrustedSymbolDictionary.TryGetValue(symbolId, out SymbolBox? symbolBox))
                 {
                     symbolBox.SetSymbolChar(symbolChar);
+                    RecalculateAllNodePresentationsInternal();
                     return true;
                 }
                 return false;
@@ -932,6 +1254,7 @@ namespace OPEN_LRD
                 if (UntrustedWordDictionary.TryGetValue(wordId, out WordBox? wordBox))
                 {
                     wordBox.SetSenseID(senseId);
+                    RecalculateAllNodePresentationsInternal();
                     return true;
                 }
                 return false;
@@ -952,6 +1275,7 @@ namespace OPEN_LRD
                 if (UntrustedSentenceDictionary.TryGetValue(sentenceId, out SentenceBox? sentenceBox))
                 {
                     sentenceBox.SetSenseID(senseId);
+                    RecalculateAllNodePresentationsInternal();
                     return true;
                 }
                 return false;
@@ -972,6 +1296,7 @@ namespace OPEN_LRD
                 if (UntrustedWordDictionary.TryGetValue(wordId, out WordBox? wordBox))
                 {
                     wordBox.SetSymbols(symbols);
+                    RecalculateAllNodePresentationsInternal();
                     return true;
                 }
                 return false;
@@ -991,6 +1316,7 @@ namespace OPEN_LRD
                 if (UntrustedSentenceDictionary.TryGetValue(sentenceId, out SentenceBox? sentenceBox))
                 {
                     sentenceBox.SetWords(words);
+                    RecalculateAllNodePresentationsInternal();
                     return true;
                 }
                 return false;
@@ -1011,6 +1337,7 @@ namespace OPEN_LRD
                 if (UntrustedWordDictionary.TryGetValue(wordId, out WordBox? wordBox))
                 {
                     wordBox.SetUsageID(usageId);
+                    RecalculateAllNodePresentationsInternal();
                     return true;
                 }
                 return false;
@@ -1031,6 +1358,7 @@ namespace OPEN_LRD
                 if (UntrustedWordDictionary.TryGetValue(wordId, out WordBox? wordBox))
                 {
                     wordBox.SetPartOfSpeech(pos);
+                    RecalculateAllNodePresentationsInternal();
                     return true;
                 }
                 return false;
@@ -1277,21 +1605,24 @@ namespace OPEN_LRD
             return GraphSynchronization.Execute(() =>
             {
                 EnsureMutableStorageMode();
-                if (!TrustedGroupDictionary.TryGetValue(groupId, out GroupBox? groupBox) ||
-                    !TrustedSentenceDictionary.ContainsKey(sentenceId))
-                {
-                    return false;
-                }
-
-                if (!groupBox.AddSentenceFromCore(sentenceId))
-                {
-                    return false;
-                }
-                AddIndex(GroupsBySentenceIndex, sentenceId, groupId);
-                LinkNodeToTarget(GetNodeIdForTarget(NodeTargetKind.Group, groupId),
-                    NodeTargetKind.Sentence, sentenceId, NodeRelationType.ContainsSentence);
-                return true;
+                return AddSentenceToTrustedGroupInternal(groupId, sentenceId, true);
             });
+        }
+
+        private bool AddSentenceToTrustedGroupInternal(Guid groupId, Guid sentenceId, bool recalculate)
+        {
+            if (!TrustedGroupDictionary.TryGetValue(groupId, out GroupBox? groupBox) ||
+                !TrustedSentenceDictionary.ContainsKey(sentenceId))
+            {
+                return false;
+            }
+
+            if (!groupBox.AddSentenceFromCore(sentenceId)) return false;
+            AddIndex(GroupsBySentenceIndex, sentenceId, groupId);
+            LinkNodeToTarget(GetNodeIdForTarget(NodeTargetKind.Group, groupId),
+                NodeTargetKind.Sentence, sentenceId, NodeRelationType.ContainsSentence);
+            if (recalculate) RecalculateAllNodePresentationsInternal();
+            return true;
         }
 
         public bool AddGroupToTrustedSource(Guid sourceId, Guid groupId)
@@ -1299,21 +1630,24 @@ namespace OPEN_LRD
             return GraphSynchronization.Execute(() =>
             {
                 EnsureMutableStorageMode();
-                if (!SourceDictionary.TryGetValue(sourceId, out SourceBox? sourceBox) ||
-                    !TrustedGroupDictionary.ContainsKey(groupId))
-                {
-                    return false;
-                }
-
-                if (!sourceBox.AddGroupingFromCore(groupId))
-                {
-                    return false;
-                }
-                AddIndex(SourcesByGroupIndex, groupId, sourceId);
-                LinkNodeToTarget(GetNodeIdForTarget(NodeTargetKind.Source, sourceId),
-                    NodeTargetKind.Group, groupId, NodeRelationType.ContainsGroup);
-                return true;
+                return AddGroupToTrustedSourceInternal(sourceId, groupId, true);
             });
+        }
+
+        private bool AddGroupToTrustedSourceInternal(Guid sourceId, Guid groupId, bool recalculate)
+        {
+            if (!SourceDictionary.TryGetValue(sourceId, out SourceBox? sourceBox) ||
+                !TrustedGroupDictionary.ContainsKey(groupId))
+            {
+                return false;
+            }
+
+            if (!sourceBox.AddGroupingFromCore(groupId)) return false;
+            AddIndex(SourcesByGroupIndex, groupId, sourceId);
+            LinkNodeToTarget(GetNodeIdForTarget(NodeTargetKind.Source, sourceId),
+                NodeTargetKind.Group, groupId, NodeRelationType.ContainsGroup);
+            if (recalculate) RecalculateAllNodePresentationsInternal();
+            return true;
         }
 
         public bool AddTextConversation(ConversationText conversation)
@@ -1378,7 +1712,8 @@ namespace OPEN_LRD
                 }
 
                 UntrustedSymbolDictionary[symbolId] = symbolBox;
-                EnsureUntrustedNode(NodeTargetKind.Symbol, symbolId);
+                if (!EnsureUntrustedNode(NodeTargetKind.Symbol, symbolId))
+                    RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
@@ -1400,7 +1735,8 @@ namespace OPEN_LRD
                 }
 
                 UntrustedWordDictionary[wordId] = wordBox;
-                EnsureUntrustedNode(NodeTargetKind.Word, wordId);
+                if (!EnsureUntrustedNode(NodeTargetKind.Word, wordId))
+                    RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
@@ -1422,7 +1758,8 @@ namespace OPEN_LRD
                 }
 
                 UntrustedSentenceDictionary[sentenceId] = sentenceBox;
-                EnsureUntrustedNode(NodeTargetKind.Sentence, sentenceId);
+                if (!EnsureUntrustedNode(NodeTargetKind.Sentence, sentenceId))
+                    RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
@@ -1830,8 +2167,14 @@ namespace OPEN_LRD
                     if (existingNodeId == nodeId && UntrustedNodeDictionary.ContainsKey(nodeId))
                     {
                         UntrustedNodeDictionary[nodeId].SetIdentityChangingHandler(null);
+                        UntrustedNodeDictionary[nodeId].SetIdentityChangedHandler(null);
+                        UntrustedNodeDictionary[nodeId].SetReferenceCountsChangedHandler(null);
                         UntrustedNodeDictionary[nodeId] = node;
                         node.SetIdentityChangingHandler((oldKey, newKey) => HandleUntrustedNodeIdentityChange(nodeId, oldKey, newKey));
+                        node.SetIdentityChangedHandler((oldKey, newKey) => HandleNodeIdentityChange(nodeId, oldKey, newKey));
+                        node.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
+                        EnsureNodeRepresentation(node, isTrusted: false);
+                        RecalculateAllNodePresentationsInternal();
                         return true;
                     }
                     return false;
@@ -1849,6 +2192,10 @@ namespace OPEN_LRD
                     UntrustedNodeByTargetIndex.Add(targetKey, nodeId);
                 }
                 node.SetIdentityChangingHandler((oldKey, newKey) => HandleUntrustedNodeIdentityChange(nodeId, oldKey, newKey));
+                node.SetIdentityChangedHandler((oldKey, newKey) => HandleNodeIdentityChange(nodeId, oldKey, newKey));
+                node.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
+                EnsureNodeRepresentation(node, isTrusted: false);
+                RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
@@ -1876,6 +2223,10 @@ namespace OPEN_LRD
                     UntrustedNodeByTargetIndex.Remove((identityKey.TargetKind, identityKey.TargetId));
                 }
                 node.SetIdentityChangingHandler(null);
+                node.SetIdentityChangedHandler(null);
+                node.SetReferenceCountsChangedHandler(null);
+                RemoveNodeRepresentation(nodeId);
+                RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
@@ -1907,14 +2258,18 @@ namespace OPEN_LRD
                     TrustedNodeByTargetIndex.Add(targetKey, nodeId);
                 }
                 node.SetIdentityChangingHandler(null);
+                node.SetIdentityChangedHandler(null);
+                node.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
                 node.MarkTrusted();
                 TrustedNodeDictionary.Add(nodeId, node);
                 TrustedNodeByIdentityIndex.Add(identityKey, nodeId);
                 TrustedSkillsGraph.AddNode(nodeId);
+                EnsureNodeRepresentation(node, isTrusted: true);
                 if (identityKey.Label == null)
                 {
                     WireNodeRelations(node);
                 }
+                RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
@@ -1924,8 +2279,10 @@ namespace OPEN_LRD
             return GraphSynchronization.Execute(() =>
             {
                 EnsureMutableStorageMode();
-                return !IsStructuralRelation(link.RelationType) && IsValidLinkKindCombination(link) &&
-                       AreProvenanceTargetsTrusted(link.Provenance) && AddTrustedLinkInternal(link);
+                bool added = !IsStructuralRelation(link.RelationType) && IsValidLinkKindCombination(link) &&
+                             AreProvenanceTargetsTrusted(link.Provenance) && AddTrustedLinkInternal(link);
+                if (added) RecalculateAllNodePresentationsInternal();
+                return added;
             });
         }
 
@@ -1940,52 +2297,172 @@ namespace OPEN_LRD
             return AddTrustedLink(new NodeLink(sourceNodeId, targetNodeId, relationType, weight, label, provenance));
         }
 
-        public List<NodeLink> GetOutgoingLinks(Guid nodeId, NodeRelationType? relationFilter = null)
+        /// <summary>Adds a provenance-backed reasoning assertion with a deterministic assertion ID.</summary>
+        public bool AddReasoningLink(
+            Guid sourceNodeId,
+            Guid targetNodeId,
+            NodeRelationType relationType,
+            double confidence = 1.0,
+            string? label = null,
+            string? author = null,
+            Guid? sourceTargetId = null,
+            Guid? evidenceTargetId = null,
+            DateTimeOffset? validFrom = null,
+            DateTimeOffset? validUntil = null)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureMutableStorageMode();
+                NodeLinkProvenance provenance = NodeLinkProvenance.CreateReasoning(
+                    sourceNodeId, targetNodeId, relationType, label, confidence, author,
+                    sourceTargetId, evidenceTargetId, validFrom, validUntil);
+                NodeLink link = new NodeLink(sourceNodeId, targetNodeId, relationType,
+                    confidence, label, provenance);
+                bool added = !IsStructuralRelation(relationType) && IsValidLinkKindCombination(link) &&
+                             AreProvenanceTargetsTrusted(provenance) && AddTrustedLinkInternal(link);
+                if (added) RecalculateAllNodePresentationsInternal();
+                return added;
+            });
+        }
+
+        /// <summary>Updates confidence only when the assertion was created by the reasoning layer.</summary>
+        public bool UpdateReasoningLinkWeight(Guid assertionId, double newConfidence)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureMutableStorageMode();
+                if (assertionId == Guid.Empty)
+                    throw new ArgumentException("Assertion identifiers cannot be Guid.Empty.", nameof(assertionId));
+                if (!double.IsFinite(newConfidence) || newConfidence < 0.0 || newConfidence > 1.0)
+                    throw new ArgumentOutOfRangeException(nameof(newConfidence), "Confidence must be finite and in [0, 1].");
+                List<NodeLink> matchingLinks = TrustedLinkKeys
+                    .Where(link => link.Provenance.AssertionId == assertionId)
+                    .ToList();
+                if (matchingLinks.Count == 0 || matchingLinks.Any(link => link.Provenance.Origin != NodeLinkOrigin.Reasoning))
+                    return false;
+                return UpdateTrustedLinkWeight(assertionId, newConfidence);
+            });
+        }
+
+        public List<NodeLink> GetOutgoingLinks(
+            Guid nodeId,
+            NodeRelationType? relationFilter = null,
+            NodeLinkOrigin? originFilter = null,
+            string? authorFilter = null,
+            double? minimumConfidence = null,
+            DateTimeOffset? activeAt = null)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
-                if (relationFilter.HasValue && !Enum.IsDefined(relationFilter.Value))
-                    throw new ArgumentOutOfRangeException(nameof(relationFilter));
+                ValidateLinkQuery(relationFilter, originFilter, minimumConfidence);
                 if (!TrustedOutgoingLinks.TryGetValue(nodeId, out List<NodeLink>? links))
                 {
                     return new List<NodeLink>();
                 }
-                if (!relationFilter.HasValue)
-                {
-                    return new List<NodeLink>(links);
-                }
-                return links.Where(link => link.RelationType == relationFilter.Value).ToList();
+                string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
+                return links.Where(link => MatchesLinkQuery(link, relationFilter, originFilter,
+                    normalizedAuthor, minimumConfidence, activeAt)).ToList();
             });
         }
 
-        public List<NodeLink> GetIncomingLinks(Guid nodeId, NodeRelationType? relationFilter = null)
+        public List<NodeLink> GetIncomingLinks(
+            Guid nodeId,
+            NodeRelationType? relationFilter = null,
+            NodeLinkOrigin? originFilter = null,
+            string? authorFilter = null,
+            double? minimumConfidence = null,
+            DateTimeOffset? activeAt = null)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
-                if (relationFilter.HasValue && !Enum.IsDefined(relationFilter.Value))
-                    throw new ArgumentOutOfRangeException(nameof(relationFilter));
+                ValidateLinkQuery(relationFilter, originFilter, minimumConfidence);
                 if (!TrustedIncomingLinks.TryGetValue(nodeId, out List<NodeLink>? links))
                 {
                     return new List<NodeLink>();
                 }
-                if (!relationFilter.HasValue)
-                {
-                    return new List<NodeLink>(links);
-                }
-                return links.Where(link => link.RelationType == relationFilter.Value).ToList();
+                string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
+                return links.Where(link => MatchesLinkQuery(link, relationFilter, originFilter,
+                    normalizedAuthor, minimumConfidence, activeAt)).ToList();
             });
         }
 
-        public Graph<Guid> BuildSkillsGraphSnapshot(NodeRelationType? relationFilter = null)
+        public Graph<Guid> BuildSkillsGraphSnapshot(
+            NodeRelationType? relationFilter = null,
+            NodeLinkOrigin? originFilter = null,
+            string? authorFilter = null,
+            double? minimumConfidence = null,
+            DateTimeOffset? activeAt = null)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
+                ValidateLinkQuery(relationFilter, originFilter, minimumConfidence);
+                return BuildSkillsGraphSnapshotInternal(relationFilter, originFilter, authorFilter,
+                    minimumConfidence, activeAt);
+            });
+        }
+
+        /// <summary>Returns distinct assertions whose provenance references the supplied trusted target.</summary>
+        public List<NodeLink> GetTrustedLinksByProvenanceTarget(
+            Guid targetId,
+            bool includeSourceTarget = true,
+            bool includeEvidenceTarget = true,
+            NodeLinkOrigin? originFilter = null)
+        {
+            if (targetId == Guid.Empty)
+                throw new ArgumentException("Target identifiers cannot be Guid.Empty.", nameof(targetId));
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                if (originFilter.HasValue && !Enum.IsDefined(originFilter.Value))
+                    throw new ArgumentOutOfRangeException(nameof(originFilter));
+                return TrustedLinkKeys
+                    .Where(link => (!originFilter.HasValue || link.Provenance.Origin == originFilter.Value) &&
+                        ((includeSourceTarget && link.Provenance.SourceTargetId == targetId) ||
+                         (includeEvidenceTarget && link.Provenance.EvidenceTargetId == targetId)))
+                    .GroupBy(link => link.Provenance.AssertionId)
+                    .Select(group => group.First())
+                    .ToList();
+            });
+        }
+
+        /// <summary>Finds trusted nodes using target kind, label, trust weight, and incident-link filters.</summary>
+        public List<Node> FindTrustedNodes(
+            NodeTargetKind? kindFilter = null,
+            string? labelContains = null,
+            int? minimumNetTrustWeight = null,
+            NodeRelationType? relationFilter = null,
+            double? minimumIncidentLinkConfidence = null,
+            bool canonicalOnly = false)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                if (kindFilter.HasValue && !Enum.IsDefined(kindFilter.Value))
+                    throw new ArgumentOutOfRangeException(nameof(kindFilter));
                 if (relationFilter.HasValue && !Enum.IsDefined(relationFilter.Value))
                     throw new ArgumentOutOfRangeException(nameof(relationFilter));
-                return BuildSkillsGraphSnapshotInternal(relationFilter);
+                if (minimumIncidentLinkConfidence.HasValue &&
+                    (!double.IsFinite(minimumIncidentLinkConfidence.Value) ||
+                     minimumIncidentLinkConfidence.Value < 0.0 || minimumIncidentLinkConfidence.Value > 1.0))
+                    throw new ArgumentOutOfRangeException(nameof(minimumIncidentLinkConfidence));
+
+                string? normalizedLabel = NormalizeOptionalLinkText(labelContains);
+                return TrustedNodeDictionary.Values
+                    .Where(node => !kindFilter.HasValue || node.GetTargetKind() == kindFilter.Value)
+                    .Where(node => !canonicalOnly || node.GetLabel() == null)
+                    .Where(node => normalizedLabel == null ||
+                        (node.GetLabel()?.Contains(normalizedLabel, StringComparison.OrdinalIgnoreCase) ?? false))
+                    .Where(node => !minimumNetTrustWeight.HasValue ||
+                        node.GetNetTrustWeight() >= minimumNetTrustWeight.Value)
+                    .Where(node => !relationFilter.HasValue && !minimumIncidentLinkConfidence.HasValue ||
+                        HasMatchingIncidentLink(node.GetNodeID(), relationFilter, minimumIncidentLinkConfidence))
+                    .OrderBy(node => node.GetTargetKind())
+                    .ThenBy(node => node.GetTargetID())
+                    .ThenBy(node => node.GetLabel(), StringComparer.Ordinal)
+                    .ToList();
             });
         }
 
@@ -2006,10 +2483,18 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>
+        /// Loads a checkpoint or merges it into the current core. On merge, base layout
+        /// options win by default; callers may opt to restore the incoming checkpoint's
+        /// options (or its defaults if the record is absent) before derived recalculation.
+        /// </summary>
         public void StreamTrustedDictionariesFromDisk(string directoryPath, bool replaceExisting = true,
-            bool preloadAllIntoMemory = false, int maxCachedRecordsPerPartition = 128)
+            bool preloadAllIntoMemory = false, int maxCachedRecordsPerPartition = 128,
+            LayoutOptionsMergePreference layoutOptionsMergePreference = LayoutOptionsMergePreference.BaseWins)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
+            if (!Enum.IsDefined(layoutOptionsMergePreference))
+                throw new ArgumentOutOfRangeException(nameof(layoutOptionsMergePreference));
             GraphSynchronization.Execute(() =>
             {
                 PartitionedBinaryStore? incoming = PartitionedBinaryStore.Open(directoryPath, maxCachedRecordsPerPartition);
@@ -2041,15 +2526,40 @@ namespace OPEN_LRD
                             mergeStage._maxPagedObjects = Math.Max(0, maxCachedRecordsPerPartition) * Enum.GetValues<DiskPartition>().Length;
                             mergeStage.BuildPagedIndexesAndGraph(mergeStage._diskStore!);
                             mergeStage.MaterializeDiskStore();
-                            foreach (Node existingUntrustedNode in UntrustedNodeDictionary.Values)
+                            mergeStage._suspendNodePresentationRecalculation = true;
+                            try
                             {
-                                Node clone = new Node(existingUntrustedNode.GetNodeID(), existingUntrustedNode.GetTargetKind(),
-                                    existingUntrustedNode.GetTargetID(), existingUntrustedNode.GetLabel());
-                                clone.ReconcileReferenceCounts(existingUntrustedNode.GetVerifiedReferences(),
-                                    existingUntrustedNode.GetInvalidReferences());
-                                mergeStage.SetUntrustedNode(clone);
+                                foreach (Node existingUntrustedNode in UntrustedNodeDictionary.Values)
+                                {
+                                    Node clone = new Node(existingUntrustedNode.GetNodeID(), existingUntrustedNode.GetTargetKind(),
+                                        existingUntrustedNode.GetTargetID(), existingUntrustedNode.GetLabel(), allowRegisteredTrustedId: true);
+                                    clone.ReconcileReferenceCounts(existingUntrustedNode.GetVerifiedReferences(),
+                                        existingUntrustedNode.GetInvalidReferences());
+                                    mergeStage.SetUntrustedNode(clone);
+                                    if (NodePresentationKeyByNodeId.TryGetValue(existingUntrustedNode.GetNodeID(), out UInt128 originalPresentationId) &&
+                                        NodePresentation.TryGetValue(originalPresentationId, out NodeRepresentation? originalRepresentation))
+                                    {
+                                        mergeStage.RemoveNodeRepresentation(existingUntrustedNode.GetNodeID());
+                                        UInt128 presentationId = mergeStage.NodePresentation.ContainsKey(originalPresentationId)
+                                            ? mergeStage.AllocateNodePresentationId()
+                                            : originalPresentationId;
+                                        NodeRepresentation clonedRepresentation = new NodeRepresentation(
+                                            clone.GetNodeID(),
+                                            originalRepresentation.GetColor(),
+                                            originalRepresentation.GetSize(),
+                                            originalRepresentation.GetTextLabel(),
+                                            originalRepresentation.GetPosition(),
+                                            originalRepresentation.IsTextLabelCustomized);
+                                        mergeStage.AddNodeRepresentation(presentationId, clonedRepresentation);
+                                    }
+                                }
+                                mergeStage.MergeDiskStore(incoming, layoutOptionsMergePreference);
                             }
-                            mergeStage.MergeDiskStore(incoming);
+                            finally
+                            {
+                                mergeStage._suspendNodePresentationRecalculation = false;
+                            }
+                            mergeStage.RecalculateAllNodePresentationsInternal();
                             InstallMergedTrustedStateFrom(mergeStage);
                         }
                         finally
@@ -2127,9 +2637,19 @@ namespace OPEN_LRD
             SentencesByWordIndex.Clear();
             GroupsBySentenceIndex.Clear();
             SourcesByGroupIndex.Clear();
+            foreach (Node node in TrustedNodeDictionary.Values)
+            {
+                node.SetIdentityChangingHandler(null);
+                node.SetIdentityChangedHandler(null);
+                node.SetReferenceCountsChangedHandler(null);
+            }
             TrustedNodeDictionary.Clear();
             TrustedNodeByIdentityIndex.Clear();
             TrustedNodeByTargetIndex.Clear();
+            NodePresentation.Clear();
+            NodePresentationKeyByNodeId.Clear();
+            _nextNodePresentationId = 0;
+            _nodePresentationIdSpaceExhausted = false;
             TrustedOutgoingLinks.Clear();
             TrustedIncomingLinks.Clear();
             TrustedLinkKeys.Clear();
@@ -2138,12 +2658,19 @@ namespace OPEN_LRD
             foreach (Node node in UntrustedNodeDictionary.Values)
             {
                 node.SetIdentityChangingHandler(null);
+                node.SetIdentityChangedHandler(null);
+                node.SetReferenceCountsChangedHandler(null);
             }
             UntrustedNodeDictionary.Clear();
             UntrustedNodeByIdentityIndex.Clear();
             UntrustedNodeByTargetIndex.Clear();
 
             CopyTrustedStateFrom(staged);
+            foreach (KeyValuePair<Guid, Node> entry in TrustedNodeDictionary)
+            {
+                Guid nodeId = entry.Key;
+                entry.Value.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
+            }
             CopyDictionary(staged.UntrustedNodeDictionary, UntrustedNodeDictionary);
             CopyDictionary(staged.UntrustedNodeByIdentityIndex, UntrustedNodeByIdentityIndex);
             CopyDictionary(staged.UntrustedNodeByTargetIndex, UntrustedNodeByTargetIndex);
@@ -2151,6 +2678,8 @@ namespace OPEN_LRD
             {
                 Guid nodeId = entry.Key;
                 entry.Value.SetIdentityChangingHandler((oldKey, newKey) => HandleUntrustedNodeIdentityChange(nodeId, oldKey, newKey));
+                entry.Value.SetIdentityChangedHandler((oldKey, newKey) => HandleNodeIdentityChange(nodeId, oldKey, newKey));
+                entry.Value.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
             }
 
             foreach (Guid id in new List<Guid>(UntrustedSymbolDictionary.Keys))
@@ -2194,6 +2723,12 @@ namespace OPEN_LRD
             CopyDictionary(staged.TrustedNodeDictionary, TrustedNodeDictionary);
             CopyDictionary(staged.TrustedNodeByIdentityIndex, TrustedNodeByIdentityIndex);
             CopyDictionary(staged.TrustedNodeByTargetIndex, TrustedNodeByTargetIndex);
+            CopyDictionary(staged.NodePresentation, NodePresentation);
+            CopyDictionary(staged.NodePresentationKeyByNodeId, NodePresentationKeyByNodeId);
+            _nextNodePresentationId = staged._nextNodePresentationId;
+            _nodePresentationIdSpaceExhausted = staged._nodePresentationIdSpaceExhausted;
+            _nodeLayoutOptions = new NodeLayoutOptions(staged._nodeLayoutOptions.NodeWeightBias,
+                staged._nodeLayoutOptions.NeighborPositionBias);
             CopyDictionary(staged.TrustedOutgoingLinks, TrustedOutgoingLinks);
             CopyDictionary(staged.TrustedIncomingLinks, TrustedIncomingLinks);
             TrustedLinkKeys.UnionWith(staged.TrustedLinkKeys);
@@ -2272,6 +2807,16 @@ namespace OPEN_LRD
             }
             foreach (DiskRecord record in store.ReadAll(DiskPartition.Nodes))
                 TrustedNodeDictionary[record.Key] = FoundationBinarySerializer.DeserializeNode(record.Payload, false);
+            foreach (NodeRepresentation representation in NodePresentation.Values)
+            {
+                representation.MarkWritable();
+            }
+            foreach (KeyValuePair<Guid, Node> entry in TrustedNodeDictionary)
+            {
+                Guid nodeId = entry.Key;
+                entry.Value.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
+            }
+            RecalculateAllNodePresentationsInternal();
         }
 
         public void CloseDiskStore(bool materialize = true)
@@ -2354,8 +2899,17 @@ namespace OPEN_LRD
         {
             if (_diskPagedReadOnly && _diskStore != null)
             {
-                return Enum.GetValues<DiskPartition>().ToDictionary(partition => partition,
-                    partition => _diskStore.ReadAll(partition));
+                Dictionary<DiskPartition, IEnumerable<DiskRecord>> copied =
+                    Enum.GetValues<DiskPartition>().ToDictionary(partition => partition,
+                        partition => _diskStore.ReadAll(partition));
+                List<DiskRecord> layoutRecords = copied[DiskPartition.LayoutSettings].ToList();
+                if (layoutRecords.Count == 0)
+                {
+                    layoutRecords.Add(new DiskRecord(NodeLayoutOptions.RecordKey,
+                        FoundationBinarySerializer.SerializeNodeLayoutOptions(_nodeLayoutOptions)));
+                }
+                copied[DiskPartition.LayoutSettings] = layoutRecords;
+                return copied;
             }
 
             return new Dictionary<DiskPartition, IEnumerable<DiskRecord>>
@@ -2369,9 +2923,30 @@ namespace OPEN_LRD
                 [DiskPartition.Sources] = ToDiskRecords(SourceDictionary.Values, box => box.GetSourceID(), FoundationBinarySerializer.SerializeSource),
                 [DiskPartition.Functions] = ToDiskRecords(TrustedFunctionDictionary.Values, box => box.GetFunctionID(), FoundationBinarySerializer.SerializeFunction),
                 [DiskPartition.Nodes] = ToDiskRecords(TrustedNodeDictionary.Values, box => box.GetNodeID(), FoundationBinarySerializer.SerializeNode),
+                [DiskPartition.NodePresentations] = TrustedNodePresentationRecords(),
+                [DiskPartition.LayoutSettings] = new[]
+                {
+                    new DiskRecord(NodeLayoutOptions.RecordKey,
+                        FoundationBinarySerializer.SerializeNodeLayoutOptions(_nodeLayoutOptions))
+                },
                 [DiskPartition.Links] = TrustedOutgoingLinks.Values.SelectMany(links => links)
                     .Select(link => new DiskRecord(CreateLinkRecordId(link), FoundationBinarySerializer.SerializeLink(link)))
             };
+        }
+
+        private IEnumerable<DiskRecord> TrustedNodePresentationRecords()
+        {
+            foreach (KeyValuePair<UInt128, NodeRepresentation> entry in NodePresentation.OrderBy(pair => pair.Key))
+            {
+                NodeRepresentation representation = entry.Value;
+                Guid nodeId = representation.GetNodeID();
+                if (TrustedNodeDictionary.ContainsKey(nodeId))
+                {
+                    yield return new DiskRecord(
+                        nodeId,
+                        FoundationBinarySerializer.SerializeNodeRepresentation(entry.Key, representation));
+                }
+            }
         }
 
         private static Guid CreateLinkRecordId(NodeLink link)
@@ -2413,6 +2988,24 @@ namespace OPEN_LRD
             HashSet<SentenceIdentityKey> sentenceIdentities = new HashSet<SentenceIdentityKey>();
             HashSet<NodeLink> linkIdentities = new HashSet<NodeLink>();
             Dictionary<Guid, List<NodeLink>> assertionLinks = new Dictionary<Guid, List<NodeLink>>();
+
+            if (store.HasPartition(DiskPartition.LayoutSettings))
+            {
+                List<DiskRecord> layoutRecords = store.ReadAll(DiskPartition.LayoutSettings).ToList();
+                if (layoutRecords.Count > 0)
+                {
+                    if (layoutRecords.Count != 1 || layoutRecords[0].Key != NodeLayoutOptions.RecordKey)
+                        throw new InvalidDataException("LayoutSettings partition contains an invalid record set.");
+                    try
+                    {
+                        _ = FoundationBinarySerializer.DeserializeNodeLayoutOptions(layoutRecords[0].Payload);
+                    }
+                    catch (Exception exception) when (exception is ArgumentException or InvalidDataException)
+                    {
+                        throw new InvalidDataException("LayoutSettings partition contains invalid bias values.", exception);
+                    }
+                }
+            }
 
             foreach (DiskRecord record in store.ReadAll(DiskPartition.Symbols))
             {
@@ -2508,6 +3101,26 @@ namespace OPEN_LRD
                 }
                 if (!DiskTargetExists(node.GetTargetKind(), node.GetTargetID(), symbols, words, sentences, senses, usages, groups, sources, functions))
                     throw new InvalidDataException("Node partition contains a node with an unresolved target.");
+            }
+            if (store.HasPartition(DiskPartition.NodePresentations))
+            {
+                HashSet<Guid> presentedNodes = new HashSet<Guid>();
+                HashSet<UInt128> presentationIds = new HashSet<UInt128>();
+                foreach (DiskRecord record in store.ReadAll(DiskPartition.NodePresentations))
+                {
+                    (UInt128 presentationId, NodeRepresentation representation) =
+                        FoundationBinarySerializer.DeserializeNodeRepresentation(record.Payload);
+                    Guid nodeId = representation.GetNodeID();
+                    if (record.Key != nodeId || !nodes.Contains(nodeId) ||
+                        !presentedNodes.Add(nodeId) || !presentationIds.Add(presentationId))
+                    {
+                        throw new InvalidDataException("NodePresentation partition contains a duplicate, unresolved, or mismatched identity.");
+                    }
+                }
+                if (!presentedNodes.SetEquals(nodes))
+                {
+                    throw new InvalidDataException("NodePresentation partition must contain exactly one record per trusted Node.");
+                }
             }
             RequireCanonicalNodes(NodeTargetKind.Symbol, symbols, canonicalNodeTargets);
             RequireCanonicalNodes(NodeTargetKind.Word, words, canonicalNodeTargets);
@@ -2745,6 +3358,7 @@ namespace OPEN_LRD
                     return false;
                 }
                 RebuildTrustedSkillsGraph();
+                RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
@@ -2794,12 +3408,33 @@ namespace OPEN_LRD
                     return false;
                 }
                 RebuildTrustedSkillsGraph();
+                RecalculateAllNodePresentationsInternal();
                 return true;
             });
         }
 
+        private void LoadNodeLayoutSettings(PartitionedBinaryStore store)
+        {
+            _nodeLayoutOptions = new NodeLayoutOptions();
+            if (!store.HasPartition(DiskPartition.LayoutSettings)) return;
+            List<DiskRecord> records = store.ReadAll(DiskPartition.LayoutSettings).ToList();
+            if (records.Count == 0) return;
+            if (records.Count != 1 || records[0].Key != NodeLayoutOptions.RecordKey)
+                throw new InvalidDataException("LayoutSettings partition contains an invalid record set.");
+            try
+            {
+                _nodeLayoutOptions = FoundationBinarySerializer.DeserializeNodeLayoutOptions(records[0].Payload);
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidDataException)
+            {
+                throw new InvalidDataException("LayoutSettings partition contains invalid bias values.", exception);
+            }
+        }
+
         private void BuildPagedIndexesAndGraph(PartitionedBinaryStore store)
         {
+            _initialized = true;
+            LoadNodeLayoutSettings(store);
             foreach (DiskRecord record in store.ReadAll(DiskPartition.Symbols))
             {
                 SymbolBox box = FoundationBinarySerializer.DeserializeSymbol(record.Payload, store.IsLegacyFormat);
@@ -2849,15 +3484,74 @@ namespace OPEN_LRD
                 }
                 TrustedSkillsGraph.AddNode(record.Key);
             }
+            LoadNodePresentationRecords(store);
             foreach (DiskRecord record in store.ReadAll(DiskPartition.Links))
             {
                 NodeLink link = FoundationBinarySerializer.DeserializeLink(record.Payload, store.IsLegacyFormat);
                 AddTrustedLinkInternal(link, true, false);
             }
+            RecalculateAllNodePresentationsInternal();
+            foreach (NodeRepresentation representation in NodePresentation.Values)
+            {
+                representation.MarkReadOnly();
+            }
         }
 
-        private void MergeDiskStore(PartitionedBinaryStore store)
+        private void LoadNodePresentationRecords(PartitionedBinaryStore store)
         {
+            HashSet<Guid> trustedNodeIds = TrustedNodeByIdentityIndex.Values.ToHashSet();
+            if (!store.HasPartition(DiskPartition.NodePresentations))
+            {
+                foreach (DiskRecord record in store.ReadAll(DiskPartition.Nodes))
+                {
+                    Node node = FoundationBinarySerializer.DeserializeNode(record.Payload, true);
+                    NodeRepresentation representation = CreateDefaultNodeRepresentation(node, isTrusted: true);
+                    AddNodeRepresentation(AllocateNodePresentationId(), representation);
+                }
+                return;
+            }
+            if (store.GetRecordCount(DiskPartition.NodePresentations) != trustedNodeIds.Count)
+            {
+                throw new InvalidDataException("NodePresentation partition must contain exactly one record per trusted Node.");
+            }
+
+            foreach (DiskRecord record in store.ReadAll(DiskPartition.NodePresentations))
+            {
+                (UInt128 presentationId, NodeRepresentation representation) =
+                    FoundationBinarySerializer.DeserializeNodeRepresentation(record.Payload);
+                if (record.Key != representation.GetNodeID() || !trustedNodeIds.Contains(record.Key))
+                {
+                    throw new InvalidDataException("NodePresentation partition contains an unresolved or mismatched Node ID.");
+                }
+                try
+                {
+                    AddNodeRepresentation(presentationId, representation);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    throw new InvalidDataException("NodePresentation partition contains a duplicate presentation key or Node ID.", exception);
+                }
+            }
+            if (NodePresentationKeyByNodeId.Count != trustedNodeIds.Count)
+            {
+                throw new InvalidDataException("NodePresentation partition does not contain exactly one presentation per trusted Node.");
+            }
+        }
+
+        private NodeRepresentation CreateDefaultNodeRepresentation(Node node, bool isTrusted)
+        {
+            return new NodeRepresentation(
+                node.GetNodeID(),
+                GetDefaultNodeColor(node.GetTargetKind(), isTrusted),
+                1.0,
+                CreateDefaultNodeLabel(node.GetTargetKind(), node.GetTargetID(), node.GetLabel()));
+        }
+
+        private void MergeDiskStore(PartitionedBinaryStore store, LayoutOptionsMergePreference layoutOptionsMergePreference)
+        {
+            if (layoutOptionsMergePreference == LayoutOptionsMergePreference.IncomingWins)
+                LoadNodeLayoutSettings(store);
+            HashSet<Guid> existingPresentationNodeIds = NodePresentationKeyByNodeId.Keys.ToHashSet();
             foreach (DiskRecord record in store.ReadAll(DiskPartition.Senses))
             {
                 SenseBox incoming = FoundationBinarySerializer.DeserializeSense(record.Payload);
@@ -2938,7 +3632,7 @@ namespace OPEN_LRD
                     if (!string.Equals(existing.GetGroupingName(), incoming.GetGroupingName(), StringComparison.Ordinal))
                         throw new InvalidDataException("Merge contains a conflicting GroupBox name.");
                     foreach (Guid sentenceId in incoming.GetSentenceIDs() ?? new List<Guid>())
-                        AddSentenceToTrustedGroup(incoming.GetGroupingID(), sentenceId);
+                        AddSentenceToTrustedGroupInternal(incoming.GetGroupingID(), sentenceId, false);
                 }
                 else
                 {
@@ -2954,7 +3648,7 @@ namespace OPEN_LRD
                     if (!string.Equals(existing.GetSourceName(), incoming.GetSourceName(), StringComparison.Ordinal))
                         throw new InvalidDataException("Merge contains a conflicting SourceBox name.");
                     foreach (Guid groupId in incoming.GetGroupingIDs() ?? new List<Guid>())
-                        AddGroupToTrustedSource(incoming.GetSourceID(), groupId);
+                        AddGroupToTrustedSourceInternal(incoming.GetSourceID(), groupId, false);
                 }
                 else
                 {
@@ -2994,11 +3688,13 @@ namespace OPEN_LRD
                 Guid mergedNodeId = record.Key;
                 if (TrustedNodeDictionary.ContainsKey(mergedNodeId))
                 {
-                    mergedNodeId = Guid.NewGuid();
-                    Node remapped = new Node(mergedNodeId, identityKey.TargetKind, identityKey.TargetId, identityKey.Label);
+                    mergedNodeId = GenerateUntrustedNodeId();
+                    Node remapped = new Node(mergedNodeId, identityKey.TargetKind, identityKey.TargetId, identityKey.Label, allowRegisteredTrustedId: true);
                     remapped.ReconcileReferenceCounts(incoming.GetVerifiedReferences(), incoming.GetInvalidReferences());
                     incoming = remapped;
                 }
+                Guid importedNodeId = mergedNodeId;
+                incoming.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(importedNodeId));
                 incoming.MarkTrusted();
                 TrustedNodeDictionary.Add(mergedNodeId, incoming);
                 TrustedNodeByIdentityIndex.Add(identityKey, mergedNodeId);
@@ -3007,11 +3703,16 @@ namespace OPEN_LRD
                     TrustedNodeByTargetIndex.Add((identityKey.TargetKind, identityKey.TargetId), mergedNodeId);
                 }
                 TrustedSkillsGraph.AddNode(mergedNodeId);
-                if (identityKey.Label == null)
-                {
-                    WireNodeRelations(incoming);
-                }
                 nodeIdMap[record.Key] = mergedNodeId;
+            }
+            MergeNodePresentations(store, nodeIdMap, existingPresentationNodeIds);
+            foreach (Node trustedNode in TrustedNodeDictionary.Values)
+            {
+                EnsureNodeRepresentation(trustedNode, isTrusted: true);
+                if (trustedNode.GetLabel() == null)
+                {
+                    WireNodeRelations(trustedNode);
+                }
             }
             foreach (DiskRecord record in store.ReadAll(DiskPartition.Links))
             {
@@ -3044,6 +3745,41 @@ namespace OPEN_LRD
                             UpdateTrustedLinkWeight(mapped.Provenance.AssertionId, mapped.Weight);
                     }
                 }
+            }
+        }
+
+        private void MergeNodePresentations(
+            PartitionedBinaryStore store,
+            IReadOnlyDictionary<Guid, Guid> nodeIdMap,
+            HashSet<Guid> existingPresentationNodeIds)
+        {
+            foreach (DiskRecord record in store.ReadAll(DiskPartition.NodePresentations))
+            {
+                (UInt128 incomingPresentationId, NodeRepresentation incomingRepresentation) =
+                    FoundationBinarySerializer.DeserializeNodeRepresentation(record.Payload);
+                if (record.Key != incomingRepresentation.GetNodeID() ||
+                    !nodeIdMap.TryGetValue(record.Key, out Guid mappedNodeId))
+                {
+                    throw new InvalidDataException("Incoming NodePresentation does not map to an imported Node.");
+                }
+                if (existingPresentationNodeIds.Contains(mappedNodeId))
+                {
+                    continue;
+                }
+
+                RemoveNodeRepresentation(mappedNodeId);
+
+                UInt128 presentationId = NodePresentation.ContainsKey(incomingPresentationId)
+                    ? AllocateNodePresentationId()
+                    : incomingPresentationId;
+                NodeRepresentation mappedRepresentation = new NodeRepresentation(
+                    mappedNodeId,
+                    incomingRepresentation.GetColor(),
+                    incomingRepresentation.GetSize(),
+                    incomingRepresentation.GetTextLabel(),
+                    incomingRepresentation.GetPosition(),
+                    incomingRepresentation.IsTextLabelCustomized);
+                AddNodeRepresentation(presentationId, mappedRepresentation);
             }
         }
 
@@ -3186,6 +3922,10 @@ namespace OPEN_LRD
             {
                 UntrustedNodeByIdentityIndex.Remove(node.GetIdentityKey());
                 node.SetIdentityChangingHandler(null);
+                node.SetIdentityChangedHandler(null);
+                node.SetReferenceCountsChangedHandler(null);
+                RemoveNodeRepresentation(nodeId);
+                RecalculateAllNodePresentationsInternal();
             }
             UntrustedNodeByTargetIndex.Remove(targetKey);
         }
@@ -3210,23 +3950,46 @@ namespace OPEN_LRD
             {
                 UntrustedNodeByTargetIndex[targetKey] = nodeId;
             }
+            if (NodePresentationKeyByNodeId.TryGetValue(nodeId, out UInt128 presentationId) &&
+                NodePresentation.TryGetValue(presentationId, out NodeRepresentation? representation))
+            {
+                representation.UpdateDefaultTextLabel(CreateDefaultNodeLabel(newKey.TargetKind, newKey.TargetId, newKey.Label));
+            }
             return true;
         }
 
-        private void EnsureUntrustedNode(NodeTargetKind kind, Guid targetId)
+        private void HandleNodeIdentityChange(Guid nodeId, NodeIdentityKey oldKey, NodeIdentityKey newKey)
+        {
+            if (_diskPagedReadOnly) return;
+            RecalculateAllNodePresentationsInternal();
+        }
+
+        private void HandleNodeReferenceChange(Guid nodeId)
+        {
+            if (_diskPagedReadOnly) return;
+            RecalculateAllNodePresentationsInternal();
+        }
+
+        private bool EnsureUntrustedNode(NodeTargetKind kind, Guid targetId)
         {
             (NodeTargetKind Kind, Guid TargetId) targetKey = (kind, targetId);
             if (TrustedNodeByTargetIndex.ContainsKey(targetKey) ||
                 UntrustedNodeByTargetIndex.ContainsKey(targetKey))
             {
-                return;
+                return false;
             }
 
             Node node = new Node(kind, targetId);
             UntrustedNodeDictionary.Add(node.GetNodeID(), node);
             UntrustedNodeByTargetIndex.Add(targetKey, node.GetNodeID());
             UntrustedNodeByIdentityIndex.Add(node.GetIdentityKey(), node.GetNodeID());
-            node.SetIdentityChangingHandler((oldKey, newKey) => HandleUntrustedNodeIdentityChange(node.GetNodeID(), oldKey, newKey));
+            Guid nodeId = node.GetNodeID();
+            node.SetIdentityChangingHandler((oldKey, newKey) => HandleUntrustedNodeIdentityChange(nodeId, oldKey, newKey));
+            node.SetIdentityChangedHandler((oldKey, newKey) => HandleNodeIdentityChange(nodeId, oldKey, newKey));
+            node.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
+            EnsureNodeRepresentation(node, isTrusted: false);
+            RecalculateAllNodePresentationsInternal();
+            return true;
         }
 
         private Node EnsureTrustedNode(NodeTargetKind kind, Guid targetId)
@@ -3235,6 +3998,8 @@ namespace OPEN_LRD
             if (TrustedNodeByTargetIndex.TryGetValue(targetKey, out Guid trustedNodeId) &&
                 TrustedNodeDictionary.TryGetValue(trustedNodeId, out Node? existingNode))
             {
+                existingNode.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(trustedNodeId));
+                EnsureNodeRepresentation(existingNode, isTrusted: true);
                 return existingNode;
             }
 
@@ -3255,8 +4020,124 @@ namespace OPEN_LRD
             TrustedNodeByTargetIndex.Add(targetKey, node.GetNodeID());
             TrustedNodeByIdentityIndex.Add(node.GetIdentityKey(), node.GetNodeID());
             TrustedSkillsGraph.AddNode(node.GetNodeID());
+            Guid nodeId = node.GetNodeID();
+            node.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
+            EnsureNodeRepresentation(node, isTrusted: true);
             WireNodeRelations(node);
             return node;
+        }
+
+        private void EnsureNodeRepresentation(Node node, bool isTrusted)
+        {
+            Guid nodeId = node.GetNodeID();
+            if (NodePresentationKeyByNodeId.TryGetValue(nodeId, out UInt128 existingKey))
+            {
+                if (!NodePresentation.TryGetValue(existingKey, out NodeRepresentation? existingRepresentation) ||
+                    existingRepresentation.GetNodeID() != nodeId)
+                {
+                    throw new InvalidOperationException("Node presentation indexes are inconsistent.");
+                }
+                existingRepresentation.UpdateDefaultTextLabel(CreateDefaultNodeLabel(
+                    node.GetTargetKind(), node.GetTargetID(), node.GetLabel(), isTrusted));
+                return;
+            }
+
+            UInt128 presentationId = AllocateNodePresentationId();
+            NodeRepresentation representation = new NodeRepresentation(
+                nodeId,
+                GetDefaultNodeColor(node.GetTargetKind(), isTrusted),
+                1.0,
+                CreateDefaultNodeLabel(node.GetTargetKind(), node.GetTargetID(), node.GetLabel(), isTrusted));
+            AddNodeRepresentation(presentationId, representation);
+        }
+
+        private static uint GetDefaultNodeColor(NodeTargetKind kind, bool isTrusted)
+        {
+            uint color = kind switch
+            {
+                NodeTargetKind.Symbol => 0xFF4E79A7,
+                NodeTargetKind.Word => 0xFFF28E2B,
+                NodeTargetKind.Sentence => 0xFFE15759,
+                NodeTargetKind.Sense => 0xFF76B7B2,
+                NodeTargetKind.Usage => 0xFF59A14F,
+                NodeTargetKind.Source => 0xFFEDC949,
+                NodeTargetKind.Group => 0xFFAF7AA1,
+                NodeTargetKind.Function => 0xFFFF9DA7,
+                _ => 0xFFBAB0AC
+            };
+            return isTrusted ? color : (color & 0x00FFFFFF) | 0xA0000000;
+        }
+
+        private string? CreateDefaultNodeLabel(NodeTargetKind kind, Guid targetId, string? nodeLabel, bool isTrusted = false)
+        {
+            if (!string.IsNullOrWhiteSpace(nodeLabel))
+            {
+                return nodeLabel.Trim();
+            }
+            if (isTrusted && _initialized)
+            {
+                string? summary = GetTrustedNodeSummary(kind, targetId);
+                if (!string.IsNullOrWhiteSpace(summary))
+                {
+                    return summary;
+                }
+            }
+            return $"{kind} {targetId.ToString("N")[..8]}";
+        }
+
+        private UInt128 AllocateNodePresentationId()
+        {
+            if (_nodePresentationIdSpaceExhausted)
+            {
+                throw new OverflowException("No further UInt128 presentation IDs are available for NodePresentation.");
+            }
+            UInt128 assigned = _nextNodePresentationId;
+            if (assigned == UInt128.MaxValue)
+            {
+                _nodePresentationIdSpaceExhausted = true;
+            }
+            else
+            {
+                _nextNodePresentationId = assigned + 1;
+            }
+            return assigned;
+        }
+
+        private void AddNodeRepresentation(UInt128 presentationId, NodeRepresentation representation)
+        {
+            Guid nodeId = representation.GetNodeID();
+            if (NodePresentation.ContainsKey(presentationId) || NodePresentationKeyByNodeId.ContainsKey(nodeId))
+            {
+                throw new InvalidOperationException("A Node or presentation ID is already registered in NodePresentation.");
+            }
+            NodePresentation.Add(presentationId, representation);
+            NodePresentationKeyByNodeId.Add(nodeId, presentationId);
+            AdvanceNodePresentationId(presentationId);
+        }
+
+        private void RemoveNodeRepresentation(Guid nodeId)
+        {
+            if (NodePresentationKeyByNodeId.Remove(nodeId, out UInt128 presentationId))
+            {
+                NodePresentation.Remove(presentationId);
+            }
+        }
+
+        private void AdvanceNodePresentationId(UInt128 usedId)
+        {
+            if (_nodePresentationIdSpaceExhausted || usedId < _nextNodePresentationId)
+            {
+                return;
+            }
+            if (usedId == UInt128.MaxValue)
+            {
+                _nextNodePresentationId = UInt128.MaxValue;
+                _nodePresentationIdSpaceExhausted = true;
+            }
+            else
+            {
+                _nextNodePresentationId = usedId + 1;
+            }
         }
 
         private Node? GetTrustedNodeForTarget(NodeTargetKind kind, Guid targetId)
@@ -3501,6 +4382,7 @@ namespace OPEN_LRD
                 case NodeTargetKind.Function:
                     break;
             }
+            RecalculateAllNodePresentationsInternal();
         }
 
         private Guid GetNodeIdForTarget(NodeTargetKind kind, Guid targetId)
@@ -3651,10 +4533,58 @@ namespace OPEN_LRD
             TrustedSkillsGraph = graph;
         }
 
-        private Graph<Guid> BuildSkillsGraphSnapshotInternal(NodeRelationType? relationFilter)
+        private static void ValidateLinkQuery(
+            NodeRelationType? relationFilter,
+            NodeLinkOrigin? originFilter,
+            double? minimumConfidence)
+        {
+            if (relationFilter.HasValue && !Enum.IsDefined(relationFilter.Value))
+                throw new ArgumentOutOfRangeException(nameof(relationFilter));
+            if (originFilter.HasValue && !Enum.IsDefined(originFilter.Value))
+                throw new ArgumentOutOfRangeException(nameof(originFilter));
+            if (minimumConfidence.HasValue &&
+                (!double.IsFinite(minimumConfidence.Value) || minimumConfidence.Value < 0.0 || minimumConfidence.Value > 1.0))
+                throw new ArgumentOutOfRangeException(nameof(minimumConfidence));
+        }
+
+        private static bool MatchesLinkQuery(
+            NodeLink link,
+            NodeRelationType? relationFilter,
+            NodeLinkOrigin? originFilter,
+            string? authorFilter,
+            double? minimumConfidence,
+            DateTimeOffset? activeAt)
+        {
+            return (!relationFilter.HasValue || link.RelationType == relationFilter.Value) &&
+                   (!originFilter.HasValue || link.Provenance.Origin == originFilter.Value) &&
+                   (authorFilter == null || string.Equals(link.Provenance.Author, authorFilter, StringComparison.OrdinalIgnoreCase)) &&
+                   (!minimumConfidence.HasValue || link.Weight >= minimumConfidence.Value) &&
+                   (!activeAt.HasValue || link.Provenance.IsActiveAt(activeAt.Value));
+        }
+
+        private bool HasMatchingIncidentLink(
+            Guid nodeId,
+            NodeRelationType? relationFilter,
+            double? minimumConfidence)
+        {
+            bool Matches(NodeLink link) =>
+                (!relationFilter.HasValue || link.RelationType == relationFilter.Value) &&
+                (!minimumConfidence.HasValue || link.Weight >= minimumConfidence.Value);
+            return (TrustedOutgoingLinks.TryGetValue(nodeId, out List<NodeLink>? outgoing) && outgoing.Any(Matches)) ||
+                   (TrustedIncomingLinks.TryGetValue(nodeId, out List<NodeLink>? incoming) && incoming.Any(Matches));
+        }
+
+        private Graph<Guid> BuildSkillsGraphSnapshotInternal(
+            NodeRelationType? relationFilter,
+            NodeLinkOrigin? originFilter,
+            string? authorFilter,
+            double? minimumConfidence,
+            DateTimeOffset? activeAt)
         {
             Graph<Guid> graph = new Graph<Guid>(true);
-            if (!relationFilter.HasValue)
+            string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
+            if (!relationFilter.HasValue && !originFilter.HasValue &&
+                normalizedAuthor == null && !minimumConfidence.HasValue && !activeAt.HasValue)
             {
                 foreach (Guid nodeId in TrustedSkillsGraph.Nodes)
                 {
@@ -3675,7 +4605,7 @@ namespace OPEN_LRD
             {
                 foreach (NodeLink link in links)
                 {
-                    if (link.RelationType == relationFilter.Value)
+                    if (MatchesLinkQuery(link, relationFilter, originFilter, normalizedAuthor, minimumConfidence, activeAt))
                     {
                         graph.AddEdge(link.SourceNodeId, link.TargetNodeId, link.Weight);
                     }
@@ -3703,7 +4633,7 @@ namespace OPEN_LRD
                     return existingSymbolBox;
                 }
 
-                SymbolBox newSymbolBox = new SymbolBox(Guid.NewGuid(), symbolChar);
+                SymbolBox newSymbolBox = new SymbolBox(GenerateUntrustedId(NodeTargetKind.Symbol), symbolChar);
                 newSymbolBox.SetSenseID(senseId);
                 return newSymbolBox;
             });
@@ -3729,7 +4659,7 @@ namespace OPEN_LRD
                     return existingWord;
                 }
 
-                return new WordBox(senseId, usageId, symbols, partOfSpeech);
+                return new WordBox(GenerateUntrustedId(NodeTargetKind.Word), senseId, usageId, symbols, partOfSpeech);
             });
         }
 
@@ -3751,8 +4681,182 @@ namespace OPEN_LRD
                     return existingSentence;
                 }
 
-                return new SentenceBox(Guid.NewGuid(), senseId, words);
+                return new SentenceBox(GenerateUntrustedId(NodeTargetKind.Sentence), senseId, words);
             });
+        }
+
+        internal bool IsTrustedIdRegistered(NodeTargetKind kind, Guid id)
+        {
+            if (id == Guid.Empty)
+            {
+                return false;
+            }
+            return GraphSynchronization.Execute(() =>
+            {
+                if (!_initialized)
+                {
+                    return false;
+                }
+                if (TrustedNodeByTargetIndex.ContainsKey((kind, id)))
+                {
+                    return true;
+                }
+                return kind switch
+                {
+                    NodeTargetKind.Symbol => TrustedSymbolDictionary.ContainsKey(id) || IsPagedRecordAvailable(DiskPartition.Symbols, id),
+                    NodeTargetKind.Word => TrustedWordDictionary.ContainsKey(id) || IsPagedRecordAvailable(DiskPartition.Words, id),
+                    NodeTargetKind.Sentence => TrustedSentenceDictionary.ContainsKey(id) || IsPagedRecordAvailable(DiskPartition.Sentences, id),
+                    NodeTargetKind.Sense => TrustedSenseDictionary.ContainsKey(id) || IsPagedRecordAvailable(DiskPartition.Senses, id),
+                    NodeTargetKind.Usage => TrustedUsageDictionary.ContainsKey(id) || IsPagedRecordAvailable(DiskPartition.Usages, id),
+                    NodeTargetKind.Source => SourceDictionary.ContainsKey(id) || IsPagedRecordAvailable(DiskPartition.Sources, id),
+                    NodeTargetKind.Group => TrustedGroupDictionary.ContainsKey(id) || IsPagedRecordAvailable(DiskPartition.Groups, id),
+                    NodeTargetKind.Function => TrustedFunctionDictionary.ContainsKey(id) || IsPagedRecordAvailable(DiskPartition.Functions, id),
+                    _ => false
+                };
+            });
+        }
+
+        internal bool IsUntrustedIdRegistered(NodeTargetKind kind, Guid id)
+        {
+            if (id == Guid.Empty)
+            {
+                return false;
+            }
+            return GraphSynchronization.Execute(() =>
+            {
+                if (!_initialized)
+                {
+                    return false;
+                }
+                if (UntrustedNodeByTargetIndex.ContainsKey((kind, id)))
+                {
+                    return true;
+                }
+                return kind switch
+                {
+                    NodeTargetKind.Symbol => UntrustedSymbolDictionary.ContainsKey(id),
+                    NodeTargetKind.Word => UntrustedWordDictionary.ContainsKey(id),
+                    NodeTargetKind.Sentence => UntrustedSentenceDictionary.ContainsKey(id),
+                    NodeTargetKind.Function => UntrustedFunctionDictionary.ContainsKey(id),
+                    _ => false
+                };
+            });
+        }
+
+        internal Guid GenerateUntrustedId(NodeTargetKind kind, Func<Guid>? guidGenerator = null)
+        {
+            Func<Guid> generator = guidGenerator ?? Guid.NewGuid;
+            return GraphSynchronization.Execute(() =>
+            {
+                const int maxAttempts = 1024;
+                for (int attempt = 0; attempt < maxAttempts; attempt++)
+                {
+                    Guid candidate = generator();
+                    if (candidate != Guid.Empty &&
+                        !IsTrustedIdRegistered(kind, candidate) &&
+                        !IsUntrustedIdRegistered(kind, candidate))
+                    {
+                        return candidate;
+                    }
+                }
+                throw new InvalidOperationException($"Unable to generate a non-colliding untrusted {kind} identifier.");
+            });
+        }
+
+        internal void ValidateNewUntrustedId(NodeTargetKind kind, Guid id, string parameterName)
+        {
+            if (id == Guid.Empty)
+            {
+                throw new ArgumentException("Identity identifiers cannot be Guid.Empty.", parameterName);
+            }
+            if (IsTrustedIdRegistered(kind, id))
+            {
+                throw new ArgumentException($"The identifier '{id}' conflicts with a registered trusted {kind} object.", parameterName);
+            }
+        }
+
+        internal bool IsTrustedNodeIdRegistered(Guid nodeId)
+        {
+            if (nodeId == Guid.Empty)
+            {
+                return false;
+            }
+            return GraphSynchronization.Execute(() =>
+                _initialized && (TrustedNodeDictionary.ContainsKey(nodeId) || IsPagedRecordAvailable(DiskPartition.Nodes, nodeId)));
+        }
+
+        internal Guid GenerateUntrustedNodeId(Func<Guid>? guidGenerator = null)
+        {
+            Func<Guid> generator = guidGenerator ?? Guid.NewGuid;
+            return GraphSynchronization.Execute(() =>
+            {
+                const int maxAttempts = 1024;
+                for (int attempt = 0; attempt < maxAttempts; attempt++)
+                {
+                    Guid candidate = generator();
+                    if (candidate != Guid.Empty &&
+                        !IsTrustedNodeIdRegistered(candidate) &&
+                        (!_initialized || !UntrustedNodeDictionary.ContainsKey(candidate)))
+                    {
+                        return candidate;
+                    }
+                }
+                throw new InvalidOperationException("Unable to generate a non-colliding untrusted Node identifier.");
+            });
+        }
+
+        internal void ValidateNewUntrustedNodeId(Guid nodeId, string parameterName)
+        {
+            if (nodeId == Guid.Empty)
+            {
+                throw new ArgumentException("Node identifiers cannot be Guid.Empty.", parameterName);
+            }
+            if (IsTrustedNodeIdRegistered(nodeId))
+            {
+                throw new ArgumentException($"The node identifier '{nodeId}' conflicts with a registered trusted Node.", parameterName);
+            }
+        }
+
+        internal bool IsConversationIdRegistered(Guid conversationId)
+        {
+            if (conversationId == Guid.Empty)
+            {
+                return false;
+            }
+            return GraphSynchronization.Execute(() =>
+                _initialized &&
+                (TextConversationDictionary.ContainsKey(conversationId) ||
+                 SymbolicConversationDictionary.ContainsKey(conversationId)));
+        }
+
+        internal Guid GenerateConversationId(Func<Guid>? guidGenerator = null)
+        {
+            Func<Guid> generator = guidGenerator ?? Guid.NewGuid;
+            return GraphSynchronization.Execute(() =>
+            {
+                const int maxAttempts = 1024;
+                for (int attempt = 0; attempt < maxAttempts; attempt++)
+                {
+                    Guid candidate = generator();
+                    if (candidate != Guid.Empty && !IsConversationIdRegistered(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+                throw new InvalidOperationException("Unable to generate a non-colliding Conversation identifier.");
+            });
+        }
+
+        internal void ValidateNewConversationId(Guid conversationId, string parameterName)
+        {
+            if (conversationId == Guid.Empty)
+            {
+                throw new ArgumentException("Conversation identifiers cannot be Guid.Empty.", parameterName);
+            }
+            if (IsConversationIdRegistered(conversationId))
+            {
+                throw new ArgumentException($"The conversation identifier '{conversationId}' conflicts with a registered conversation.", parameterName);
+            }
         }
 
     }

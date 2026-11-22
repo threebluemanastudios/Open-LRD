@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Threading;
@@ -35,6 +37,7 @@ namespace OPEN_LRD.Skills
             string? OutputUnit);
 
         private static readonly IReadOnlyList<FunctionDescriptor> Functions = BuildFunctionRegistry();
+        private static readonly IReadOnlyList<FunctionDescriptor> ScalarFunctions = BuildScalarFunctionRegistry();
 
         public static FunctionResult Dispatch(FunctionBox functionBox)
         {
@@ -43,20 +46,16 @@ namespace OPEN_LRD.Skills
                 throw new ArgumentNullException(nameof(functionBox));
             }
 
-            bool storeResult = !functionBox.IsReadOnly;
-            if (storeResult)
-            {
-                functionBox.ClearResult();
-            }
+            FunctionDispatchSnapshot snapshot = functionBox.GetDispatchSnapshot();
             FunctionDescriptor descriptor = SelectFunction(
-                functionBox.FunctionKey,
-                functionBox.Variables,
-                functionBox.ExpectedResultType,
-                functionBox.ExpectedResultUnitTitle);
-            FunctionResult result = Invoke(descriptor, functionBox.Variables);
-            if (storeResult)
+                snapshot.FunctionKey,
+                snapshot.Variables,
+                snapshot.ExpectedResultType,
+                snapshot.ExpectedResultUnitTitle);
+            FunctionResult result = Invoke(descriptor, snapshot.Variables);
+            if (!snapshot.IsReadOnly)
             {
-                functionBox.StoreResult(result);
+                functionBox.TryStoreDispatchResult(result, snapshot.DefinitionRevision);
             }
             return result;
         }
@@ -79,11 +78,23 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentException("The stored function result value does not match the selected function signature.", nameof(functionBox));
             }
-            if (result.UnitTitle != null &&
-                !string.Equals(result.UnitTitle, descriptor.OutputUnit, StringComparison.Ordinal))
+            if (!string.Equals(result.UnitTitle, descriptor.OutputUnit, StringComparison.Ordinal))
             {
                 throw new ArgumentException("The stored function result unit does not match the selected function signature.", nameof(functionBox));
             }
+        }
+
+        /// <summary>Resolves an alias or unqualified function name to its stable registry key.</summary>
+        public static string ResolveFunctionKey(
+            string? functionKey,
+            IReadOnlyList<FunctionVariable> variables,
+            Type expectedResultType,
+            string? expectedResultUnitTitle = null)
+        {
+            ArgumentNullException.ThrowIfNull(variables);
+            ArgumentNullException.ThrowIfNull(expectedResultType);
+            return SelectFunction(functionKey, variables, expectedResultType,
+                NormalizeOptionalText(expectedResultUnitTitle)).Key;
         }
 
         public static FunctionResult Dispatch(
@@ -226,7 +237,8 @@ namespace OPEN_LRD.Skills
 
         private static bool SignatureMatches(FunctionDescriptor function, IReadOnlyList<FunctionVariable> variables, Type expectedResultType)
         {
-            if (function.ParameterTypes.Length != variables.Count || !expectedResultType.IsAssignableFrom(function.ReturnType))
+            Type expectedValueType = Nullable.GetUnderlyingType(expectedResultType) ?? expectedResultType;
+            if (function.ParameterTypes.Length != variables.Count || !expectedValueType.IsAssignableFrom(function.ReturnType))
             {
                 return false;
             }
@@ -335,6 +347,288 @@ namespace OPEN_LRD.Skills
 
             string? resultUnitTitle = function.OutputUnit;
             return new FunctionResult(value, function.ReturnType, resultUnitTitle);
+        }
+
+        internal static bool CanResolveScalarExpressionCall(string nameOrKey, int argumentCount, out string canonicalName)
+        {
+            canonicalName = string.Empty;
+            if (string.IsNullOrWhiteSpace(nameOrKey) || argumentCount <= 0)
+            {
+                return false;
+            }
+
+            string request = nameOrKey.Trim();
+            List<FunctionDescriptor> candidates = ScalarFunctions
+                .Where(function => function.ParameterTypes.Length == argumentCount)
+                .Where(function => MatchesScalarName(function, request))
+                .ToList();
+            if (candidates.Count == 0)
+            {
+                return false;
+            }
+
+            List<FunctionDescriptor> keyedCandidates = candidates
+                .Where(function => string.Equals(function.Key, request, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (keyedCandidates.Count > 0)
+            {
+                candidates = keyedCandidates;
+            }
+
+            FunctionDescriptor selected = candidates
+                .OrderBy(function => GetScalarPreferenceScore(function.ParameterTypes))
+                .ThenBy(function => function.Key, StringComparer.Ordinal)
+                .First();
+            canonicalName = selected.Key;
+            return true;
+        }
+
+        internal static double InvokeScalarExpressionCall(string nameOrKey, IReadOnlyList<double> arguments)
+        {
+            if (!TryInvokeScalarExpressionCall(nameOrKey, arguments, out double result))
+            {
+                throw new ArgumentException($"No registered scalar math function named '{nameOrKey}' accepts {arguments.Count} numeric argument(s).", nameof(nameOrKey));
+            }
+            return result;
+        }
+
+        internal static bool TryInvokeScalarExpressionCall(string nameOrKey, IReadOnlyList<double> arguments, out double result)
+        {
+            result = 0.0;
+            if (string.IsNullOrWhiteSpace(nameOrKey))
+            {
+                return false;
+            }
+            ArgumentNullException.ThrowIfNull(arguments);
+
+            string request = nameOrKey.Trim();
+            List<FunctionDescriptor> candidates = ScalarFunctions
+                .Where(function => function.ParameterTypes.Length == arguments.Count)
+                .Where(function => MatchesScalarName(function, request))
+                .ToList();
+            List<FunctionDescriptor> keyedCandidates = candidates
+                .Where(function => string.Equals(function.Key, request, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (keyedCandidates.Count > 0)
+            {
+                candidates = keyedCandidates;
+            }
+
+            FunctionDescriptor? best = null;
+            object?[]? bestArguments = null;
+            int bestScore = int.MaxValue;
+            foreach (FunctionDescriptor candidate in candidates)
+            {
+                if (!TryConvertScalarArguments(candidate.ParameterTypes, arguments, out object?[] converted, out int score) || score >= bestScore)
+                {
+                    continue;
+                }
+                best = candidate;
+                bestArguments = converted;
+                bestScore = score;
+            }
+
+            if (best == null || bestArguments == null)
+            {
+                return false;
+            }
+
+            object? value;
+            try
+            {
+                value = best.Method.Invoke(null, bestArguments);
+            }
+            catch (TargetInvocationException exception) when (exception.InnerException != null)
+            {
+                ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+                throw;
+            }
+            if (value == null)
+            {
+                return false;
+            }
+            try
+            {
+                double convertedResult = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                if (!double.IsFinite(convertedResult))
+                {
+                    return false;
+                }
+                result = convertedResult;
+                return true;
+            }
+            catch (OverflowException)
+            {
+                return false;
+            }
+        }
+
+        private static bool MatchesScalarName(FunctionDescriptor function, string request)
+        {
+            return string.Equals(function.Key, request, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(function.Name, request, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int GetScalarPreferenceScore(IReadOnlyList<Type> parameterTypes)
+        {
+            int score = 0;
+            foreach (Type parameterType in parameterTypes)
+            {
+                score += parameterType == typeof(double) ? 0
+                    : parameterType == typeof(int) ? 1
+                    : parameterType == typeof(long) ? 2
+                    : parameterType == typeof(BigInteger) ? 3
+                    : parameterType == typeof(float) ? 4
+                    : 5;
+            }
+            return score;
+        }
+
+        private static bool TryConvertScalarArguments(
+            IReadOnlyList<Type> parameterTypes,
+            IReadOnlyList<double> arguments,
+            out object?[] converted,
+            out int score)
+        {
+            converted = new object?[arguments.Count];
+            score = 0;
+            for (int index = 0; index < arguments.Count; index++)
+            {
+                double value = arguments[index];
+                if (!double.IsFinite(value))
+                {
+                    return false;
+                }
+                Type parameterType = parameterTypes[index];
+                if (parameterType == typeof(double))
+                {
+                    converted[index] = value;
+                    continue;
+                }
+                if (parameterType == typeof(float))
+                {
+                    float floatValue = (float)value;
+                    if (!float.IsFinite(floatValue))
+                    {
+                        return false;
+                    }
+                    converted[index] = floatValue;
+                    score += 4;
+                    continue;
+                }
+                if (parameterType == typeof(decimal))
+                {
+                    try
+                    {
+                        converted[index] = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                    }
+                    catch (OverflowException)
+                    {
+                        return false;
+                    }
+                    score += 5;
+                    continue;
+                }
+                if (value != Math.Truncate(value))
+                {
+                    return false;
+                }
+                if (parameterType == typeof(int))
+                {
+                    if (value < int.MinValue || value > int.MaxValue)
+                    {
+                        return false;
+                    }
+                    converted[index] = (int)value;
+                    score += 1;
+                    continue;
+                }
+                if (parameterType == typeof(long))
+                {
+                    if (value < long.MinValue || value > long.MaxValue)
+                    {
+                        return false;
+                    }
+                    converted[index] = (long)value;
+                    score += 2;
+                    continue;
+                }
+                if (parameterType == typeof(BigInteger))
+                {
+                    if (value < long.MinValue || value > long.MaxValue)
+                    {
+                        return false;
+                    }
+                    converted[index] = new BigInteger((long)value);
+                    score += 3;
+                    continue;
+                }
+                return false;
+            }
+            return true;
+        }
+
+        private static IReadOnlyList<FunctionDescriptor> BuildScalarFunctionRegistry()
+        {
+            Type[] scalarTypes =
+            {
+                typeof(Math_1),
+                typeof(Math_2),
+                typeof(Math_3),
+                typeof(Math_4),
+                typeof(Algebra),
+                typeof(ProbabilityAndStatistics),
+                typeof(DiscreteMath),
+                typeof(InformationTheoryAndMLMath),
+                typeof(FinancialMath),
+                typeof(BasicPhysics),
+                typeof(Thermodynamics),
+                typeof(FluidMechanics),
+                typeof(Electromagnetism),
+                typeof(CondensedMatter),
+                typeof(CurvedSpacetime)
+            };
+            List<FunctionDescriptor> functions = new List<FunctionDescriptor>();
+            foreach (Type scalarType in scalarTypes)
+            {
+                MethodInfo[] methods = scalarType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+                foreach (MethodInfo method in methods)
+                {
+                    if (method.IsGenericMethodDefinition
+                        || method.IsSpecialName
+                        || !IsScalarNumericType(method.ReturnType))
+                    {
+                        continue;
+                    }
+                    ParameterInfo[] parameters = method.GetParameters();
+                    if (parameters.Length == 0
+                        || parameters.Any(parameter => parameter.IsOut
+                            || parameter.ParameterType.IsByRef
+                            || !IsScalarNumericType(parameter.ParameterType)))
+                    {
+                        continue;
+                    }
+                    functions.Add(new FunctionDescriptor(
+                        $"{scalarType.Name}.{method.Name}",
+                        method.Name,
+                        method,
+                        parameters.Select(parameter => parameter.ParameterType).ToArray(),
+                        method.ReturnType,
+                        new Dictionary<int, string>(),
+                        null));
+                }
+            }
+            return functions.AsReadOnly();
+        }
+
+        private static bool IsScalarNumericType(Type type)
+        {
+            return type == typeof(double)
+                || type == typeof(float)
+                || type == typeof(int)
+                || type == typeof(long)
+                || type == typeof(decimal)
+                || type == typeof(BigInteger);
         }
 
         private static IReadOnlyList<FunctionDescriptor> BuildFunctionRegistry()

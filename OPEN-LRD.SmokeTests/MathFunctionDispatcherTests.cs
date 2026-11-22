@@ -14,7 +14,7 @@ namespace OPEN_LRD.SmokeTests
             Run("Math function dispatcher unique inference", TestUniqueInference);
             Run("Math function dispatcher validation and ambiguity", TestValidationAndAmbiguity);
             Run("Math function dispatcher unit requirements", TestUnitRequirements);
-            Run("Math function dispatcher clears prior result", TestResultClearing);
+            Run("Math function dispatcher preserves last successful result", TestResultPreservation);
         }
 
         private static void TestKeyedCall()
@@ -23,6 +23,10 @@ namespace OPEN_LRD.SmokeTests
             Assert(result.Value is int value && value == 5, "keyed call should return the integer result");
             Assert(result.DataType == typeof(int), "keyed call should report the declared return type");
             AssertEqual(MathFunctionDispatcher.Dispatch<double>("Math_1.AddDouble", 1.25, 2.75), 4.0, "generic keyed call");
+            Assert(MathFunctionDispatcher.ResolveFunctionKey("AddDouble",
+                    new[] { new FunctionVariable("x", 1.0, typeof(double)), new FunctionVariable("y", 2.0, typeof(double)) },
+                    typeof(double)) == "Math_1.AddDouble",
+                "function aliases should resolve to a stable canonical registry key");
         }
 
         private static void TestFunctionBoxRouting()
@@ -59,6 +63,9 @@ namespace OPEN_LRD.SmokeTests
 
         private static void TestValidationAndAmbiguity()
         {
+            FunctionResult nullableResult = MathFunctionDispatcher.Dispatch("Math_1.AddDouble", typeof(double?), 2.0, 3.0);
+            Assert(nullableResult.DataType == typeof(double) && (double)nullableResult.Value! == 5.0,
+                "nullable expected result types should accept their underlying registered return type");
             AssertThrows<ArgumentException>(
                 () => MathFunctionDispatcher.Dispatch("Math_1.AddDouble", typeof(double), 2, 3),
                 "dispatcher should reject mismatched input types");
@@ -94,21 +101,36 @@ namespace OPEN_LRD.SmokeTests
             AssertThrows<UnitConversionRequiredException>(
                 () => MathFunctionDispatcher.Dispatch(outputConversionBox),
                 "dispatcher should reject an output unit requiring conversion");
+
+            FunctionBox mismatchedStoredUnit = new FunctionBox(typeof(double), "Math_2.CalculateCircleArea", "m²");
+            mismatchedStoredUnit.AddVariable(new FunctionVariable("radius", 2.0, typeof(double), "m"));
+            mismatchedStoredUnit.StoreResult(new FunctionResult(Math.PI * 4.0, typeof(double), "cm²"));
+            AssertThrows<ArgumentException>(() => MathFunctionDispatcher.ValidateDefinition(mismatchedStoredUnit),
+                "trusted definitions should reject result units that do not match the selected function output");
         }
 
-        private static void TestResultClearing()
+        private static void TestResultPreservation()
         {
             FunctionBox box = new FunctionBox(typeof(double), "Math_2.CalculateHypotenuse");
             box.AddVariable(new FunctionVariable("legA", 3.0, typeof(double), "m"));
             box.AddVariable(new FunctionVariable("legB", 4.0, typeof(double), "m"));
             MathFunctionDispatcher.Dispatch(box);
-            Assert(box.Result != null, "successful dispatch should populate the result slot");
+            FunctionResult original = box.Result!;
+            Assert(original != null, "successful dispatch should populate the result slot");
+
+            FunctionDispatchSnapshot snapshot = box.GetDispatchSnapshot();
+            box.FunctionKey = "Math_2.CalculateCircleArea";
+            AssertThrows<InvalidOperationException>(() => MathFunctionDispatcher.ValidateDefinition(box),
+                "a result from an older definition revision must not be promoted as trusted");
+            AssertThrows<InvalidOperationException>(() => box.TryStoreDispatchResult(original!, snapshot.DefinitionRevision),
+                "a result computed against an obsolete definition revision must not overwrite the box");
+            Assert(ReferenceEquals(box.Result, original), "stale dispatch results must not replace the last successful result");
 
             box.FunctionKey = "Missing.Function";
             AssertThrows<System.Collections.Generic.KeyNotFoundException>(
                 () => MathFunctionDispatcher.Dispatch(box),
                 "unknown function should fail");
-            Assert(box.Result == null, "failed invocation should not leave a stale result on the box");
+            Assert(ReferenceEquals(box.Result, original), "failed dispatch should preserve the last successful result");
         }
     }
 }

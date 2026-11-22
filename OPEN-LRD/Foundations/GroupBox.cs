@@ -16,13 +16,13 @@ namespace OPEN_LRD.Foundations
 
         public GroupBox()
         {
-            GroupingID = Guid.NewGuid();
+            GroupingID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Group);
             _sentences = new List<Guid>();
             _sentenceSet = new HashSet<Guid>();
         }
         public GroupBox(string groupingName)
         {
-            GroupingID = Guid.NewGuid();
+            GroupingID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Group);
             GroupingName = NormalizeOptionalText(groupingName);
             _sentences = new List<Guid>();
             _sentenceSet = new HashSet<Guid>();
@@ -30,40 +30,45 @@ namespace OPEN_LRD.Foundations
 
         public GroupBox(Guid groupingId)
         {
-            ValidateIdentityId(groupingId, nameof(groupingId));
+            ValidateGroupingId(groupingId, nameof(groupingId), allowRegisteredTrustedId: false);
             GroupingID = groupingId;
             _sentences = new List<Guid>();
             _sentenceSet = new HashSet<Guid>();
         }
 
         public GroupBox(Dictionary<Guid, SentenceBox> sentences)
-            : this(Guid.NewGuid(), null, ExtractSentenceIds(sentences))
+            : this(LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Group), null, ExtractSentenceIds(sentences), allowRegisteredTrustedId: true)
         {
         }
 
         public GroupBox(Guid groupingId, Dictionary<Guid, SentenceBox> sentences)
-            : this(groupingId, null, ExtractSentenceIds(sentences))
+            : this(groupingId, null, ExtractSentenceIds(sentences), allowRegisteredTrustedId: false)
         {
         }
 
         public GroupBox(Guid groupingId, string groupingName, Dictionary<Guid, SentenceBox> sentences)
-            : this(groupingId, groupingName, ExtractSentenceIds(sentences))
+            : this(groupingId, groupingName, ExtractSentenceIds(sentences), allowRegisteredTrustedId: false)
         {
         }
 
         public GroupBox(IEnumerable<Guid> sentenceIds)
-            : this(Guid.NewGuid(), null, sentenceIds)
+            : this(LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Group), null, sentenceIds, allowRegisteredTrustedId: true)
         {
         }
 
         public GroupBox(Guid groupingId, IEnumerable<Guid> sentenceIds)
-            : this(groupingId, null, sentenceIds)
+            : this(groupingId, null, sentenceIds, allowRegisteredTrustedId: false)
         {
         }
 
         public GroupBox(Guid groupingId, string? groupingName, IEnumerable<Guid> sentenceIds)
+            : this(groupingId, groupingName, sentenceIds, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(groupingId, nameof(groupingId));
+        }
+
+        internal GroupBox(Guid groupingId, string? groupingName, IEnumerable<Guid> sentenceIds, bool allowRegisteredTrustedId)
+        {
+            ValidateGroupingId(groupingId, nameof(groupingId), allowRegisteredTrustedId);
             ArgumentNullException.ThrowIfNull(sentenceIds);
             ValidateIdentityIds(sentenceIds, nameof(sentenceIds));
             GroupingID = groupingId;
@@ -161,6 +166,18 @@ namespace OPEN_LRD.Foundations
                 }
                 return sentenceIds;
             });
+        }
+
+        private static void ValidateGroupingId(Guid id, string parameterName, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
+            {
+                ValidateIdentityId(id, parameterName);
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedId(NodeTargetKind.Group, id, parameterName);
+            }
         }
 
         private static void ValidateIdentityId(Guid id, string parameterName)

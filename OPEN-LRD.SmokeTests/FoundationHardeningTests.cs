@@ -127,6 +127,10 @@ namespace OPEN_LRD.SmokeTests
                     FunctionResult original = trusted.Result!;
                     Program.AssertThrows<InvalidOperationException>(() => trusted.AddVariable(new FunctionVariable("other", 1.0, typeof(double))),
                         "Trusted FunctionBox variables must be immutable.");
+                    Program.AssertThrows<InvalidOperationException>(() => trusted.SetVariable(new FunctionVariable("radius", 3.0, typeof(double), "m")),
+                        "Trusted FunctionBox variables must not be replaceable.");
+                    Program.AssertThrows<InvalidOperationException>(() => trusted.RemoveVariable("radius"),
+                        "Trusted FunctionBox variables must not be removable.");
                     Program.AssertThrows<InvalidOperationException>(() => trusted.StoreResult(original),
                         "Trusted FunctionBox Result must be immutable.");
 
@@ -264,11 +268,21 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(parsed == huge && Fraction.TryParse("-6/-8", out Fraction? parsedThreeQuarters) &&
                                parsedThreeQuarters == new Fraction(new BigInteger(3), new BigInteger(4)),
                     "BigInteger fractions should parse and round-trip invariantly.");
+                Fraction negative = new Fraction(new BigInteger(-7), new BigInteger(3));
+                Program.Assert(Fraction.Parse(negative.ToString()) == negative && negative.CompareTo(null) > 0,
+                    "Negative fractions should round-trip and compare greater than a null reference.");
                 Program.Assert((half + half) == new Fraction(1, 1), "Fraction arithmetic should remain exact.");
                 Program.AssertThrows<DivideByZeroException>(() => _ = half / zero,
                     "Fraction division by zero should throw.");
                 Program.AssertThrows<DivideByZeroException>(() => _ = new Fraction(BigInteger.One, BigInteger.Zero),
                     "A zero denominator should throw.");
+                Program.Assert(!Fraction.TryParse(null, out _), "Null fraction text should not parse.");
+                Program.Assert(!Fraction.TryParse("   ", out _), "Blank fraction text should not parse.");
+                Program.Assert(!Fraction.TryParse("1/2/3", out _), "Fraction text with multiple separators should not parse.");
+                Program.Assert(!Fraction.TryParse("1/x", out _), "Fraction text with a non-numeric denominator should not parse.");
+                Program.Assert(!Fraction.TryParse("1/0", out _), "Fraction text with a zero denominator should not parse.");
+                Program.Assert(Fraction.TryParse("42", out Fraction? whole) && whole == new Fraction(42, 1),
+                    "An integer-only fraction string should parse with denominator one.");
             };
         }
 
@@ -285,6 +299,11 @@ namespace OPEN_LRD.SmokeTests
                     "Vector2 angle should be in radians.");
                 Program.Assert(Vector2.Lerp(Vector2.Zero, Vector2.UnitX, 0.5) == new Vector2(0.5, 0.0),
                     "Vector2 Lerp should interpolate values.");
+                Program.Assert(Vector2.Lerp(Vector2.Zero, Vector2.UnitX, 2.0) == new Vector2(2.0, 0.0) &&
+                               Vector2.Lerp(Vector2.Zero, Vector2.UnitX, -1.0) == new Vector2(-1.0, 0.0),
+                    "Finite interpolation parameters outside [0, 1] should extrapolate linearly.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(() => Vector2.Lerp(Vector2.Zero, Vector2.UnitX, double.NaN),
+                    "Interpolation should reject non-finite parameters.");
                 Program.Assert(new Vector2(1e200, 0.0).Normalize() == Vector2.UnitX,
                     "Vector normalization should remain stable for large finite components.");
                 Program.Assert(Vector3.UnitX.Cross(Vector3.UnitY) == Vector3.UnitZ,
@@ -295,6 +314,10 @@ namespace OPEN_LRD.SmokeTests
                     "Zero-length vectors should not be normalized.");
                 Program.AssertThrows<ArgumentOutOfRangeException>(() => new Vector3(double.NaN, 0.0, 0.0),
                     "Vectors should reject non-finite components.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(() => new Vector3(double.PositiveInfinity, 0.0, 0.0),
+                    "Vectors should reject positive infinity components.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(() => new Vector2(double.NegativeInfinity, 0.0),
+                    "Vectors should reject negative infinity components.");
                 Program.AssertThrows<DivideByZeroException>(() => _ = vector / 0.0,
                     "Vector division by zero should throw.");
             };
@@ -346,6 +369,7 @@ namespace OPEN_LRD.SmokeTests
                     "Text dictionary ranges should upsert existing IDs and advance the next ID.");
                 Program.Assert(text.Remove(0) && text.GetEntryCount() == 2,
                     "Text entries should support removal without reusing IDs.");
+                Program.Assert(!text.Remove(99), "Removing a missing text ID should return false without changing entries.");
                 text.Clear();
                 Program.Assert(text.GetEntryCount() == 0 && text.GetCurrentTextCount() == 0,
                     "Clear should reset text entries and ID allocation.");

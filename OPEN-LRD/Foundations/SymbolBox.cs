@@ -20,13 +20,18 @@ namespace OPEN_LRD.Foundations
         private bool _hasSymbolChar;
         private bool _identityFrozen;
         public SymbolBox()
-            : this(Guid.NewGuid())
+            : this(LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Symbol), allowRegisteredTrustedId: true)
         {
         }
 
         public SymbolBox(Guid id)
+            : this(id, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(id, nameof(id));
+        }
+
+        internal SymbolBox(Guid id, bool allowRegisteredTrustedId)
+        {
+            ValidateSymbolId(id, nameof(id), allowRegisteredTrustedId);
             SymbolID = id;
             SymbolChar = '\0';
             SenseID = null;
@@ -35,13 +40,17 @@ namespace OPEN_LRD.Foundations
         }
 
         public SymbolBox(Guid id, char c)
+            : this(id, c, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(id, nameof(id));
+        }
+
+        internal SymbolBox(Guid id, char c, bool allowRegisteredTrustedId)
+        {
+            ValidateSymbolId(id, nameof(id), allowRegisteredTrustedId);
             SymbolID = id;
             SymbolChar = c;
             SType = char.GetUnicodeCategory(c);
             _hasSymbolChar = true;
-
         }
 
         public Guid GetSymbolID()
@@ -138,6 +147,18 @@ namespace OPEN_LRD.Foundations
             if (_identityFrozen)
             {
                 throw new InvalidOperationException("Symbol identity is frozen after trust.");
+            }
+        }
+
+        private static void ValidateSymbolId(Guid id, string parameterName, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
+            {
+                ValidateIdentityId(id, parameterName);
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedId(NodeTargetKind.Symbol, id, parameterName);
             }
         }
 

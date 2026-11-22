@@ -1561,6 +1561,20 @@ namespace OPEN_LRD.Skills
                     return ExpressionBuilder.Negate(ExpandInternal(negate.Operand, depth + 1));
                 case FunctionExpression function:
                     return ExpressionBuilder.Function(function.Function, ExpandInternal(function.Argument, depth + 1));
+                case CallExpression call:
+                {
+                    Expression[] arguments = new Expression[call.Arguments.Count];
+                    for (int index = 0; index < arguments.Length; index++)
+                    {
+                        arguments[index] = ExpandInternal(call.Arguments[index], depth + 1);
+                    }
+                    return ExpressionBuilder.Call(call.FunctionName, arguments);
+                }
+                case ConditionalExpression conditional:
+                    return ExpressionBuilder.Conditional(
+                        ExpandInternal(conditional.Condition, depth + 1),
+                        ExpandInternal(conditional.WhenTrue, depth + 1),
+                        ExpandInternal(conditional.WhenFalse, depth + 1));
                 case BinaryExpression binary:
                 {
                     Expression left = ExpandInternal(binary.Left, depth + 1);
@@ -1574,7 +1588,7 @@ namespace OPEN_LRD.Skills
                         BinaryOperator.Power => TryGetNonNegativeInteger(right, out int exponent)
                             ? ExpandPower(left, exponent, depth + 1)
                             : ExpressionBuilder.Power(left, right),
-                        _ => ExpressionBuilder.Add(left, right)
+                        _ => ExpressionBuilder.Binary(binary.Operator, left, right)
                     };
                     return SymbolicCalculus.Simplify(expanded);
                 }
@@ -1671,6 +1685,20 @@ namespace OPEN_LRD.Skills
                     return ExpressionBuilder.Function(
                         function.Function,
                         SubstituteInternal(function.Argument, variable, replacement));
+                case CallExpression call:
+                {
+                    Expression[] arguments = new Expression[call.Arguments.Count];
+                    for (int index = 0; index < arguments.Length; index++)
+                    {
+                        arguments[index] = SubstituteInternal(call.Arguments[index], variable, replacement);
+                    }
+                    return ExpressionBuilder.Call(call.FunctionName, arguments);
+                }
+                case ConditionalExpression conditional:
+                    return ExpressionBuilder.Conditional(
+                        SubstituteInternal(conditional.Condition, variable, replacement),
+                        SubstituteInternal(conditional.WhenTrue, variable, replacement),
+                        SubstituteInternal(conditional.WhenFalse, variable, replacement));
                 default:
                     return expression;
             }

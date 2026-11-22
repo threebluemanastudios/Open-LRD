@@ -229,6 +229,15 @@ namespace OPEN_LRD.SmokeTests
             AssertThrows<ArgumentException>(
                 () => LinearAlgebraAdvanced.MatrixVectorMultiply(Identity(2), new[] { 1.0 }),
                 "wrong vector length should be rejected");
+            AssertThrows<ArgumentException>(
+                () => LinearAlgebraAdvanced.LuDecomposition(new double[0, 0]),
+                "zero-size square LU input should be rejected");
+            AssertThrows<ArgumentException>(
+                () => LinearAlgebraAdvanced.SingularValueDecomposition(new double[2, 0]),
+                "zero-column SVD input should be rejected");
+            AssertThrows<ArgumentException>(
+                () => LinearAlgebraAdvanced.MatrixNorm(new double[0, 3], MatrixNormType.Frobenius),
+                "zero-row matrix norm input should be rejected");
         }
 
         private static double[,] Multiply(double[,] left, double[,] right)

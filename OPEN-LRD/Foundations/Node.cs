@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -89,6 +90,13 @@ namespace OPEN_LRD.Foundations
         public DateTimeOffset? ValidFrom { get; }
         public DateTimeOffset? ValidUntil { get; }
 
+        /// <summary>Returns whether this assertion is active at the supplied instant, including both window endpoints.</summary>
+        public bool IsActiveAt(DateTimeOffset instant)
+        {
+            return (!ValidFrom.HasValue || ValidFrom.Value <= instant) &&
+                   (!ValidUntil.HasValue || ValidUntil.Value >= instant);
+        }
+
         public NodeLinkProvenance(
             Guid assertionId,
             NodeLinkOrigin origin,
@@ -176,6 +184,50 @@ namespace OPEN_LRD.Foundations
                 sourceNodeId, targetNodeId, relationType, label, NodeLinkOrigin.LegacyImport, weight);
             return new NodeLinkProvenance(deterministic.AssertionId, NodeLinkOrigin.LegacyImport,
                 DateTimeOffset.UnixEpoch, confidence: weight);
+        }
+
+        internal static NodeLinkProvenance CreateReasoning(
+            Guid sourceNodeId,
+            Guid targetNodeId,
+            NodeRelationType relationType,
+            string? label,
+            double confidence,
+            string? author,
+            Guid? sourceTargetId,
+            Guid? evidenceTargetId,
+            DateTimeOffset? validFrom,
+            DateTimeOffset? validUntil)
+        {
+            string? normalizedLabel = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
+            string? normalizedAuthor = string.IsNullOrWhiteSpace(author) ? null : author.Trim();
+            if ((relationType is NodeRelationType.Synonym or NodeRelationType.Antonym) &&
+                sourceNodeId.CompareTo(targetNodeId) > 0)
+            {
+                (sourceNodeId, targetNodeId) = (targetNodeId, sourceNodeId);
+            }
+
+            using MemoryStream identity = new MemoryStream();
+            using (BinaryWriter writer = new BinaryWriter(identity, Encoding.UTF8, leaveOpen: true))
+            {
+                writer.Write(sourceNodeId.ToByteArray());
+                writer.Write(targetNodeId.ToByteArray());
+                writer.Write((int)relationType);
+                writer.Write(normalizedLabel ?? string.Empty);
+                writer.Write(normalizedAuthor ?? string.Empty);
+                writer.Write((sourceTargetId ?? Guid.Empty).ToByteArray());
+                writer.Write((evidenceTargetId ?? Guid.Empty).ToByteArray());
+                writer.Write(validFrom?.UtcDateTime.Ticks ?? long.MinValue);
+                writer.Write(validUntil?.UtcDateTime.Ticks ?? long.MinValue);
+            }
+
+            byte[] hash = SHA256.HashData(identity.ToArray());
+            Guid assertionId = new Guid(hash.AsSpan(0, 16));
+            if (assertionId == Guid.Empty)
+            {
+                assertionId = new Guid(hash.AsSpan(16, 16));
+            }
+            return new NodeLinkProvenance(assertionId, NodeLinkOrigin.Reasoning, DateTimeOffset.UtcNow,
+                normalizedAuthor, sourceTargetId, evidenceTargetId, confidence, validFrom, validUntil);
         }
 
         internal NodeLinkProvenance WithConfidence(double weight)
@@ -287,17 +339,31 @@ namespace OPEN_LRD.Foundations
         private bool isTrusted;
         private bool isReadOnly;
         private Func<NodeIdentityKey, NodeIdentityKey, bool>? identityChanging;
+        private Action<NodeIdentityKey, NodeIdentityKey>? identityChanged;
+        private Action? referenceCountsChanged;
 
         public Node(NodeTargetKind targetKind, Guid targetId, string? label = null)
-            : this(Guid.NewGuid(), targetKind, targetId, label)
+            : this(LRD_Core.Instance.GenerateUntrustedNodeId(), targetKind, targetId, label, allowRegisteredTrustedId: true)
         {
         }
 
         public Node(Guid nodeId, NodeTargetKind targetKind, Guid targetId, string? label = null)
+            : this(nodeId, targetKind, targetId, label, allowRegisteredTrustedId: false)
         {
-            if (nodeId == Guid.Empty)
+        }
+
+        internal Node(Guid nodeId, NodeTargetKind targetKind, Guid targetId, string? label, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
             {
-                throw new ArgumentException("Node identifiers cannot be Guid.Empty.", nameof(nodeId));
+                if (nodeId == Guid.Empty)
+                {
+                    throw new ArgumentException("Node identifiers cannot be Guid.Empty.", nameof(nodeId));
+                }
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedNodeId(nodeId, nameof(nodeId));
             }
             if (targetId == Guid.Empty)
             {
@@ -362,12 +428,23 @@ namespace OPEN_LRD.Foundations
                     throw new InvalidOperationException("Another node already has the requested target and label identity.");
                 }
                 label = normalized;
+                if (!oldKey.Equals(newKey)) identityChanged?.Invoke(oldKey, newKey);
             });
         }
 
         internal void SetIdentityChangingHandler(Func<NodeIdentityKey, NodeIdentityKey, bool>? handler)
         {
             GraphSynchronization.Execute(() => identityChanging = handler);
+        }
+
+        internal void SetIdentityChangedHandler(Action<NodeIdentityKey, NodeIdentityKey>? handler)
+        {
+            GraphSynchronization.Execute(() => identityChanged = handler);
+        }
+
+        internal void SetReferenceCountsChangedHandler(Action? handler)
+        {
+            GraphSynchronization.Execute(() => referenceCountsChanged = handler);
         }
 
         public int GetVerifiedReferences()
@@ -388,13 +465,23 @@ namespace OPEN_LRD.Foundations
         public void RegisterVerifiedReference(int count = 1)
         {
             ValidateCount(count);
-            GraphSynchronization.Execute(() => { EnsureWritable(); verifiedReferences = checked(verifiedReferences + count); });
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                verifiedReferences = checked(verifiedReferences + count);
+                referenceCountsChanged?.Invoke();
+            });
         }
 
         public void RegisterInvalidReference(int count = 1)
         {
             ValidateCount(count);
-            GraphSynchronization.Execute(() => { EnsureWritable(); invalidReferences = checked(invalidReferences + count); });
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                invalidReferences = checked(invalidReferences + count);
+                referenceCountsChanged?.Invoke();
+            });
         }
 
         internal void ReconcileReferenceCounts(int verified, int invalid)
@@ -413,6 +500,7 @@ namespace OPEN_LRD.Foundations
                 verifiedReferences = verified;
                 invalidReferences = invalid;
                 _ = checked(verifiedReferences - invalidReferences);
+                referenceCountsChanged?.Invoke();
             });
         }
 

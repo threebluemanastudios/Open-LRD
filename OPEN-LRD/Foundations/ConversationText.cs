@@ -13,7 +13,7 @@ namespace OPEN_LRD.Foundations
         private bool idSpaceExhausted;
 
         public ConversationText()
-            : this(Guid.NewGuid())
+            : this(LRD_Core.Instance.GenerateConversationId())
         {
         }
 
@@ -24,7 +24,7 @@ namespace OPEN_LRD.Foundations
         }
 
         public ConversationText(Dictionary<UInt128, string> textArray)
-            : this(Guid.NewGuid(), textArray)
+            : this(LRD_Core.Instance.GenerateConversationId(), textArray)
         {
         }
 
@@ -220,10 +220,7 @@ namespace OPEN_LRD.Foundations
 
         private static void ValidateConversationId(Guid id)
         {
-            if (id == Guid.Empty)
-            {
-                throw new ArgumentException("Conversation identifiers cannot be Guid.Empty.", nameof(id));
-            }
+            LRD_Core.Instance.ValidateNewConversationId(id, nameof(id));
         }
     }
 }

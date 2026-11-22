@@ -66,6 +66,15 @@ namespace OPEN_LRD.SmokeTests
             Assert(beforeTransition.Offset == TimeSpan.FromHours(-5), "pre-transition UTC offset");
             Assert(afterTransition.TimeOfDay == new TimeSpan(3, 30, 0), "post-transition local time");
             Assert(afterTransition.Offset == TimeSpan.FromHours(-4), "post-transition UTC offset");
+            DateTimeOffset firstAmbiguousHour = TimeAndDate.ConvertTime(
+                new DateTimeOffset(2024, 11, 3, 5, 30, 0, TimeSpan.Zero), zone);
+            DateTimeOffset secondAmbiguousHour = TimeAndDate.ConvertTime(
+                new DateTimeOffset(2024, 11, 3, 6, 30, 0, TimeSpan.Zero), zone);
+            Assert(firstAmbiguousHour.TimeOfDay == new TimeSpan(1, 30, 0) &&
+                   secondAmbiguousHour.TimeOfDay == new TimeSpan(1, 30, 0) &&
+                   firstAmbiguousHour.Offset == TimeSpan.FromHours(-4) &&
+                   secondAmbiguousHour.Offset == TimeSpan.FromHours(-5),
+                "Fall-back conversion should preserve the distinct offsets of an ambiguous local hour.");
             Assert(TimeAndDate.ConvertTime(DateTimeOffset.UnixEpoch, TimeZoneInfo.Utc) == DateTimeOffset.UnixEpoch, "UTC conversion");
         }
 
@@ -111,6 +120,9 @@ namespace OPEN_LRD.SmokeTests
             AssertThrows<ArgumentOutOfRangeException>(
                 () => TimeAndDate.AddBusinessDays(DateOnly.MaxValue, 1),
                 "date arithmetic overflow");
+            AssertThrows<ArgumentOutOfRangeException>(
+                () => TimeAndDate.AddBusinessDays(DateOnly.MinValue, -1),
+                "date arithmetic underflow");
             AssertThrows<ArgumentException>(
                 () => TimeAndDate.ElapsedTime(new TimeOnly(10, 0), new TimeOnly(9, 0)),
                 "end time before start time");

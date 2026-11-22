@@ -52,6 +52,13 @@ namespace OPEN_LRD.SmokeTests
             AssertEqual(ProbabilityAndStatistics.BinomialCdf(1, 2, 0.5), 0.75, "binomial CDF");
             AssertEqual(ProbabilityAndStatistics.PoissonPmf(0, 3.0), Math.Exp(-3.0), "Poisson PMF");
             AssertEqual(ProbabilityAndStatistics.PoissonCdf(0, 3.0), Math.Exp(-3.0), "Poisson CDF");
+            AssertEqual(ProbabilityAndStatistics.BinomialPmf(0, 5, 0.0), 1.0, "binomial p=0 endpoint");
+            AssertEqual(ProbabilityAndStatistics.BinomialPmf(5, 5, 1.0), 1.0, "binomial p=1 endpoint");
+            AssertEqual(ProbabilityAndStatistics.BinomialPmf(2, 5, 0.0), 0.0, "impossible successes at p=0");
+            AssertEqual(ProbabilityAndStatistics.BinomialCdf(0, 5, 1.0), 0.0, "binomial CDF at p=1 below its support");
+            Assert(ProbabilityAndStatistics.BinomialSample(new Random(7), 8, 0.0) == 0 &&
+                   ProbabilityAndStatistics.BinomialSample(new Random(7), 8, 1.0) == 8,
+                "Binomial sampling should be deterministic at probability endpoints.");
         }
 
         private static void TestContinuousDistributions()
@@ -198,6 +205,10 @@ namespace OPEN_LRD.SmokeTests
             AssertThrows<ArgumentOutOfRangeException>(() => ProbabilityAndStatistics.ProportionConfidenceInterval(0, 0, 0.95), "empty proportion sample");
             AssertThrows<ArgumentOutOfRangeException>(() => ProbabilityAndStatistics.StudentTCdf(0.0, 0.0), "zero t degrees of freedom");
             AssertThrows<ArgumentException>(() => ProbabilityAndStatistics.MeanConfidenceInterval(new[] { 1.0 }, 0.95), "small mean sample");
+            AssertThrows<ArgumentException>(() => ProbabilityAndStatistics.OneSampleTTest(Array.Empty<double>(), 0.0, TailType.TwoSided),
+                "empty t-test sample");
+            AssertThrows<ArgumentOutOfRangeException>(() => ProbabilityAndStatistics.MeanConfidenceInterval(new[] { double.PositiveInfinity, 1.0 }, 0.95),
+                "non-finite sample observation");
             AssertThrows<ArgumentNullException>(() => ProbabilityAndStatistics.NormalSample(null!, 0.0, 1.0), "null random source");
         }
     }

@@ -9,12 +9,16 @@ namespace OPEN_LRD.SmokeTests
         internal static void RunAll()
         {
             Program.Run("Core initialization lifecycle", InitializationLifecycleIsExplicit());
+            Program.Run("Concurrent initialization is idempotent", ConcurrentInitializationIsIdempotent());
             Program.Run("Core identity assignment and freezing", IdentityFieldsAreAssignedOnceAndFrozen());
             Program.Run("Trusted word identity uniqueness", TrustedWordsUseTheCompleteIdentityTuple());
             Program.Run("Duplicate word promotion rejection", DuplicatePromotionLeavesWordUntrusted());
             Program.Run("Incomplete node promotion rejection", IncompleteNodesCannotBecomeTrusted());
             Program.Run("Sentence and symbol semantic indexes", FactoriesUseSenseAwareIdentities());
+            Program.Run("Untrusted box construction avoids trusted ID collisions", UntrustedBoxConstructionAvoidsTrustedIdCollisions());
+            Program.Run("Untrusted function ID collisions do not replace staged definitions", UntrustedFunctionIdCollisionsAreRejected());
             Program.Run("Concurrent graph mutations", ConcurrentAddsPreserveIdentityIndexes());
+            Program.Run("Concurrent duplicate promotions are atomic", ConcurrentDuplicatePromotionsAreAtomic());
         }
 
         private static Action InitializationLifecycleIsExplicit()
@@ -26,6 +30,30 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(!core.initialized, "ResetCore should leave the core uninitialized.");
                 Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedSense(new SenseBox(Guid.NewGuid())),
                     "Registry mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedSymbol(new SymbolBox(Guid.NewGuid(), 'x')),
+                    "Symbol mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedWord(new WordBox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())),
+                    "Word mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedSentence(new SentenceBox(Guid.NewGuid())),
+                    "Sentence mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedUsage(new UsageBox(Guid.NewGuid())),
+                    "Usage mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedGroup(new GroupBox(Guid.NewGuid(), new List<Guid>())),
+                    "Group mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedSource(new SourceBox(Guid.NewGuid(), new List<Guid>())),
+                    "Source mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedFunction(new FunctionBox(Guid.NewGuid(), typeof(double))),
+                    "Function mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.SetUntrustedSymbol(new SymbolBox()),
+                    "Untrusted Symbol mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.SetUntrustedWord(new WordBox(new List<Guid>())),
+                    "Untrusted Word mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.SetUntrustedSentence(new SentenceBox()),
+                    "Untrusted Sentence mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.SetUntrustedFunction(new FunctionBox(typeof(double))),
+                    "Untrusted Function mutations should require initialization.");
+                Program.AssertThrows<InvalidOperationException>(() => core.SetUntrustedNode(new Node(NodeTargetKind.Symbol, Guid.NewGuid())),
+                    "Untrusted Node mutations should require initialization.");
                 Program.AssertThrows<InvalidOperationException>(() => core.GetTrustedSenseBox(Guid.NewGuid()),
                     "Registry queries should require initialization.");
                 core.InitializeCore();
@@ -37,6 +65,22 @@ namespace OPEN_LRD.SmokeTests
                     "InitializeCore should be idempotent after initialization.");
                 core.ResetCore();
                 Program.Assert(!core.initialized, "ResetCore should clear initialized status.");
+                Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedUsage(new UsageBox(Guid.NewGuid())),
+                    "Registry mutations should remain disabled after ResetCore.");
+            };
+        }
+
+        private static Action ConcurrentInitializationIsIdempotent()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                Parallel.For(0, 32, _ => core.InitializeCore());
+                Program.Assert(core.initialized, "Concurrent initialization should leave the core initialized.");
+                Program.Assert(core.AddTrustedSense(new SenseBox(Guid.NewGuid())),
+                    "The initialized core should accept a mutation after concurrent initialization.");
+                core.ResetCore();
             };
         }
 
@@ -225,6 +269,105 @@ namespace OPEN_LRD.SmokeTests
             };
         }
 
+        private static Action UntrustedBoxConstructionAvoidsTrustedIdCollisions()
+        {
+            return () =>
+            {
+                ResetCore();
+                LRD_Core core = LRD_Core.Instance;
+                Guid senseId = AddSense(core);
+                Guid usageId = AddUsage(core);
+                Guid symbolId = AddTrustedSymbol(core, senseId, 'k');
+                List<Guid> symbols = new List<Guid> { symbolId };
+
+                Guid trustedWordId = Guid.NewGuid();
+                WordBox trustedWord = new WordBox(trustedWordId, senseId, usageId, symbols, PartOfSpeech.Noun);
+                Program.Assert(core.AddTrustedWord(trustedWord), "Trusted word should be registered.");
+
+                Guid trustedSentenceId = Guid.NewGuid();
+                SentenceBox trustedSentence = new SentenceBox(trustedSentenceId, senseId, new List<Guid> { trustedWordId });
+                Program.Assert(core.AddTrustedSentence(trustedSentence), "Trusted sentence should be registered.");
+
+                Guid trustedGroupId = Guid.NewGuid();
+                Program.Assert(core.AddTrustedGroup(new GroupBox(trustedGroupId, new List<Guid> { trustedSentenceId })),
+                    "Trusted group should be registered.");
+
+                Guid trustedSourceId = Guid.NewGuid();
+                Program.Assert(core.AddTrustedSource(new SourceBox(trustedSourceId, new List<Guid> { trustedGroupId })),
+                    "Trusted source should be registered.");
+
+                Guid trustedFunctionId = Guid.NewGuid();
+                FunctionBox trustedFunction = new FunctionBox(trustedFunctionId, typeof(double), "Math_2.CalculateCircleArea", "m²");
+                trustedFunction.AddVariable(new FunctionVariable("radius", 2.0, typeof(double), "m"));
+                trustedFunction.StoreResult(new FunctionResult(Math.PI * 4.0, typeof(double), "m²"));
+                Program.Assert(core.AddTrustedFunction(trustedFunction), "Trusted function should be registered.");
+
+                Guid trustedNodeId = core.GetTrustedNodeByTarget(NodeTargetKind.Word, trustedWordId)!.GetNodeID();
+
+                Guid textConversationId = Guid.NewGuid();
+                Program.Assert(core.AddTextConversation(new ConversationText(textConversationId)),
+                    "Text conversation should be registered.");
+
+                Program.AssertThrows<ArgumentException>(() => new WordBox(trustedWordId, senseId, usageId),
+                    "WordBox constructor must reject an ID matching a registered trusted WordBox.");
+                Program.AssertThrows<ArgumentException>(() => new WordBox(trustedWordId, symbols),
+                    "WordBox symbol-list constructor must reject an ID matching a registered trusted WordBox.");
+                Program.AssertThrows<ArgumentException>(() => new WordBox(trustedWordId, senseId, usageId, symbols),
+                    "WordBox 4-arg constructor must reject an ID matching a registered trusted WordBox.");
+                Program.AssertThrows<ArgumentException>(() => new WordBox(trustedWordId, senseId, usageId, symbols, PartOfSpeech.Verb),
+                    "WordBox 5-arg constructor must reject an ID matching a registered trusted WordBox.");
+
+                Program.AssertThrows<ArgumentException>(() => new SymbolBox(symbolId, 'z'),
+                    "SymbolBox constructor must reject an ID matching a registered trusted SymbolBox.");
+                Program.AssertThrows<ArgumentException>(() => new SentenceBox(trustedSentenceId),
+                    "SentenceBox constructor must reject an ID matching a registered trusted SentenceBox.");
+                Program.AssertThrows<ArgumentException>(() => new SenseBox(senseId),
+                    "SenseBox constructor must reject an ID matching a registered trusted SenseBox.");
+                Program.AssertThrows<ArgumentException>(() => new UsageBox(usageId),
+                    "UsageBox constructor must reject an ID matching a registered trusted UsageBox.");
+                Program.AssertThrows<ArgumentException>(() => new GroupBox(trustedGroupId),
+                    "GroupBox constructor must reject an ID matching a registered trusted GroupBox.");
+                Program.AssertThrows<ArgumentException>(() => new SourceBox(trustedSourceId),
+                    "SourceBox constructor must reject an ID matching a registered trusted SourceBox.");
+                Program.AssertThrows<ArgumentException>(() => new FunctionBox(trustedFunctionId, typeof(double)),
+                    "FunctionBox constructor must reject an ID matching a registered trusted FunctionBox.");
+                Program.AssertThrows<ArgumentException>(() => new Node(trustedNodeId, NodeTargetKind.Word, Guid.NewGuid()),
+                    "Node constructor must reject an ID matching a registered trusted Node.");
+                Program.AssertThrows<ArgumentException>(() => new ConversationText(textConversationId),
+                    "ConversationText constructor must reject an ID matching a registered conversation.");
+                Program.AssertThrows<ArgumentException>(() => new ConversationSymbolic(textConversationId),
+                    "ConversationSymbolic constructor must reject an ID matching a registered conversation.");
+
+                Guid expectedFreeWordId = Guid.NewGuid();
+                int wordGenAttempt = 0;
+                Guid generatedWordId = core.GenerateUntrustedId(NodeTargetKind.Word, () =>
+                    wordGenAttempt++ == 0 ? trustedWordId : expectedFreeWordId);
+                Program.Assert(generatedWordId == expectedFreeWordId && wordGenAttempt == 2,
+                    "GenerateUntrustedId must skip registered trusted WordBox IDs.");
+
+                WordBox autoWord = core.GetNewWordBox(symbols, senseId, usageId, PartOfSpeech.Adverb);
+                Program.Assert(autoWord.GetWordID() != trustedWordId && !core.IsTrustedIdRegistered(NodeTargetKind.Word, autoWord.GetWordID()),
+                    "GetNewWordBox must generate an untrusted WordID that does not conflict with trusted WordBoxes.");
+            };
+        }
+
+        private static Action UntrustedFunctionIdCollisionsAreRejected()
+        {
+            return () =>
+            {
+                ResetCore();
+                LRD_Core core = LRD_Core.Instance;
+                Guid functionId = Guid.NewGuid();
+                FunctionBox original = new FunctionBox(functionId, typeof(double), "Math_1.AddDouble");
+                FunctionBox collision = new FunctionBox(functionId, typeof(double), "Math_1.SubtractDouble");
+
+                Program.Assert(core.SetUntrustedFunction(original), "The first function definition should be staged.");
+                Program.Assert(!core.SetUntrustedFunction(collision), "A different definition must not replace a staged function ID.");
+                Program.Assert(ReferenceEquals(core.GetUntrustedFunctionBox(functionId), original),
+                    "The first staged function definition should remain canonical for its ID.");
+            };
+        }
+
         private static Action ConcurrentAddsPreserveIdentityIndexes()
         {
             return () =>
@@ -257,6 +400,38 @@ namespace OPEN_LRD.SmokeTests
                     }
                 });
                 Program.Assert(acceptedWords == 1, "Concurrent duplicate words should yield one canonical trusted node.");
+            };
+        }
+
+        private static Action ConcurrentDuplicatePromotionsAreAtomic()
+        {
+            return () =>
+            {
+                ResetCore();
+                LRD_Core core = LRD_Core.Instance;
+                Guid senseId = AddSense(core);
+                Guid usageId = AddUsage(core);
+                Guid symbolId = AddTrustedSymbol(core, senseId, 'r');
+                List<Guid> symbols = new List<Guid> { symbolId };
+                WordBox first = new WordBox(Guid.NewGuid(), senseId, usageId, symbols, PartOfSpeech.Noun);
+                WordBox second = new WordBox(Guid.NewGuid(), senseId, usageId, symbols, PartOfSpeech.Noun);
+                Program.Assert(core.SetUntrustedWord(first) && core.SetUntrustedWord(second),
+                    "Both semantically duplicate words should be staged before promotion.");
+
+                int promoted = 0;
+                Parallel.Invoke(
+                    () => { if (core.ConvertUntrustedWordToTrusted(first.GetWordID())) Interlocked.Increment(ref promoted); },
+                    () => { if (core.ConvertUntrustedWordToTrusted(second.GetWordID())) Interlocked.Increment(ref promoted); });
+
+                Program.Assert(promoted == 1,
+                    "Concurrent promotions of the same semantic identity should have exactly one winner.");
+                Program.Assert((core.GetTrustedWordBox(first.GetWordID()) != null) !=
+                               (core.GetTrustedWordBox(second.GetWordID()) != null),
+                    "Exactly one duplicate should be trusted after the race.");
+                Program.Assert((core.GetUntrustedWordBox(first.GetWordID()) != null) !=
+                               (core.GetUntrustedWordBox(second.GetWordID()) != null),
+                    "The losing duplicate should remain staged after the race.");
+                ResetCore();
             };
         }
 

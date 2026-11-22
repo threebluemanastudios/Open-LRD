@@ -18,14 +18,14 @@ namespace OPEN_LRD.Foundations
 
         public SourceBox()
         {
-            SourceID = Guid.NewGuid();
+            SourceID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Source);
             _groupings = new List<Guid>();
             _groupingSet = new HashSet<Guid>();
         }
 
         public SourceBox(Guid sourceId)
         {
-            ValidateIdentityId(sourceId, nameof(sourceId));
+            ValidateSourceId(sourceId, nameof(sourceId), allowRegisteredTrustedId: false);
             SourceID = sourceId;
             _groupings = new List<Guid>();
             _groupingSet = new HashSet<Guid>();
@@ -33,7 +33,7 @@ namespace OPEN_LRD.Foundations
 
         public SourceBox(Guid sourceId, string? sourceName)
         {
-            ValidateIdentityId(sourceId, nameof(sourceId));
+            ValidateSourceId(sourceId, nameof(sourceId), allowRegisteredTrustedId: false);
             SourceID = sourceId;
             SourceName = NormalizeOptionalText(sourceName);
             _groupings = new List<Guid>();
@@ -41,7 +41,7 @@ namespace OPEN_LRD.Foundations
         }
         public SourceBox(Guid sourceId, string? sourceName, Dictionary<Guid, GroupBox> groupings)
         {
-            ValidateIdentityId(sourceId, nameof(sourceId));
+            ValidateSourceId(sourceId, nameof(sourceId), allowRegisteredTrustedId: false);
             ArgumentNullException.ThrowIfNull(groupings);
             foreach (KeyValuePair<Guid, GroupBox> entry in groupings)
             {
@@ -64,18 +64,23 @@ namespace OPEN_LRD.Foundations
         }
 
         public SourceBox(IEnumerable<Guid> groupingIds)
-            : this(Guid.NewGuid(), null, groupingIds)
+            : this(LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Source), null, groupingIds, allowRegisteredTrustedId: true)
         {
         }
 
         public SourceBox(Guid sourceId, IEnumerable<Guid> groupingIds)
-            : this(sourceId, null, groupingIds)
+            : this(sourceId, null, groupingIds, allowRegisteredTrustedId: false)
         {
         }
 
         public SourceBox(Guid sourceId, string? sourceName, IEnumerable<Guid> groupingIds)
+            : this(sourceId, sourceName, groupingIds, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(sourceId, nameof(sourceId));
+        }
+
+        internal SourceBox(Guid sourceId, string? sourceName, IEnumerable<Guid> groupingIds, bool allowRegisteredTrustedId)
+        {
+            ValidateSourceId(sourceId, nameof(sourceId), allowRegisteredTrustedId);
             ArgumentNullException.ThrowIfNull(groupingIds);
             ValidateIdentityIds(groupingIds, nameof(groupingIds));
             SourceID = sourceId;
@@ -166,6 +171,18 @@ namespace OPEN_LRD.Foundations
         }
 
         internal void MarkReadOnly() => FreezeIdentity();
+
+        private static void ValidateSourceId(Guid id, string parameterName, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
+            {
+                ValidateIdentityId(id, parameterName);
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedId(NodeTargetKind.Source, id, parameterName);
+            }
+        }
 
         private static void ValidateIdentityId(Guid id, string parameterName)
         {

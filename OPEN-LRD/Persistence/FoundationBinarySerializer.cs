@@ -35,7 +35,9 @@ namespace OPEN_LRD.Persistence
             Guid? senseId = ReadNullableGuid(reader);
             if (!legacyFormat && !hasSymbolChar && value != '\0')
                 throw new InvalidDataException("An unassigned SymbolBox cannot store a non-NUL character.");
-            SymbolBox box = hasSymbolChar || legacyFormat ? new SymbolBox(id, value) : new SymbolBox(id);
+            SymbolBox box = hasSymbolChar || legacyFormat
+                ? new SymbolBox(id, value, allowRegisteredTrustedId: true)
+                : new SymbolBox(id, allowRegisteredTrustedId: true);
             if (senseId.HasValue) box.SetSenseID(senseId.Value);
             box.FreezeIdentity();
             return box;
@@ -65,7 +67,7 @@ namespace OPEN_LRD.Persistence
             {
                 throw new InvalidDataException("Stored trusted WordBox identity is incomplete.");
             }
-            WordBox box = new WordBox(id, sense.Value, usage.Value, symbols, partOfSpeech.Value);
+            WordBox box = new WordBox(id, sense.Value, usage.Value, symbols, partOfSpeech.Value, allowRegisteredTrustedId: true);
             box.FreezeIdentity();
             return box;
         });
@@ -83,8 +85,8 @@ namespace OPEN_LRD.Persistence
             Guid? sense = ReadNullableGuid(reader);
             List<Guid>? words = ReadGuidList(reader);
             SentenceBox box = sense.HasValue && words != null
-                ? new SentenceBox(id, sense.Value, words)
-                : new SentenceBox(id);
+                ? new SentenceBox(id, sense.Value, words, allowRegisteredTrustedId: true)
+                : new SentenceBox(id, allowRegisteredTrustedId: true);
             if (sense.HasValue && words == null) box.SetSenseID(sense.Value);
             if (words != null && !sense.HasValue) box.SetWords(words);
             box.FreezeIdentity();
@@ -104,7 +106,7 @@ namespace OPEN_LRD.Persistence
 
         internal static SenseBox DeserializeSense(byte[] payload) => Read(payload, reader =>
         {
-            SenseBox box = new SenseBox(ReadGuid(reader));
+            SenseBox box = new SenseBox(ReadGuid(reader), allowRegisteredTrustedId: true);
             foreach (Guid id in ReadGuidList(reader) ?? new List<Guid>()) box.AddSentence(id);
             foreach (Guid id in ReadGuidList(reader) ?? new List<Guid>()) box.AddLeadingWord(id);
             foreach (Guid id in ReadGuidList(reader) ?? new List<Guid>()) box.AddTrailingWord(id);
@@ -121,7 +123,7 @@ namespace OPEN_LRD.Persistence
         internal static UsageBox DeserializeUsage(byte[] payload) => Read(payload, reader =>
         {
             Guid id = ReadGuid(reader);
-            return new UsageBox(id, ReadGuidList(reader) ?? new List<Guid>());
+            return new UsageBox(id, ReadGuidList(reader) ?? new List<Guid>(), allowRegisteredTrustedId: true);
         });
 
         internal static byte[] SerializeGroup(GroupBox box) => Write(writer =>
@@ -135,7 +137,7 @@ namespace OPEN_LRD.Persistence
         {
             Guid id = ReadGuid(reader);
             string? name = ReadNullableString(reader);
-            return new GroupBox(id, name, ReadGuidList(reader) ?? new List<Guid>());
+            return new GroupBox(id, name, ReadGuidList(reader) ?? new List<Guid>(), allowRegisteredTrustedId: true);
         });
 
         internal static byte[] SerializeSource(SourceBox box) => Write(writer =>
@@ -149,7 +151,7 @@ namespace OPEN_LRD.Persistence
         {
             Guid id = ReadGuid(reader);
             string? name = ReadNullableString(reader);
-            return new SourceBox(id, name, ReadGuidList(reader) ?? new List<Guid>());
+            return new SourceBox(id, name, ReadGuidList(reader) ?? new List<Guid>(), allowRegisteredTrustedId: true);
         });
 
         internal static byte[] SerializeFunction(FunctionBox box) => Write(writer =>
@@ -180,7 +182,7 @@ namespace OPEN_LRD.Persistence
         internal static FunctionBox DeserializeFunction(byte[] payload, bool legacyFormat = false) => Read(payload, reader =>
         {
             Guid id = ReadGuid(reader);
-            FunctionBox box = new FunctionBox(id, ReadType(reader), ReadNullableString(reader), ReadNullableString(reader));
+            FunctionBox box = new FunctionBox(id, ReadType(reader), ReadNullableString(reader), ReadNullableString(reader), allowRegisteredTrustedId: true);
             int variableCount = ReadCount(reader);
             for (int i = 0; i < variableCount; i++)
             {
@@ -221,13 +223,79 @@ namespace OPEN_LRD.Persistence
             int invalid = reader.ReadInt32();
             bool trusted = reader.ReadBoolean();
             if (verified < 0 || invalid < 0) throw new InvalidDataException("Node reference counts cannot be negative.");
-            Node node = new Node(nodeId, kind, targetId, label);
+            Node node = new Node(nodeId, kind, targetId, label, allowRegisteredTrustedId: true);
             if (verified > 0) node.RegisterVerifiedReference(verified);
             if (invalid > 0) node.RegisterInvalidReference(invalid);
             if (trusted) node.MarkTrusted();
             if (readOnly) node.MarkReadOnly();
             return node;
         });
+
+        internal static byte[] SerializeNodeRepresentation(UInt128 presentationId, NodeRepresentation representation) => Write(writer =>
+        {
+            ArgumentNullException.ThrowIfNull(representation);
+            writer.Write((ulong)presentationId);
+            writer.Write((ulong)(presentationId >> 64));
+            writer.Write(representation.GetNodeID().ToByteArray());
+            writer.Write(representation.GetColor());
+            writer.Write(representation.GetSize());
+            WriteNullableString(writer, representation.GetTextLabel());
+            Vector3 position = representation.GetPosition();
+            writer.Write(position.X);
+            writer.Write(position.Y);
+            writer.Write(position.Z);
+            writer.Write(false);
+        });
+
+        internal static (UInt128 PresentationId, NodeRepresentation Representation) DeserializeNodeRepresentation(byte[] payload) =>
+            Read(payload, reader =>
+            {
+                ulong low = reader.ReadUInt64();
+                ulong high = reader.ReadUInt64();
+                UInt128 presentationId = ((UInt128)high << 64) | low;
+                Guid nodeId = ReadGuid(reader);
+                uint color = reader.ReadUInt32();
+                double size = reader.ReadDouble();
+                string? textLabel = ReadNullableString(reader);
+                Vector3 position = new Vector3(reader.ReadDouble(), reader.ReadDouble(), reader.ReadDouble());
+                _ = reader.ReadBoolean();
+                NodeRepresentation representation = new NodeRepresentation(
+                    nodeId, color, size, textLabel, position, false);
+                return (presentationId, representation);
+            });
+
+        private const byte NodeLayoutOptionsFormatVersion = 1;
+
+        internal static byte[] SerializeNodeLayoutOptions(NodeLayoutOptions options) => Write(writer =>
+        {
+            ArgumentNullException.ThrowIfNull(options);
+            writer.Write(NodeLayoutOptionsFormatVersion);
+            writer.Write(NodeLayoutOptions.RecordKey.ToByteArray());
+            writer.Write(options.NodeWeightBias);
+            writer.Write(options.NeighborPositionBias);
+        });
+
+        internal static NodeLayoutOptions DeserializeNodeLayoutOptions(byte[] payload)
+        {
+            ArgumentNullException.ThrowIfNull(payload);
+            bool unversioned = payload.Length == 32;
+            if (!unversioned && payload.Length != 33)
+            {
+                throw new InvalidDataException("Serialized layout settings have an invalid payload length.");
+            }
+
+            return Read(payload, reader =>
+            {
+                if (!unversioned && reader.ReadByte() != NodeLayoutOptionsFormatVersion)
+                    throw new InvalidDataException("Stored node layout options version is unsupported.");
+                Guid key = ReadGuid(reader);
+                if (key != NodeLayoutOptions.RecordKey)
+                    throw new InvalidDataException("Stored node layout options record key is invalid.");
+                double nodeWeightBias = reader.ReadDouble();
+                double neighborPositionBias = reader.ReadDouble();
+                return new NodeLayoutOptions(nodeWeightBias, neighborPositionBias);
+            });
+        }
 
         internal static byte[] SerializeLink(NodeLink link) => Write(writer =>
         {

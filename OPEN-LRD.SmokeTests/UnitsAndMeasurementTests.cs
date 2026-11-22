@@ -107,6 +107,17 @@ namespace OPEN_LRD.SmokeTests
             AssertThrows<ArgumentException>(
                 () => UnitsAndMeasurement.Convert(1.0, UnitCatalog.Meter, UnitCatalog.Second),
                 "incompatible unit conversion");
+            AssertThrows<KeyNotFoundException>(() => UnitsAndMeasurement.FindUnit("not-a-unit"),
+                "unknown unit lookup should throw a clear missing-key error");
+            AssertThrows<ArgumentException>(() => UnitsAndMeasurement.Convert(1.0,
+                    new Unit("zero-scale", 0.0, 0.0, UnitCatalog.Meter.Dimension), UnitCatalog.Meter),
+                "custom units with zero scale should be rejected");
+            Unit hugeScale = new Unit("huge", double.MaxValue, 0.0, UnitCatalog.Meter.Dimension);
+            AssertThrows<ArgumentOutOfRangeException>(() => UnitCatalog.CreatePrefixedUnit(hugeScale, "k", 2),
+                "prefixed-unit scale overflow should be rejected");
+            Unit tinyScale = new Unit("tiny", 1e-300, 0.0, UnitCatalog.Meter.Dimension);
+            AssertThrows<ArgumentOutOfRangeException>(() => UnitsAndMeasurement.Convert(double.MaxValue, UnitCatalog.Meter, tinyScale),
+                "conversion overflow should be rejected rather than returning infinity");
             AssertThrows<ArgumentOutOfRangeException>(
                 () => UnitsAndMeasurement.Convert(double.NaN, UnitCatalog.Meter, UnitCatalog.Centimeter),
                 "non-finite conversion input");

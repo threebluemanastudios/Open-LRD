@@ -18,7 +18,7 @@ namespace OPEN_LRD.Foundations
         /// </summary>
         public UsageBox()
         {
-            UsageID = Guid.NewGuid();
+            UsageID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Usage);
             _sentences = new List<Guid>();
             _sentenceSet = new HashSet<Guid>();
         }
@@ -28,8 +28,13 @@ namespace OPEN_LRD.Foundations
         /// </summary>
         /// <param name="usageId"></param>
         public UsageBox(Guid usageId)
+            : this(usageId, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(usageId, nameof(usageId));
+        }
+
+        internal UsageBox(Guid usageId, bool allowRegisteredTrustedId)
+        {
+            ValidateUsageId(usageId, nameof(usageId), allowRegisteredTrustedId);
             UsageID = usageId;
             _sentences = new List<Guid>();
             _sentenceSet = new HashSet<Guid>();
@@ -41,8 +46,13 @@ namespace OPEN_LRD.Foundations
         /// <param name="usageId"></param>
         /// <param name="sentences"></param>
         public UsageBox(Guid usageId, List<Guid> sentences)
+            : this(usageId, sentences, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(usageId, nameof(usageId));
+        }
+
+        internal UsageBox(Guid usageId, List<Guid> sentences, bool allowRegisteredTrustedId)
+        {
+            ValidateUsageId(usageId, nameof(usageId), allowRegisteredTrustedId);
             ArgumentNullException.ThrowIfNull(sentences);
             ValidateIdentityIds(sentences, nameof(sentences));
             UsageID = usageId;
@@ -128,6 +138,18 @@ namespace OPEN_LRD.Foundations
         internal void MarkTrusted() => GraphSynchronization.Execute(() => _isTrusted = true);
 
         internal void MarkReadOnly() => GraphSynchronization.Execute(() => { _isTrusted = true; _isReadOnly = true; });
+
+        private static void ValidateUsageId(Guid id, string parameterName, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
+            {
+                ValidateIdentityId(id, parameterName);
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedId(NodeTargetKind.Usage, id, parameterName);
+            }
+        }
 
         private static void ValidateIdentityId(Guid id, string parameterName)
         {

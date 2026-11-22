@@ -107,6 +107,9 @@ namespace OPEN_LRD.SmokeTests
         private static void TestValidation()
         {
             AssertThrows<ArgumentOutOfRangeException>(() => DiscreteMath.Mod(1, 0), "zero modulus");
+            AssertThrows<ArgumentOutOfRangeException>(() => DiscreteMath.Mod(1, -7), "negative modulus");
+            AssertThrows<ArgumentOutOfRangeException>(() => DiscreteMath.Mod(BigInteger.One, new BigInteger(-7)),
+                "negative BigInteger modulus");
             AssertThrows<ArgumentOutOfRangeException>(() => DiscreteMath.ModPow(2, -1, 7), "negative exponent");
             AssertThrows<InvalidOperationException>(() => DiscreteMath.ModInverse(6, 9), "missing inverse");
             AssertThrows<ArgumentOutOfRangeException>(() => DiscreteMath.Sieve(50000001), "sieve cap");

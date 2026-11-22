@@ -17,6 +17,11 @@
     <Compile Include="../OPEN-LRD/Foundations/GraphSynchronization.cs" />
     <Compile Include="../OPEN-LRD/Foundations/GroupBox.cs" />
     <Compile Include="../OPEN-LRD/Foundations/Node.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/NodeRepresentation.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/NodeDerivationSnapshot.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/NodePresentationCalculator.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/NodeLayoutOptions.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/NodeLayoutCalculator.cs" />
     <Compile Include="../OPEN-LRD/Foundations/SenseBox.cs" />
     <Compile Include="../OPEN-LRD/Foundations/SentenceBox.cs" />
     <Compile Include="../OPEN-LRD/Foundations/SourceBox.cs" />

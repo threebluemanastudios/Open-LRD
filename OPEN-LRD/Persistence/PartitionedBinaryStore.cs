@@ -17,7 +17,9 @@ namespace OPEN_LRD.Persistence
         Sources = 7,
         Functions = 8,
         Nodes = 9,
-        Links = 10
+        Links = 10,
+        NodePresentations = 11,
+        LayoutSettings = 12
     }
 
     internal readonly record struct DiskRecord(Guid Key, byte[] Payload);
@@ -130,6 +132,12 @@ namespace OPEN_LRD.Persistence
             return readers.TryGetValue(partition, out PartitionReader? reader) ? reader.Index.Count : 0;
         }
 
+        internal bool HasPartition(DiskPartition partition)
+        {
+            ThrowIfDisposed();
+            return readers.ContainsKey(partition);
+        }
+
         internal bool Contains(DiskPartition partition, Guid key)
         {
             ThrowIfDisposed();
@@ -165,6 +173,10 @@ namespace OPEN_LRD.Persistence
             {
                 if (!manifest.TryGetValue(partition, out PartitionManifestEntry item))
                 {
+                    if (partition == DiskPartition.NodePresentations || partition == DiskPartition.LayoutSettings)
+                    {
+                        continue;
+                    }
                     throw new InvalidDataException($"Manifest is missing partition {partition}.");
                 }
                 string dataPath = DataPath(directoryPath, partition);
@@ -267,7 +279,9 @@ namespace OPEN_LRD.Persistence
             }
             _ = reader.ReadInt64();
             int count = reader.ReadInt32();
-            if (count != AllPartitions.Length) throw new InvalidDataException("Manifest partition count is invalid.");
+            int minimumCount = AllPartitions.Length - 2;
+            if (count < minimumCount || count > AllPartitions.Length)
+                throw new InvalidDataException("Manifest partition count is invalid.");
             Dictionary<DiskPartition, PartitionManifestEntry> result = new Dictionary<DiskPartition, PartitionManifestEntry>();
             for (int i = 0; i < count; i++)
             {
@@ -280,6 +294,14 @@ namespace OPEN_LRD.Persistence
                     !result.TryAdd(partition, new PartitionManifestEntry(recordCount, dataHash, indexHash)))
                 {
                     throw new InvalidDataException("Manifest contains an invalid partition entry.");
+                }
+            }
+            foreach (DiskPartition partition in AllPartitions)
+            {
+                if (partition != DiskPartition.NodePresentations && partition != DiskPartition.LayoutSettings &&
+                    !result.ContainsKey(partition))
+                {
+                    throw new InvalidDataException($"Manifest is missing partition {partition}.");
                 }
             }
             if (stream.Position != stream.Length) throw new InvalidDataException("Manifest has trailing data.");

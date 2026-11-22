@@ -23,6 +23,7 @@ namespace OPEN_LRD.SmokeTests
             AssertEqual(Thermodynamics.LatentHeat(2.0, 5.0), 10.0, "latent heat");
             AssertEqual(Thermodynamics.InternalEnergyChange(10.0, 4.0), 6.0, "first-law sign convention");
             AssertEqual(Thermodynamics.ThermalExpansion(2.0, 0.01, 5.0), 0.1, "linear expansion");
+            AssertEqual(Thermodynamics.HeatTransfer(2.0, 3.0, 0.0), 0.0, "zero temperature change transfers no heat");
         }
 
         private static void TestEntropyAndEfficiency()
@@ -39,6 +40,10 @@ namespace OPEN_LRD.SmokeTests
             AssertThrows<ArgumentOutOfRangeException>(() => Thermodynamics.IdealGasPressure(1.0, 0.0, 300.0), "ideal gas rejects zero volume");
             AssertThrows<ArgumentOutOfRangeException>(() => Thermodynamics.CarnotEfficiency(300.0, 300.0), "Carnot temperatures must be ordered");
             AssertThrows<ArgumentOutOfRangeException>(() => Thermodynamics.EntropyChange(1.0, 0.0), "entropy temperature must be positive");
+            AssertThrows<ArgumentOutOfRangeException>(() => Thermodynamics.IdealGasPressure(1.0, 1.0, -1.0),
+                "ideal-gas temperature cannot be below absolute zero");
+            AssertThrows<ArgumentOutOfRangeException>(() => Thermodynamics.AdiabaticFinalTemperature(300.0, 1.0, 1.0, 1.0),
+                "adiabatic heat-capacity ratio must exceed one even when volumes match");
         }
     }
 }

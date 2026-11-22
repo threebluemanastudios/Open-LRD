@@ -84,6 +84,14 @@ namespace OPEN_LRD.Foundations
         }
     }
 
+    internal readonly record struct FunctionDispatchSnapshot(
+        long DefinitionRevision,
+        string? FunctionKey,
+        IReadOnlyList<FunctionVariable> Variables,
+        Type ExpectedResultType,
+        string? ExpectedResultUnitTitle,
+        bool IsReadOnly);
+
     internal sealed class FunctionBox
     {
         /// <summary>Maximum number of input variables allowed per function definition.</summary>
@@ -94,13 +102,25 @@ namespace OPEN_LRD.Foundations
         private string? functionKey;
         private string? expectedResultUnitTitle;
         private FunctionResult? result;
+        private long? resultDefinitionRevision;
         private bool isTrusted;
         private bool isReadOnly;
+        private long definitionRevision;
 
         public string? FunctionKey
         {
             get => GraphSynchronization.Execute(() => functionKey);
-            set => GraphSynchronization.Execute(() => { EnsureWritable(); functionKey = NormalizeOptionalText(value); });
+            set => GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                string? normalized = NormalizeOptionalText(value);
+                if (!string.Equals(functionKey, normalized, StringComparison.Ordinal))
+                {
+                    long nextRevision = GetNextDefinitionRevision();
+                    functionKey = normalized;
+                    definitionRevision = nextRevision;
+                }
+            });
         }
 
         public Guid FunctionID => GetFunctionID();
@@ -111,22 +131,43 @@ namespace OPEN_LRD.Foundations
         public string? ExpectedResultUnitTitle
         {
             get => GraphSynchronization.Execute(() => expectedResultUnitTitle);
-            set => GraphSynchronization.Execute(() => { EnsureWritable(); expectedResultUnitTitle = NormalizeOptionalText(value); });
+            set => GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                string? normalized = NormalizeOptionalText(value);
+                if (!string.Equals(expectedResultUnitTitle, normalized, StringComparison.Ordinal))
+                {
+                    long nextRevision = GetNextDefinitionRevision();
+                    expectedResultUnitTitle = normalized;
+                    definitionRevision = nextRevision;
+                }
+            });
         }
 
         public FunctionResult? Result => GraphSynchronization.Execute(() => result);
-        internal bool IsReadOnly => GraphSynchronization.Execute(() => isReadOnly);
 
         public FunctionBox(Type expectedResultType, string? functionKey = null, string? expectedResultUnitTitle = null)
-            : this(Guid.NewGuid(), expectedResultType, functionKey, expectedResultUnitTitle)
+            : this(LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Function), expectedResultType, functionKey, expectedResultUnitTitle, allowRegisteredTrustedId: true)
         {
         }
 
         public FunctionBox(Guid functionId, Type expectedResultType, string? functionKey = null, string? expectedResultUnitTitle = null)
+            : this(functionId, expectedResultType, functionKey, expectedResultUnitTitle, allowRegisteredTrustedId: false)
         {
-            if (functionId == Guid.Empty)
+        }
+
+        internal FunctionBox(Guid functionId, Type expectedResultType, string? functionKey, string? expectedResultUnitTitle, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
             {
-                throw new ArgumentException("Identity identifiers cannot be Guid.Empty.", nameof(functionId));
+                if (functionId == Guid.Empty)
+                {
+                    throw new ArgumentException("Identity identifiers cannot be Guid.Empty.", nameof(functionId));
+                }
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedId(NodeTargetKind.Function, functionId, nameof(functionId));
             }
             functionID = functionId;
             ExpectedResultType = FunctionValueValidation.ValidateType(expectedResultType, nameof(expectedResultType));
@@ -153,7 +194,9 @@ namespace OPEN_LRD.Foundations
                 {
                     throw new ArgumentException($"Variable '{variable.Name}' is already declared.", nameof(variable));
                 }
+                long nextRevision = GetNextDefinitionRevision();
                 variables.Add(variable);
+                definitionRevision = nextRevision;
             });
         }
 
@@ -168,6 +211,7 @@ namespace OPEN_LRD.Foundations
                 {
                     throw new InvalidOperationException($"A function can declare at most {MaximumVariableCount} variables.");
                 }
+                long nextRevision = GetNextDefinitionRevision();
                 if (index < 0)
                 {
                     variables.Add(variable);
@@ -176,6 +220,7 @@ namespace OPEN_LRD.Foundations
                 {
                     variables[index] = variable;
                 }
+                definitionRevision = nextRevision;
             });
         }
 
@@ -205,21 +250,64 @@ namespace OPEN_LRD.Foundations
                 {
                     return false;
                 }
+                long nextRevision = GetNextDefinitionRevision();
                 variables.RemoveAt(index);
+                definitionRevision = nextRevision;
                 return true;
             });
         }
 
+        internal FunctionDispatchSnapshot GetDispatchSnapshot()
+        {
+            return GraphSynchronization.Execute(() => new FunctionDispatchSnapshot(
+                definitionRevision,
+                functionKey,
+                new ReadOnlyCollection<FunctionVariable>(variables.ToList()),
+                ExpectedResultType,
+                expectedResultUnitTitle,
+                isReadOnly));
+        }
+
         internal void ClearResult()
         {
-            GraphSynchronization.Execute(() => { EnsureWritable(); result = null; });
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                result = null;
+                resultDefinitionRevision = null;
+            });
         }
 
         internal void StoreResult(FunctionResult result)
         {
             ArgumentNullException.ThrowIfNull(result);
             ValidateResult(result);
-            GraphSynchronization.Execute(() => { EnsureWritable(); this.result = result; });
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                this.result = result;
+                resultDefinitionRevision = definitionRevision;
+            });
+        }
+
+        internal bool TryStoreDispatchResult(FunctionResult result, long expectedDefinitionRevision)
+        {
+            ArgumentNullException.ThrowIfNull(result);
+            ValidateResult(result);
+            return GraphSynchronization.Execute(() =>
+            {
+                if (definitionRevision != expectedDefinitionRevision)
+                {
+                    throw new InvalidOperationException("The FunctionBox definition changed during dispatch; the result was not stored.");
+                }
+                if (isReadOnly)
+                {
+                    return false;
+                }
+                this.result = result;
+                resultDefinitionRevision = definitionRevision;
+                return true;
+            });
         }
 
         internal void ValidateDefinition()
@@ -241,6 +329,10 @@ namespace OPEN_LRD.Foundations
                 if (result == null)
                 {
                     throw new InvalidOperationException("A FunctionBox must have a result before it can be trusted.");
+                }
+                if (resultDefinitionRevision != definitionRevision)
+                {
+                    throw new InvalidOperationException("The FunctionBox result is stale; dispatch the current definition before trusting it.");
                 }
                 ValidateResult(result);
             });
@@ -280,6 +372,8 @@ namespace OPEN_LRD.Foundations
         {
             if (isReadOnly) throw new InvalidOperationException("Trusted or disk-paged function definitions are read-only.");
         }
+
+        private long GetNextDefinitionRevision() => checked(definitionRevision + 1);
 
         private static string? NormalizeOptionalText(string? value)
         {

@@ -14,14 +14,19 @@ namespace OPEN_LRD.Foundations
 
         public SentenceBox()
         {
-            SentenceID = Guid.NewGuid();
+            SentenceID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Sentence);
             SenseID = null;
             _words = null;
         }
 
         public SentenceBox(Guid sentenceId)
+            : this(sentenceId, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(sentenceId, nameof(sentenceId));
+        }
+
+        internal SentenceBox(Guid sentenceId, bool allowRegisteredTrustedId)
+        {
+            ValidateSentenceId(sentenceId, nameof(sentenceId), allowRegisteredTrustedId);
             SentenceID = sentenceId;
             SenseID = null;
             _words = null;
@@ -29,13 +34,13 @@ namespace OPEN_LRD.Foundations
         public SentenceBox(List<Guid> words)
         {
             ValidateIdentityIds(words, nameof(words));
-            SentenceID = Guid.NewGuid();
+            SentenceID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Sentence);
             SenseID = null;
             _words = new List<Guid>(words);
         }
         public SentenceBox(Guid sentenceId, List<Guid> words)
         {
-            ValidateIdentityId(sentenceId, nameof(sentenceId));
+            ValidateSentenceId(sentenceId, nameof(sentenceId), allowRegisteredTrustedId: false);
             ValidateIdentityIds(words, nameof(words));
             SentenceID = sentenceId;
             SenseID = null;
@@ -43,7 +48,7 @@ namespace OPEN_LRD.Foundations
         }
         public SentenceBox(Guid sentenceId, Guid? senseId)
         {
-            ValidateIdentityId(sentenceId, nameof(sentenceId));
+            ValidateSentenceId(sentenceId, nameof(sentenceId), allowRegisteredTrustedId: false);
             ValidateOptionalIdentityId(senseId, nameof(senseId));
             SentenceID = sentenceId;
             SenseID = senseId;
@@ -51,8 +56,13 @@ namespace OPEN_LRD.Foundations
         }
 
         public SentenceBox(Guid sentenceId, Guid senseId, List<Guid> words)
+            : this(sentenceId, senseId, words, allowRegisteredTrustedId: false)
         {
-            ValidateIdentityId(sentenceId, nameof(sentenceId));
+        }
+
+        internal SentenceBox(Guid sentenceId, Guid senseId, List<Guid> words, bool allowRegisteredTrustedId)
+        {
+            ValidateSentenceId(sentenceId, nameof(sentenceId), allowRegisteredTrustedId);
             ValidateIdentityId(senseId, nameof(senseId));
             ValidateIdentityIds(words, nameof(words));
             SentenceID = sentenceId;
@@ -62,7 +72,7 @@ namespace OPEN_LRD.Foundations
 
         public SentenceBox(Guid sentenceId, Guid? senseId, Dictionary<int, WordBox> words)
         {
-            ValidateIdentityId(sentenceId, nameof(sentenceId));
+            ValidateSentenceId(sentenceId, nameof(sentenceId), allowRegisteredTrustedId: false);
             ValidateOptionalIdentityId(senseId, nameof(senseId));
             ArgumentNullException.ThrowIfNull(words);
             List<Guid> wordIds = new List<Guid>();
@@ -202,6 +212,18 @@ namespace OPEN_LRD.Foundations
             if (_identityFrozen)
             {
                 throw new InvalidOperationException("Sentence identity is frozen after trust.");
+            }
+        }
+
+        private static void ValidateSentenceId(Guid id, string parameterName, bool allowRegisteredTrustedId)
+        {
+            if (allowRegisteredTrustedId)
+            {
+                ValidateIdentityId(id, parameterName);
+            }
+            else
+            {
+                LRD_Core.Instance.ValidateNewUntrustedId(NodeTargetKind.Sentence, id, parameterName);
             }
         }
 

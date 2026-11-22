@@ -1,5 +1,7 @@
 using System.IO;
 using System.Security.Cryptography;
+using System.Collections.Generic;
+using System.Linq;
 using OPEN_LRD.Foundations;
 using OPEN_LRD.Persistence;
 
@@ -11,7 +13,10 @@ namespace OPEN_LRD.SmokeTests
         {
             Program.Run("Trusted dictionaries stream to and page from binary partitions", CheckpointRoundTripsAndPagesTrustedData());
             Program.Run("Disk checkpoint validation preserves current core on corruption", CorruptCheckpointDoesNotReplaceCore());
+            Program.Run("Empty checkpoints and invalid manifest headers are handled", EmptyCheckpointsAndInvalidManifestHeaders());
+            Program.Run("Disk validation rejects invalid layouts and presentation records", InvalidLayoutAndPresentationRecordsAreRejected());
             Program.Run("Legacy checkpoints are read-only until atomic upgrade", LegacyCheckpointUpgradesReadOnly());
+            Program.Run("Merge layout options honor configurable precedence", MergeLayoutOptionsHonorPrecedence());
             Program.Run("Merge imports reconcile existing container memberships", MergeReconcilesContainerMemberships());
         }
 
@@ -40,6 +45,9 @@ namespace OPEN_LRD.SmokeTests
                     Guid sentenceId = Guid.NewGuid();
                     SentenceBox sentence = new SentenceBox(sentenceId, senseId, new List<Guid> { wordId });
                     Program.Assert(core.AddTrustedSentence(sentence), "Sentence should be trusted.");
+
+                    Node wordNode = core.GetTrustedNodeByTarget(NodeTargetKind.Word, wordId)!;
+                    UInt128 wordPresentationId = core.GetNodePresentationId(wordNode.GetNodeID())!.Value;
 
                     GroupBox group = new GroupBox(Guid.NewGuid(), "group", new List<Guid> { sentenceId });
                     Program.Assert(core.AddTrustedGroup(group), "Group should be trusted.");
@@ -70,9 +78,15 @@ namespace OPEN_LRD.SmokeTests
                         extraSymbolIds.Add(id);
                     }
 
+                    NodeRepresentation wordRepresentation = core.GetNodeRepresentationByNodeId(wordNode.GetNodeID())!;
+                    uint expectedColor = wordRepresentation.GetColor();
+                    double expectedSize = wordRepresentation.GetSize();
+                    string? expectedLabel = wordRepresentation.GetTextLabel();
+                    Vector3 expectedPosition = wordRepresentation.GetPosition();
+
                     core.StreamTrustedDictionariesToDisk(directory);
                     Program.Assert(File.Exists(Path.Combine(directory, "manifest.lrdmeta")), "Checkpoint should include a manifest.");
-                    foreach (string partition in new[] { "symbols", "words", "sentences", "senses", "usages", "groups", "sources", "functions", "nodes", "links" })
+                    foreach (string partition in new[] { "symbols", "words", "sentences", "senses", "usages", "groups", "sources", "functions", "nodes", "links", "nodepresentations", "layoutsettings" })
                     {
                         Program.Assert(File.Exists(Path.Combine(directory, partition + ".lrdpart")), $"Missing {partition} data partition.");
                         Program.Assert(File.Exists(Path.Combine(directory, partition + ".lrdidx")), $"Missing {partition} index partition.");
@@ -82,6 +96,15 @@ namespace OPEN_LRD.SmokeTests
                     Program.Assert(core.IsDiskPagedReadOnly, "Checkpoint should open in read-only paging mode.");
                     Program.Assert(core.initialized, "A successful disk import should initialize the core.");
                     Program.Assert(core.GetTextFromSentenceID(sentenceId) == "d", "Text resolution should page sentence, word, and symbol data.");
+                    NodeRepresentation pagedWordRepresentation = core.GetNodeRepresentationByNodeId(wordNode.GetNodeID())!;
+                    Program.Assert(core.GetNodePresentationId(wordNode.GetNodeID()) == wordPresentationId &&
+                        pagedWordRepresentation.GetColor() == expectedColor &&
+                        pagedWordRepresentation.GetSize() == expectedSize &&
+                        pagedWordRepresentation.GetTextLabel() == expectedLabel &&
+                        pagedWordRepresentation.GetPosition() == expectedPosition,
+                        "Presentation IDs and deterministic derived display fields should survive disk paging.");
+                    Program.AssertThrows<InvalidOperationException>(() => pagedWordRepresentation.SetPosition(Vector3.Zero),
+                        "Paged NodeRepresentations should be read-only.");
                     Program.Assert(core.GetTrustedSymbolBox(extraSymbolIds[0])?.GetSymbolChar() == (char)0x0100,
                         "Paged symbol getter should preserve records after LRU churn.");
                     Program.Assert(core.GetTrustedSymbolBox(extraSymbolIds[^1])?.GetSymbolChar() == (char)0x010B,
@@ -113,14 +136,23 @@ namespace OPEN_LRD.SmokeTests
 
                     core.MaterializeDiskStore();
                     Program.Assert(!core.IsDiskPagedReadOnly, "Materialization should restore mutable in-memory mode.");
+                    NodeRepresentation materializedWordRepresentation = core.GetNodeRepresentationByNodeId(wordNode.GetNodeID())!;
+                    Program.Assert(!materializedWordRepresentation.IsReadOnly,
+                        "Materialization should restore writable NodeRepresentations.");
+                    core.UpdateNodeLayoutOptions(0.35, 0.35);
                     SymbolBox addedSymbol = new SymbolBox(Guid.NewGuid(), 'z');
                     addedSymbol.SetSenseID(senseId);
                     Program.Assert(core.AddTrustedSymbol(addedSymbol), "Mutation should succeed after materialization.");
+                    Vector3 updatedPosition = core.GetNodeRepresentationByNodeId(wordNode.GetNodeID())!.GetPosition();
                     core.FlushTrustedDiskStore();
 
                     core.OpenDiskStore(directory, 0);
                     Program.Assert(core.GetTrustedSymbolBox(addedSymbol.GetSymbolID())?.GetSymbolChar() == 'z',
                         "Flushed changes should persist and page back from disk.");
+                    Program.Assert(core.GetNodeRepresentationByNodeId(wordNode.GetNodeID())?.GetPosition() == updatedPosition &&
+                        core.GetNodeLayoutOptions().NodeWeightBias == 0.35 &&
+                        core.GetNodeLayoutOptions().NeighborPositionBias == 0.35,
+                        "Derived positions and layout options should persist after materialization and flush.");
                     core.StreamTrustedDictionariesFromDisk(directory, false);
                     Program.Assert(!core.IsDiskPagedReadOnly && core.GetTrustedSymbolIDs('z').Count == 1,
                         "Merge import should materialize existing state and avoid duplicate records.");
@@ -171,6 +203,60 @@ namespace OPEN_LRD.SmokeTests
             };
         }
 
+        private static Action EmptyCheckpointsAndInvalidManifestHeaders()
+        {
+            return () =>
+            {
+                string directory = Path.Combine(Path.GetTempPath(), "open-lrd-empty-" + Guid.NewGuid().ToString("N"));
+                string badMagicDirectory = directory + "-bad-magic";
+                string badVersionDirectory = directory + "-bad-version";
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    core.StreamTrustedDictionariesToDisk(directory);
+                    core.MaterializeDiskStore();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(Guid.NewGuid())),
+                        "A retained entry should be added after saving the empty checkpoint.");
+                    core.StreamTrustedDictionariesFromDisk(directory);
+                    Program.Assert(core.initialized && core.GetTrustedNodeCount() == 0 && core.GetNodePresentationCount() == 0,
+                        "Opening an empty checkpoint should replace state with an initialized empty core.");
+                    core.MaterializeDiskStore();
+
+                    foreach (string copy in new[] { badMagicDirectory, badVersionDirectory })
+                    {
+                        Directory.CreateDirectory(copy);
+                        foreach (string file in Directory.GetFiles(directory))
+                            File.Copy(file, Path.Combine(copy, Path.GetFileName(file)));
+                    }
+                    byte[] manifest = File.ReadAllBytes(Path.Combine(badMagicDirectory, "manifest.lrdmeta"));
+                    manifest[0] ^= 0x7F;
+                    File.WriteAllBytes(Path.Combine(badMagicDirectory, "manifest.lrdmeta"), manifest);
+                    manifest = File.ReadAllBytes(Path.Combine(badVersionDirectory, "manifest.lrdmeta"));
+                    BitConverter.GetBytes(99).CopyTo(manifest, 4);
+                    File.WriteAllBytes(Path.Combine(badVersionDirectory, "manifest.lrdmeta"), manifest);
+
+                    Guid retainedSenseId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(retainedSenseId)),
+                        "A retained entry should be added before rejecting invalid manifests.");
+                    foreach (string invalid in new[] { badMagicDirectory, badVersionDirectory })
+                    {
+                        Program.AssertThrows<InvalidDataException>(() => core.StreamTrustedDictionariesFromDisk(invalid),
+                            "Invalid manifest magic/version should be rejected.");
+                        Program.Assert(core.GetTrustedSenseBox(retainedSenseId) != null,
+                            "Invalid manifest headers must leave the current core untouched.");
+                    }
+                }
+                finally
+                {
+                    core.ResetCore();
+                    foreach (string path in new[] { directory, badMagicDirectory, badVersionDirectory })
+                        if (Directory.Exists(path)) Directory.Delete(path, true);
+                }
+            };
+        }
+
         private static Action LegacyCheckpointUpgradesReadOnly()
         {
             return () =>
@@ -200,6 +286,11 @@ namespace OPEN_LRD.SmokeTests
                     core.StreamTrustedDictionariesFromDisk(directory, true, false, 1);
                     Program.Assert(core.IsLegacyDiskStoreReadOnly && core.IsDiskPagedReadOnly,
                         "Opening a legacy checkpoint should enter read-only migration mode.");
+                    Program.Assert(core.GetNodeLayoutOptions().NodeWeightBias == NodeLayoutOptions.DefaultBias &&
+                                   core.GetNodeLayoutOptions().NeighborPositionBias == NodeLayoutOptions.DefaultBias,
+                        "Legacy checkpoints without layout settings should use documented defaults.");
+                    Program.Assert(core.GetNodePresentationCount() == core.GetTrustedNodeCount(),
+                        "Legacy checkpoints without a presentation partition should receive default NodeRepresentations.");
                     Program.AssertThrows<InvalidOperationException>(() => core.AddTrustedSymbol(new SymbolBox(Guid.NewGuid(), 'x')),
                         "Trusted data mutations should be rejected until a legacy checkpoint is upgraded.");
                     Program.AssertThrows<InvalidOperationException>(() => core.FlushTrustedDiskStore(),
@@ -214,6 +305,11 @@ namespace OPEN_LRD.SmokeTests
                     Program.Assert(!core.IsLegacyDiskStoreReadOnly && !core.IsDiskPagedReadOnly,
                         "A successful upgrade should install the current writable format.");
                     core.OpenDiskStore(directory, 1);
+                    Program.Assert(core.GetNodePresentationCount() == core.GetTrustedNodeCount(),
+                        "Legacy upgrade should persist synthesized NodeRepresentations.");
+                    Program.Assert(core.GetNodeLayoutOptions().NodeWeightBias == NodeLayoutOptions.DefaultBias &&
+                                   core.GetNodeLayoutOptions().NeighborPositionBias == NodeLayoutOptions.DefaultBias,
+                        "Legacy upgrade should persist default layout options.");
                     NodeLink structural = core.GetOutgoingLinks(
                         core.GetTrustedNodeByTarget(NodeTargetKind.Symbol, symbolId)!.GetNodeID(), NodeRelationType.HasSense).Single();
                     Program.Assert(structural.Provenance.Origin == NodeLinkOrigin.LegacyImport && structural.Weight == 1.0,
@@ -225,6 +321,203 @@ namespace OPEN_LRD.SmokeTests
                     if (Directory.Exists(directory)) Directory.Delete(directory, true);
                 }
             };
+        }
+
+        private static Action MergeLayoutOptionsHonorPrecedence()
+        {
+            return () =>
+            {
+                string baseDirectory = Path.Combine(Path.GetTempPath(), "open-lrd-layout-base-" + Guid.NewGuid().ToString("N"));
+                string incomingDirectory = Path.Combine(Path.GetTempPath(), "open-lrd-layout-incoming-" + Guid.NewGuid().ToString("N"));
+                string incomingWithoutOptions = Path.Combine(Path.GetTempPath(), "open-lrd-layout-defaults-" + Guid.NewGuid().ToString("N"));
+                LRD_Core core = LRD_Core.Instance;
+                Guid senseId = Guid.NewGuid();
+                Guid usageId = Guid.NewGuid();
+                Guid symbolId = Guid.NewGuid();
+                Guid wordId = Guid.NewGuid();
+                Guid sentenceId = Guid.NewGuid();
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    AddLayoutMergeGraph(core, senseId, usageId, symbolId, wordId, sentenceId);
+                    core.UpdateNodeLayoutOptions(0.1, 0.15);
+                    core.StreamTrustedDictionariesToDisk(baseDirectory);
+
+                    core.ResetCore();
+                    core.InitializeCore();
+                    AddLayoutMergeGraph(core, senseId, usageId, symbolId, wordId, sentenceId);
+                    core.UpdateNodeLayoutOptions(0.4, 0.45);
+                    core.StreamTrustedDictionariesToDisk(incomingDirectory);
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> noOptions = ReadCheckpointPartitions(incomingDirectory);
+                    noOptions[DiskPartition.LayoutSettings] = Array.Empty<DiskRecord>();
+                    WriteCheckpoint(incomingWithoutOptions, noOptions);
+
+                    core.ResetCore();
+                    core.OpenDiskStore(baseDirectory);
+                    core.MaterializeDiskStore();
+                    Guid wordNodeId = core.GetTrustedNodeByTarget(NodeTargetKind.Word, wordId)!.GetNodeID();
+                    core.StreamTrustedDictionariesFromDisk(incomingDirectory, replaceExisting: false);
+                    Program.Assert(core.GetNodeLayoutOptions().NodeWeightBias == 0.1 &&
+                                   core.GetNodeLayoutOptions().NeighborPositionBias == 0.15,
+                        "Base layout options should win by default during merge.");
+                    Program.Assert(core.GetNodeRepresentationByNodeId(wordNodeId)!.GetPosition() ==
+                                   core.GetNodeLayoutResult().Positions[wordNodeId],
+                        "Base-preference merge should recalculate positions with the base options.");
+
+                    core.ResetCore();
+                    core.OpenDiskStore(baseDirectory);
+                    core.MaterializeDiskStore();
+                    wordNodeId = core.GetTrustedNodeByTarget(NodeTargetKind.Word, wordId)!.GetNodeID();
+                    Vector3 basePosition = core.GetNodeRepresentationByNodeId(wordNodeId)!.GetPosition();
+                    core.StreamTrustedDictionariesFromDisk(incomingDirectory, replaceExisting: false,
+                        layoutOptionsMergePreference: LayoutOptionsMergePreference.IncomingWins);
+                    Program.Assert(core.GetNodeLayoutOptions().NodeWeightBias == 0.4 &&
+                                   core.GetNodeLayoutOptions().NeighborPositionBias == 0.45,
+                        "IncomingWins should restore incoming layout options before recalculation.");
+                    Program.Assert(core.GetNodeRepresentationByNodeId(wordNodeId)!.GetPosition() != basePosition &&
+                                   core.GetNodeRepresentationByNodeId(wordNodeId)!.GetPosition() ==
+                                   core.GetNodeLayoutResult().Positions[wordNodeId],
+                        "Incoming-preference merge should recalculate base Nodes with incoming options before install.");
+
+                    core.ResetCore();
+                    core.OpenDiskStore(baseDirectory);
+                    core.MaterializeDiskStore();
+                    wordNodeId = core.GetTrustedNodeByTarget(NodeTargetKind.Word, wordId)!.GetNodeID();
+                    core.StreamTrustedDictionariesFromDisk(incomingWithoutOptions, replaceExisting: false,
+                        layoutOptionsMergePreference: LayoutOptionsMergePreference.IncomingWins);
+                    Program.Assert(core.GetNodeLayoutOptions().NodeWeightBias == NodeLayoutOptions.DefaultBias &&
+                                   core.GetNodeLayoutOptions().NeighborPositionBias == NodeLayoutOptions.DefaultBias,
+                        "IncomingWins should use defaults when the incoming checkpoint has no settings record.");
+                    Program.Assert(core.GetNodeRepresentationByNodeId(wordNodeId)!.GetPosition() ==
+                                   core.GetNodeLayoutResult().Positions[wordNodeId],
+                        "Incoming default options should be applied before merged positions are recalculated.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                    foreach (string directory in new[] { baseDirectory, incomingDirectory, incomingWithoutOptions })
+                        if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                }
+            };
+        }
+
+        private static void AddLayoutMergeGraph(
+            LRD_Core core,
+            Guid senseId,
+            Guid usageId,
+            Guid symbolId,
+            Guid wordId,
+            Guid sentenceId)
+        {
+            Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Layout merge sense should be trusted.");
+            Program.Assert(core.AddTrustedUsage(new UsageBox(usageId)), "Layout merge usage should be trusted.");
+            SymbolBox symbol = new SymbolBox(symbolId, 'q');
+            symbol.SetSenseID(senseId);
+            Program.Assert(core.AddTrustedSymbol(symbol), "Layout merge symbol should be trusted.");
+            Program.Assert(core.AddTrustedWord(new WordBox(wordId, senseId, usageId,
+                new List<Guid> { symbolId }, PartOfSpeech.Noun)), "Layout merge word should be trusted.");
+            Program.Assert(core.AddTrustedSentence(new SentenceBox(sentenceId, senseId, new List<Guid> { wordId })),
+                "Layout merge sentence should be trusted.");
+        }
+
+        private static Action InvalidLayoutAndPresentationRecordsAreRejected()
+        {
+            return () =>
+            {
+                string sourceDirectory = Path.Combine(Path.GetTempPath(), "open-lrd-record-source-" + Guid.NewGuid().ToString("N"));
+                string invalidLayoutDirectory = sourceDirectory + "-layout";
+                string missingPresentationDirectory = sourceDirectory + "-missing-presentation";
+                string malformedPresentationDirectory = sourceDirectory + "-malformed-presentation";
+                string duplicatePresentationDirectory = sourceDirectory + "-duplicate-presentation";
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(Guid.NewGuid())), "Source sense should be trusted.");
+                    core.StreamTrustedDictionariesToDisk(sourceDirectory);
+
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> invalidLayout = ReadCheckpointPartitions(sourceDirectory);
+                    DiskRecord settingsRecord = invalidLayout[DiskPartition.LayoutSettings].Single();
+                    byte[] invalidOptions = (byte[])settingsRecord.Payload.Clone();
+                    BitConverter.GetBytes(0.75).CopyTo(invalidOptions, 17);
+                    invalidLayout[DiskPartition.LayoutSettings] = new[] { new DiskRecord(settingsRecord.Key, invalidOptions) };
+                    WriteCheckpoint(invalidLayoutDirectory, invalidLayout);
+
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> missingPresentation = ReadCheckpointPartitions(sourceDirectory);
+                    List<DiskRecord> presentationRecords = missingPresentation[DiskPartition.NodePresentations].ToList();
+                    Program.Assert(presentationRecords.Count > 0, "Source checkpoint should contain a presentation record.");
+                    presentationRecords.RemoveAt(0);
+                    missingPresentation[DiskPartition.NodePresentations] = presentationRecords;
+                    WriteCheckpoint(missingPresentationDirectory, missingPresentation);
+
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> malformedPresentation = ReadCheckpointPartitions(sourceDirectory);
+                    presentationRecords = malformedPresentation[DiskPartition.NodePresentations].ToList();
+                    DiskRecord originalPresentation = presentationRecords[0];
+                    presentationRecords[0] = new DiskRecord(originalPresentation.Key,
+                        originalPresentation.Payload.Concat(new byte[] { 0x5A }).ToArray());
+                    malformedPresentation[DiskPartition.NodePresentations] = presentationRecords;
+                    WriteCheckpoint(malformedPresentationDirectory, malformedPresentation);
+
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> duplicatePresentation = ReadCheckpointPartitions(sourceDirectory);
+                    presentationRecords = duplicatePresentation[DiskPartition.NodePresentations].ToList();
+                    originalPresentation = presentationRecords[0];
+                    presentationRecords.Add(new DiskRecord(Guid.NewGuid(), (byte[])originalPresentation.Payload.Clone()));
+                    duplicatePresentation[DiskPartition.NodePresentations] = presentationRecords;
+                    WriteCheckpoint(duplicatePresentationDirectory, duplicatePresentation);
+
+                    core.ResetCore();
+                    core.InitializeCore();
+                    Guid retainedSenseId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(retainedSenseId)), "Retained sense should be trusted.");
+                    foreach (string invalidDirectory in new[]
+                             {
+                                 invalidLayoutDirectory,
+                                 missingPresentationDirectory,
+                                 malformedPresentationDirectory,
+                                 duplicatePresentationDirectory
+                             })
+                    {
+                        Program.AssertThrows<InvalidDataException>(
+                            () => core.StreamTrustedDictionariesFromDisk(invalidDirectory),
+                            "Invalid layout/presentation data should fail staged checkpoint validation.");
+                        Program.Assert(core.GetTrustedSenseBox(retainedSenseId) != null,
+                            "Rejected checkpoint data must not replace the current core.");
+                    }
+                }
+                finally
+                {
+                    core.ResetCore();
+                    foreach (string directory in new[]
+                             {
+                                 sourceDirectory,
+                                 invalidLayoutDirectory,
+                                 missingPresentationDirectory,
+                                 malformedPresentationDirectory,
+                                 duplicatePresentationDirectory
+                             })
+                    {
+                        if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                    }
+                }
+            };
+        }
+
+        private static Dictionary<DiskPartition, IEnumerable<DiskRecord>> ReadCheckpointPartitions(string directory)
+        {
+            using PartitionedBinaryStore store = PartitionedBinaryStore.Open(directory);
+            return Enum.GetValues<DiskPartition>().ToDictionary(
+                partition => partition,
+                partition => (IEnumerable<DiskRecord>)store.ReadAll(partition).ToList());
+        }
+
+        private static void WriteCheckpoint(
+            string directory,
+            IReadOnlyDictionary<DiskPartition, IEnumerable<DiskRecord>> partitions)
+        {
+            using PartitionedBinaryStore store = PartitionedBinaryStore.Create(directory, partitions);
+            store.Validate();
         }
 
         private static Action MergeReconcilesContainerMemberships()
@@ -263,6 +556,9 @@ namespace OPEN_LRD.SmokeTests
 
                     core.ResetCore();
                     core.OpenDiskStore(baseDirectory, 1);
+                    core.MaterializeDiskStore();
+                    Node untrustedNode = new Node(NodeTargetKind.Function, Guid.NewGuid());
+                    Program.Assert(core.SetUntrustedNode(untrustedNode), "Existing untrusted node should be staged before merge.");
                     core.StreamTrustedDictionariesFromDisk(incomingDirectory, false);
                     Program.Assert(core.GetTrustedGroupBox(firstGroupId)!.GetSentenceCount() == 2,
                         "Incoming sentence memberships should append to an existing trusted group.");
@@ -272,8 +568,22 @@ namespace OPEN_LRD.SmokeTests
                                    core.GetTrustedSourcesContainingGroup(secondGroupId).Contains(sourceId),
                         "Incoming group memberships should append to an existing trusted source and reverse index.");
                     Program.Assert(core.GetTrustedSenseBox(senseId)!.ContainsSentence(secondSentenceId) &&
-                                   core.GetTrustedUsageBox(usageId)!.ContainsSentence(secondSentenceId),
-                        "Incoming SenseBox and UsageBox memberships should be reconciled.");
+                                    core.GetTrustedUsageBox(usageId)!.ContainsSentence(secondSentenceId),
+                         "Incoming SenseBox and UsageBox memberships should be reconciled.");
+                    Node mergedSecondWordNode = core.GetTrustedNodeByTarget(NodeTargetKind.Word, secondWordId)!;
+                    NodeRepresentation mergedIncomingRepresentation = core.GetNodeRepresentationByNodeId(mergedSecondWordNode.GetNodeID())!;
+                    Program.Assert(mergedIncomingRepresentation.GetColor() != 0xFF00ABCD &&
+                        mergedIncomingRepresentation.GetSize() >= 0.6 && mergedIncomingRepresentation.GetSize() <= 2.0 &&
+                        mergedIncomingRepresentation.GetTextLabel()!.Contains("[", StringComparison.Ordinal) &&
+                        mergedIncomingRepresentation.GetPosition().IsFinite,
+                        "Merge should recalculate presentation data for newly imported trusted nodes.");
+                    NodeRepresentation retainedUntrustedRepresentation = core.GetNodeRepresentationByNodeId(untrustedNode.GetNodeID())!;
+                    Program.Assert(core.GetUntrustedNode(untrustedNode.GetNodeID()) != null &&
+                        retainedUntrustedRepresentation.GetColor() != 0xFFABCDEF &&
+                        retainedUntrustedRepresentation.GetSize() >= 0.6 && retainedUntrustedRepresentation.GetSize() <= 2.0 &&
+                        retainedUntrustedRepresentation.GetTextLabel()!.StartsWith("Function ", StringComparison.Ordinal) &&
+                        retainedUntrustedRepresentation.GetPosition().IsFinite,
+                        "Merge should recalculate pre-existing untrusted NodeRepresentation fields.");
                 }
                 finally
                 {
@@ -318,6 +628,12 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(core.AddTrustedSymbol(secondSymbol), "Second merge symbol should be trusted.");
                 Program.Assert(core.AddTrustedWord(new WordBox(secondWordId, senseId, usageId,
                     new List<Guid> { secondSymbolId }, PartOfSpeech.Noun)), "Second merge word should be trusted.");
+                NodeRepresentation secondWordRepresentation = core.GetNodeRepresentationByNodeId(
+                    core.GetTrustedNodeByTarget(NodeTargetKind.Word, secondWordId)!.GetNodeID())!;
+                secondWordRepresentation.SetColor(0xFF00ABCD);
+                secondWordRepresentation.SetSize(2.0);
+                secondWordRepresentation.SetTextLabel("incoming word model");
+                secondWordRepresentation.SetPosition(1.0, 2.0, 3.0);
                 Program.Assert(core.AddTrustedSentence(new SentenceBox(secondSentenceId, senseId,
                     new List<Guid> { secondWordId })), "Second merge sentence should be trusted.");
                 firstGroupSentences.Add(secondSentenceId);
@@ -340,6 +656,12 @@ namespace OPEN_LRD.SmokeTests
             {
                 string dataPath = Path.Combine(directory, partition.ToString().ToLowerInvariant() + ".lrdpart");
                 string indexPath = Path.Combine(directory, partition.ToString().ToLowerInvariant() + ".lrdidx");
+                if (partition is DiskPartition.NodePresentations or DiskPartition.LayoutSettings)
+                {
+                    File.Delete(dataPath);
+                    File.Delete(indexPath);
+                    continue;
+                }
                 byte[] data = File.ReadAllBytes(dataPath);
                 byte[] index = File.ReadAllBytes(indexPath);
                 WriteInt32(data, 4, 1);
@@ -364,7 +686,7 @@ namespace OPEN_LRD.SmokeTests
             writer.Write(1);
             writer.Write(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             writer.Write(manifest.Count);
-            foreach (DiskPartition partition in Enum.GetValues<DiskPartition>())
+            foreach (DiskPartition partition in manifest.Keys.OrderBy(partition => partition))
             {
                 (int count, byte[] dataHash, byte[] indexHash) = manifest[partition];
                 writer.Write((byte)partition);

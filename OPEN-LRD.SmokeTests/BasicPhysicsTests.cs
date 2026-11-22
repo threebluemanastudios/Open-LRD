@@ -22,6 +22,7 @@ namespace OPEN_LRD.SmokeTests
             AssertEqual(BasicPhysics.Acceleration(12.0, 4.0), 3.0, "scalar acceleration");
             AssertEqual(BasicPhysics.Weight(2.0), 19.6133, "standard weight");
             AssertEqual(BasicPhysics.KineticEnergy(2.0, 3.0), 9.0, "kinetic energy");
+            AssertEqual(BasicPhysics.KineticEnergy(2.0, 0.0), 0.0, "a stationary object has zero kinetic energy");
             AssertEqual(BasicPhysics.GravitationalPotentialEnergy(2.0, 10.0, 4.0), 80.0, "gravitational potential energy");
             AssertEqual(BasicPhysics.Work(new Vector3(2.0, 0.0, 0.0), new Vector3(3.0, 0.0, 0.0)), 6.0, "work from dot product");
             AssertEqual(BasicPhysics.Power(12.0, 3.0), 4.0, "power from work");

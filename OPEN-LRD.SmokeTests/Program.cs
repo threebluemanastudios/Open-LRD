@@ -12,10 +12,14 @@ namespace OPEN_LRD.SmokeTests
         {
             CoreIdentityTests.RunAll();
             CoreNodeGraphTests.RunAll();
+            NodeDerivationTests.RunAll();
             CoreDiskStreamingTests.RunAll();
             FoundationHardeningTests.RunAll();
+            SmokeHarnessTests.RunAll();
             ToolFileParsingTests.RunAll();
             AlgebraTests.RunAll();
+            AdvancedExpressionTests.RunAll();
+            ExpressionExtensionTests.RunAll();
             MathHelperReuseTests.RunAll();
             MathFunctionDispatcherTests.RunAll();
             TimeAndDateTests.RunAll();
