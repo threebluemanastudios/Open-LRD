@@ -21,6 +21,7 @@ namespace OPEN_LRD.SmokeTests
             Run("Minimum spanning tree", TestMinimumSpanningTree);
             Run("Maximum flow", TestMaximumFlow);
             Run("PageRank distribution", TestPageRank);
+            Run("Graph results are isolated and confidence-weighted", TestImmutableResultsAndWeightedPageRank);
             Run("Graph validation", TestGraphValidation);
         }
 
@@ -90,6 +91,8 @@ namespace OPEN_LRD.SmokeTests
             AssertEqual(result.Distances["A"]["D"], 4.0, "Floyd-Warshall distance");
             AssertEqual(result.Distances["A"]["F"], double.PositiveInfinity, "Floyd-Warshall unreachable distance");
             Assert(!result.HasNegativeCycle, "Floyd-Warshall should not report a negative cycle");
+            AssertThrows<NotSupportedException>(() => ((IDictionary<string, double>)result.Distances["A"]).Clear(),
+                "all-pairs rows should be defensive read-only copies");
         }
 
         private static void TestTopologicalOrdering()
@@ -103,6 +106,8 @@ namespace OPEN_LRD.SmokeTests
             TopologicalSortResult<string> result = GraphAlgorithms.TopologicalSort(graph);
             Assert(result.Success, "topological sort should succeed");
             Assert(string.Join(",", result.Order) == "A,B,C,D", "topological order");
+            AssertThrows<NotSupportedException>(() => ((IList<string>)result.Order).Clear(),
+                "topological order should be immutable");
             Assert(!GraphAlgorithms.HasCycle(graph), "DAG should not have a cycle");
 
             graph.AddEdge("D", "A");
@@ -120,6 +125,8 @@ namespace OPEN_LRD.SmokeTests
             IReadOnlyList<IReadOnlyList<string>> components = GraphAlgorithms.ConnectedComponents(graph);
             Assert(components.Count == 2, "undirected component count");
             Assert(string.Join(",", components[0]) == "A,B,C,D,E", "undirected component members");
+            AssertThrows<NotSupportedException>(() => ((IList<string>)components[0]).Clear(),
+                "component members should be immutable snapshots");
             Assert(GraphAlgorithms.HasCycle(graph), "undirected cycle should be detected");
             Assert(!GraphAlgorithms.IsBipartite(graph), "triangle graph should not be bipartite");
 
@@ -182,6 +189,46 @@ namespace OPEN_LRD.SmokeTests
             IReadOnlyDictionary<string, double> ranks = GraphAlgorithms.PageRank(graph);
             AssertEqual(ranks.Values.Sum(), 1.0, "PageRank should sum to one", 1e-7);
             Assert(ranks.All(pair => pair.Value > 0.0), "PageRank values should be positive");
+        }
+
+        private static void TestImmutableResultsAndWeightedPageRank()
+        {
+            Graph<string> graph = new Graph<string>(false);
+            graph.AddEdge("self", "self", 2.0);
+            Assert(graph.EdgeCount == 1 && graph.GetOutgoingEdges("self").Count == 1 && graph.GetIncomingEdges("self").Count == 1,
+                "an undirected self-loop should be represented once in each adjacency list");
+            graph.AddEdge("A", "B", 9.0);
+            graph.AddEdge("A", "C", 1.0);
+
+            GraphTraversal<string> traversal = GraphAlgorithms.BreadthFirstTraversal(graph, "A");
+            AssertThrows<NotSupportedException>(() => ((IList<string>)traversal.Order).Add("mutated"),
+                "traversal order should be a defensive read-only copy");
+            AssertThrows<NotSupportedException>(() => ((IDictionary<string, string>)traversal.Parents).Clear(),
+                "traversal parents should be a defensive read-only copy");
+
+            IReadOnlyDictionary<string, double> uniform = GraphAlgorithms.PageRank(graph, confidenceWeighted: false);
+            IReadOnlyDictionary<string, double> weighted = GraphAlgorithms.PageRank(graph, confidenceWeighted: true);
+            Assert(weighted["B"] > weighted["C"] && Math.Abs(uniform["B"] - uniform["C"]) < 1e-8,
+                "weighted PageRank should follow normalized positive edge confidence");
+            AssertThrows<NotSupportedException>(() => ((IDictionary<string, double>)weighted).Clear(),
+                "PageRank results should be immutable snapshots");
+            Assert(graph.EdgeCount == 3 && !graph.ContainsNode("mutated"),
+                "mutating algorithm result views must not alter the source graph");
+
+            Graph<int> negativeConfidence = new Graph<int>();
+            negativeConfidence.AddEdge(0, 1, -0.5);
+            AssertThrows<InvalidOperationException>(() => GraphAlgorithms.PageRank(negativeConfidence, confidenceWeighted: true),
+                "confidence-weighted PageRank must reject negative traversal weights");
+
+            Graph<int> sparse = new Graph<int>();
+            for (int node = 0; node < 1_500; node++) sparse.AddEdge(node, node + 1, 1.0);
+            AssertEqual(GraphAlgorithms.MaximumFlow(sparse, 0, 1_500).MaximumFlow, 1.0,
+                "maximum flow should use sparse residual storage on large low-degree graphs");
+
+            Graph<int> tooLargeForAllPairs = new Graph<int>();
+            for (int node = 0; node <= 512; node++) tooLargeForAllPairs.AddNode(node);
+            AssertThrows<InvalidOperationException>(() => GraphAlgorithms.FloydWarshall(tooLargeForAllPairs),
+                "Floyd-Warshall should reject node counts beyond its documented memory limit");
         }
 
         private static void TestGraphValidation()

@@ -252,11 +252,26 @@ assertions. Validity windows are inclusive through
 `NodeLinkProvenance.IsActiveAt(...)`.
 
 Link queries and graph snapshots can filter by relation,
-origin, author, minimum confidence, and active time.
+origin, author, minimum confidence, and active time. If no
+instant is supplied, queries use the current UTC time and
+exclude expired assertions.
 `GetTrustedLinksByProvenanceTarget` returns distinct
 assertions for a trusted source or evidence target.
 `FindTrustedNodes` filters by target kind, label,
 canonical status, net trust weight, and incident links.
+`BuildTrustedKnowledgeGraphSnapshot(asOf)` returns an
+immutable typed node/assertion snapshot with provenance and
+an explicit time context. `BuildSkillsCostGraphSnapshot`
+projects confidence `c` to non-negative path cost
+`-ln(max(c, 1e-12))`; the regular skills graph retains
+confidence as its edge weight.
+
+`BeginReasoningWriteBatch()` stages link-only inference
+writes. `Commit()` validates and applies the complete batch
+atomically, recalculating presentation once; disposing an
+uncommitted batch discards it. Use
+`SuspendPresentationRecalculation()` when batching other
+core mutations.
 
 ### Trust and presentation
 
@@ -281,6 +296,13 @@ summaries.
 for algorithms including traversal, shortest paths,
 connected components, topological sorting, minimum
 spanning trees, maximum flow, and PageRank.
+Graph algorithm outputs are defensive read-only snapshots.
+`PageRank(..., confidenceWeighted: true)` normalizes
+non-negative outgoing weights; the default retains uniform
+transitions. Floyd-Warshall is limited to 512 nodes; maximum
+flow uses sparse residual adjacency. The generic `Graph<T>`
+models algorithm-specific costs/capacities, while
+knowledge-link confidence remains in `[0, 1]`.
 
 ---
 
@@ -288,7 +310,9 @@ spanning trees, maximum flow, and PageRank.
 
 `PartitionedBinaryStore` and
 `FoundationBinarySerializer` persist trusted state in
-versioned binary records.
+versioned binary records. New writes use checkpoint format
+v3; v1 legacy and v2 checkpoints remain readable, while
+unsupported future versions are rejected.
 
 ### Checkpoint contents
 
@@ -312,6 +336,14 @@ Read and write limits include:
 - 64 MiB maximum record payload;
 - 1 MiB maximum strict UTF-8 string;
 - 1 million maximum collection items.
+- 4,096 maximum cached records per partition in paged mode.
+
+Function scalar records support `BigInteger`, `Fraction`,
+Foundation `Vector2`/`Vector3`, `Complex`, `double[]`, and
+`int[]` in addition to the original scalar types. Extended
+values use bounded, tagged encodings. `GetDiskStoreDiagnostics()`
+reports partition counts/sizes, cache hit/miss totals, and
+the most recent validation error for an attached store.
 
 Writes stage checkpoint files in a sibling directory,
 validate the output, and then replace the destination.

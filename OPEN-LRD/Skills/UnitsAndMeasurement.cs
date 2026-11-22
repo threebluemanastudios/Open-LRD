@@ -48,6 +48,18 @@ namespace OPEN_LRD.Skills
         private static readonly UnitDimension VelocityDimension = UnitsAndMeasurement.Divide(LengthDimension, TimeDimension);
         private static readonly UnitDimension AccelerationDimension = UnitsAndMeasurement.Divide(VelocityDimension, TimeDimension);
         private static readonly UnitDimension DensityDimension = UnitsAndMeasurement.Divide(MassDimension, VolumeDimension);
+        private static readonly UnitDimension SpecificHeatCapacityDimension = UnitsAndMeasurement.Divide(
+            EnergyDimension, UnitsAndMeasurement.Multiply(MassDimension, TemperatureDimension));
+        private static readonly UnitDimension SpecificLatentHeatDimension = UnitsAndMeasurement.Divide(EnergyDimension, MassDimension);
+        private static readonly UnitDimension MolarHeatCapacityDimension = UnitsAndMeasurement.Divide(
+            EnergyDimension, UnitsAndMeasurement.Multiply(AmountDimension, TemperatureDimension));
+        private static readonly UnitDimension EntropyDimension = UnitsAndMeasurement.Divide(EnergyDimension, TemperatureDimension);
+        private static readonly UnitDimension DynamicViscosityDimension = UnitsAndMeasurement.Multiply(PressureDimension, TimeDimension);
+        private static readonly UnitDimension VolumetricFlowRateDimension = UnitsAndMeasurement.Divide(VolumeDimension, TimeDimension);
+        private static readonly UnitDimension MassFlowRateDimension = UnitsAndMeasurement.Divide(MassDimension, TimeDimension);
+        private static readonly UnitDimension ThermalExpansionCoefficientDimension = UnitsAndMeasurement.Power(TemperatureDimension, -1);
+        private static readonly UnitDimension ElectricFieldDimension = UnitsAndMeasurement.Divide(ForceDimension, ChargeDimension);
+        private static readonly UnitDimension LinearMomentumDimension = UnitsAndMeasurement.Multiply(MassDimension, VelocityDimension);
 
         public static Unit DimensionlessUnit { get; } = new Unit("", 1.0, 0.0, Dimensionless);
         public static Unit Meter { get; } = new Unit("m", 1.0, 0.0, LengthDimension);
@@ -119,6 +131,17 @@ namespace OPEN_LRD.Skills
         public static Unit Bar { get; } = new Unit("bar", 100000.0, 0.0, PressureDimension);
         public static Unit AstronomicalUnit { get; } = new Unit("au", 149597870700.0, 0.0, LengthDimension);
         public static Unit Parsec { get; } = new Unit("pc", 3.0856775814913673e16, 0.0, LengthDimension);
+        public static Unit SpecificHeatCapacity { get; } = new Unit("J/(kg·K)", 1.0, 0.0, SpecificHeatCapacityDimension);
+        public static Unit SpecificLatentHeat { get; } = new Unit("J/kg", 1.0, 0.0, SpecificLatentHeatDimension);
+        public static Unit MolarHeatCapacity { get; } = new Unit("J/(mol·K)", 1.0, 0.0, MolarHeatCapacityDimension);
+        public static Unit Entropy { get; } = new Unit("J/K", 1.0, 0.0, EntropyDimension);
+        public static Unit DynamicViscosity { get; } = new Unit("Pa·s", 1.0, 0.0, DynamicViscosityDimension);
+        public static Unit VolumetricFlowRate { get; } = new Unit("m³/s", 1.0, 0.0, VolumetricFlowRateDimension);
+        public static Unit MassFlowRate { get; } = new Unit("kg/s", 1.0, 0.0, MassFlowRateDimension);
+        public static Unit ThermalExpansionCoefficient { get; } = new Unit("1/K", 1.0, 0.0, ThermalExpansionCoefficientDimension);
+        public static Unit ElectricField { get; } = new Unit("N/C", 1.0, 0.0, ElectricFieldDimension);
+        public static Unit LinearMomentum { get; } = new Unit("kg·m/s", 1.0, 0.0, LinearMomentumDimension);
+        public static Unit Impulse { get; } = new Unit("N·s", 1.0, 0.0, LinearMomentumDimension);
         private static readonly IReadOnlyDictionary<string, Unit> Units = BuildUnits();
 
         private static readonly IReadOnlyDictionary<string, int> PrefixPowers = new Dictionary<string, int>(StringComparer.Ordinal)
@@ -333,7 +356,20 @@ namespace OPEN_LRD.Skills
                 ["atm"] = Atmosphere,
                 ["bar"] = Bar,
                 ["au"] = AstronomicalUnit,
-                ["pc"] = Parsec
+                ["pc"] = Parsec,
+                ["1"] = DimensionlessUnit,
+                ["J/(kg·K)"] = SpecificHeatCapacity,
+                ["J/kg"] = SpecificLatentHeat,
+                ["J/(mol·K)"] = MolarHeatCapacity,
+                ["J/K"] = Entropy,
+                ["Pa·s"] = DynamicViscosity,
+                ["m³/s"] = VolumetricFlowRate,
+                ["kg/s"] = MassFlowRate,
+                ["1/K"] = ThermalExpansionCoefficient,
+                ["N/C"] = ElectricField,
+                ["kg·m/s"] = LinearMomentum,
+                ["N·s"] = Impulse,
+                ["rad/s"] = Hertz
             };
             return units;
         }

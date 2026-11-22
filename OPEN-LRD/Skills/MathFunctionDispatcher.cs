@@ -36,9 +36,35 @@ namespace OPEN_LRD.Skills
             IReadOnlyDictionary<int, string> InputUnits,
             string? OutputUnit);
 
+        private static readonly Type[] DispatchSkillTypes =
+        {
+            typeof(Math_1), typeof(Math_2), typeof(Math_3), typeof(Math_4),
+            typeof(Algebra), typeof(ProbabilityAndStatistics), typeof(DiscreteMath),
+            typeof(InformationTheoryAndMLMath), typeof(FinancialMath), typeof(BasicPhysics),
+            typeof(Thermodynamics), typeof(FluidMechanics), typeof(Electromagnetism),
+            typeof(CondensedMatter), typeof(CurvedSpacetime), typeof(LinearAlgebraAdvanced),
+            typeof(NumericalMethods), typeof(Optimization), typeof(Geometry3DAndGraphics),
+            typeof(TransformsAndSignals), typeof(TimeAndDate), typeof(UnitsAndMeasurement),
+            typeof(ManyBodyInteractions), typeof(ExtremeScalars)
+        };
+
+        private static readonly Type[] DispatchValueTypes =
+        {
+            typeof(string), typeof(bool), typeof(byte), typeof(sbyte), typeof(short), typeof(ushort),
+            typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(double),
+            typeof(decimal), typeof(char), typeof(Guid), typeof(DateTime), typeof(DateTimeOffset),
+            typeof(TimeSpan), typeof(BigInteger), typeof(Fraction), typeof(OPEN_LRD.Foundations.Vector2), typeof(OPEN_LRD.Foundations.Vector3),
+            typeof(Complex), typeof(double[]), typeof(int[])
+        };
+
+        private static readonly List<string> DiscoveryRejections = new List<string>();
         private static readonly IReadOnlyList<FunctionDescriptor> Functions = BuildFunctionRegistry();
         private static readonly IReadOnlyList<FunctionDescriptor> ScalarFunctions = BuildScalarFunctionRegistry();
 
+        /// <summary>Returns stable diagnostics for allowlisted methods excluded from function dispatch.</summary>
+        public static IReadOnlyList<string> GetDiscoveryDiagnostics() => DiscoveryRejections.AsReadOnly();
+
+        /// <summary>Dispatches a FunctionBox definition and stores the successful result if its revision is unchanged.</summary>
         public static FunctionResult Dispatch(FunctionBox functionBox)
         {
             if (functionBox == null)
@@ -82,6 +108,36 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentException("The stored function result unit does not match the selected function signature.", nameof(functionBox));
             }
+            FunctionResult dispatched = Invoke(descriptor, functionBox.Variables);
+            if (!ResultsEquivalent(result, dispatched))
+            {
+                throw new ArgumentException("The stored result was not produced by dispatch for the current function definition and variable values.", nameof(functionBox));
+            }
+        }
+
+        private static bool ResultsEquivalent(FunctionResult stored, FunctionResult dispatched)
+        {
+            if (stored.DataType != dispatched.DataType ||
+                !string.Equals(stored.UnitTitle, dispatched.UnitTitle, StringComparison.Ordinal))
+            {
+                return false;
+            }
+            if (stored.Value is double storedDouble && dispatched.Value is double dispatchedDouble)
+            {
+                return double.IsFinite(storedDouble) && double.IsFinite(dispatchedDouble) &&
+                       Math.Abs(storedDouble - dispatchedDouble) <= 1e-12 * Math.Max(1.0, Math.Max(Math.Abs(storedDouble), Math.Abs(dispatchedDouble)));
+            }
+            if (stored.Value is float storedFloat && dispatched.Value is float dispatchedFloat)
+            {
+                return float.IsFinite(storedFloat) && float.IsFinite(dispatchedFloat) &&
+                       Math.Abs(storedFloat - dispatchedFloat) <= 1e-6f * Math.Max(1.0f, Math.Max(Math.Abs(storedFloat), Math.Abs(dispatchedFloat)));
+            }
+            if (stored.Value is Array storedArray && dispatched.Value is Array dispatchedArray)
+            {
+                return storedArray.GetType() == dispatchedArray.GetType() && storedArray.Length == dispatchedArray.Length &&
+                       storedArray.Cast<object?>().SequenceEqual(dispatchedArray.Cast<object?>());
+            }
+            return Equals(stored.Value, dispatched.Value);
         }
 
         /// <summary>Resolves an alias or unqualified function name to its stable registry key.</summary>
@@ -97,6 +153,7 @@ namespace OPEN_LRD.Skills
                 NormalizeOptionalText(expectedResultUnitTitle)).Key;
         }
 
+        /// <summary>Dispatches the best matching registered overload for typed arguments and expected output.</summary>
         public static FunctionResult Dispatch(
             string functionKey,
             IReadOnlyList<FunctionVariable> variables,
@@ -124,6 +181,7 @@ namespace OPEN_LRD.Skills
             return Invoke(descriptor, variables);
         }
 
+        /// <summary>Dispatches a named overload using runtime argument types; null arguments require typed variables.</summary>
         public static FunctionResult Dispatch(string functionKey, Type expectedResultType, params object?[] values)
         {
             if (values == null)
@@ -144,6 +202,7 @@ namespace OPEN_LRD.Skills
             return Dispatch(functionKey, variables, expectedResultType);
         }
 
+        /// <summary>Dispatches a named overload and returns its value as <typeparamref name="T"/>.</summary>
         public static T Dispatch<T>(string functionKey, params object?[] values)
         {
             FunctionResult result = Dispatch(functionKey, typeof(T), values);
@@ -570,28 +629,14 @@ namespace OPEN_LRD.Skills
 
         private static IReadOnlyList<FunctionDescriptor> BuildScalarFunctionRegistry()
         {
-            Type[] scalarTypes =
-            {
-                typeof(Math_1),
-                typeof(Math_2),
-                typeof(Math_3),
-                typeof(Math_4),
-                typeof(Algebra),
-                typeof(ProbabilityAndStatistics),
-                typeof(DiscreteMath),
-                typeof(InformationTheoryAndMLMath),
-                typeof(FinancialMath),
-                typeof(BasicPhysics),
-                typeof(Thermodynamics),
-                typeof(FluidMechanics),
-                typeof(Electromagnetism),
-                typeof(CondensedMatter),
-                typeof(CurvedSpacetime)
-            };
             List<FunctionDescriptor> functions = new List<FunctionDescriptor>();
-            foreach (Type scalarType in scalarTypes)
+            foreach (Type scalarType in DispatchSkillTypes.OrderBy(type => type.FullName, StringComparer.Ordinal))
             {
-                MethodInfo[] methods = scalarType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+                MethodInfo[] methods = scalarType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                    .OrderBy(method => method.Name, StringComparer.Ordinal)
+                    .ThenBy(method => string.Join("|", method.GetParameters().Select(parameter => parameter.ParameterType.FullName)), StringComparer.Ordinal)
+                    .ThenBy(method => method.ReturnType.FullName, StringComparer.Ordinal)
+                    .ToArray();
                 foreach (MethodInfo method in methods)
                 {
                     if (method.IsGenericMethodDefinition
@@ -633,20 +678,25 @@ namespace OPEN_LRD.Skills
 
         private static IReadOnlyList<FunctionDescriptor> BuildFunctionRegistry()
         {
-            Type[] mathTypes = { typeof(Math_1), typeof(Math_2), typeof(Math_3), typeof(Math_4) };
             List<FunctionDescriptor> functions = new List<FunctionDescriptor>();
-            foreach (Type mathType in mathTypes)
+            foreach (Type mathType in DispatchSkillTypes.OrderBy(type => type.FullName, StringComparer.Ordinal))
             {
-                MethodInfo[] methods = mathType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+                MethodInfo[] methods = mathType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                    .OrderBy(method => method.Name, StringComparer.Ordinal)
+                    .ThenBy(method => string.Join("|", method.GetParameters().Select(parameter => parameter.ParameterType.FullName)), StringComparer.Ordinal)
+                    .ThenBy(method => method.ReturnType.FullName, StringComparer.Ordinal)
+                    .ToArray();
                 foreach (MethodInfo method in methods)
                 {
-                    if (method.IsGenericMethodDefinition || method.ReturnType == typeof(void))
-                    {
-                        continue;
-                    }
                     ParameterInfo[] parameters = method.GetParameters();
-                    if (parameters.Any(parameter => parameter.IsOut || parameter.ParameterType.IsByRef))
+                    bool unsupported = method.IsGenericMethod || method.IsSpecialName || method.ReturnType == typeof(void) ||
+                        method.ReturnType.IsByRef || method.ReturnType.IsByRefLike || !IsSupportedDispatchType(method.ReturnType) ||
+                        parameters.Any(parameter => parameter.IsOut || parameter.ParameterType.IsByRef ||
+                            parameter.ParameterType.IsByRefLike || parameter.IsOptional || parameter.GetCustomAttributes(typeof(ParamArrayAttribute), false).Length != 0 ||
+                            !IsSupportedDispatchType(parameter.ParameterType));
+                    if (unsupported)
                     {
+                        DiscoveryRejections.Add($"{mathType.FullName}.{method.Name}: unsupported or non-persistable signature excluded.");
                         continue;
                     }
                     functions.Add(new FunctionDescriptor(
@@ -660,13 +710,82 @@ namespace OPEN_LRD.Skills
                 }
             }
 
+            functions = functions.OrderBy(function => function.Method.DeclaringType?.FullName, StringComparer.Ordinal)
+                .ThenBy(function => function.Name, StringComparer.Ordinal)
+                .ThenBy(function => string.Join("|", function.ParameterTypes.Select(type => type.FullName)), StringComparer.Ordinal)
+                .ThenBy(function => function.ReturnType.FullName, StringComparer.Ordinal)
+                .ToList();
+
             AddUnitMetadata(functions, "Math_2.CalculateHypotenuse", new[] { typeof(double), typeof(double) }, new Dictionary<int, string> { [0] = "m", [1] = "m" }, "m");
             AddUnitMetadata(functions, "Math_2.CalculateHypotenuse", new[] { typeof(float), typeof(float) }, new Dictionary<int, string> { [0] = "m", [1] = "m" }, "m");
             AddUnitMetadata(functions, "Math_2.CalculateRectangleArea", new[] { typeof(double), typeof(double) }, new Dictionary<int, string> { [0] = "m", [1] = "m" }, "m²");
             AddUnitMetadata(functions, "Math_2.CalculateRectangleArea", new[] { typeof(float), typeof(float) }, new Dictionary<int, string> { [0] = "m", [1] = "m" }, "m²");
             AddUnitMetadata(functions, "Math_2.CalculateCircleArea", new[] { typeof(double) }, new Dictionary<int, string> { [0] = "m" }, "m²");
             AddUnitMetadata(functions, "Math_2.CalculateCircleArea", new[] { typeof(float) }, new Dictionary<int, string> { [0] = "m" }, "m²");
+
+            AddUnits(functions, "BasicPhysics.Force", new[] { typeof(double), typeof(double) }, new[] { "kg", "m/s²" }, "N");
+            AddUnits(functions, "BasicPhysics.Force", new[] { typeof(double), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "kg", "m/s²" }, "N");
+            AddUnits(functions, "BasicPhysics.MassFromForce", new[] { typeof(double), typeof(double) }, new[] { "N", "m/s²" }, "kg");
+            AddUnits(functions, "BasicPhysics.Acceleration", new[] { typeof(double), typeof(double) }, new[] { "N", "kg" }, "m/s²");
+            AddUnits(functions, "BasicPhysics.Weight", new[] { typeof(double) }, new[] { "kg" }, "N");
+            AddUnits(functions, "BasicPhysics.Distance", new[] { typeof(double), typeof(double) }, new[] { "m/s", "s" }, "m");
+            AddUnits(functions, "BasicPhysics.Distance", new[] { typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "m" }, "m");
+            AddUnits(functions, "BasicPhysics.TravelTime", new[] { typeof(double), typeof(double) }, new[] { "m", "m/s" }, "s");
+            AddUnits(functions, "BasicPhysics.KineticEnergy", new[] { typeof(double), typeof(double) }, new[] { "kg", "m/s" }, "J");
+            AddUnits(functions, "BasicPhysics.GravitationalPotentialEnergy", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "kg", "m/s²", "m" }, "J");
+            AddUnits(functions, "BasicPhysics.Momentum", new[] { typeof(double), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "kg", "m/s" }, "kg·m/s");
+            AddUnits(functions, "BasicPhysics.Impulse", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(double) }, new[] { "N", "s" }, "N·s");
+            AddUnits(functions, "BasicPhysics.Work", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "N", "m" }, "J");
+            AddUnits(functions, "BasicPhysics.Power", new[] { typeof(double), typeof(double) }, new[] { "J", "s" }, "W");
+            AddUnits(functions, "BasicPhysics.Power", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "N", "m/s" }, "W");
+            AddUnits(functions, "BasicPhysics.Torque", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "m", "N" }, "N·m");
+            AddUnits(functions, "BasicPhysics.RotationalPower", new[] { typeof(OPEN_LRD.Foundations.Vector3), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "N·m", "rad/s" }, "W");
+            AddUnits(functions, "Thermodynamics.IdealGasPressure", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "mol", "m³", "K" }, "Pa");
+            AddUnits(functions, "Thermodynamics.IdealGasVolume", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "mol", "Pa", "K" }, "m³");
+            AddUnits(functions, "Thermodynamics.IdealGasTemperature", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "mol", "Pa", "m³" }, "K");
+            AddUnits(functions, "Thermodynamics.IdealGasMoles", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "Pa", "m³", "K" }, "mol");
+            AddUnits(functions, "Thermodynamics.HeatTransfer", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "kg", "J/(kg·K)", "K" }, "J");
+            AddUnits(functions, "Thermodynamics.LatentHeat", new[] { typeof(double), typeof(double) }, new[] { "kg", "J/kg" }, "J");
+            AddUnits(functions, "Thermodynamics.InternalEnergyChange", new[] { typeof(double), typeof(double) }, new[] { "J", "J" }, "J");
+            AddUnits(functions, "Thermodynamics.ThermalExpansion", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "m", "1/K", "K" }, "m");
+            AddUnits(functions, "Thermodynamics.EntropyChange", new[] { typeof(double), typeof(double) }, new[] { "J", "K" }, "J/K");
+            AddUnits(functions, "Thermodynamics.IdealGasIsothermalEntropyChange", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "mol", "m³", "m³" }, "J/K");
+            AddUnits(functions, "Thermodynamics.IdealGasConstantVolumeEntropyChange", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "mol", "K", "K", "J/(mol·K)" }, "J/K");
+            AddUnits(functions, "Thermodynamics.AdiabaticFinalTemperature", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "K", "m³", "m³", "1" }, "K");
+            AddUnits(functions, "FluidMechanics.HydrostaticPressure", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "Pa", "kg/m³", "m/s²", "m" }, "Pa");
+            AddUnits(functions, "FluidMechanics.BuoyantForce", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "kg/m³", "m/s²", "m³" }, "N");
+            AddUnits(functions, "FluidMechanics.MassFlowRate", new[] { typeof(double), typeof(double) }, new[] { "kg/m³", "m³/s" }, "kg/s");
+            AddUnits(functions, "FluidMechanics.ContinuityVelocity", new[] { typeof(double), typeof(double), typeof(double) }, new[] { "m²", "m/s", "m²" }, "m/s");
+            AddUnits(functions, "FluidMechanics.BernoulliPressure", new[] { typeof(double), typeof(double), typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "Pa", "kg/m³", "m/s", "m/s", "m", "m/s²" }, "Pa");
+            AddUnits(functions, "FluidMechanics.ReynoldsNumber", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "kg/m³", "m/s", "m", "Pa·s" }, null);
+            AddUnits(functions, "FluidMechanics.PoiseuilleFlowRate", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "m", "Pa", "m", "Pa·s" }, "m³/s");
+            AddUnits(functions, "FluidMechanics.DragForce", new[] { typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "1", "kg/m³", "m/s", "m²" }, "N");
+            AddUnits(functions, "FluidMechanics.DarcyWeisbachPressureDrop", new[] { typeof(double), typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "1", "kg/m³", "m/s", "m", "m" }, "Pa");
+            AddUnits(functions, "Electromagnetism.CoulombForce", new[] { typeof(double), typeof(double), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "C", "C", "m" }, "N");
+            AddUnits(functions, "Electromagnetism.ElectricFieldPointCharge", new[] { typeof(double), typeof(OPEN_LRD.Foundations.Vector3) }, new[] { "C", "m" }, "N/C");
+            AddUnits(functions, "Electromagnetism.ElectricPotentialPointCharge", new[] { typeof(double), typeof(double) }, new[] { "C", "m" }, "V");
+            AddUnits(functions, "Electromagnetism.OhmsLawCurrent", new[] { typeof(double), typeof(double) }, new[] { "V", "Ω" }, "A");
+            AddUnits(functions, "Electromagnetism.OhmsLawVoltage", new[] { typeof(double), typeof(double) }, new[] { "A", "Ω" }, "V");
+            AddUnits(functions, "Electromagnetism.OhmsLawResistance", new[] { typeof(double), typeof(double) }, new[] { "V", "A" }, "Ω");
+            AddUnits(functions, "Electromagnetism.CapacitanceCharge", new[] { typeof(double), typeof(double) }, new[] { "F", "V" }, "C");
+            AddUnits(functions, "Electromagnetism.CapacitorEnergy", new[] { typeof(double), typeof(double) }, new[] { "F", "V" }, "J");
+            AddUnits(functions, "Electromagnetism.RcVoltage", new[] { typeof(double), typeof(double), typeof(double), typeof(double), typeof(double) }, new[] { "V", "V", "s", "Ω", "F" }, "V");
+            AddUnits(functions, "Electromagnetism.MagneticFieldLongStraightWire", new[] { typeof(double), typeof(double) }, new[] { "A", "m" }, "T");
             return functions.AsReadOnly();
+        }
+
+        private static void AddUnits(List<FunctionDescriptor> functions, string key, Type[] parameterTypes,
+            IReadOnlyList<string> inputUnits, string? outputUnit)
+        {
+            Dictionary<int, string> units = new Dictionary<int, string>();
+            for (int index = 0; index < inputUnits.Count; index++) units.Add(index, inputUnits[index]);
+            AddUnitMetadata(functions, key, parameterTypes, units, outputUnit);
+        }
+
+        private static bool IsSupportedDispatchType(Type type)
+        {
+            return type == typeof(double[]) || type == typeof(int[]) ||
+                   (!type.IsArray && DispatchValueTypes.Contains(type));
         }
 
         private static void AddUnitMetadata(
@@ -674,7 +793,7 @@ namespace OPEN_LRD.Skills
             string key,
             Type[] parameterTypes,
             IReadOnlyDictionary<int, string> inputUnits,
-            string outputUnit)
+            string? outputUnit)
         {
             int index = functions.FindIndex(function =>
                 string.Equals(function.Key, key, StringComparison.Ordinal)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OPEN_LRD.Foundations;
 using OPEN_LRD.Skills;
 using static OPEN_LRD.SmokeTests.Program;
@@ -106,6 +107,10 @@ namespace OPEN_LRD.SmokeTests
         {
             AssertEqual(Math_3.Evaluate("sum(k, 1, 4, k^2)", "x", 0.0), 30.0, "indexed sum expansion");
             AssertEqual(Math_3.Evaluate("prod(k, 1, 4, k)", "x", 0.0), 24.0, "indexed product expansion");
+            AssertEqual(Math_3.Evaluate("sum(k, -2147483648, -2147483648, k)", "x", 0.0),
+                int.MinValue, "indexed sum accepts int.MinValue endpoint");
+            AssertEqual(Math_3.Evaluate("sum(k, 2147483646, 2147483647, k)", "x", 0.0),
+                4294967293.0, "short indexed range ending at int.MaxValue");
             AssertEqual(Math_3.Evaluate("sum(k, 3, 1, k)", "x", 0.0), 0.0, "empty indexed sum");
             AssertEqual(Math_3.Evaluate("prod(k, 3, 1, k)", "x", 0.0), 1.0, "empty indexed product");
             AssertEqual(Math_3.Evaluate("sum(k, 1, 4, x)", "x", 2.0), 8.0, "indexed sum keeps free variables");
@@ -172,8 +177,14 @@ namespace OPEN_LRD.SmokeTests
         private static void TestErrorCases()
         {
             AssertThrows<FormatException>(() => ExpressionParser.Parse("const.nope"), "unknown qualified constants fail");
-            AssertThrows<NotSupportedException>(() => ExpressionParser.Parse("sum(k, 1, 2_000, k)"), "excessive indexed bounds fail");
+            AssertThrows<FormatException>(() => ExpressionParser.Parse("sum(k, 1, 2_000, k)"), "excessive indexed bounds fail");
             AssertThrows<FormatException>(() => ExpressionParser.Parse("sum(k, x, 4, k)"), "non-constant indexed bounds fail");
+            AssertThrows<FormatException>(() => ExpressionParser.Parse("1e9999"), "overflowing decimal literals fail deterministically");
+            AssertThrows<FormatException>(() => ExpressionParser.Parse(new string('9', 400)),
+                "overflowing decimal integer literals fail deterministically");
+            AssertThrows<FormatException>(() => ExpressionParser.Parse("x\uD800"), "unpaired surrogate input is rejected as malformed syntax");
+            AssertThrows<FormatException>(() => ExpressionParser.Parse("f(" + string.Join(",", Enumerable.Repeat("1", 33)) + ")"),
+                "function argument count is bounded");
             AssertThrows<FormatException>(() => ExpressionParser.Parse("let(x = 1, x = 2, x)"), "duplicate let bindings fail");
             AssertThrows<NotSupportedException>(() => ExpressionParser.Parse("let(x = y, y = x, x)"), "forward let references fail");
             AssertThrows<NotSupportedException>(() => Math_3.Differentiate("x > 0", "x"), "standalone comparison derivatives fail");

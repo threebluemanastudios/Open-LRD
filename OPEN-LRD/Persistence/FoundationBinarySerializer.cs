@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using BigInteger = System.Numerics.BigInteger;
+using Complex = System.Numerics.Complex;
 using OPEN_LRD.Foundations;
 
 namespace OPEN_LRD.Persistence
@@ -16,7 +18,8 @@ namespace OPEN_LRD.Persistence
             typeof(object), typeof(string), typeof(bool), typeof(byte), typeof(sbyte), typeof(short),
             typeof(ushort), typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float),
             typeof(double), typeof(decimal), typeof(char), typeof(Guid), typeof(DateTime),
-            typeof(DateTimeOffset), typeof(TimeSpan)
+            typeof(DateTimeOffset), typeof(TimeSpan), typeof(BigInteger), typeof(Fraction),
+            typeof(Vector2), typeof(Vector3), typeof(Complex), typeof(double[]), typeof(int[])
         };
 
         internal static byte[] SerializeSymbol(SymbolBox box) => Write(writer =>
@@ -560,13 +563,35 @@ namespace OPEN_LRD.Persistence
                 case DateTime item: writer.Write((byte)16); writer.Write(item.Ticks); writer.Write((byte)item.Kind); break;
                 case DateTimeOffset item: writer.Write((byte)17); writer.Write(item.Ticks); writer.Write((short)item.Offset.TotalMinutes); break;
                 case TimeSpan item: writer.Write((byte)18); writer.Write(item.Ticks); break;
+                case BigInteger item: writer.Write((byte)19); WriteBigInteger(writer, item); break;
+                case Fraction item:
+                    writer.Write((byte)20);
+                    WriteBigInteger(writer, item.Numerator);
+                    WriteBigInteger(writer, item.Denominator);
+                    break;
+                case Vector2 item: writer.Write((byte)21); writer.Write(item.X); writer.Write(item.Y); break;
+                case Vector3 item: writer.Write((byte)22); writer.Write(item.X); writer.Write(item.Y); writer.Write(item.Z); break;
+                case Complex item: writer.Write((byte)23); writer.Write(item.Real); writer.Write(item.Imaginary); break;
+                case double[] item:
+                    writer.Write((byte)24);
+                    WriteNumericArray(writer, item, static (output, value) => output.Write(value));
+                    break;
+                case int[] item:
+                    writer.Write((byte)25);
+                    WriteNumericArray(writer, item, static (output, value) => output.Write(value));
+                    break;
                 default: throw new NotSupportedException($"Value type '{value.GetType().FullName}' is not supported by the binary disk store.");
             }
         }
 
         private static object? ReadScalar(BinaryReader reader, bool legacyFormat)
         {
-            return reader.ReadByte() switch
+            byte tag = reader.ReadByte();
+            if (legacyFormat && tag > 18)
+            {
+                throw new InvalidDataException("Extended scalar tags are not valid in a legacy checkpoint.");
+            }
+            return tag switch
             {
                 0 => null,
                 1 => ReadBoundedString(reader),
@@ -587,8 +612,74 @@ namespace OPEN_LRD.Persistence
                 16 => ReadDateTime(reader),
                 17 => ReadDateTimeOffsetScalar(reader),
                 18 => TimeSpan.FromTicks(reader.ReadInt64()),
+                19 => ReadBigInteger(reader),
+                20 => ReadFraction(reader),
+                21 => new Vector2(reader.ReadDouble(), reader.ReadDouble()),
+                22 => new Vector3(reader.ReadDouble(), reader.ReadDouble(), reader.ReadDouble()),
+                23 => new Complex(reader.ReadDouble(), reader.ReadDouble()),
+                24 => ReadNumericArray(reader, static input => input.ReadDouble()),
+                25 => ReadNumericArray(reader, static input => input.ReadInt32()),
                 _ => throw new InvalidDataException("Stored scalar tag is invalid.")
             };
+        }
+
+        private static void WriteBigInteger(BinaryWriter writer, BigInteger value)
+        {
+            byte[] bytes = value.ToByteArray(isUnsigned: false, isBigEndian: false);
+            if (bytes.Length > MaximumStringByteLength)
+            {
+                throw new NotSupportedException("BigInteger values exceeding the serialized scalar size limit are not supported.");
+            }
+            writer.Write(bytes.Length);
+            writer.Write(bytes);
+        }
+
+        private static BigInteger ReadBigInteger(BinaryReader reader)
+        {
+            int length = reader.ReadInt32();
+            if (length <= 0 || length > MaximumStringByteLength)
+            {
+                throw new InvalidDataException("Stored BigInteger length is invalid.");
+            }
+            byte[] bytes = reader.ReadBytes(length);
+            if (bytes.Length != length)
+            {
+                throw new InvalidDataException("Stored BigInteger is truncated.");
+            }
+            return new BigInteger(bytes, isUnsigned: false, isBigEndian: false);
+        }
+
+        private static Fraction ReadFraction(BinaryReader reader)
+        {
+            BigInteger numerator = ReadBigInteger(reader);
+            BigInteger denominator = ReadBigInteger(reader);
+            if (denominator.IsZero)
+            {
+                throw new InvalidDataException("Stored Fraction has a zero denominator.");
+            }
+            return new Fraction(numerator, denominator);
+        }
+
+        private static void WriteNumericArray<T>(BinaryWriter writer, T[] values, Action<BinaryWriter, T> writeValue)
+        {
+            if (values.Length > MaximumCollectionCount)
+            {
+                throw new NotSupportedException("Numeric arrays exceeding the serialized collection limit are not supported.");
+            }
+            writer.Write(values.Length);
+            foreach (T value in values) writeValue(writer, value);
+        }
+
+        private static T[] ReadNumericArray<T>(BinaryReader reader, Func<BinaryReader, T> readValue)
+        {
+            int count = reader.ReadInt32();
+            if (count < 0 || count > MaximumCollectionCount)
+            {
+                throw new InvalidDataException("Stored numeric array length is invalid.");
+            }
+            T[] values = new T[count];
+            for (int index = 0; index < count; index++) values[index] = readValue(reader);
+            return values;
         }
 
         private static DateTime ReadDateTime(BinaryReader reader)

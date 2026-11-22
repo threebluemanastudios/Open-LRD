@@ -11,6 +11,9 @@ namespace OPEN_LRD.Foundations
         internal const int MaximumInputLength = 16_384;
         internal const int MaximumNestingDepth = 256;
         internal const int MaximumFunctionArguments = 32;
+        internal const int MaximumAstNodes = 4_096;
+        internal const int MaximumAstDepth = 256;
+        internal const int MaximumIdentifierLength = 128;
         private const int MaximumIndexedIterations = 1_000;
 
         internal static Expression Parse(string input)
@@ -27,7 +30,58 @@ namespace OPEN_LRD.Foundations
             {
                 throw parser.Error($"Unexpected character '{parser.CurrentCharacter}'", parser.Position);
             }
+            ValidateExpressionLimits(expression);
             return expression;
+        }
+
+        internal static void ValidateExpressionLimits(Expression expression)
+        {
+            ArgumentNullException.ThrowIfNull(expression);
+            int nodes = 0;
+            int maxDepth = 0;
+            Stack<(Expression Expression, int Depth)> stack = new Stack<(Expression, int)>();
+            stack.Push((expression, 1));
+            while (stack.Count > 0)
+            {
+                (Expression current, int depth) = stack.Pop();
+                nodes++;
+                if (nodes > MaximumAstNodes)
+                {
+                    throw new FormatException($"Expression AST exceeds the {MaximumAstNodes} node limit.");
+                }
+                if (depth > maxDepth)
+                {
+                    maxDepth = depth;
+                    if (maxDepth > MaximumAstDepth)
+                    {
+                        throw new FormatException($"Expression AST exceeds the {MaximumAstDepth} depth limit.");
+                    }
+                }
+                switch (current)
+                {
+                    case NegateExpression negate:
+                        stack.Push((negate.Operand, depth + 1));
+                        break;
+                    case BinaryExpression binary:
+                        stack.Push((binary.Right, depth + 1));
+                        stack.Push((binary.Left, depth + 1));
+                        break;
+                    case FunctionExpression function:
+                        stack.Push((function.Argument, depth + 1));
+                        break;
+                    case CallExpression call:
+                        for (int i = call.Arguments.Count - 1; i >= 0; i--)
+                        {
+                            stack.Push((call.Arguments[i], depth + 1));
+                        }
+                        break;
+                    case ConditionalExpression conditional:
+                        stack.Push((conditional.WhenFalse, depth + 1));
+                        stack.Push((conditional.WhenTrue, depth + 1));
+                        stack.Push((conditional.Condition, depth + 1));
+                        break;
+                }
+            }
         }
 
         private sealed class Parser
@@ -686,16 +740,20 @@ namespace OPEN_LRD.Foundations
                 long span = (long)end - start + 1L;
                 if (span > MaximumIndexedIterations)
                 {
-                    throw new NotSupportedException($"'{name}' bounds may cover at most {MaximumIndexedIterations} values.");
+                    throw new FormatException($"'{name}' bounds may cover at most {MaximumIndexedIterations} values.");
                 }
                 Expression result = ExpressionBuilder.Constant(name == "sum" ? 0.0 : 1.0);
                 if (span <= 0)
                 {
                     return result;
                 }
-                for (int value = start; value <= end; value++)
+                for (long value = start; value <= end; value++)
                 {
-                    Expression term = Algebra.Substitute(arguments[3], indexVariable.Name, ExpressionBuilder.Constant(value));
+                    if (value < int.MinValue || value > int.MaxValue)
+                    {
+                        throw new NotSupportedException($"'{name}' index value {value} exceeds supported integer bounds.");
+                    }
+                    Expression term = Algebra.Substitute(arguments[3], indexVariable.Name, ExpressionBuilder.Constant((double)value));
                     result = name == "sum"
                         ? ExpressionBuilder.Add(result, term)
                         : ExpressionBuilder.Multiply(result, term);
@@ -784,6 +842,10 @@ namespace OPEN_LRD.Foundations
                 while (index < text.Length && (IsAsciiLetter(text[index]) || IsAsciiDigit(text[index]) || text[index] == '_'))
                 {
                     index++;
+                    if (index - start > MaximumIdentifierLength)
+                    {
+                        throw Error($"Identifier exceeds the {MaximumIdentifierLength} character limit", start);
+                    }
                 }
                 return text.Substring(start, index - start);
             }
@@ -1085,7 +1147,9 @@ namespace OPEN_LRD.Foundations
                 }
                 try
                 {
-                    return parse();
+                    Expression result = parse();
+                    ValidateExpressionLimits(result);
+                    return result;
                 }
                 finally
                 {

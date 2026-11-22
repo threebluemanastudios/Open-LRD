@@ -2,8 +2,10 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Collections.Generic;
 using System.Linq;
+using BigInteger = System.Numerics.BigInteger;
 using OPEN_LRD.Foundations;
 using OPEN_LRD.Persistence;
+using OPEN_LRD.Skills;
 
 namespace OPEN_LRD.SmokeTests
 {
@@ -18,6 +20,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Legacy checkpoints are read-only until atomic upgrade", LegacyCheckpointUpgradesReadOnly());
             Program.Run("Merge layout options honor configurable precedence", MergeLayoutOptionsHonorPrecedence());
             Program.Run("Merge imports reconcile existing container memberships", MergeReconcilesContainerMemberships());
+            Program.Run("Truncated checkpoints are rejected without replacing core", TruncatedCheckpointIsRejected());
         }
 
         private static Action CheckpointRoundTripsAndPagesTrustedData()
@@ -58,6 +61,25 @@ namespace OPEN_LRD.SmokeTests
                     function.AddVariable(new FunctionVariable("x", 2.5, typeof(double), "m"));
                     function.StoreResult(new FunctionResult(Math.PI * 6.25, typeof(double), "m²"));
                     Program.Assert(core.AddTrustedFunction(function), "Function should be trusted.");
+
+                    FunctionBox fractionFunction = new FunctionBox(typeof(Fraction), "Math_1.SimplifyFraction");
+                    fractionFunction.AddVariable(new FunctionVariable("fraction", new Fraction(6, 8), typeof(Fraction)));
+                    MathFunctionDispatcher.Dispatch(fractionFunction);
+                    Program.Assert(core.AddTrustedFunction(fractionFunction), "Fraction function should be trusted.");
+                    FunctionBox bigIntegerFunction = new FunctionBox(typeof(BigInteger), "Math_1.CalculateGCD");
+                    bigIntegerFunction.AddVariable(new FunctionVariable("left", BigInteger.Pow(10, 80), typeof(BigInteger)));
+                    bigIntegerFunction.AddVariable(new FunctionVariable("right", BigInteger.Pow(10, 60), typeof(BigInteger)));
+                    MathFunctionDispatcher.Dispatch(bigIntegerFunction);
+                    Program.Assert(core.AddTrustedFunction(bigIntegerFunction), "BigInteger function should be trusted.");
+                    FunctionBox vectorFunction = new FunctionBox(typeof(Vector3), "Math_2.AddVectors");
+                    vectorFunction.AddVariable(new FunctionVariable("left", new Vector3(1, 2, 3), typeof(Vector3)));
+                    vectorFunction.AddVariable(new FunctionVariable("right", new Vector3(4, 5, 6), typeof(Vector3)));
+                    MathFunctionDispatcher.Dispatch(vectorFunction);
+                    Program.Assert(core.AddTrustedFunction(vectorFunction), "Vector function should be trusted.");
+                    FunctionBox arrayFunction = new FunctionBox(typeof(double), "InformationTheoryAndMLMath.Entropy");
+                    arrayFunction.AddVariable(new FunctionVariable("probabilities", new[] { 0.25, 0.75 }, typeof(double[])));
+                    MathFunctionDispatcher.Dispatch(arrayFunction);
+                    Program.Assert(core.AddTrustedFunction(arrayFunction), "Numeric-array function should be trusted.");
                     DateTimeOffset assertedAt = DateTimeOffset.UtcNow;
                     NodeLinkProvenance provenance = new NodeLinkProvenance(
                         Guid.NewGuid(), NodeLinkOrigin.User, assertedAt, "reviewer",
@@ -113,6 +135,15 @@ namespace OPEN_LRD.SmokeTests
                         "Function variables should round-trip from disk.");
                     Program.Assert(core.GetTrustedFunctionBox(function.FunctionID)?.Result?.Value is double result && result == Math.PI * 6.25,
                         "Function result should round-trip from disk.");
+                    Program.Assert(core.GetTrustedFunctionBox(fractionFunction.FunctionID)?.Result?.Value is Fraction restoredFraction &&
+                                   restoredFraction.Equals(new Fraction(3, 4)) &&
+                                   core.GetTrustedFunctionBox(bigIntegerFunction.FunctionID)?.Result?.Value is BigInteger restoredGcd &&
+                                   restoredGcd == BigInteger.Pow(10, 60) &&
+                                   core.GetTrustedFunctionBox(vectorFunction.FunctionID)?.Result?.Value is Vector3 restoredVector &&
+                                   restoredVector == new Vector3(5, 7, 9) &&
+                                   core.GetTrustedFunctionBox(arrayFunction.FunctionID)?.Variables.Single().Value is double[] restoredProbabilities &&
+                                   restoredProbabilities.SequenceEqual(new[] { 0.25, 0.75 }),
+                        "Extended BigInteger, Fraction, Vector3, and numeric-array function values should round-trip in checkpoints.");
                     Program.Assert(core.GetTrustedGroupsContainingSentence(sentenceId).Contains(group.GetGroupingID()),
                         "Group reverse index should be rebuilt during paging.");
                     Program.Assert(core.GetTrustedSourcesContainingGroup(group.GetGroupingID()).Contains(source.GetSourceID()),
@@ -124,6 +155,13 @@ namespace OPEN_LRD.SmokeTests
                         .Single();
                     Program.Assert(loadedLink.Label == "distance" && loadedLink.Provenance == provenance,
                         "Weighted labeled link provenance should round-trip exactly.");
+                    DiskStoreDiagnostics diagnostics = core.GetDiskStoreDiagnostics()!;
+                    Program.Assert(diagnostics.FormatVersion == 3 && diagnostics.CacheMisses > 0 &&
+                                   diagnostics.Partitions.Any(partition => partition.Partition == DiskPartition.Links &&
+                                       partition.RecordCount >= 1 && partition.DataBytes > 0 && partition.IndexBytes > 0),
+                        "Disk diagnostics should report checkpoint version, paged cache activity, and partition sizes.");
+                    Program.Assert(core.GetTrustedLinksByProvenanceTarget(source.GetSourceID()).Count == 1,
+                        "Provenance reverse indexes should remain queryable in paged mode.");
 
                     Program.AssertThrows<InvalidOperationException>(() => core.GetTrustedSenseBox(senseId)!.AddSentence(Guid.NewGuid()),
                         "Paged SenseBox should be read-only.");
@@ -833,6 +871,42 @@ namespace OPEN_LRD.SmokeTests
         private static void WriteInt32(byte[] data, int offset, int value)
         {
             BitConverter.GetBytes(value).CopyTo(data, offset);
+        }
+
+        private static Action TruncatedCheckpointIsRejected()
+        {
+            return () =>
+            {
+                string directory = Path.Combine(Path.GetTempPath(), "open-lrd-truncated-" + Guid.NewGuid().ToString("N"));
+                string truncatedDirectory = directory + "-truncated";
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    Guid senseId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    core.StreamTrustedDictionariesToDisk(directory);
+                    Directory.CreateDirectory(truncatedDirectory);
+                    foreach (string file in Directory.GetFiles(directory))
+                        File.Copy(file, Path.Combine(truncatedDirectory, Path.GetFileName(file)));
+                    string symbolsPath = Path.Combine(truncatedDirectory, "symbols.lrdpart");
+                    byte[] bytes = File.ReadAllBytes(symbolsPath);
+                    File.WriteAllBytes(symbolsPath, bytes.AsSpan(0, bytes.Length / 2).ToArray());
+
+                    Program.AssertThrows<InvalidDataException>(() => core.StreamTrustedDictionariesFromDisk(truncatedDirectory),
+                        "Truncated partition should be rejected before core replacement.");
+                    Program.Assert(core.GetTrustedSenseBox(senseId) != null,
+                        "Failed truncated import must preserve current trusted state.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                    if (Directory.Exists(truncatedDirectory)) Directory.Delete(truncatedDirectory, true);
+                }
+            };
         }
     }
 }

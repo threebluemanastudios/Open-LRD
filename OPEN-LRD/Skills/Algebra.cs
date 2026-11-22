@@ -1488,11 +1488,12 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentNullException(nameof(variable));
             }
+            string normalizedVariable = variable.Trim();
             if (replacement == null)
             {
                 throw new ArgumentNullException(nameof(replacement));
             }
-            return SymbolicCalculus.Simplify(SubstituteInternal(expression, variable, replacement));
+            return SymbolicCalculus.Simplify(SubstituteInternal(expression, normalizedVariable, replacement));
         }
 
         public static Expression Substitute(Expression expression, string variable, double value)

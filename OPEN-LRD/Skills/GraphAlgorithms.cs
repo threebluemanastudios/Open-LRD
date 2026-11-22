@@ -52,9 +52,11 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Adds one finite-weight edge. Negative weights and parallel/duplicate
-        /// insertions are retained; algorithms that cannot support negative
-        /// weights validate their own preconditions. For undirected graphs,
+        /// Adds one finite-weight edge. This generic graph treats weights as
+        /// algorithm-specific costs/capacities, not knowledge-graph confidence;
+        /// negative finite costs are retained for algorithms such as Bellman-Ford
+        /// while Dijkstra and MaximumFlow validate their own preconditions.
+        /// Parallel/duplicate insertions are retained. For undirected graphs,
         /// EdgeCount and Edges count each inserted edge once while adjacency
         /// contains the generated reverse view.
         /// </summary>
@@ -70,12 +72,32 @@ namespace OPEN_LRD.Skills
             edges.Add(edge);
             outgoingEdges[from].Add(edge);
             incomingEdges[to].Add(edge);
-            if (!IsDirected)
+            if (!IsDirected && !EqualityComparer<TNode>.Default.Equals(from, to))
             {
                 GraphEdge<TNode> reverse = new GraphEdge<TNode>(to, from, weight, false);
                 outgoingEdges[to].Add(reverse);
                 incomingEdges[from].Add(reverse);
             }
+        }
+
+        /// <summary>Removes one matching edge instance and its reverse adjacency entry when undirected.</summary>
+        public bool RemoveEdge(TNode from, TNode to, double weight)
+        {
+            if (!outgoingEdges.ContainsKey(from) || !incomingEdges.ContainsKey(to)) return false;
+            int edgeIndex = edges.FindIndex(edge => EqualityComparer<TNode>.Default.Equals(edge.From, from) &&
+                EqualityComparer<TNode>.Default.Equals(edge.To, to) && edge.Weight.Equals(weight));
+            if (edgeIndex < 0) return false;
+            GraphEdge<TNode> edge = edges[edgeIndex];
+            edges.RemoveAt(edgeIndex);
+            outgoingEdges[from].Remove(edge);
+            incomingEdges[to].Remove(edge);
+            if (!IsDirected && !EqualityComparer<TNode>.Default.Equals(from, to))
+            {
+                GraphEdge<TNode> reverse = new GraphEdge<TNode>(to, from, weight, false);
+                outgoingEdges[to].Remove(reverse);
+                incomingEdges[from].Remove(reverse);
+            }
+            return true;
         }
 
         public bool ContainsNode(TNode node)
@@ -93,7 +115,7 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentException("The node is not present in the graph.", nameof(node));
             }
-            return result.AsReadOnly();
+            return new ReadOnlyCollection<GraphEdge<TNode>>(new List<GraphEdge<TNode>>(result));
         }
 
         public IReadOnlyList<GraphEdge<TNode>> GetIncomingEdges(TNode node)
@@ -102,7 +124,7 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentException("The node is not present in the graph.", nameof(node));
             }
-            return result.AsReadOnly();
+            return new ReadOnlyCollection<GraphEdge<TNode>>(new List<GraphEdge<TNode>>(result));
         }
 
         public IReadOnlyList<TNode> GetNeighbors(TNode node)
@@ -117,15 +139,32 @@ namespace OPEN_LRD.Skills
         }
     }
 
-    internal sealed record GraphTraversal<TNode>(IReadOnlyList<TNode> Order, IReadOnlyDictionary<TNode, TNode> Parents)
-        where TNode : notnull;
-
-    internal sealed record ShortestPathResult<TNode>(
-        IReadOnlyDictionary<TNode, double> Distances,
-        IReadOnlyDictionary<TNode, TNode> Previous,
-        bool HasNegativeCycle)
-        where TNode : notnull
+    internal sealed class GraphTraversal<TNode> where TNode : notnull
     {
+        public IReadOnlyList<TNode> Order { get; }
+        public IReadOnlyDictionary<TNode, TNode> Parents { get; }
+
+        public GraphTraversal(IReadOnlyList<TNode> order, IReadOnlyDictionary<TNode, TNode> parents)
+        {
+            Order = new ReadOnlyCollection<TNode>(new List<TNode>(order));
+            Parents = new ReadOnlyDictionary<TNode, TNode>(new Dictionary<TNode, TNode>(parents));
+        }
+    }
+
+    internal sealed class ShortestPathResult<TNode> where TNode : notnull
+    {
+        public IReadOnlyDictionary<TNode, double> Distances { get; }
+        public IReadOnlyDictionary<TNode, TNode> Previous { get; }
+        public bool HasNegativeCycle { get; }
+
+        public ShortestPathResult(IReadOnlyDictionary<TNode, double> distances,
+            IReadOnlyDictionary<TNode, TNode> previous, bool hasNegativeCycle)
+        {
+            Distances = new ReadOnlyDictionary<TNode, double>(new Dictionary<TNode, double>(distances));
+            Previous = new ReadOnlyDictionary<TNode, TNode>(new Dictionary<TNode, TNode>(previous));
+            HasNegativeCycle = hasNegativeCycle;
+        }
+
         public bool TryGetDistance(TNode node, out double distance)
         {
             return Distances.TryGetValue(node, out distance);
@@ -161,11 +200,20 @@ namespace OPEN_LRD.Skills
         }
     }
 
-    internal sealed record AllPairsShortestPathResult<TNode>(
-        IReadOnlyDictionary<TNode, IReadOnlyDictionary<TNode, double>> Distances,
-        bool HasNegativeCycle)
-        where TNode : notnull
+    internal sealed class AllPairsShortestPathResult<TNode> where TNode : notnull
     {
+        public IReadOnlyDictionary<TNode, IReadOnlyDictionary<TNode, double>> Distances { get; }
+        public bool HasNegativeCycle { get; }
+
+        public AllPairsShortestPathResult(IReadOnlyDictionary<TNode, IReadOnlyDictionary<TNode, double>> distances, bool hasNegativeCycle)
+        {
+            Dictionary<TNode, IReadOnlyDictionary<TNode, double>> copy = new Dictionary<TNode, IReadOnlyDictionary<TNode, double>>();
+            foreach (KeyValuePair<TNode, IReadOnlyDictionary<TNode, double>> entry in distances)
+                copy.Add(entry.Key, new ReadOnlyDictionary<TNode, double>(new Dictionary<TNode, double>(entry.Value)));
+            Distances = new ReadOnlyDictionary<TNode, IReadOnlyDictionary<TNode, double>>(copy);
+            HasNegativeCycle = hasNegativeCycle;
+        }
+
         public bool TryGetDistance(TNode from, TNode to, out double distance)
         {
             if (Distances.TryGetValue(from, out IReadOnlyDictionary<TNode, double>? row) && row is not null
@@ -178,20 +226,43 @@ namespace OPEN_LRD.Skills
         }
     }
 
-    internal sealed record TopologicalSortResult<TNode>(bool Success, IReadOnlyList<TNode> Order)
-        where TNode : notnull;
+    internal sealed class TopologicalSortResult<TNode> where TNode : notnull
+    {
+        public bool Success { get; }
+        public IReadOnlyList<TNode> Order { get; }
+        public TopologicalSortResult(bool success, IReadOnlyList<TNode> order)
+        {
+            Success = success;
+            Order = new ReadOnlyCollection<TNode>(new List<TNode>(order));
+        }
+    }
 
-    internal sealed record MinimumSpanningTreeResult<TNode>(IReadOnlyList<GraphEdge<TNode>> Edges, double TotalWeight)
-        where TNode : notnull;
+    internal sealed class MinimumSpanningTreeResult<TNode> where TNode : notnull
+    {
+        public IReadOnlyList<GraphEdge<TNode>> Edges { get; }
+        public double TotalWeight { get; }
+        public MinimumSpanningTreeResult(IReadOnlyList<GraphEdge<TNode>> edges, double totalWeight)
+        {
+            Edges = new ReadOnlyCollection<GraphEdge<TNode>>(new List<GraphEdge<TNode>>(edges));
+            TotalWeight = totalWeight;
+        }
+    }
 
-    internal sealed record MaximumFlowResult<TNode>(
-        double MaximumFlow,
-        IReadOnlyDictionary<(TNode From, TNode To), double> Flows)
-        where TNode : notnull;
+    internal sealed class MaximumFlowResult<TNode> where TNode : notnull
+    {
+        public double MaximumFlow { get; }
+        public IReadOnlyDictionary<(TNode From, TNode To), double> Flows { get; }
+        public MaximumFlowResult(double maximumFlow, IReadOnlyDictionary<(TNode From, TNode To), double> flows)
+        {
+            MaximumFlow = maximumFlow;
+            Flows = new ReadOnlyDictionary<(TNode From, TNode To), double>(new Dictionary<(TNode From, TNode To), double>(flows));
+        }
+    }
 
     internal static class GraphAlgorithms
     {
         private const double Tolerance = 1e-9;
+        private const int MaximumFloydWarshallNodes = 512;
 
         public static GraphTraversal<TNode> BreadthFirstTraversal<TNode>(Graph<TNode> graph, TNode start)
             where TNode : notnull
@@ -353,17 +424,22 @@ namespace OPEN_LRD.Skills
             where TNode : notnull
         {
             EnsureGraph(graph, nameof(graph));
+            if (graph.NodeCount > MaximumFloydWarshallNodes)
+            {
+                throw new InvalidOperationException($"Floyd-Warshall is limited to {MaximumFloydWarshallNodes} nodes; use a sparse single-source algorithm for larger graphs.");
+            }
+            IReadOnlyList<TNode> nodes = graph.Nodes;
             Dictionary<TNode, Dictionary<TNode, double>> distances = new Dictionary<TNode, Dictionary<TNode, double>>();
-            foreach (TNode node in graph.Nodes)
+            foreach (TNode node in nodes)
             {
                 Dictionary<TNode, double> row = new Dictionary<TNode, double>();
-                foreach (TNode other in graph.Nodes)
+                foreach (TNode other in nodes)
                 {
                     row[other] = EqualityComparer<TNode>.Default.Equals(node, other) ? 0.0 : double.PositiveInfinity;
                 }
                 distances[node] = row;
             }
-            foreach (TNode node in graph.Nodes)
+            foreach (TNode node in nodes)
             {
                 foreach (GraphEdge<TNode> edge in graph.GetOutgoingEdges(node))
                 {
@@ -373,10 +449,10 @@ namespace OPEN_LRD.Skills
                     }
                 }
             }
-            foreach (TNode pivot in graph.Nodes)
+            foreach (TNode pivot in nodes)
             {
                 Dictionary<TNode, double> pivotRow = distances[pivot];
-                foreach (TNode from in graph.Nodes)
+                foreach (TNode from in nodes)
                 {
                     Dictionary<TNode, double> fromRow = distances[from];
                     double firstLeg = fromRow[pivot];
@@ -384,7 +460,7 @@ namespace OPEN_LRD.Skills
                     {
                         continue;
                     }
-                    foreach (TNode to in graph.Nodes)
+                    foreach (TNode to in nodes)
                     {
                         double candidate = firstLeg + pivotRow[to];
                         if (candidate < fromRow[to] - Tolerance)
@@ -395,7 +471,7 @@ namespace OPEN_LRD.Skills
                 }
             }
             bool hasNegativeCycle = false;
-            foreach (TNode node in graph.Nodes)
+            foreach (TNode node in nodes)
             {
                 if (distances[node][node] < -Tolerance)
                 {
@@ -404,7 +480,7 @@ namespace OPEN_LRD.Skills
                 }
             }
             Dictionary<TNode, IReadOnlyDictionary<TNode, double>> result = new Dictionary<TNode, IReadOnlyDictionary<TNode, double>>();
-            foreach (TNode node in graph.Nodes)
+            foreach (TNode node in nodes)
             {
                 result[node] = distances[node];
             }
@@ -515,9 +591,9 @@ namespace OPEN_LRD.Skills
                         }
                     }
                 }
-                components.Add(component);
+                components.Add(new ReadOnlyCollection<TNode>(component));
             }
-            return components;
+            return new ReadOnlyCollection<IReadOnlyList<TNode>>(components);
         }
 
         public static IReadOnlyList<IReadOnlyList<TNode>> StronglyConnectedComponents<TNode>(Graph<TNode> graph)
@@ -584,9 +660,9 @@ namespace OPEN_LRD.Skills
                         }
                     }
                 }
-                components.Add(component);
+                components.Add(new ReadOnlyCollection<TNode>(component));
             }
-            return components;
+            return new ReadOnlyCollection<IReadOnlyList<TNode>>(components);
         }
 
         public static MinimumSpanningTreeResult<TNode> MinimumSpanningTree<TNode>(Graph<TNode> graph)
@@ -638,10 +714,13 @@ namespace OPEN_LRD.Skills
                 throw new ArgumentException("The source and sink must be different nodes.");
             }
             Dictionary<TNode, int> indices = BuildNodeIndices(graph);
-            int size = graph.NodeCount;
+            IReadOnlyList<TNode> nodes = graph.Nodes;
+            int size = nodes.Count;
             int sourceIndex = indices[source];
             int sinkIndex = indices[sink];
-            double[,] residual = new double[size, size];
+            Dictionary<int, Dictionary<int, double>> residual = new Dictionary<int, Dictionary<int, double>>();
+            Dictionary<(int From, int To), double> flow = new Dictionary<(int From, int To), double>();
+            for (int index = 0; index < size; index++) residual[index] = new Dictionary<int, double>();
             foreach (GraphEdge<TNode> edge in graph.Edges)
             {
                 if (edge.Weight < -Tolerance)
@@ -650,13 +729,13 @@ namespace OPEN_LRD.Skills
                 }
                 int from = indices[edge.From];
                 int to = indices[edge.To];
-                residual[from, to] += Math.Max(edge.Weight, 0.0);
+                double capacity = Math.Max(edge.Weight, 0.0);
+                AddResidualCapacity(residual, from, to, capacity);
                 if (!graph.IsDirected)
                 {
-                    residual[to, from] += Math.Max(edge.Weight, 0.0);
+                    AddResidualCapacity(residual, to, from, capacity);
                 }
             }
-            double[,] flow = new double[size, size];
             double maximumFlow = 0.0;
             while (true)
             {
@@ -671,9 +750,10 @@ namespace OPEN_LRD.Skills
                 while (queue.Count > 0 && parent[sinkIndex] < 0)
                 {
                     int node = queue.Dequeue();
-                    for (int next = 0; next < size; next++)
+                    foreach (KeyValuePair<int, double> adjacent in residual[node])
                     {
-                        if (parent[next] < 0 && residual[node, next] > Tolerance)
+                        int next = adjacent.Key;
+                        if (parent[next] < 0 && adjacent.Value > Tolerance)
                         {
                             parent[next] = node;
                             queue.Enqueue(next);
@@ -689,42 +769,54 @@ namespace OPEN_LRD.Skills
                 while (current != sourceIndex)
                 {
                     int previous = parent[current];
-                    bottleneck = Math.Min(bottleneck, residual[previous, current]);
+                    bottleneck = Math.Min(bottleneck, residual[previous][current]);
                     current = previous;
                 }
                 current = sinkIndex;
                 while (current != sourceIndex)
                 {
                     int previous = parent[current];
-                    residual[previous, current] -= bottleneck;
-                    residual[current, previous] += bottleneck;
-                    flow[previous, current] += bottleneck;
+                    residual[previous][current] -= bottleneck;
+                    if (residual[previous][current] <= Tolerance) residual[previous].Remove(current);
+                    AddResidualCapacity(residual, current, previous, bottleneck);
+                    double cancellable = flow.TryGetValue((current, previous), out double reverseFlow)
+                        ? Math.Min(reverseFlow, bottleneck) : 0.0;
+                    if (cancellable > 0.0)
+                    {
+                        reverseFlow -= cancellable;
+                        if (reverseFlow <= Tolerance) flow.Remove((current, previous));
+                        else flow[(current, previous)] = reverseFlow;
+                    }
+                    double forwardFlow = bottleneck - cancellable;
+                    if (forwardFlow > Tolerance)
+                        flow[(previous, current)] = flow.TryGetValue((previous, current), out double existingForward)
+                            ? existingForward + forwardFlow : forwardFlow;
                     current = previous;
                 }
                 maximumFlow += bottleneck;
             }
             Dictionary<(TNode From, TNode To), double> flows = new Dictionary<(TNode From, TNode To), double>();
-            for (int from = 0; from < size; from++)
+            foreach (KeyValuePair<(int From, int To), double> entry in flow)
             {
-                for (int to = 0; to < size; to++)
-                {
-                    if (flow[from, to] > Tolerance)
-                    {
-                        TNode fromNode = graph.Nodes[from];
-                        TNode toNode = graph.Nodes[to];
-                        (TNode From, TNode To) key = (fromNode, toNode);
-                        flows[key] = flows.TryGetValue(key, out double existing) ? existing + flow[from, to] : flow[from, to];
-                    }
-                }
+                if (entry.Value > Tolerance)
+                    flows[(nodes[entry.Key.From], nodes[entry.Key.To])] = entry.Value;
             }
             return new MaximumFlowResult<TNode>(maximumFlow, flows);
         }
 
+        private static void AddResidualCapacity(Dictionary<int, Dictionary<int, double>> residual, int from, int to, double amount)
+        {
+            Dictionary<int, double> outgoing = residual[from];
+            outgoing[to] = outgoing.TryGetValue(to, out double existing) ? existing + amount : amount;
+        }
+
+        /// <summary>Computes PageRank; optionally treats non-negative edge weights as transition confidence.</summary>
         public static IReadOnlyDictionary<TNode, double> PageRank<TNode>(
             Graph<TNode> graph,
             double dampingFactor = 0.85,
             double tolerance = 1e-9,
-            int maxIterations = 100)
+            int maxIterations = 100,
+            bool confidenceWeighted = false)
             where TNode : notnull
         {
             EnsureGraph(graph, nameof(graph));
@@ -743,14 +835,28 @@ namespace OPEN_LRD.Skills
             int count = graph.NodeCount;
             if (count == 0)
             {
-                return new Dictionary<TNode, double>();
+                return new ReadOnlyDictionary<TNode, double>(new Dictionary<TNode, double>());
             }
             Dictionary<TNode, int> indices = BuildNodeIndices(graph);
-            int[] outDegree = new int[count];
+            IReadOnlyList<TNode> nodes = graph.Nodes;
+            double[] outgoingWeight = new double[count];
             double[] ranks = new double[count];
             for (int index = 0; index < count; index++)
             {
-                outDegree[index] = graph.GetOutgoingEdges(graph.Nodes[index]).Count;
+                IReadOnlyList<GraphEdge<TNode>> outgoing = graph.GetOutgoingEdges(nodes[index]);
+                if (!confidenceWeighted)
+                {
+                    outgoingWeight[index] = outgoing.Count;
+                }
+                else
+                {
+                    foreach (GraphEdge<TNode> edge in outgoing)
+                    {
+                        if (edge.Weight < 0.0)
+                            throw new InvalidOperationException("Confidence-weighted PageRank requires non-negative edge weights.");
+                        outgoingWeight[index] += edge.Weight;
+                    }
+                }
                 ranks[index] = 1.0 / count;
             }
             double initial = (1.0 - dampingFactor) / count;
@@ -764,7 +870,7 @@ namespace OPEN_LRD.Skills
                 double dangling = 0.0;
                 for (int index = 0; index < count; index++)
                 {
-                    if (outDegree[index] == 0)
+                    if (outgoingWeight[index] <= Tolerance)
                     {
                         dangling += ranks[index];
                     }
@@ -776,14 +882,14 @@ namespace OPEN_LRD.Skills
                 }
                 for (int index = 0; index < count; index++)
                 {
-                    if (outDegree[index] == 0)
+                    if (outgoingWeight[index] <= Tolerance)
                     {
                         continue;
                     }
-                    double share = dampingFactor * ranks[index] / outDegree[index];
-                    foreach (GraphEdge<TNode> edge in graph.GetOutgoingEdges(graph.Nodes[index]))
+                    foreach (GraphEdge<TNode> edge in graph.GetOutgoingEdges(nodes[index]))
                     {
-                        next[indices[edge.To]] += share;
+                        double transition = confidenceWeighted ? edge.Weight / outgoingWeight[index] : 1.0 / outgoingWeight[index];
+                        next[indices[edge.To]] += dampingFactor * ranks[index] * transition;
                     }
                 }
                 double difference = 0.0;
@@ -800,9 +906,9 @@ namespace OPEN_LRD.Skills
             Dictionary<TNode, double> result = new Dictionary<TNode, double>();
             for (int index = 0; index < count; index++)
             {
-                result[graph.Nodes[index]] = ranks[index];
+                result[nodes[index]] = ranks[index];
             }
-            return result;
+            return new ReadOnlyDictionary<TNode, double>(result);
         }
 
         public static bool IsBipartite<TNode>(Graph<TNode> graph)
@@ -843,10 +949,11 @@ namespace OPEN_LRD.Skills
         private static Dictionary<TNode, int> BuildNodeIndices<TNode>(Graph<TNode> graph)
             where TNode : notnull
         {
+            IReadOnlyList<TNode> nodes = graph.Nodes;
             Dictionary<TNode, int> result = new Dictionary<TNode, int>();
-            for (int index = 0; index < graph.NodeCount; index++)
+            for (int index = 0; index < nodes.Count; index++)
             {
-                result[graph.Nodes[index]] = index;
+                result[nodes[index]] = index;
             }
             return result;
         }

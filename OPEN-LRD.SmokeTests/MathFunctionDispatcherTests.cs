@@ -15,6 +15,7 @@ namespace OPEN_LRD.SmokeTests
             Run("Math function dispatcher validation and ambiguity", TestValidationAndAmbiguity);
             Run("Math function dispatcher unit requirements", TestUnitRequirements);
             Run("Math function dispatcher preserves last successful result", TestResultPreservation);
+            Run("Math function dispatcher discovers safe skill functions and verifies results", TestDiscoveryAndResultValidation);
         }
 
         private static void TestKeyedCall()
@@ -131,6 +132,59 @@ namespace OPEN_LRD.SmokeTests
                 () => MathFunctionDispatcher.Dispatch(box),
                 "unknown function should fail");
             Assert(ReferenceEquals(box.Result, original), "failed dispatch should preserve the last successful result");
+        }
+
+        private static void TestDiscoveryAndResultValidation()
+        {
+            FunctionBox force = new FunctionBox(typeof(double), "BasicPhysics.Force", "N");
+            force.AddVariable(new FunctionVariable("mass", 2.0, typeof(double), "kg"));
+            force.AddVariable(new FunctionVariable("acceleration", 3.0, typeof(double), "m/s²"));
+            AssertEqual((double)MathFunctionDispatcher.Dispatch(force).Value!, 6.0,
+                "allowlisted physics functions should be discoverable with SI unit metadata");
+            Assert(force.Result!.UnitTitle == "N", "physics dispatch should preserve result unit metadata");
+            FunctionBox heat = new FunctionBox(typeof(double), "Thermodynamics.HeatTransfer", "J");
+            heat.AddVariable(new FunctionVariable("mass", 2.0, typeof(double), "kg"));
+            heat.AddVariable(new FunctionVariable("specificHeat", 4184.0, typeof(double), "J/(kg·K)"));
+            heat.AddVariable(new FunctionVariable("temperatureChange", 10.0, typeof(double), "K"));
+            AssertEqual((double)MathFunctionDispatcher.Dispatch(heat).Value!, 83680.0,
+                "thermodynamic dispatch should validate derived SI units");
+            FunctionBox flow = new FunctionBox(typeof(double), "FluidMechanics.MassFlowRate", "kg/s");
+            flow.AddVariable(new FunctionVariable("density", 1000.0, typeof(double), "kg/m³"));
+            flow.AddVariable(new FunctionVariable("volumetricFlowRate", 0.002, typeof(double), "m³/s"));
+            AssertEqual((double)MathFunctionDispatcher.Dispatch(flow).Value!, 2.0,
+                "fluid-flow dispatch should validate derived SI units");
+            Assert(MathFunctionDispatcher.GetDiscoveryDiagnostics().Any(message =>
+                    message.Contains("BasicPhysics.ProjectileTrajectory", StringComparison.Ordinal)),
+                "unsupported return types should be excluded with deterministic discovery diagnostics");
+            AssertThrows<System.Collections.Generic.KeyNotFoundException>(
+                () => MathFunctionDispatcher.ResolveFunctionKey("BasicPhysics.ProjectileTrajectory",
+                    Array.Empty<FunctionVariable>(), typeof(object)),
+                "unsupported skill signatures must not enter the callable registry");
+
+            FunctionBox tampered = new FunctionBox(typeof(double), "Math_2.CalculateCircleArea", "m²");
+            tampered.AddVariable(new FunctionVariable("radius", 2.0, typeof(double), "m"));
+            tampered.StoreResult(new FunctionResult(1.0, typeof(double), "m²"));
+            AssertThrows<ArgumentException>(() => MathFunctionDispatcher.ValidateDefinition(tampered),
+                "a type/unit-correct but incorrect stored result must not be trusted");
+
+            LRD_Core core = LRD_Core.Instance;
+            core.ResetCore();
+            core.InitializeCore();
+            try
+            {
+                FunctionBox staged = new FunctionBox(typeof(double), "Math_2.CalculateCircleArea", "m²");
+                staged.AddVariable(new FunctionVariable("radius", 2.0, typeof(double), "m"));
+                staged.StoreResult(new FunctionResult(1.0, typeof(double), "m²"));
+                Assert(core.SetUntrustedFunction(staged), "tampered candidate should remain available in staging");
+                AssertThrows<ArgumentException>(() => core.AddTrustedFunction(staged),
+                    "failed dispatch verification should prevent promotion");
+                Assert(core.GetUntrustedFunctionBox(staged.GetFunctionID()) == staged,
+                    "failed validation must leave the candidate untrusted");
+            }
+            finally
+            {
+                core.ResetCore();
+            }
         }
     }
 }

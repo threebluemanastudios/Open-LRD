@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using OPEN_LRD.Foundations;
 using OPEN_LRD.Skills;
@@ -34,6 +36,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Trusted graph membership and link lifecycle are hardened", TrustedMembershipAndLinkLifecycleAreHardened());
             Program.Run("Reasoning links support provenance and validity queries", ReasoningLinksSupportProvenanceAndTimeQueries());
             Program.Run("Conversation and function APIs return validated snapshots", ConversationAndFunctionApisAreHardened());
+            Program.Run("Core assertion and checkpoint performance smoke baseline", CorePerformanceSmokeBaseline());
         }
 
         private static Action DefaultSourcesAreInitializedAndStable()
@@ -616,9 +619,9 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Synonym,
                     0.82, "derived", "researcher", fixture.WordId, fixture.SenseId, validFrom, validUntil),
                     "Reasoning helper should add a trusted assertion with provenance and a validity interval.");
-                Program.Assert(!core.AddReasoningLink(secondNodeId, firstNodeId, NodeRelationType.Synonym,
-                    0.82, " derived ", " researcher ", fixture.WordId, fixture.SenseId, validFrom, validUntil),
-                    "Reasoning assertion IDs should be stable across symmetric endpoint order and normalized text.");
+                Program.Assert(core.AddReasoningLink(secondNodeId, firstNodeId, NodeRelationType.Synonym,
+                    0.88, " derived ", " researcher ", fixture.WordId, fixture.SenseId, validFrom, validUntil),
+                    "A repeated reasoning assertion should idempotently upsert confidence across symmetric endpoint order.");
 
                 List<NodeLink> activeReasoningLinks = core.GetAllTrustedLinks(NodeRelationType.Synonym,
                     NodeLinkOrigin.Reasoning, " RESEARCHER ", 0.8, now);
@@ -634,21 +637,79 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Synonym, NodeLinkOrigin.Reasoning,
                     "researcher", 0.8, now.AddHours(1)).Count == 0,
                     "Validity windows should exclude assertions outside their interval.");
+                Program.Assert(core.FindTrustedNodes(NodeTargetKind.Word, relationFilter: NodeRelationType.Synonym,
+                        minimumIncidentLinkConfidence: 0.8, activeAt: now.AddHours(1)).Count == 0,
+                    "Node query incident-link filtering should omit expired assertions by default/as-of time.");
                 Program.Assert(core.BuildSkillsGraphSnapshot(NodeRelationType.Synonym, NodeLinkOrigin.Reasoning,
                     "researcher", 0.8, now).EdgeCount == 2,
                     "Filtered graph snapshots should honor provenance and temporal filters.");
+                TrustedKnowledgeGraphSnapshot typedSnapshot = core.BuildTrustedKnowledgeGraphSnapshot(now);
+                Program.Assert(typedSnapshot.Links.Count(link => link.Provenance.Origin == NodeLinkOrigin.Reasoning) == 2 &&
+                               typedSnapshot.AsOf == now,
+                    "Typed knowledge snapshots should preserve provenance and active-time context.");
+                Program.AssertThrows<NotSupportedException>(() => ((IList<NodeLink>)typedSnapshot.Links).Clear(),
+                    "typed snapshot assertion collections should be immutable copies");
+                Graph<Guid> costProjection = core.BuildSkillsCostGraphSnapshot(NodeRelationType.Synonym,
+                    NodeLinkOrigin.Reasoning, "researcher", 0.8, now);
+                Program.Assert(costProjection.Edges.Count == 2 && costProjection.Edges.All(edge =>
+                        Math.Abs(edge.Weight - -Math.Log(0.9)) < 1e-12),
+                    "confidence-to-cost projection should use documented -log(confidence) costs");
                 Program.Assert(core.GetTrustedLinksByProvenanceTarget(fixture.SenseId,
                     includeSourceTarget: false).Count == 1,
                     "Reverse provenance lookup should return one assertion rather than both symmetric edges.");
+                Program.Assert(core.GetTrustedLinksByProvenanceTarget(fixture.SenseId,
+                        includeSourceTarget: false, activeAt: now.AddHours(1)).Count == 0,
+                    "Provenance lookups should filter expired assertions at the requested time.");
+                Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.IsA,
+                        0.7, "node-reference", "researcher", firstNodeId, fixture.SenseId),
+                    "Trusted node IDs should be accepted as provenance targets alongside box IDs.");
+                Program.Assert(core.GetTrustedLinksByProvenanceTarget(firstNodeId).Any(link =>
+                        link.Label == "node-reference"),
+                    "Node-target provenance should be indexed and queryable.");
+                List<NodeLink> pagedProvenance = core.GetTrustedLinksByProvenanceTarget(fixture.SenseId,
+                    includeSourceTarget: false, limit: 1, offset: 0);
+                Program.Assert(pagedProvenance.Count == 1,
+                    "Provenance queries should support deterministic paging limits.");
+                Program.Assert(core.GetAggregatedLinkConfidence(firstNodeId, secondNodeId,
+                        NodeRelationType.Synonym) > 0.0,
+                    "Independent assertion aggregation should combine active synonym evidence.");
+                Program.Assert(core.GetAggregatedLinkConfidence(Guid.NewGuid(), Guid.NewGuid(),
+                        NodeRelationType.Synonym) == 0.0,
+                    "Aggregation should return zero when no active assertions exist.");
 
                 core.GetTrustedNode(firstNodeId)!.RegisterVerifiedReference(2);
                 List<Node> matchingNodes = core.FindTrustedNodes(NodeTargetKind.Word, minimumNetTrustWeight: 1,
                     relationFilter: NodeRelationType.Synonym, minimumIncidentLinkConfidence: 0.8, canonicalOnly: true);
                 Program.Assert(matchingNodes.Count == 1 && matchingNodes[0].GetNodeID() == firstNodeId,
                     "Node queries should combine target kind, canonical identity, trust, relation, and confidence filters.");
+                List<Guid> pagedNodeIds = core.GetTrustedNodeIds(NodeTargetKind.Word, limit: 1, offset: 0);
+                Program.Assert(pagedNodeIds.Count == 1, "Trusted node ID queries should support paging.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(() =>
+                    core.GetTrustedNodeIds(limit: -1),
+                    "Trusted node paging limit must be non-negative.");
                 Program.AssertThrows<ArgumentOutOfRangeException>(() =>
                     core.GetAllTrustedLinks(minimumConfidence: double.NaN),
                     "Link query confidence thresholds must be finite and in range.");
+                Program.Assert(core.GetAllTrustedLinks(limit: 1, offset: 1).Count <= 1,
+                    "Trusted link queries should support paging.");
+
+                using (LRD_Core.ReasoningWriteBatch failedBatch = core.BeginReasoningWriteBatch())
+                {
+                    failedBatch.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Custom, 0.6, "staged-valid");
+                    failedBatch.AddReasoningLink(Guid.NewGuid(), secondNodeId, NodeRelationType.Custom, 0.6, "staged-invalid");
+                    Program.AssertThrows<InvalidOperationException>(failedBatch.Commit,
+                        "invalid batch endpoints should abort the transaction");
+                }
+                Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count == 0,
+                    "failed reasoning batches should roll back earlier staged assertions");
+                using (LRD_Core.ReasoningWriteBatch successfulBatch = core.BeginReasoningWriteBatch())
+                {
+                    successfulBatch.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Custom, 0.6, "batch-one");
+                    successfulBatch.AddReasoningLink(secondNodeId, firstNodeId, NodeRelationType.Custom, 0.7, "batch-two");
+                    successfulBatch.Commit();
+                }
+                Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count == 2,
+                    "successful reasoning batches should atomically commit all assertions");
             };
         }
 
@@ -682,6 +743,74 @@ namespace OPEN_LRD.SmokeTests
                 function.AddVariable(new FunctionVariable("y", 2.0, typeof(double)));
                 Program.Assert(snapshot.Count == 1 && function.Variables.Count == 2,
                     "Variables should return an isolated snapshot.");
+            };
+        }
+
+        private static Action CorePerformanceSmokeBaseline()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                ResetCore();
+                LexicalFixture fixture = BuildLexicalChain();
+                string directory = Path.Combine(Path.GetTempPath(), "open-lrd-perf-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    List<Guid> assertionIds = new List<Guid>();
+                    using (core.SuspendPresentationRecalculation())
+                    {
+                        for (int index = 0; index < 24; index++)
+                        {
+                            Guid symbolId = AddTrustedSymbol(core, fixture.SenseId, (char)(0x0400 + index));
+                            Guid wordId = AddTrustedWord(core, fixture.SenseId, fixture.UsageId, symbolId);
+                            Guid targetNodeId = NodeIdFor(core, NodeTargetKind.Word, wordId);
+                            Guid assertionId = Guid.NewGuid();
+                            NodeLinkProvenance provenance = new NodeLinkProvenance(assertionId, NodeLinkOrigin.User,
+                                DateTimeOffset.UtcNow, sourceTargetId: fixture.WordId, confidence: 0.4);
+                            Program.Assert(core.AddTrustedLink(new NodeLink(fixture.WordNodeId, targetNodeId,
+                                NodeRelationType.Custom, 0.4, $"perf-{index}", provenance)),
+                                "Performance smoke assertion should add.");
+                            assertionIds.Add(assertionId);
+                        }
+                    }
+
+                    Stopwatch updateTimer = Stopwatch.StartNew();
+                    foreach (Guid assertionId in assertionIds)
+                        Program.Assert(core.UpdateTrustedLinkWeight(assertionId, 0.55), "Indexed assertion update should succeed.");
+                    updateTimer.Stop();
+
+                    Stopwatch provenanceTimer = Stopwatch.StartNew();
+                    int reverseLookupCount = 0;
+                    for (int iteration = 0; iteration < 24; iteration++)
+                        reverseLookupCount += core.GetTrustedLinksByProvenanceTarget(fixture.WordId).Count;
+                    provenanceTimer.Stop();
+                    Program.Assert(reverseLookupCount == 24 * assertionIds.Count,
+                        "Indexed provenance lookups should return all matching assertions.");
+
+                    Stopwatch removeTimer = Stopwatch.StartNew();
+                    foreach (Guid assertionId in assertionIds)
+                        Program.Assert(core.RemoveTrustedLink(assertionId), "Indexed assertion removal should succeed.");
+                    removeTimer.Stop();
+                    Program.Assert(core.GetTrustedLinksByProvenanceTarget(fixture.WordId).Count == 0,
+                        "Removing indexed assertions should clean provenance indexes.");
+
+                    Stopwatch writeTimer = Stopwatch.StartNew();
+                    core.StreamTrustedDictionariesToDisk(directory);
+                    writeTimer.Stop();
+                    core.StreamTrustedDictionariesFromDisk(directory, true, false, 1);
+                    Stopwatch validateTimer = Stopwatch.StartNew();
+                    core.ValidateDiskStore();
+                    validateTimer.Stop();
+                    Console.WriteLine($"PERF baseline nodes={core.GetTrustedNodeCount()} links={core.GetTrustedLinkCount()} " +
+                        $"updatesMs={updateTimer.Elapsed.TotalMilliseconds:F3} provenanceMs={provenanceTimer.Elapsed.TotalMilliseconds:F3} " +
+                        $"removesMs={removeTimer.Elapsed.TotalMilliseconds:F3} checkpointWriteMs={writeTimer.Elapsed.TotalMilliseconds:F3} " +
+                        $"checkpointValidateMs={validateTimer.Elapsed.TotalMilliseconds:F3}");
+                }
+                finally
+                {
+                    core.ResetCore();
+                    if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                }
             };
         }
 

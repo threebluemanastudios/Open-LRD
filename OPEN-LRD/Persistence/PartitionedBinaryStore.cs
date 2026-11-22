@@ -23,13 +23,19 @@ namespace OPEN_LRD.Persistence
     }
 
     internal readonly record struct DiskRecord(Guid Key, byte[] Payload);
+    internal readonly record struct DiskPartitionDiagnostics(DiskPartition Partition, int RecordCount, long DataBytes, long IndexBytes);
+    internal sealed record DiskStoreDiagnostics(string? StorePath, int FormatVersion, bool IsPagedReadOnly,
+        long CacheHits, long CacheMisses, string? LastValidationError,
+        IReadOnlyList<DiskPartitionDiagnostics> Partitions);
 
     internal sealed class PartitionedBinaryStore : IDisposable
     {
-        private const int CurrentFormatVersion = 2;
+        private const int CurrentFormatVersion = 3;
         private const int LegacyFormatVersion = 1;
+        private const int PreviousFormatVersion = 2;
         private const int MaximumRecordPayloadLength = 64 * 1024 * 1024;
         private const int MaximumRecordsPerPartition = 5_000_000;
+        private const int MaximumCachedRecordsPerPartition = 4_096;
         private const int DataMagic = 0x44524C4F; // OLRD, little-endian
         private const int IndexMagic = 0x49524C4F;
         private const int ManifestMagic = 0x4D524C4F;
@@ -97,9 +103,10 @@ namespace OPEN_LRD.Persistence
         internal static PartitionedBinaryStore Open(string directoryPath, int maxCachedRecordsPerPartition = 128)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
-            if (maxCachedRecordsPerPartition < 0)
+            if (maxCachedRecordsPerPartition < 0 || maxCachedRecordsPerPartition > MaximumCachedRecordsPerPartition)
             {
-                throw new ArgumentOutOfRangeException(nameof(maxCachedRecordsPerPartition));
+                throw new ArgumentOutOfRangeException(nameof(maxCachedRecordsPerPartition),
+                    $"Cache limit must be between 0 and {MaximumCachedRecordsPerPartition} records per partition.");
             }
             return new PartitionedBinaryStore(Path.GetFullPath(directoryPath), maxCachedRecordsPerPartition);
         }
@@ -130,6 +137,21 @@ namespace OPEN_LRD.Persistence
         {
             ThrowIfDisposed();
             return readers.TryGetValue(partition, out PartitionReader? reader) ? reader.Index.Count : 0;
+        }
+
+        internal IReadOnlyList<DiskPartitionDiagnostics> GetPartitionDiagnostics()
+        {
+            ThrowIfDisposed();
+            List<DiskPartitionDiagnostics> result = new List<DiskPartitionDiagnostics>(AllPartitions.Length);
+            foreach (DiskPartition partition in AllPartitions)
+            {
+                string dataPath = DataPath(directoryPath, partition);
+                string indexPath = IndexPath(directoryPath, partition);
+                result.Add(new DiskPartitionDiagnostics(partition, GetRecordCount(partition),
+                    File.Exists(dataPath) ? new FileInfo(dataPath).Length : 0L,
+                    File.Exists(indexPath) ? new FileInfo(indexPath).Length : 0L));
+            }
+            return result.AsReadOnly();
         }
 
         internal bool HasPartition(DiskPartition partition)
@@ -199,32 +221,33 @@ namespace OPEN_LRD.Persistence
             string dataPath = DataPath(directory, partition);
             string indexPath = IndexPath(directory, partition);
             int count = 0;
+            byte[] dataDigest;
             HashSet<Guid> keys = new HashSet<Guid>();
             using (FileStream data = new FileStream(dataPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.SequentialScan))
-            using (BinaryWriter writer = new BinaryWriter(data))
+            using (IncrementalHash dataHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+            using (HashingWriteStream hashingData = new HashingWriteStream(data, dataHash))
+            using (BinaryWriter writer = new BinaryWriter(hashingData))
+            using (FileStream index = new FileStream(indexPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.SequentialScan))
+            using (IncrementalHash indexHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+            using (HashingWriteStream hashingIndex = new HashingWriteStream(index, indexHash))
+            using (BinaryWriter indexWriter = new BinaryWriter(hashingIndex))
             {
                 writer.Write(DataMagic);
                 writer.Write(CurrentFormatVersion);
                 writer.Write((byte)partition);
-                using FileStream index = new FileStream(indexPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.SequentialScan);
-                using BinaryWriter indexWriter = new BinaryWriter(index);
                 indexWriter.Write(IndexMagic);
                 indexWriter.Write(CurrentFormatVersion);
                 indexWriter.Write(0);
+                writer.Flush();
+                indexWriter.Flush();
                 foreach (DiskRecord record in records)
                 {
                     if (count >= MaximumRecordsPerPartition)
-                    {
                         throw new InvalidDataException($"Partition {partition} exceeds the record-count limit.");
-                    }
                     if (record.Key == Guid.Empty || !keys.Add(record.Key))
-                    {
                         throw new InvalidDataException($"Partition {partition} contains an empty or duplicate key.");
-                    }
                     if (record.Payload == null || record.Payload.Length > MaximumRecordPayloadLength)
-                    {
                         throw new InvalidDataException($"Partition {partition} contains an invalid payload.");
-                    }
                     long recordOffset = data.Position;
                     writer.Write(record.Key.ToByteArray());
                     writer.Write(record.Payload.Length);
@@ -235,14 +258,27 @@ namespace OPEN_LRD.Persistence
                     indexWriter.Write(record.Payload.Length);
                     count++;
                 }
+                writer.Flush();
+                indexWriter.Flush();
                 data.Flush(true);
-                indexWriter.Flush();
-                index.Position = 8;
-                indexWriter.Write(count);
-                indexWriter.Flush();
                 index.Flush(true);
+                dataDigest = dataHash.GetHashAndReset();
             }
-            return new PartitionManifestEntry(count, ComputeHash(dataPath), ComputeHash(indexPath));
+
+            byte[] indexDigest;
+            using (FileStream index = new FileStream(indexPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                index.Position = 8;
+                index.Write(BitConverter.GetBytes(count));
+                index.Flush(true);
+                index.Position = 0;
+                using IncrementalHash finalIndexHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                byte[] buffer = new byte[65536];
+                int read;
+                while ((read = index.Read(buffer)) > 0) finalIndexHash.AppendData(buffer, 0, read);
+                indexDigest = finalIndexHash.GetHashAndReset();
+            }
+            return new PartitionManifestEntry(count, dataDigest, indexDigest);
         }
 
         private static void WriteManifest(string directory, IReadOnlyDictionary<DiskPartition, PartitionManifestEntry> entries)
@@ -273,7 +309,7 @@ namespace OPEN_LRD.Persistence
             using BinaryReader reader = new BinaryReader(stream);
             int magic = reader.ReadInt32();
             int formatVersion = reader.ReadInt32();
-            if (magic != ManifestMagic || formatVersion is not (LegacyFormatVersion or CurrentFormatVersion))
+            if (magic != ManifestMagic || formatVersion is not (LegacyFormatVersion or PreviousFormatVersion or CurrentFormatVersion))
             {
                 throw new InvalidDataException("Unsupported or invalid disk-store manifest.");
             }
@@ -348,6 +384,52 @@ namespace OPEN_LRD.Persistence
 
         private readonly record struct IndexEntry(long Offset, int PayloadLength);
         private readonly record struct PartitionManifestEntry(int RecordCount, byte[] DataHash, byte[] IndexHash);
+
+        private sealed class HashingWriteStream : Stream
+        {
+            private readonly Stream destination;
+            private readonly IncrementalHash hash;
+
+            internal HashingWriteStream(Stream destination, IncrementalHash hash)
+            {
+                this.destination = destination;
+                this.hash = hash;
+            }
+
+            public override bool CanRead => false;
+            public override bool CanSeek => false;
+            public override bool CanWrite => destination.CanWrite;
+            public override long Length => destination.Length;
+            public override long Position { get => destination.Position; set => throw new NotSupportedException(); }
+            public override void Flush() => destination.Flush();
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                hash.AppendData(buffer, offset, count);
+                destination.Write(buffer, offset, count);
+            }
+
+            public override void Write(ReadOnlySpan<byte> buffer)
+            {
+                hash.AppendData(buffer);
+                destination.Write(buffer);
+            }
+
+            public override void WriteByte(byte value)
+            {
+                hash.AppendData(new[] { value });
+                destination.WriteByte(value);
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing) destination.Flush();
+                base.Dispose(disposing);
+            }
+        }
 
         private sealed class PartitionReader : IDisposable
         {

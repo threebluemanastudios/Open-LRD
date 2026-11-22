@@ -19,6 +19,7 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentNullException(nameof(expression));
             }
+            ExpressionParser.ValidateExpressionLimits(expression);
             Expression current = expression;
             for (int i = 0; i < MaxSimplifyPasses; i++)
             {
@@ -28,6 +29,7 @@ namespace OPEN_LRD.Skills
                     return next;
                 }
                 current = next;
+                ExpressionParser.ValidateExpressionLimits(current);
             }
             return current;
         }
@@ -1054,11 +1056,12 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentNullException(nameof(expression));
             }
-            if (string.IsNullOrWhiteSpace(variable))
+            if (variable == null)
             {
-                throw new ArgumentException("The variable name cannot be null or empty.", nameof(variable));
+                throw new ArgumentNullException(nameof(variable));
             }
-            return Simplify(DifferentiateOnce(expression, variable));
+            ExpressionParser.ValidateExpressionLimits(expression);
+            return Simplify(DifferentiateOnce(expression, variable.Trim()));
         }
 
         internal static Expression Differentiate(Expression expression, string variable, int order)
@@ -2433,31 +2436,32 @@ namespace OPEN_LRD.Skills
 
         internal static bool DependsOn(Expression expression, string variable)
         {
+            string normalizedVariable = variable?.Trim() ?? string.Empty;
             switch (expression)
             {
                 case ConstantExpression:
                     return false;
                 case VariableExpression variableExpression:
-                    return variableExpression.Name == variable;
+                    return variableExpression.Name == normalizedVariable;
                 case NegateExpression negate:
-                    return DependsOn(negate.Operand, variable);
+                    return DependsOn(negate.Operand, normalizedVariable);
                 case BinaryExpression binary:
-                    return DependsOn(binary.Left, variable) || DependsOn(binary.Right, variable);
+                    return DependsOn(binary.Left, normalizedVariable) || DependsOn(binary.Right, normalizedVariable);
                 case FunctionExpression function:
-                    return DependsOn(function.Argument, variable);
+                    return DependsOn(function.Argument, normalizedVariable);
                 case CallExpression call:
                     foreach (Expression argument in call.Arguments)
                     {
-                        if (DependsOn(argument, variable))
+                        if (DependsOn(argument, normalizedVariable))
                         {
                             return true;
                         }
                     }
                     return false;
                 case ConditionalExpression conditional:
-                    return DependsOn(conditional.Condition, variable)
-                        || DependsOn(conditional.WhenTrue, variable)
-                        || DependsOn(conditional.WhenFalse, variable);
+                    return DependsOn(conditional.Condition, normalizedVariable)
+                        || DependsOn(conditional.WhenTrue, normalizedVariable)
+                        || DependsOn(conditional.WhenFalse, normalizedVariable);
                 default:
                     return false;
             }
@@ -3324,6 +3328,7 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentNullException(nameof(expression));
             }
+            ExpressionParser.ValidateExpressionLimits(expression);
             return EvaluateInternal(expression, name =>
             {
                 if (name == variable)
@@ -3344,6 +3349,7 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentNullException(nameof(variables));
             }
+            ExpressionParser.ValidateExpressionLimits(expression);
             return EvaluateInternal(expression, name =>
             {
                 if (variables.TryGetValue(name, out double value))

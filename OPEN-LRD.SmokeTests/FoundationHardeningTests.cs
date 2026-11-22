@@ -23,6 +23,9 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("SymbolBox distinguishes assigned NUL", SymbolCharacterState());
             Program.Run("Conversation ranges are atomic and overflow-safe", ConversationRangeSemantics());
             Program.Run("Expression AST and parser boundaries", ExpressionBoundaries());
+            Program.Run("Repeated-element promotion and GetWordByGuid", RepeatedElementPromotionAndWordLookup());
+            Program.Run("Trusted link weight updates keep assertion-key state consistent", TrustedLinkWeightUpdateConsistency());
+            Program.Run("Extended function scalar checkpoint payloads round-trip", ExtendedFunctionScalarPersistence());
         }
 
         private static Action ValueValidationAndConstructors()
@@ -237,7 +240,9 @@ namespace OPEN_LRD.SmokeTests
                     core.StreamTrustedDictionariesToDisk(directory);
                     core.StreamTrustedDictionariesFromDisk(directory, true, false, 1);
                     Program.Assert(core.GetTrustedNodeByTarget(NodeTargetKind.Symbol, symbolId, "alternate")?.GetNodeID() == labeled.GetNodeID() &&
-                                   core.GetTrustedNodesByTarget(NodeTargetKind.Symbol, symbolId).Count == 2,
+                                   core.GetTrustedNodesByTarget(NodeTargetKind.Symbol, symbolId).Count == 2 &&
+                                   core.FindTrustedNodes(NodeTargetKind.Symbol, canonicalOnly: true).Any(node => node.GetTargetID() == symbolId) &&
+                                   core.GetWordByGuid(wordId)?.GetWordID() == wordId,
                         "Full node identity and canonical indexes should survive disk paging.");
 
                 Node counterNode = new Node(NodeTargetKind.Symbol, Guid.NewGuid());
@@ -415,6 +420,153 @@ namespace OPEN_LRD.SmokeTests
             };
         }
 
+        private static Action RepeatedElementPromotionAndWordLookup()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    Guid senseId = Guid.NewGuid();
+                    Guid usageId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    Program.Assert(core.AddTrustedUsage(new UsageBox(usageId)), "Usage should be trusted.");
+
+                    Guid symbolO = Guid.NewGuid();
+                    Guid symbolL = Guid.NewGuid();
+                    SymbolBox o = new SymbolBox(symbolO, 'o'); o.SetSenseID(senseId);
+                    SymbolBox l = new SymbolBox(symbolL, 'l'); l.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(o) && core.AddTrustedSymbol(l), "Symbols should be trusted.");
+
+                    Guid wordId = Guid.NewGuid();
+                    WordBox word = new WordBox(wordId, senseId, usageId, new List<Guid> { symbolL, symbolO, symbolO, symbolL }, PartOfSpeech.Noun);
+                    Program.Assert(core.SetUntrustedWord(word), "Repeated-letter word should stage.");
+                    Guid? promotedWord = core.ResolveOrPromoteUntrustedWord(wordId);
+                    Program.Assert(promotedWord == wordId && core.GetTrustedWordBox(wordId) != null,
+                        "Repeated-letter words should promote without deduplication failure.");
+                    Program.Assert(core.GetWordByGuid(wordId) != null, "GetWordByGuid should resolve trusted words.");
+                    Program.Assert(core.GetWordByGuid(Guid.Empty) == null, "GetWordByGuid should reject Guid.Empty.");
+
+                    Guid untrustedWordId = Guid.NewGuid();
+                    WordBox stagedWord = new WordBox(untrustedWordId, senseId, usageId, new List<Guid> { symbolO }, PartOfSpeech.Noun);
+                    Program.Assert(core.SetUntrustedWord(stagedWord), "Untrusted word should stage.");
+                    Program.Assert(ReferenceEquals(core.GetWordByGuid(untrustedWordId), stagedWord),
+                        "GetWordByGuid should resolve staged untrusted words.");
+                    Node labeledUntrustedWord = new Node(NodeTargetKind.Word, untrustedWordId, "draft");
+                    Program.Assert(core.AddUntrustedNode(labeledUntrustedWord), "labeled untrusted node should be accepted");
+                    Program.Assert(core.RemoveUntrustedWord(untrustedWordId) &&
+                                   core.GetUntrustedNode(labeledUntrustedWord.GetNodeID()) == null &&
+                                   core.GetUntrustedNodeByTarget(NodeTargetKind.Word, untrustedWordId, "draft") == null,
+                        "removing a box should clean up its canonical and labeled untrusted nodes");
+
+                    Guid sentenceId = Guid.NewGuid();
+                    SentenceBox sentence = new SentenceBox(sentenceId, senseId, new List<Guid> { wordId, wordId });
+                    Program.Assert(core.SetUntrustedSentence(sentence), "Repeated-word sentence should stage.");
+                    Guid? promotedSentence = core.ResolveOrPromoteUntrustedSentenceSubgraph(sentenceId);
+                    Program.Assert(promotedSentence == sentenceId && core.GetTrustedSentenceBox(sentenceId) != null,
+                        "Repeated-word sentences should promote without deduplication failure.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static Action TrustedLinkWeightUpdateConsistency()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    Guid senseId = Guid.NewGuid();
+                    Guid usageId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    Program.Assert(core.AddTrustedUsage(new UsageBox(usageId)), "Usage should be trusted.");
+                    Guid s1 = Guid.NewGuid(); Guid s2 = Guid.NewGuid();
+                    SymbolBox sb1 = new SymbolBox(s1, 'a'); sb1.SetSenseID(senseId);
+                    SymbolBox sb2 = new SymbolBox(s2, 'b'); sb2.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(sb1) && core.AddTrustedSymbol(sb2), "Symbols should be trusted.");
+                    Guid w1 = Guid.NewGuid(); Guid w2 = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedWord(new WordBox(w1, senseId, usageId, new List<Guid> { s1 }, PartOfSpeech.Noun)), "Word should be trusted.");
+                    Program.Assert(core.AddTrustedWord(new WordBox(w2, senseId, usageId, new List<Guid> { s2 }, PartOfSpeech.Noun)), "Word should be trusted.");
+                    Guid s3 = Guid.NewGuid(); SymbolBox sb3 = new SymbolBox(s3, 'c'); sb3.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(sb3), "Symbol should be trusted.");
+                    Guid w3 = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedWord(new WordBox(w3, senseId, usageId, new List<Guid> { s3 }, PartOfSpeech.Noun)), "Word should be trusted.");
+                    Guid n1 = core.GetTrustedNodeByTarget(NodeTargetKind.Word, w1)!.GetNodeID();
+                    Guid n2 = core.GetTrustedNodeByTarget(NodeTargetKind.Word, w2)!.GetNodeID();
+                    Guid n3 = core.GetTrustedNodeByTarget(NodeTargetKind.Word, w3)!.GetNodeID();
+
+                    NodeLinkProvenance provenance = new NodeLinkProvenance(
+                        NodeLinkProvenance.CreateForLink(n1, n2, NodeRelationType.Synonym, "pair", NodeLinkOrigin.User, 0.5).AssertionId,
+                        NodeLinkOrigin.User, DateTimeOffset.UtcNow, sourceTargetId: w1, confidence: 0.5);
+                    Program.Assert(core.AddTrustedLink(new NodeLink(n1, n2, NodeRelationType.Synonym, 0.5, "pair", provenance)),
+                        "Synonym link should be added.");
+                    Program.Assert(core.UpdateTrustedLinkWeight(provenance.AssertionId, 0.9),
+                        "Assertion weight update should succeed.");
+                    List<NodeLink> byProvenance = core.GetTrustedLinksByProvenanceTarget(w1);
+                    Program.Assert(byProvenance.Count == 1 && byProvenance[0].Weight == 0.9,
+                        "Provenance lookup should see updated weight after assertion update.");
+                    Program.AssertThrows<ArgumentException>(() => core.AddTrustedLink(
+                        new NodeLink(n2, n3, NodeRelationType.Synonym, 0.5, "pair", provenance)),
+                        "reusing an assertion ID for a different endpoint pair should be rejected in memory");
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static Action ExtendedFunctionScalarPersistence()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    BigInteger huge = BigInteger.Pow(10, 150) + 987654321;
+                    AssertFunctionValueRoundTrip(huge, typeof(BigInteger), huge.Equals);
+                    Fraction fraction = new Fraction(huge, new BigInteger(37));
+                    AssertFunctionValueRoundTrip(fraction, typeof(Fraction), value => fraction.Equals((Fraction)value!));
+                    Vector2 vector2 = new Vector2(1.25, -8.5);
+                    AssertFunctionValueRoundTrip(vector2, typeof(Vector2), value => vector2.Equals((Vector2)value!));
+                    Vector3 vector3 = new Vector3(1.25, -8.5, 3.0);
+                    AssertFunctionValueRoundTrip(vector3, typeof(Vector3), value => vector3.Equals((Vector3)value!));
+                    Complex complex = new Complex(-2.0, 7.5);
+                    AssertFunctionValueRoundTrip(complex, typeof(Complex), value => complex.Equals((Complex)value!));
+                    double[] doubles = { 1.0, -2.5, 9.0 };
+                    AssertFunctionValueRoundTrip(doubles, typeof(double[]), value => doubles.SequenceEqual((double[])value!));
+                    int[] integers = { int.MinValue, 0, int.MaxValue };
+                    AssertFunctionValueRoundTrip(integers, typeof(int[]), value => integers.SequenceEqual((int[])value!));
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static void AssertFunctionValueRoundTrip(object value, Type valueType, Func<object?, bool> equals)
+        {
+            FunctionBox box = new FunctionBox(valueType);
+            box.AddVariable(new FunctionVariable("value", value, valueType));
+            box.StoreResult(new FunctionResult(value, valueType, null));
+            FunctionBox restored = FoundationBinarySerializer.DeserializeFunction(
+                FoundationBinarySerializer.SerializeFunction(box));
+            Program.Assert(restored.Variables.Count == 1 && equals(restored.Variables[0].Value) &&
+                           restored.Result != null && equals(restored.Result.Value),
+                $"FunctionBox scalar value of type {valueType.Name} should round-trip.");
+        }
+
         private static Action ExpressionBoundaries()
         {
             return () =>
@@ -452,6 +604,20 @@ namespace OPEN_LRD.SmokeTests
                                  new string(')', ExpressionParser.MaximumNestingDepth + 1);
                 Program.AssertThrows<FormatException>(() => ExpressionParser.Parse(tooDeep),
                     "Expression nesting depth should be bounded.");
+
+                Program.AssertThrows<FormatException>(() => ExpressionParser.Parse($"sum(i,1,{int.MaxValue},i)"),
+                    "Indexed expansion should reject ranges that overflow iteration bounds.");
+                Program.AssertThrows<FormatException>(() => ExpressionParser.Parse("sum(i,0,1001,i)"),
+                    "Indexed expansion should enforce iteration count limits.");
+                string flatChain = string.Join("+", Enumerable.Repeat("1", 5000));
+                Program.AssertThrows<FormatException>(() => ExpressionParser.Parse(flatChain),
+                    "Long flat chains should be rejected by AST node/depth limits.");
+
+                Program.Assert(SymbolicCalculus.DependsOn(new VariableExpression("x"), " x "),
+                    "DependsOn should normalize variable identifiers.");
+                Program.Assert((double)((ConstantExpression)Algebra.Substitute(new VariableExpression("x"), " x ", 2.0)).Value == 2.0,
+                    "Substitute should normalize variable identifiers.");
+
                 Program.Assert(new ConstantExpression(1.2345678901234567).ToString() ==
                                1.2345678901234567.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
                     "Expression constants should use round-trip invariant formatting.");

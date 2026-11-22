@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Buffers.Binary;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
 using OPEN_LRD.Foundations;
 using OPEN_LRD.Reasoning;
 using OPEN_LRD.Skills;
@@ -15,6 +16,62 @@ namespace OPEN_LRD
     /// <summary>Owns the graph, runtime registries, conversations, and persistence hooks.</summary>
     internal class LRD_Core
     {
+        private sealed class PresentationUpdateScope : IDisposable
+        {
+            private readonly LRD_Core owner;
+            private int disposed;
+
+            internal PresentationUpdateScope(LRD_Core owner) => this.owner = owner;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref disposed, 1) == 0)
+                    owner.ResumePresentationRecalculation();
+            }
+        }
+
+        /// <summary>Stages reasoning assertions for atomic, single-layout batch commit.</summary>
+        public sealed class ReasoningWriteBatch : IDisposable
+        {
+            private readonly LRD_Core owner;
+            private readonly List<NodeLink> pending = new List<NodeLink>();
+            private bool completed;
+
+            internal ReasoningWriteBatch(LRD_Core owner) => this.owner = owner;
+
+            /// <summary>Stages one assertion without mutating trusted graph state until commit.</summary>
+            public void AddReasoningLink(Guid sourceNodeId, Guid targetNodeId, NodeRelationType relationType,
+                double confidence = 1.0, string? label = null, string? author = null,
+                Guid? sourceTargetId = null, Guid? evidenceTargetId = null,
+                DateTimeOffset? validFrom = null, DateTimeOffset? validUntil = null)
+            {
+                EnsureOpen();
+                NodeLinkProvenance provenance = NodeLinkProvenance.CreateReasoning(sourceNodeId, targetNodeId,
+                    relationType, label, confidence, author, sourceTargetId, evidenceTargetId, validFrom, validUntil);
+                pending.Add(new NodeLink(sourceNodeId, targetNodeId, relationType, confidence, label, provenance));
+            }
+
+            /// <summary>Atomically applies all staged assertions or restores the pre-commit graph state.</summary>
+            public void Commit()
+            {
+                EnsureOpen();
+                owner.CommitReasoningLinks(pending);
+                completed = true;
+                pending.Clear();
+            }
+
+            public void Dispose()
+            {
+                completed = true;
+                pending.Clear();
+            }
+
+            private void EnsureOpen()
+            {
+                if (completed) throw new InvalidOperationException("The reasoning batch is already completed.");
+            }
+        }
+
         private sealed class OrderedGuidIndexList : IEnumerable<Guid>
         {
             private readonly List<Guid> ordered = new List<Guid>();
@@ -87,7 +144,7 @@ namespace OPEN_LRD
         private UInt128 _nextNodePresentationId;
         private bool _nodePresentationIdSpaceExhausted;
         private NodeLayoutOptions _nodeLayoutOptions = new NodeLayoutOptions();
-        private bool _suspendNodePresentationRecalculation;
+        private int _nodePresentationRecalculationSuspendCount;
         private static readonly Guid DefaultDictionarySourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000001");
         private static readonly Guid DefaultUserSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000002");
         private static readonly Guid DefaultImportSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000003");
@@ -113,11 +170,17 @@ namespace OPEN_LRD
         private readonly Dictionary<Guid, List<NodeLink>> TrustedOutgoingLinks = new Dictionary<Guid, List<NodeLink>>();
         private readonly Dictionary<Guid, List<NodeLink>> TrustedIncomingLinks = new Dictionary<Guid, List<NodeLink>>();
         private readonly HashSet<NodeLink> TrustedLinkKeys = new HashSet<NodeLink>();
+        private readonly Dictionary<Guid, List<NodeLink>> LinksByAssertionId = new Dictionary<Guid, List<NodeLink>>();
+        private readonly Dictionary<Guid, List<NodeLink>> LinksBySourceTargetId = new Dictionary<Guid, List<NodeLink>>();
+        private readonly Dictionary<Guid, List<NodeLink>> LinksByEvidenceTargetId = new Dictionary<Guid, List<NodeLink>>();
         private Graph<Guid> TrustedSkillsGraph = new Graph<Guid>(true);
         private PartitionedBinaryStore? _diskStore;
         private string? _diskStorePath;
         private bool _diskPagedReadOnly;
         private bool _legacyDiskStoreReadOnly;
+        private long _pagedCacheHits;
+        private long _pagedCacheMisses;
+        private string? _lastDiskStoreValidationError;
         private int _maxPagedObjects = 1024;
         private readonly Dictionary<(DiskPartition Partition, Guid Id), object> _pagedObjectCache = new Dictionary<(DiskPartition Partition, Guid Id), object>();
         private readonly Dictionary<(DiskPartition Partition, Guid Id), LinkedListNode<(DiskPartition Partition, Guid Id)>> _pagedObjectLruNodes = new Dictionary<(DiskPartition Partition, Guid Id), LinkedListNode<(DiskPartition Partition, Guid Id)>>();
@@ -312,6 +375,24 @@ namespace OPEN_LRD
             {
                 EnsureCoreInitialized();
                 return UntrustedSymbolDictionary.TryGetValue(symbolId, out SymbolBox? symbolBox) ? symbolBox : null;
+            });
+        }
+
+        /// <summary>
+        /// Returns a trusted or untrusted word by identifier, preferring trusted state.
+        /// </summary>
+        /// <param name="wordId">Word identifier to resolve.</param>
+        /// <returns>The matching <see cref="WordBox"/>, or <see langword="null"/> if not found.</returns>
+        public WordBox? GetWordByGuid(Guid wordId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                if (wordId == Guid.Empty)
+                {
+                    return null;
+                }
+                return GetTrustedWordBox(wordId) ?? (UntrustedWordDictionary.TryGetValue(wordId, out WordBox? wordBox) ? wordBox : null);
             });
         }
 
@@ -548,31 +629,35 @@ namespace OPEN_LRD
             });
         }
 
-        public List<Guid> GetTrustedNodeIds(NodeTargetKind? kindFilter = null)
+        public List<Guid> GetTrustedNodeIds(NodeTargetKind? kindFilter = null, int? limit = null, int offset = 0)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
                 if (kindFilter.HasValue && !Enum.IsDefined(kindFilter.Value))
                     throw new ArgumentOutOfRangeException(nameof(kindFilter));
-                return TrustedNodeByIdentityIndex
-                .Where(entry => !kindFilter.HasValue || entry.Key.TargetKind == kindFilter.Value)
-                .OrderBy(entry => entry.Key.TargetKind)
-                .ThenBy(entry => entry.Key.TargetId)
-                .ThenBy(entry => entry.Key.Label, StringComparer.Ordinal)
-                .Select(entry => entry.Value)
-                .ToList();
+                ValidatePaging(limit, offset);
+                IEnumerable<Guid> query = TrustedNodeByIdentityIndex
+                    .Where(entry => !kindFilter.HasValue || entry.Key.TargetKind == kindFilter.Value)
+                    .OrderBy(entry => entry.Key.TargetKind)
+                    .ThenBy(entry => entry.Key.TargetId)
+                    .ThenBy(entry => entry.Key.Label, StringComparer.Ordinal)
+                    .Select(entry => entry.Value);
+                if (offset > 0) query = query.Skip(offset);
+                if (limit.HasValue) query = query.Take(limit.Value);
+                return query.ToList();
             });
         }
 
-        public List<Node> GetTrustedNodes(NodeTargetKind? kindFilter = null)
+        public List<Node> GetTrustedNodes(NodeTargetKind? kindFilter = null, int? limit = null, int offset = 0)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
                 if (kindFilter.HasValue && !Enum.IsDefined(kindFilter.Value))
                     throw new ArgumentOutOfRangeException(nameof(kindFilter));
-                return GetTrustedNodeIds(kindFilter)
+                ValidatePaging(limit, offset);
+                return GetTrustedNodeIds(kindFilter, limit, offset)
                     .Select(GetTrustedNode)
                     .Where(node => node != null)
                     .Cast<Node>()
@@ -602,17 +687,65 @@ namespace OPEN_LRD
             NodeLinkOrigin? originFilter = null,
             string? authorFilter = null,
             double? minimumConfidence = null,
-            DateTimeOffset? activeAt = null)
+            DateTimeOffset? activeAt = null,
+            int? limit = null,
+            int offset = 0)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
                 ValidateLinkQuery(relationFilter, originFilter, minimumConfidence);
+                ValidatePaging(limit, offset);
                 string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
-                return TrustedOutgoingLinks.Values
-                .SelectMany(links => links)
-                .Where(link => MatchesLinkQuery(link, relationFilter, originFilter, normalizedAuthor, minimumConfidence, activeAt))
-                .ToList();
+                IEnumerable<NodeLink> query = TrustedOutgoingLinks.Values
+                    .SelectMany(links => links)
+                    .Where(link => MatchesLinkQuery(link, relationFilter, originFilter, normalizedAuthor, minimumConfidence, activeAt ?? DateTimeOffset.UtcNow))
+                    .OrderBy(link => link.Provenance.AssertionId)
+                    .ThenBy(link => link.SourceNodeId)
+                    .ThenBy(link => link.TargetNodeId);
+                if (offset > 0) query = query.Skip(offset);
+                if (limit.HasValue) query = query.Take(limit.Value);
+                return query.ToList();
+            });
+        }
+
+        /// <summary>Aggregates independent active assertions between two endpoints using a noisy-OR Bayesian update.</summary>
+        /// <param name="sourceNodeId">Trusted source node identifier.</param>
+        /// <param name="targetNodeId">Trusted target node identifier.</param>
+        /// <param name="relationType">Relation type shared by the assertions.</param>
+        /// <param name="activeAt">Instant for inclusive validity filtering; defaults to current UTC time.</param>
+        /// <returns>The aggregated confidence in [0, 1], or 0 when no active assertions exist.</returns>
+        public double GetAggregatedLinkConfidence(
+            Guid sourceNodeId,
+            Guid targetNodeId,
+            NodeRelationType relationType,
+            DateTimeOffset? activeAt = null)
+        {
+            if (sourceNodeId == Guid.Empty)
+                throw new ArgumentException("Source node identifiers cannot be Guid.Empty.", nameof(sourceNodeId));
+            if (targetNodeId == Guid.Empty)
+                throw new ArgumentException("Target node identifiers cannot be Guid.Empty.", nameof(targetNodeId));
+            if (!Enum.IsDefined(relationType))
+                throw new ArgumentOutOfRangeException(nameof(relationType));
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                DateTimeOffset instant = activeAt ?? DateTimeOffset.UtcNow;
+                IEnumerable<NodeLink> links = TrustedOutgoingLinks.TryGetValue(sourceNodeId, out List<NodeLink>? outgoing)
+                    ? outgoing.Where(link => link.TargetNodeId == targetNodeId && link.RelationType == relationType &&
+                        link.Provenance.IsActiveAt(instant))
+                    : Enumerable.Empty<NodeLink>();
+                double independenceProduct = 1.0;
+                foreach (NodeLink link in links)
+                {
+                    double confidence = link.Provenance.Confidence ?? link.Weight;
+                    if (!double.IsFinite(confidence) || confidence < 0.0 || confidence > 1.0)
+                    {
+                        confidence = Math.Clamp(confidence, 0.0, 1.0);
+                    }
+                    independenceProduct *= 1.0 - confidence;
+                }
+                return 1.0 - independenceProduct;
             });
         }
 
@@ -759,7 +892,7 @@ namespace OPEN_LRD
 
         private void RecalculateAllNodePresentationsInternal()
         {
-            if (_suspendNodePresentationRecalculation) return;
+            if (_nodePresentationRecalculationSuspendCount > 0) return;
             Dictionary<Guid, NodeDerivationSnapshot> snapshots = BuildNodeDerivationSnapshots();
             Dictionary<Guid, double> sizes = DeriveNodeSizes(snapshots);
             NodeLayoutResult layout = NodeLayoutCalculator.Calculate(snapshots, sizes,
@@ -838,23 +971,59 @@ namespace OPEN_LRD
         private List<NodeDerivationLink> BuildNodeDerivationLinks(Guid nodeId)
         {
             Dictionary<Guid, NodeDerivationLink> links = new Dictionary<Guid, NodeDerivationLink>();
-            foreach (List<NodeLink> outgoing in TrustedOutgoingLinks.Values)
+            DateTimeOffset activeAt = DateTimeOffset.UtcNow;
+            if (TrustedOutgoingLinks.TryGetValue(nodeId, out List<NodeLink>? outgoing))
             {
                 foreach (NodeLink link in outgoing)
                 {
-                    if (link.SourceNodeId != nodeId && link.TargetNodeId != nodeId) continue;
-                    Guid otherNodeId = link.SourceNodeId == nodeId ? link.TargetNodeId : link.SourceNodeId;
-                    if (otherNodeId == nodeId) continue;
-                    NodeDerivationLink derived = new NodeDerivationLink(
-                        link.Provenance.AssertionId, link.RelationType, link.Weight, otherNodeId);
-                    if (!links.TryGetValue(derived.AssertionId, out NodeDerivationLink existing) ||
-                        PreferDerivationLink(derived, existing))
-                    {
-                        links[derived.AssertionId] = derived;
-                    }
+                    AddDerivationLink(links, nodeId, link, activeAt);
                 }
             }
+            if (TrustedIncomingLinks.TryGetValue(nodeId, out List<NodeLink>? incoming))
+            {
+                foreach (NodeLink link in incoming)
+                    AddDerivationLink(links, nodeId, link, activeAt);
+            }
             return links.Values.ToList();
+        }
+
+        /// <summary>Defers presentation layout recalculation until the returned scope is disposed.</summary>
+        /// <remarks>Scopes may be nested. Mutations still synchronize individually; the final dispose recalculates once.</remarks>
+        public IDisposable SuspendPresentationRecalculation()
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                _nodePresentationRecalculationSuspendCount = checked(_nodePresentationRecalculationSuspendCount + 1);
+            });
+            return new PresentationUpdateScope(this);
+        }
+
+        private void ResumePresentationRecalculation()
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                if (_nodePresentationRecalculationSuspendCount <= 0)
+                    throw new InvalidOperationException("Presentation recalculation scope count is inconsistent.");
+                _nodePresentationRecalculationSuspendCount--;
+                if (_nodePresentationRecalculationSuspendCount == 0)
+                    RecalculateAllNodePresentationsInternal();
+            });
+        }
+
+        private static void AddDerivationLink(Dictionary<Guid, NodeDerivationLink> links, Guid nodeId,
+            NodeLink link, DateTimeOffset activeAt)
+        {
+            if (!link.Provenance.IsActiveAt(activeAt)) return;
+            Guid otherNodeId = link.SourceNodeId == nodeId ? link.TargetNodeId : link.SourceNodeId;
+            if (otherNodeId == nodeId) return;
+            NodeDerivationLink derived = new NodeDerivationLink(
+                link.Provenance.AssertionId, link.RelationType, link.Weight, otherNodeId);
+            if (!links.TryGetValue(derived.AssertionId, out NodeDerivationLink existing) ||
+                PreferDerivationLink(derived, existing))
+            {
+                links[derived.AssertionId] = derived;
+            }
         }
 
         private static bool PreferDerivationLink(NodeDerivationLink candidate, NodeDerivationLink existing)
@@ -1187,6 +1356,9 @@ namespace OPEN_LRD
                 TrustedOutgoingLinks.Clear();
                 TrustedIncomingLinks.Clear();
                 TrustedLinkKeys.Clear();
+                LinksByAssertionId.Clear();
+                LinksBySourceTargetId.Clear();
+                LinksByEvidenceTargetId.Clear();
                 TrustedSkillsGraph = new Graph<Guid>(true);
                 UntrustedSymbolDictionary.Clear();
                 UntrustedWordDictionary.Clear();
@@ -2131,13 +2303,14 @@ namespace OPEN_LRD
                     return null;
                 }
 
-                foreach (Guid symbolId in wordBox.GetSymbols() ?? new List<Guid>())
+                List<Guid> symbolIds = (wordBox.GetSymbols() ?? new List<Guid>()).Distinct().ToList();
+                foreach (Guid symbolId in symbolIds)
                 {
                     if (TrustedSymbolDictionary.ContainsKey(symbolId)) continue;
                     if (!UntrustedSymbolDictionary.TryGetValue(symbolId, out SymbolBox? symbolBox) ||
                         !symbolBox.HasCompleteIdentity || !HasTrustedSense(symbolBox.GetSenseID())) return null;
                 }
-                foreach (Guid symbolId in wordBox.GetSymbols() ?? new List<Guid>())
+                foreach (Guid symbolId in symbolIds)
                 {
                     if (ResolveOrPromoteUntrustedSymbol(symbolId) == null) return null;
                 }
@@ -2172,7 +2345,7 @@ namespace OPEN_LRD
                 if (!UntrustedSentenceDictionary.TryGetValue(sentenceId, out SentenceBox? sentenceBox) ||
                     !sentenceBox.HasCompleteIdentity || !HasTrustedSense(sentenceBox.GetSenseID())) return null;
 
-                List<Guid> wordIds = sentenceBox.GetWords() ?? new List<Guid>();
+                List<Guid> wordIds = (sentenceBox.GetWords() ?? new List<Guid>()).Distinct().ToList();
                 foreach (Guid wordId in wordIds)
                 {
                     if (TrustedWordDictionary.ContainsKey(wordId)) continue;
@@ -2182,7 +2355,7 @@ namespace OPEN_LRD
                     {
                         return null;
                     }
-                    foreach (Guid symbolId in wordBox.GetSymbols() ?? new List<Guid>())
+                    foreach (Guid symbolId in (wordBox.GetSymbols() ?? new List<Guid>()).Distinct())
                     {
                         if (TrustedSymbolDictionary.ContainsKey(symbolId)) continue;
                         if (!UntrustedSymbolDictionary.TryGetValue(symbolId, out SymbolBox? symbolBox) ||
@@ -2378,10 +2551,66 @@ namespace OPEN_LRD
                     sourceTargetId, evidenceTargetId, validFrom, validUntil);
                 NodeLink link = new NodeLink(sourceNodeId, targetNodeId, relationType,
                     confidence, label, provenance);
-                bool added = !IsStructuralRelation(relationType) && IsValidLinkKindCombination(link) &&
-                             AreProvenanceTargetsTrusted(provenance) && AddTrustedLinkInternal(link);
-                if (added) RecalculateAllNodePresentationsInternal();
+                bool valid = !IsStructuralRelation(relationType) && IsValidLinkKindCombination(link) &&
+                             AreProvenanceTargetsTrusted(provenance);
+                bool added = valid && AddTrustedLinkInternal(link);
+                bool recalculatedByUpsert = false;
+                if (valid && !added && LinksByAssertionId.TryGetValue(provenance.AssertionId, out List<NodeLink>? existing))
+                {
+                    bool sameAssertion = existing.All(existingLink => SameReasoningAssertion(existingLink, link));
+                    if (sameAssertion)
+                    {
+                        recalculatedByUpsert = existing[0].Weight != confidence;
+                        added = !recalculatedByUpsert || UpdateTrustedLinkWeight(provenance.AssertionId, confidence);
+                    }
+                }
+                if (added && !recalculatedByUpsert) RecalculateAllNodePresentationsInternal();
                 return added;
+            });
+        }
+
+        /// <summary>Begins a link-only reasoning transaction that commits assertions and presentation once.</summary>
+        public ReasoningWriteBatch BeginReasoningWriteBatch()
+        {
+            GraphSynchronization.Execute(EnsureCoreInitialized);
+            return new ReasoningWriteBatch(this);
+        }
+
+        private void CommitReasoningLinks(IReadOnlyList<NodeLink> pending)
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureMutableStorageMode();
+                List<Guid> addedAssertionIds = new List<Guid>();
+                _nodePresentationRecalculationSuspendCount = checked(_nodePresentationRecalculationSuspendCount + 1);
+                try
+                {
+                    foreach (NodeLink link in pending)
+                    {
+                        if (IsStructuralRelation(link.RelationType) || !IsValidLinkKindCombination(link) ||
+                            !AreProvenanceTargetsTrusted(link.Provenance))
+                            throw new InvalidOperationException("A staged reasoning assertion has invalid endpoints, relation, or provenance references.");
+                        if (!AddTrustedLinkInternal(link))
+                            throw new InvalidOperationException($"Reasoning assertion '{link.Provenance.AssertionId}' could not be committed.");
+                        addedAssertionIds.Add(link.Provenance.AssertionId);
+                    }
+                }
+                catch
+                {
+                    foreach (Guid assertionId in addedAssertionIds)
+                    {
+                        if (!LinksByAssertionId.TryGetValue(assertionId, out List<NodeLink>? links)) continue;
+                        foreach (NodeLink added in new List<NodeLink>(links)) RemoveTrustedLinkInternal(added);
+                    }
+                    RebuildTrustedSkillsGraph();
+                    throw;
+                }
+                finally
+                {
+                    _nodePresentationRecalculationSuspendCount--;
+                    if (_nodePresentationRecalculationSuspendCount == 0)
+                        RecalculateAllNodePresentationsInternal();
+                }
             });
         }
 
@@ -2395,9 +2624,8 @@ namespace OPEN_LRD
                     throw new ArgumentException("Assertion identifiers cannot be Guid.Empty.", nameof(assertionId));
                 if (!double.IsFinite(newConfidence) || newConfidence < 0.0 || newConfidence > 1.0)
                     throw new ArgumentOutOfRangeException(nameof(newConfidence), "Confidence must be finite and in [0, 1].");
-                List<NodeLink> matchingLinks = TrustedLinkKeys
-                    .Where(link => link.Provenance.AssertionId == assertionId)
-                    .ToList();
+                List<NodeLink> matchingLinks = LinksByAssertionId.TryGetValue(assertionId, out List<NodeLink>? assertionLinks)
+                    ? new List<NodeLink>(assertionLinks) : new List<NodeLink>();
                 if (matchingLinks.Count == 0 || matchingLinks.Any(link => link.Provenance.Origin != NodeLinkOrigin.Reasoning))
                     return false;
                 return UpdateTrustedLinkWeight(assertionId, newConfidence);
@@ -2422,7 +2650,7 @@ namespace OPEN_LRD
                 }
                 string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
                 return links.Where(link => MatchesLinkQuery(link, relationFilter, originFilter,
-                    normalizedAuthor, minimumConfidence, activeAt)).ToList();
+                    normalizedAuthor, minimumConfidence, activeAt ?? DateTimeOffset.UtcNow)).ToList();
             });
         }
 
@@ -2444,7 +2672,7 @@ namespace OPEN_LRD
                 }
                 string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
                 return links.Where(link => MatchesLinkQuery(link, relationFilter, originFilter,
-                    normalizedAuthor, minimumConfidence, activeAt)).ToList();
+                    normalizedAuthor, minimumConfidence, activeAt ?? DateTimeOffset.UtcNow)).ToList();
             });
         }
 
@@ -2464,12 +2692,74 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>Returns distinct assertions whose provenance references the supplied trusted target.</summary>
+        /// <summary>Builds an immutable typed snapshot of trusted nodes and active assertions.</summary>
+        public TrustedKnowledgeGraphSnapshot BuildTrustedKnowledgeGraphSnapshot(DateTimeOffset? asOf = null)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                DateTimeOffset instant = asOf ?? DateTimeOffset.UtcNow;
+                List<KnowledgeNodeSnapshot> nodes = TrustedNodeByIdentityIndex.Values
+                    .Distinct()
+                    .Select(GetTrustedNode)
+                    .Where(node => node != null)
+                    .Cast<Node>()
+                    .Select(node => new KnowledgeNodeSnapshot(node.GetNodeID(), node.GetTargetKind(), node.GetTargetID(),
+                        node.GetLabel(), node.GetVerifiedReferences(), node.GetInvalidReferences()))
+                    .OrderBy(node => node.TargetKind).ThenBy(node => node.TargetId).ThenBy(node => node.Label, StringComparer.Ordinal)
+                    .ToList();
+                List<NodeLink> links = TrustedLinkKeys.Where(link => link.Provenance.IsActiveAt(instant))
+                    .OrderBy(link => link.Provenance.AssertionId).ThenBy(link => link.SourceNodeId).ThenBy(link => link.TargetNodeId)
+                    .ToList();
+                return new TrustedKnowledgeGraphSnapshot(instant, nodes, links);
+            });
+        }
+
+        /// <summary>Projects confidence edges to non-negative additive costs using -log(max(confidence, 1e-12)).</summary>
+        public Graph<Guid> BuildSkillsCostGraphSnapshot(
+            NodeRelationType? relationFilter = null,
+            NodeLinkOrigin? originFilter = null,
+            string? authorFilter = null,
+            double? minimumConfidence = null,
+            DateTimeOffset? activeAt = null)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                ValidateLinkQuery(relationFilter, originFilter, minimumConfidence);
+                Graph<Guid> graph = new Graph<Guid>(true);
+                foreach (Guid nodeId in TrustedNodeByIdentityIndex.Values.Distinct()) graph.AddNode(nodeId);
+                string? author = NormalizeOptionalLinkText(authorFilter);
+                DateTimeOffset instant = activeAt ?? DateTimeOffset.UtcNow;
+                foreach (NodeLink link in TrustedLinkKeys)
+                {
+                    if (MatchesLinkQuery(link, relationFilter, originFilter, author, minimumConfidence, instant))
+                    {
+                        double cost = -Math.Log(Math.Max(link.Weight, 1e-12));
+                        graph.AddEdge(link.SourceNodeId, link.TargetNodeId, cost);
+                    }
+                }
+                return graph;
+            });
+        }
+
+        /// <summary>Returns distinct active assertions whose provenance references the supplied trusted target.</summary>
+        /// <param name="targetId">Trusted box or node identifier recorded as provenance.</param>
+        /// <param name="includeSourceTarget">Whether to match the provenance source target.</param>
+        /// <param name="includeEvidenceTarget">Whether to match the provenance evidence target.</param>
+        /// <param name="originFilter">Optional assertion-origin filter.</param>
+        /// <param name="activeAt">Instant for inclusive validity filtering; defaults to current UTC time.</param>
+        /// <param name="limit">Optional maximum number of matching links to return.</param>
+        /// <param name="offset">Number of matching links to skip after deterministic ordering.</param>
+        /// <returns>A snapshot containing at most one directed link per matching assertion ID.</returns>
         public List<NodeLink> GetTrustedLinksByProvenanceTarget(
             Guid targetId,
             bool includeSourceTarget = true,
             bool includeEvidenceTarget = true,
-            NodeLinkOrigin? originFilter = null)
+            NodeLinkOrigin? originFilter = null,
+            DateTimeOffset? activeAt = null,
+            int? limit = null,
+            int offset = 0)
         {
             if (targetId == Guid.Empty)
                 throw new ArgumentException("Target identifiers cannot be Guid.Empty.", nameof(targetId));
@@ -2478,13 +2768,24 @@ namespace OPEN_LRD
                 EnsureCoreInitialized();
                 if (originFilter.HasValue && !Enum.IsDefined(originFilter.Value))
                     throw new ArgumentOutOfRangeException(nameof(originFilter));
-                return TrustedLinkKeys
+                ValidatePaging(limit, offset);
+                IEnumerable<NodeLink> candidates = Enumerable.Empty<NodeLink>();
+                if (includeSourceTarget && LinksBySourceTargetId.TryGetValue(targetId, out List<NodeLink>? sourceLinks))
+                    candidates = candidates.Concat(sourceLinks);
+                if (includeEvidenceTarget && LinksByEvidenceTargetId.TryGetValue(targetId, out List<NodeLink>? evidenceLinks))
+                    candidates = candidates.Concat(evidenceLinks);
+                DateTimeOffset instant = activeAt ?? DateTimeOffset.UtcNow;
+                IEnumerable<NodeLink> query = candidates
                     .Where(link => (!originFilter.HasValue || link.Provenance.Origin == originFilter.Value) &&
-                        ((includeSourceTarget && link.Provenance.SourceTargetId == targetId) ||
-                         (includeEvidenceTarget && link.Provenance.EvidenceTargetId == targetId)))
+                        link.Provenance.IsActiveAt(instant))
                     .GroupBy(link => link.Provenance.AssertionId)
                     .Select(group => group.First())
-                    .ToList();
+                    .OrderBy(link => link.Provenance.AssertionId)
+                    .ThenBy(link => link.SourceNodeId)
+                    .ThenBy(link => link.TargetNodeId);
+                if (offset > 0) query = query.Skip(offset);
+                if (limit.HasValue) query = query.Take(limit.Value);
+                return query.ToList();
             });
         }
 
@@ -2495,7 +2796,10 @@ namespace OPEN_LRD
             int? minimumNetTrustWeight = null,
             NodeRelationType? relationFilter = null,
             double? minimumIncidentLinkConfidence = null,
-            bool canonicalOnly = false)
+            bool canonicalOnly = false,
+            DateTimeOffset? activeAt = null,
+            int? limit = null,
+            int offset = 0)
         {
             return GraphSynchronization.Execute(() =>
             {
@@ -2508,9 +2812,19 @@ namespace OPEN_LRD
                     (!double.IsFinite(minimumIncidentLinkConfidence.Value) ||
                      minimumIncidentLinkConfidence.Value < 0.0 || minimumIncidentLinkConfidence.Value > 1.0))
                     throw new ArgumentOutOfRangeException(nameof(minimumIncidentLinkConfidence));
+                ValidatePaging(limit, offset);
 
                 string? normalizedLabel = NormalizeOptionalLinkText(labelContains);
-                return TrustedNodeDictionary.Values
+                IEnumerable<Node> nodes = _diskPagedReadOnly
+                    ? TrustedNodeByIdentityIndex
+                        .OrderBy(entry => entry.Key.TargetKind)
+                        .ThenBy(entry => entry.Key.TargetId)
+                        .ThenBy(entry => entry.Key.Label, StringComparer.Ordinal)
+                        .Select(entry => GetTrustedNode(entry.Value))
+                        .Where(node => node != null)
+                        .Cast<Node>()
+                    : TrustedNodeDictionary.Values;
+                IEnumerable<Node> query = nodes
                     .Where(node => !kindFilter.HasValue || node.GetTargetKind() == kindFilter.Value)
                     .Where(node => !canonicalOnly || node.GetLabel() == null)
                     .Where(node => normalizedLabel == null ||
@@ -2518,11 +2832,13 @@ namespace OPEN_LRD
                     .Where(node => !minimumNetTrustWeight.HasValue ||
                         node.GetNetTrustWeight() >= minimumNetTrustWeight.Value)
                     .Where(node => !relationFilter.HasValue && !minimumIncidentLinkConfidence.HasValue ||
-                        HasMatchingIncidentLink(node.GetNodeID(), relationFilter, minimumIncidentLinkConfidence))
+                        HasMatchingIncidentLink(node.GetNodeID(), relationFilter, minimumIncidentLinkConfidence, activeAt ?? DateTimeOffset.UtcNow))
                     .OrderBy(node => node.GetTargetKind())
                     .ThenBy(node => node.GetTargetID())
-                    .ThenBy(node => node.GetLabel(), StringComparer.Ordinal)
-                    .ToList();
+                    .ThenBy(node => node.GetLabel(), StringComparer.Ordinal);
+                if (offset > 0) query = query.Skip(offset);
+                if (limit.HasValue) query = query.Take(limit.Value);
+                return query.ToList();
             });
         }
 
@@ -2586,7 +2902,7 @@ namespace OPEN_LRD
                             mergeStage._maxPagedObjects = Math.Max(0, maxCachedRecordsPerPartition) * Enum.GetValues<DiskPartition>().Length;
                             mergeStage.BuildPagedIndexesAndGraph(mergeStage._diskStore!);
                             mergeStage.MaterializeDiskStore();
-                            mergeStage._suspendNodePresentationRecalculation = true;
+                            mergeStage._nodePresentationRecalculationSuspendCount++;
                             try
                             {
                                 foreach (Node existingUntrustedNode in UntrustedNodeDictionary.Values)
@@ -2617,7 +2933,7 @@ namespace OPEN_LRD
                             }
                             finally
                             {
-                                mergeStage._suspendNodePresentationRecalculation = false;
+                                mergeStage._nodePresentationRecalculationSuspendCount--;
                             }
                             mergeStage.RecalculateAllNodePresentationsInternal();
                             InstallMergedTrustedStateFrom(mergeStage);
@@ -2713,6 +3029,9 @@ namespace OPEN_LRD
             TrustedOutgoingLinks.Clear();
             TrustedIncomingLinks.Clear();
             TrustedLinkKeys.Clear();
+            LinksByAssertionId.Clear();
+            LinksBySourceTargetId.Clear();
+            LinksByEvidenceTargetId.Clear();
             TrustedSkillsGraph = new Graph<Guid>(true);
 
             foreach (Node node in UntrustedNodeDictionary.Values)
@@ -2792,6 +3111,9 @@ namespace OPEN_LRD
             CopyDictionary(staged.TrustedOutgoingLinks, TrustedOutgoingLinks);
             CopyDictionary(staged.TrustedIncomingLinks, TrustedIncomingLinks);
             TrustedLinkKeys.UnionWith(staged.TrustedLinkKeys);
+            CopyDictionary(staged.LinksByAssertionId, LinksByAssertionId);
+            CopyDictionary(staged.LinksBySourceTargetId, LinksBySourceTargetId);
+            CopyDictionary(staged.LinksByEvidenceTargetId, LinksByEvidenceTargetId);
             TrustedSkillsGraph = staged.TrustedSkillsGraph;
         }
 
@@ -2926,9 +3248,26 @@ namespace OPEN_LRD
             GraphSynchronization.Execute(() =>
             {
                 if (_diskStore == null) throw new InvalidOperationException("No disk store is attached.");
-                _diskStore.Validate();
-                ValidateDiskStoreContents(_diskStore);
+                try
+                {
+                    _diskStore.Validate();
+                    ValidateDiskStoreContents(_diskStore);
+                    _lastDiskStoreValidationError = null;
+                }
+                catch (Exception exception)
+                {
+                    _lastDiskStoreValidationError = $"{exception.GetType().Name}: {exception.Message}";
+                    throw;
+                }
             });
+        }
+
+        /// <summary>Returns checkpoint partition sizes/counts, paged-cache counters, and the latest validation error.</summary>
+        public DiskStoreDiagnostics? GetDiskStoreDiagnostics()
+        {
+            return GraphSynchronization.Execute(() => _diskStore == null ? null : new DiskStoreDiagnostics(
+                _diskStorePath, _diskStore.FormatVersion, _diskPagedReadOnly, _pagedCacheHits, _pagedCacheMisses,
+                _lastDiskStoreValidationError, _diskStore.GetPartitionDiagnostics()));
         }
 
         public bool IsDiskPagedReadOnly => GraphSynchronization.Execute(() => _diskPagedReadOnly);
@@ -2996,11 +3335,12 @@ namespace OPEN_LRD
 
         private IEnumerable<DiskRecord> TrustedNodePresentationRecords()
         {
+            HashSet<Guid> trustedNodeIds = TrustedNodeByIdentityIndex.Values.ToHashSet();
             foreach (KeyValuePair<UInt128, NodeRepresentation> entry in NodePresentation.OrderBy(pair => pair.Key))
             {
                 NodeRepresentation representation = entry.Value;
                 Guid nodeId = representation.GetNodeID();
-                if (TrustedNodeDictionary.ContainsKey(nodeId))
+                if (trustedNodeIds.Contains(nodeId) || TrustedNodeDictionary.ContainsKey(nodeId))
                 {
                     yield return new DiskRecord(
                         nodeId,
@@ -3029,23 +3369,39 @@ namespace OPEN_LRD
 
         private void ValidateDiskStoreContents(PartitionedBinaryStore store)
         {
-            HashSet<Guid> symbols = new HashSet<Guid>();
-            HashSet<Guid> words = new HashSet<Guid>();
-            HashSet<Guid> sentences = new HashSet<Guid>();
-            HashSet<Guid> senses = new HashSet<Guid>();
-            HashSet<Guid> usages = new HashSet<Guid>();
-            HashSet<Guid> groups = new HashSet<Guid>();
-            HashSet<Guid> sources = new HashSet<Guid>();
-            HashSet<Guid> functions = new HashSet<Guid>();
+            Dictionary<Guid, SymbolBox> symbolBoxes = ReadDiskBoxes(store, DiskPartition.Symbols,
+                payload => FoundationBinarySerializer.DeserializeSymbol(payload, store.IsLegacyFormat),
+                box => box.GetSymbolID(), "Symbol");
+            Dictionary<Guid, SenseBox> senseBoxes = ReadDiskBoxes(store, DiskPartition.Senses,
+                FoundationBinarySerializer.DeserializeSense, box => box.GetSenseID(), "Sense");
+            Dictionary<Guid, UsageBox> usageBoxes = ReadDiskBoxes(store, DiskPartition.Usages,
+                FoundationBinarySerializer.DeserializeUsage, box => box.GetUsageID(), "Usage");
+            Dictionary<Guid, WordBox> wordBoxes = ReadDiskBoxes(store, DiskPartition.Words,
+                FoundationBinarySerializer.DeserializeWord, box => box.GetWordID(), "Word");
+            Dictionary<Guid, SentenceBox> sentenceBoxes = ReadDiskBoxes(store, DiskPartition.Sentences,
+                FoundationBinarySerializer.DeserializeSentence, box => box.GetSentenceID(), "Sentence");
+            Dictionary<Guid, GroupBox> groupBoxes = ReadDiskBoxes(store, DiskPartition.Groups,
+                FoundationBinarySerializer.DeserializeGroup, box => box.GetGroupingID(), "Group");
+            Dictionary<Guid, SourceBox> sourceBoxes = ReadDiskBoxes(store, DiskPartition.Sources,
+                FoundationBinarySerializer.DeserializeSource, box => box.GetSourceID(), "Source");
+            Dictionary<Guid, FunctionBox> functionBoxes = ReadDiskBoxes(store, DiskPartition.Functions,
+                payload => FoundationBinarySerializer.DeserializeFunction(payload, store.IsLegacyFormat),
+                box => box.GetFunctionID(), "Function");
+
+            HashSet<Guid> symbols = symbolBoxes.Keys.ToHashSet();
+            HashSet<Guid> words = wordBoxes.Keys.ToHashSet();
+            HashSet<Guid> sentences = sentenceBoxes.Keys.ToHashSet();
+            HashSet<Guid> senses = senseBoxes.Keys.ToHashSet();
+            HashSet<Guid> usages = usageBoxes.Keys.ToHashSet();
+            HashSet<Guid> groups = groupBoxes.Keys.ToHashSet();
+            HashSet<Guid> sources = sourceBoxes.Keys.ToHashSet();
+            HashSet<Guid> functions = functionBoxes.Keys.ToHashSet();
             HashSet<Guid> nodes = new HashSet<Guid>();
             Dictionary<Guid, NodeTargetKind> nodeKinds = new Dictionary<Guid, NodeTargetKind>();
             Dictionary<(NodeTargetKind Kind, Guid TargetId), Guid> canonicalNodeIds =
                 new Dictionary<(NodeTargetKind Kind, Guid TargetId), Guid>();
             HashSet<NodeIdentityKey> nodeIdentities = new HashSet<NodeIdentityKey>();
             HashSet<(NodeTargetKind Kind, Guid TargetId)> canonicalNodeTargets = new HashSet<(NodeTargetKind Kind, Guid TargetId)>();
-            HashSet<SymbolIdentityKey> symbolIdentities = new HashSet<SymbolIdentityKey>();
-            HashSet<WordIdentityKey> wordIdentities = new HashSet<WordIdentityKey>();
-            HashSet<SentenceIdentityKey> sentenceIdentities = new HashSet<SentenceIdentityKey>();
             HashSet<NodeLink> linkIdentities = new HashSet<NodeLink>();
             Dictionary<Guid, List<NodeLink>> assertionLinks = new Dictionary<Guid, List<NodeLink>>();
 
@@ -3067,44 +3423,33 @@ namespace OPEN_LRD
                 }
             }
 
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Symbols))
+            HashSet<SymbolIdentityKey> symbolIdentities = new HashSet<SymbolIdentityKey>();
+            foreach (SymbolBox box in symbolBoxes.Values)
             {
-                SymbolBox box = FoundationBinarySerializer.DeserializeSymbol(record.Payload, store.IsLegacyFormat);
-                if (record.Key != box.GetSymbolID() || !symbols.Add(record.Key) || !box.HasCompleteIdentity || !symbolIdentities.Add(box.GetIdentityKey()))
+                if (!box.HasCompleteIdentity || !symbolIdentities.Add(box.GetIdentityKey()))
                     throw new InvalidDataException("Symbol partition contains a duplicate or invalid identity.");
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Senses))
+            HashSet<WordIdentityKey> wordIdentities = new HashSet<WordIdentityKey>();
+            foreach (WordBox box in wordBoxes.Values)
             {
-                SenseBox box = FoundationBinarySerializer.DeserializeSense(record.Payload);
-                if (record.Key != box.GetSenseID() || !senses.Add(record.Key)) throw new InvalidDataException("Sense partition contains a duplicate or invalid ID.");
-            }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Usages))
-            {
-                UsageBox box = FoundationBinarySerializer.DeserializeUsage(record.Payload);
-                if (record.Key != box.GetUsageID() || !usages.Add(record.Key)) throw new InvalidDataException("Usage partition contains a duplicate or invalid ID.");
-            }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Words))
-            {
-                WordBox box = FoundationBinarySerializer.DeserializeWord(record.Payload);
-                if (record.Key != box.GetWordID() || !words.Add(record.Key) || !box.HasCompleteIdentity || !wordIdentities.Add(box.GetIdentityKey()))
+                if (!box.HasCompleteIdentity || !wordIdentities.Add(box.GetIdentityKey()))
                     throw new InvalidDataException("Word partition contains a duplicate or invalid identity.");
                 if (!box.GetSenseID().HasValue || !senses.Contains(box.GetSenseID()!.Value) ||
                     !box.GetUsageID().HasValue || !usages.Contains(box.GetUsageID()!.Value) ||
                     !(box.GetSymbols() ?? new List<Guid>()).All(symbols.Contains))
                     throw new InvalidDataException("Word partition contains unresolved references.");
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Sentences))
+            HashSet<SentenceIdentityKey> sentenceIdentities = new HashSet<SentenceIdentityKey>();
+            foreach (SentenceBox box in sentenceBoxes.Values)
             {
-                SentenceBox box = FoundationBinarySerializer.DeserializeSentence(record.Payload);
-                if (record.Key != box.GetSentenceID() || !sentences.Add(record.Key) || !box.HasCompleteIdentity || !sentenceIdentities.Add(box.GetIdentityKey()))
+                if (!box.HasCompleteIdentity || !sentenceIdentities.Add(box.GetIdentityKey()))
                     throw new InvalidDataException("Sentence partition contains a duplicate or invalid identity.");
                 if (!box.GetSenseID().HasValue || !senses.Contains(box.GetSenseID()!.Value) ||
                     !(box.GetWords() ?? new List<Guid>()).All(words.Contains))
                     throw new InvalidDataException("Sentence partition contains unresolved references.");
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Senses))
+            foreach (SenseBox box in senseBoxes.Values)
             {
-                SenseBox box = FoundationBinarySerializer.DeserializeSense(record.Payload);
                 if (!(box.GetSentences() ?? new List<Guid>()).All(sentences.Contains))
                     throw new InvalidDataException("Sense partition contains an unresolved sentence membership.");
                 if (!(box.GetLeadingWords() ?? new List<Guid>()).All(words.Contains) ||
@@ -3114,29 +3459,23 @@ namespace OPEN_LRD
                     !float.IsFinite(box.GetAverageSpread()))
                     throw new InvalidDataException("Sense partition contains a non-finite metric.");
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Usages))
+            foreach (UsageBox box in usageBoxes.Values)
             {
-                UsageBox box = FoundationBinarySerializer.DeserializeUsage(record.Payload);
                 if (!(box.GetSentences() ?? new List<Guid>()).All(sentences.Contains))
                     throw new InvalidDataException("Usage partition contains an unresolved sentence membership.");
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Groups))
+            foreach (GroupBox box in groupBoxes.Values)
             {
-                GroupBox box = FoundationBinarySerializer.DeserializeGroup(record.Payload);
-                if (record.Key != box.GetGroupingID() || !groups.Add(record.Key) || !(box.GetSentenceIDs() ?? new List<Guid>()).All(sentences.Contains))
-                    throw new InvalidDataException("Group partition contains a duplicate ID or unresolved sentence.");
+                if (!(box.GetSentenceIDs() ?? new List<Guid>()).All(sentences.Contains))
+                    throw new InvalidDataException("Group partition contains an unresolved sentence.");
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Sources))
+            foreach (SourceBox box in sourceBoxes.Values)
             {
-                SourceBox box = FoundationBinarySerializer.DeserializeSource(record.Payload);
-                if (record.Key != box.GetSourceID() || !sources.Add(record.Key) || !(box.GetGroupingIDs() ?? new List<Guid>()).All(groups.Contains))
-                    throw new InvalidDataException("Source partition contains a duplicate ID or unresolved group.");
+                if (!(box.GetGroupingIDs() ?? new List<Guid>()).All(groups.Contains))
+                    throw new InvalidDataException("Source partition contains an unresolved group.");
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Functions))
+            foreach (FunctionBox box in functionBoxes.Values)
             {
-                FunctionBox box = FoundationBinarySerializer.DeserializeFunction(record.Payload, store.IsLegacyFormat);
-                if (record.Key != box.GetFunctionID() || !functions.Add(record.Key))
-                    throw new InvalidDataException("Function partition contains a duplicate ID.");
                 try
                 {
                     MathFunctionDispatcher.ValidateDefinition(box);
@@ -3224,57 +3563,54 @@ namespace OPEN_LRD
 
             HashSet<(Guid Source, Guid Target, NodeRelationType Relation)> expectedStructuralLinks =
                 new HashSet<(Guid Source, Guid Target, NodeRelationType Relation)>();
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Symbols))
+            foreach (KeyValuePair<Guid, SymbolBox> entry in symbolBoxes)
             {
-                SymbolBox box = FoundationBinarySerializer.DeserializeSymbol(record.Payload, store.IsLegacyFormat);
-                if (box.GetSenseID().HasValue)
+                if (entry.Value.GetSenseID().HasValue)
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Symbol,
-                        record.Key, NodeTargetKind.Sense, box.GetSenseID()!.Value, NodeRelationType.HasSense);
+                        entry.Key, NodeTargetKind.Sense, entry.Value.GetSenseID()!.Value, NodeRelationType.HasSense);
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Words))
+            foreach (KeyValuePair<Guid, WordBox> entry in wordBoxes)
             {
-                WordBox box = FoundationBinarySerializer.DeserializeWord(record.Payload);
+                WordBox box = entry.Value;
                 if (box.GetSenseID().HasValue)
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Word,
-                        record.Key, NodeTargetKind.Sense, box.GetSenseID()!.Value, NodeRelationType.HasSense);
+                        entry.Key, NodeTargetKind.Sense, box.GetSenseID()!.Value, NodeRelationType.HasSense);
                 if (box.GetUsageID().HasValue)
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Word,
-                        record.Key, NodeTargetKind.Usage, box.GetUsageID()!.Value, NodeRelationType.HasUsage);
+                        entry.Key, NodeTargetKind.Usage, box.GetUsageID()!.Value, NodeRelationType.HasUsage);
                 foreach (Guid symbolId in box.GetSymbols() ?? new List<Guid>())
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Word,
-                        record.Key, NodeTargetKind.Symbol, symbolId, NodeRelationType.ContainsSymbol);
+                        entry.Key, NodeTargetKind.Symbol, symbolId, NodeRelationType.ContainsSymbol);
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Sentences))
+            foreach (KeyValuePair<Guid, SentenceBox> entry in sentenceBoxes)
             {
-                SentenceBox box = FoundationBinarySerializer.DeserializeSentence(record.Payload);
+                SentenceBox box = entry.Value;
                 if (box.GetSenseID().HasValue)
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Sentence,
-                        record.Key, NodeTargetKind.Sense, box.GetSenseID()!.Value, NodeRelationType.HasSense);
+                        entry.Key, NodeTargetKind.Sense, box.GetSenseID()!.Value, NodeRelationType.HasSense);
                 List<Guid> wordIds = box.GetWords() ?? new List<Guid>();
                 foreach (Guid wordId in wordIds)
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Sentence,
-                        record.Key, NodeTargetKind.Word, wordId, NodeRelationType.ContainsWord);
+                        entry.Key, NodeTargetKind.Word, wordId, NodeRelationType.ContainsWord);
                 if (wordIds.Count > 0)
                 {
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Sentence,
-                        record.Key, NodeTargetKind.Word, wordIds[0], NodeRelationType.LeadingWord);
+                        entry.Key, NodeTargetKind.Word, wordIds[0], NodeRelationType.LeadingWord);
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Sentence,
-                        record.Key, NodeTargetKind.Word, wordIds[^1], NodeRelationType.TrailingWord);
+                        entry.Key, NodeTargetKind.Word, wordIds[^1], NodeRelationType.TrailingWord);
                 }
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Groups))
+            foreach (KeyValuePair<Guid, GroupBox> entry in groupBoxes)
             {
-                GroupBox box = FoundationBinarySerializer.DeserializeGroup(record.Payload);
-                foreach (Guid sentenceId in box.GetSentenceIDs() ?? new List<Guid>())
+                foreach (Guid sentenceId in entry.Value.GetSentenceIDs() ?? new List<Guid>())
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Group,
-                        record.Key, NodeTargetKind.Sentence, sentenceId, NodeRelationType.ContainsSentence);
+                        entry.Key, NodeTargetKind.Sentence, sentenceId, NodeRelationType.ContainsSentence);
             }
-            foreach (DiskRecord record in store.ReadAll(DiskPartition.Sources))
+            foreach (KeyValuePair<Guid, SourceBox> entry in sourceBoxes)
             {
-                SourceBox box = FoundationBinarySerializer.DeserializeSource(record.Payload);
-                foreach (Guid groupId in box.GetGroupingIDs() ?? new List<Guid>())
+                foreach (Guid groupId in entry.Value.GetGroupingIDs() ?? new List<Guid>())
                     AddExpectedStructuralLink(expectedStructuralLinks, canonicalNodeIds, NodeTargetKind.Source,
-                        record.Key, NodeTargetKind.Group, groupId, NodeRelationType.ContainsGroup);
+                        entry.Key, NodeTargetKind.Group, groupId, NodeRelationType.ContainsGroup);
             }
 
             List<(Guid Source, Guid Target, NodeRelationType Relation)> actualStructuralLinkList = assertionLinks.Values
@@ -3285,24 +3621,15 @@ namespace OPEN_LRD
             HashSet<(Guid Source, Guid Target, NodeRelationType Relation)> actualStructuralLinks =
                 actualStructuralLinkList.ToHashSet();
             if (actualStructuralLinks.Count != actualStructuralLinkList.Count)
-            {
                 throw new InvalidDataException("Structural links contain duplicate membership edges.");
-            }
             if (!actualStructuralLinks.SetEquals(expectedStructuralLinks))
-            {
                 throw new InvalidDataException("Structural links do not match trusted Foundation memberships.");
-            }
 
             foreach (List<NodeLink> linksForAssertion in assertionLinks.Values)
             {
-                if (linksForAssertion.Count <= 1)
-                {
-                    continue;
-                }
+                if (linksForAssertion.Count <= 1) continue;
                 if (linksForAssertion.Count != 2)
-                {
                     throw new InvalidDataException("An assertion ID is used by more than one link pair.");
-                }
                 NodeLink first = linksForAssertion[0];
                 NodeLink second = linksForAssertion[1];
                 if (!ShouldStoreReverse(first.RelationType) || first.RelationType != second.RelationType ||
@@ -3313,6 +3640,20 @@ namespace OPEN_LRD
                     throw new InvalidDataException("Duplicate assertion IDs are allowed only on matching symmetric reverse links.");
                 }
             }
+        }
+
+        private static Dictionary<Guid, T> ReadDiskBoxes<T>(PartitionedBinaryStore store, DiskPartition partition,
+            Func<byte[], T> deserialize, Func<T, Guid> getId, string label)
+        {
+            Dictionary<Guid, T> boxes = new Dictionary<Guid, T>();
+            foreach (DiskRecord record in store.ReadAll(partition))
+            {
+                T box = deserialize(record.Payload);
+                Guid id = getId(box);
+                if (record.Key != id || !boxes.TryAdd(id, box))
+                    throw new InvalidDataException($"{label} partition contains a duplicate or invalid ID.");
+            }
+            return boxes;
         }
 
         private static bool DiskTargetExists(NodeTargetKind kind, Guid id, HashSet<Guid> symbols, HashSet<Guid> words,
@@ -3339,9 +3680,7 @@ namespace OPEN_LRD
             foreach (Guid targetId in targetIds)
             {
                 if (!canonicalNodeTargets.Contains((kind, targetId)))
-                {
                     throw new InvalidDataException($"Trusted {kind} target '{targetId}' has no canonical null-label node.");
-                }
             }
         }
 
@@ -3395,8 +3734,8 @@ namespace OPEN_LRD
                     throw new ArgumentOutOfRangeException(nameof(newWeight), "Confidence must be finite and in [0, 1].");
                 }
 
-                List<NodeLink> originals = TrustedOutgoingLinks.Values.SelectMany(links => links)
-                    .Where(link => link.Provenance.AssertionId == assertionId).ToList();
+                List<NodeLink> originals = LinksByAssertionId.TryGetValue(assertionId, out List<NodeLink>? indexedLinks)
+                    ? new List<NodeLink>(indexedLinks) : new List<NodeLink>();
                 if (originals.Count == 0 || originals.Any(link => IsStructuralRelation(link.RelationType))) return false;
                 if (ShouldStoreReverse(originals[0].RelationType) && originals[0].SourceNodeId != originals[0].TargetNodeId && originals.Count != 2)
                     return false;
@@ -3417,7 +3756,6 @@ namespace OPEN_LRD
                     for (int index = 0; index < replaced; index++) ReplaceTrustedLink(originals[index]);
                     return false;
                 }
-                RebuildTrustedSkillsGraph();
                 RecalculateAllNodePresentationsInternal();
                 return true;
             });
@@ -3445,8 +3783,8 @@ namespace OPEN_LRD
             {
                 EnsureMutableStorageMode();
                 if (assertionId == Guid.Empty) return false;
-                List<NodeLink> links = TrustedOutgoingLinks.Values.SelectMany(values => values)
-                    .Where(link => link.Provenance.AssertionId == assertionId).ToList();
+                List<NodeLink> links = LinksByAssertionId.TryGetValue(assertionId, out List<NodeLink>? indexedLinks)
+                    ? new List<NodeLink>(indexedLinks) : new List<NodeLink>();
                 if (links.Count == 0 || links.Any(link => IsStructuralRelation(link.RelationType))) return false;
                 if (ShouldStoreReverse(links[0].RelationType) && links[0].SourceNodeId != links[0].TargetNodeId && links.Count != 2)
                     return false;
@@ -3467,7 +3805,6 @@ namespace OPEN_LRD
                     RebuildTrustedSkillsGraph();
                     return false;
                 }
-                RebuildTrustedSkillsGraph();
                 RecalculateAllNodePresentationsInternal();
                 return true;
             });
@@ -3784,8 +4121,8 @@ namespace OPEN_LRD
                 if (nodeIdMap.TryGetValue(link.SourceNodeId, out Guid sourceId) && nodeIdMap.TryGetValue(link.TargetNodeId, out Guid targetId))
                 {
                     NodeLink mapped = new NodeLink(sourceId, targetId, link.RelationType, link.Weight, link.Label, link.Provenance);
-                    List<NodeLink> existingAssertions = TrustedOutgoingLinks.Values.SelectMany(links => links)
-                        .Where(existing => existing.Provenance.AssertionId == mapped.Provenance.AssertionId).ToList();
+                    List<NodeLink> existingAssertions = LinksByAssertionId.TryGetValue(mapped.Provenance.AssertionId, out List<NodeLink>? indexedAssertions)
+                        ? new List<NodeLink>(indexedAssertions) : new List<NodeLink>();
                     if (existingAssertions.Count == 0)
                     {
                         AddTrustedLinkInternal(mapped, true, false);
@@ -3850,9 +4187,21 @@ namespace OPEN_LRD
             (DiskPartition Partition, Guid Id) key = (partition, id);
             if (_pagedObjectCache.TryGetValue(key, out object? cached))
             {
-                TouchPagedObject(key);
-                return (T)cached;
+                if (cached is T typedCached)
+                {
+                    _pagedCacheHits++;
+                    TouchPagedObject(key);
+                    return typedCached;
+                }
+
+                _pagedObjectCache.Remove(key);
+                if (_pagedObjectLruNodes.TryGetValue(key, out LinkedListNode<(DiskPartition Partition, Guid Id)>? staleNode))
+                {
+                    _pagedObjectLru.Remove(staleNode);
+                    _pagedObjectLruNodes.Remove(key);
+                }
             }
+            _pagedCacheMisses++;
             T value = deserialize(payload);
             makeReadOnly(value);
             if (_maxPagedObjects > 0)
@@ -3887,6 +4236,9 @@ namespace OPEN_LRD
             _pagedObjectCache.Clear();
             _pagedObjectLruNodes.Clear();
             _pagedObjectLru.Clear();
+            _pagedCacheHits = 0;
+            _pagedCacheMisses = 0;
+            _lastDiskStoreValidationError = null;
         }
 
         private void EnsureMutableStorageMode()
@@ -3915,14 +4267,14 @@ namespace OPEN_LRD
         {
             return kind switch
             {
-                NodeTargetKind.Symbol => TrustedSymbolDictionary.ContainsKey(targetId),
-                NodeTargetKind.Word => TrustedWordDictionary.ContainsKey(targetId),
-                NodeTargetKind.Sentence => TrustedSentenceDictionary.ContainsKey(targetId),
-                NodeTargetKind.Sense => TrustedSenseDictionary.ContainsKey(targetId),
-                NodeTargetKind.Usage => TrustedUsageDictionary.ContainsKey(targetId),
-                NodeTargetKind.Source => SourceDictionary.ContainsKey(targetId),
-                NodeTargetKind.Group => TrustedGroupDictionary.ContainsKey(targetId),
-                NodeTargetKind.Function => TrustedFunctionDictionary.ContainsKey(targetId),
+                NodeTargetKind.Symbol => TrustedSymbolDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Symbols, targetId),
+                NodeTargetKind.Word => TrustedWordDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Words, targetId),
+                NodeTargetKind.Sentence => TrustedSentenceDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Sentences, targetId),
+                NodeTargetKind.Sense => TrustedSenseDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Senses, targetId),
+                NodeTargetKind.Usage => TrustedUsageDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Usages, targetId),
+                NodeTargetKind.Source => SourceDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Sources, targetId),
+                NodeTargetKind.Group => TrustedGroupDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Groups, targetId),
+                NodeTargetKind.Function => TrustedFunctionDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Functions, targetId),
                 _ => false
             };
         }
@@ -3973,21 +4325,38 @@ namespace OPEN_LRD
         private void RemoveUntrustedNodeForTarget(NodeTargetKind kind, Guid targetId)
         {
             (NodeTargetKind Kind, Guid TargetId) targetKey = (kind, targetId);
-            if (!UntrustedNodeByTargetIndex.TryGetValue(targetKey, out Guid nodeId))
+            List<Guid> nodeIds = UntrustedNodeDictionary
+                .Where(entry => entry.Value.GetTargetKind() == kind && entry.Value.GetTargetID() == targetId)
+                .Select(entry => entry.Key)
+                .ToList();
+            if (nodeIds.Count == 0 && UntrustedNodeByTargetIndex.TryGetValue(targetKey, out Guid canonicalNodeId))
+            {
+                nodeIds.Add(canonicalNodeId);
+            }
+            if (nodeIds.Count == 0)
             {
                 return;
             }
 
-            if (UntrustedNodeDictionary.Remove(nodeId, out Node? node))
+            bool removedAny = false;
+            foreach (Guid nodeId in nodeIds.Distinct())
             {
+                if (!UntrustedNodeDictionary.Remove(nodeId, out Node? node))
+                {
+                    continue;
+                }
                 UntrustedNodeByIdentityIndex.Remove(node.GetIdentityKey());
                 node.SetIdentityChangingHandler(null);
                 node.SetIdentityChangedHandler(null);
                 node.SetReferenceCountsChangedHandler(null);
                 RemoveNodeRepresentation(nodeId);
-                RecalculateAllNodePresentationsInternal();
+                removedAny = true;
             }
             UntrustedNodeByTargetIndex.Remove(targetKey);
+            if (removedAny)
+            {
+                RecalculateAllNodePresentationsInternal();
+            }
         }
 
         private bool HandleUntrustedNodeIdentityChange(Guid nodeId, NodeIdentityKey oldKey, NodeIdentityKey newKey)
@@ -4255,12 +4624,41 @@ namespace OPEN_LRD
                    (!provenance.EvidenceTargetId.HasValue || HasAnyTrustedTarget(provenance.EvidenceTargetId.Value));
         }
 
+        private static bool SameReasoningAssertion(NodeLink existing, NodeLink candidate)
+        {
+            bool sameDirection = existing.SourceNodeId == candidate.SourceNodeId && existing.TargetNodeId == candidate.TargetNodeId;
+            bool matchingReverse = ShouldStoreReverse(candidate.RelationType) &&
+                existing.SourceNodeId == candidate.TargetNodeId && existing.TargetNodeId == candidate.SourceNodeId;
+            NodeLinkProvenance first = existing.Provenance;
+            NodeLinkProvenance second = candidate.Provenance;
+            return (sameDirection || matchingReverse) &&
+                   existing.RelationType == candidate.RelationType &&
+                   string.Equals(existing.Label, candidate.Label, StringComparison.Ordinal) &&
+                   first.AssertionId == second.AssertionId && first.Origin == NodeLinkOrigin.Reasoning &&
+                   first.Origin == second.Origin && string.Equals(first.Author, second.Author, StringComparison.Ordinal) &&
+                   first.SourceTargetId == second.SourceTargetId && first.EvidenceTargetId == second.EvidenceTargetId &&
+                   first.ValidFrom == second.ValidFrom && first.ValidUntil == second.ValidUntil;
+        }
+
         private bool HasAnyTrustedTarget(Guid targetId)
         {
-            return TrustedSymbolDictionary.ContainsKey(targetId) || TrustedWordDictionary.ContainsKey(targetId) ||
-                   TrustedSentenceDictionary.ContainsKey(targetId) || TrustedSenseDictionary.ContainsKey(targetId) ||
-                   TrustedUsageDictionary.ContainsKey(targetId) || TrustedGroupDictionary.ContainsKey(targetId) ||
-                   SourceDictionary.ContainsKey(targetId) || TrustedFunctionDictionary.ContainsKey(targetId);
+            if (TrustedNodeDictionary.ContainsKey(targetId) || IsPagedRecordAvailable(DiskPartition.Nodes, targetId))
+                return true;
+            if (TrustedSymbolDictionary.ContainsKey(targetId) || TrustedWordDictionary.ContainsKey(targetId) ||
+                TrustedSentenceDictionary.ContainsKey(targetId) || TrustedSenseDictionary.ContainsKey(targetId) ||
+                TrustedUsageDictionary.ContainsKey(targetId) || TrustedGroupDictionary.ContainsKey(targetId) ||
+                SourceDictionary.ContainsKey(targetId) || TrustedFunctionDictionary.ContainsKey(targetId))
+            {
+                return true;
+            }
+            return IsPagedRecordAvailable(DiskPartition.Symbols, targetId) ||
+                   IsPagedRecordAvailable(DiskPartition.Words, targetId) ||
+                   IsPagedRecordAvailable(DiskPartition.Sentences, targetId) ||
+                   IsPagedRecordAvailable(DiskPartition.Senses, targetId) ||
+                   IsPagedRecordAvailable(DiskPartition.Usages, targetId) ||
+                   IsPagedRecordAvailable(DiskPartition.Groups, targetId) ||
+                   IsPagedRecordAvailable(DiskPartition.Sources, targetId) ||
+                   IsPagedRecordAvailable(DiskPartition.Functions, targetId);
         }
 
         private static bool IsValidLinkKindCombination(NodeTargetKind sourceKind, NodeTargetKind targetKind, NodeLink link)
@@ -4474,7 +4872,6 @@ namespace OPEN_LRD
                 if (!AddTrustedLinkOneDirection(reverse))
                 {
                     RemoveTrustedLinkInternal(link);
-                    RebuildTrustedSkillsGraph();
                     return false;
                 }
             }
@@ -4489,10 +4886,24 @@ namespace OPEN_LRD
             {
                 return false;
             }
+            IEnumerable<NodeLink> assertionLinks = LinksByAssertionId.TryGetValue(link.Provenance.AssertionId, out List<NodeLink>? existingAssertionLinks)
+                ? existingAssertionLinks : Enumerable.Empty<NodeLink>();
+            if (assertionLinks.Any(existing => !existing.Equals(link) &&
+                !(ShouldStoreReverse(link.RelationType) &&
+                  existing.SourceNodeId == link.TargetNodeId &&
+                  existing.TargetNodeId == link.SourceNodeId &&
+                  existing.RelationType == link.RelationType &&
+                  string.Equals(existing.Label, link.Label, StringComparison.Ordinal) &&
+                  existing.Weight == link.Weight && existing.Provenance == link.Provenance)))
+            {
+                throw new ArgumentException($"AssertionId '{link.Provenance.AssertionId}' is already used by a different logical link.", nameof(link));
+            }
 
             bool addedKey = false;
             bool addedOutgoing = false;
             bool addedIncoming = false;
+            bool addedGraphEdge = false;
+            bool addedIndexes = false;
             try
             {
                 if (!TrustedOutgoingLinks.TryGetValue(link.SourceNodeId, out List<NodeLink>? outgoing))
@@ -4517,22 +4928,77 @@ namespace OPEN_LRD
                 incoming.Add(link);
                 addedIncoming = true;
                 TrustedSkillsGraph.AddEdge(link.SourceNodeId, link.TargetNodeId, link.Weight);
+                addedGraphEdge = true;
+                addedIndexes = true;
+                AddTrustedLinkIndexes(link);
                 return true;
             }
-            catch (Exception exception) when (exception is not OutOfMemoryException)
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or
+                                                KeyNotFoundException or InvalidDataException)
             {
+                if (addedIndexes) RemoveTrustedLinkIndexes(link);
                 if (addedOutgoing && TrustedOutgoingLinks.TryGetValue(link.SourceNodeId, out List<NodeLink>? outgoing))
                     outgoing.Remove(link);
                 if (addedIncoming && TrustedIncomingLinks.TryGetValue(link.TargetNodeId, out List<NodeLink>? incoming))
                     incoming.Remove(link);
+                if (addedGraphEdge) TrustedSkillsGraph.RemoveEdge(link.SourceNodeId, link.TargetNodeId, link.Weight);
                 if (addedKey) TrustedLinkKeys.Remove(link);
                 if (TrustedOutgoingLinks.TryGetValue(link.SourceNodeId, out List<NodeLink>? remainingOutgoing) && remainingOutgoing.Count == 0)
                     TrustedOutgoingLinks.Remove(link.SourceNodeId);
                 if (TrustedIncomingLinks.TryGetValue(link.TargetNodeId, out List<NodeLink>? remainingIncoming) && remainingIncoming.Count == 0)
                     TrustedIncomingLinks.Remove(link.TargetNodeId);
-                RebuildTrustedSkillsGraph();
                 return false;
             }
+            catch
+            {
+                if (addedIndexes) RemoveTrustedLinkIndexes(link);
+                if (addedOutgoing && TrustedOutgoingLinks.TryGetValue(link.SourceNodeId, out List<NodeLink>? outgoing))
+                    outgoing.Remove(link);
+                if (addedIncoming && TrustedIncomingLinks.TryGetValue(link.TargetNodeId, out List<NodeLink>? incoming))
+                    incoming.Remove(link);
+                if (addedGraphEdge) TrustedSkillsGraph.RemoveEdge(link.SourceNodeId, link.TargetNodeId, link.Weight);
+                if (addedKey) TrustedLinkKeys.Remove(link);
+                if (TrustedOutgoingLinks.TryGetValue(link.SourceNodeId, out List<NodeLink>? remainingOutgoing) && remainingOutgoing.Count == 0)
+                    TrustedOutgoingLinks.Remove(link.SourceNodeId);
+                if (TrustedIncomingLinks.TryGetValue(link.TargetNodeId, out List<NodeLink>? remainingIncoming) && remainingIncoming.Count == 0)
+                    TrustedIncomingLinks.Remove(link.TargetNodeId);
+                throw;
+            }
+        }
+
+        private void AddTrustedLinkIndexes(NodeLink link)
+        {
+            AddIndexedLink(LinksByAssertionId, link.Provenance.AssertionId, link);
+            if (link.Provenance.SourceTargetId.HasValue)
+                AddIndexedLink(LinksBySourceTargetId, link.Provenance.SourceTargetId.Value, link);
+            if (link.Provenance.EvidenceTargetId.HasValue)
+                AddIndexedLink(LinksByEvidenceTargetId, link.Provenance.EvidenceTargetId.Value, link);
+        }
+
+        private static void AddIndexedLink(Dictionary<Guid, List<NodeLink>> index, Guid key, NodeLink link)
+        {
+            if (!index.TryGetValue(key, out List<NodeLink>? links))
+            {
+                links = new List<NodeLink>();
+                index.Add(key, links);
+            }
+            links.Add(link);
+        }
+
+        private void RemoveTrustedLinkIndexes(NodeLink link)
+        {
+            RemoveIndexedLink(LinksByAssertionId, link.Provenance.AssertionId, link);
+            if (link.Provenance.SourceTargetId.HasValue)
+                RemoveIndexedLink(LinksBySourceTargetId, link.Provenance.SourceTargetId.Value, link);
+            if (link.Provenance.EvidenceTargetId.HasValue)
+                RemoveIndexedLink(LinksByEvidenceTargetId, link.Provenance.EvidenceTargetId.Value, link);
+        }
+
+        private static void RemoveIndexedLink(Dictionary<Guid, List<NodeLink>> index, Guid key, NodeLink link)
+        {
+            if (!index.TryGetValue(key, out List<NodeLink>? links)) return;
+            links.Remove(link);
+            if (links.Count == 0) index.Remove(key);
         }
 
         private bool ReplaceTrustedLink(NodeLink replacement)
@@ -4548,8 +5014,22 @@ namespace OPEN_LRD
             NodeLink previous = outgoing[outgoingIndex];
             int incomingIndex = incoming.IndexOf(previous);
             if (incomingIndex < 0) return false;
+            if (!TrustedSkillsGraph.RemoveEdge(previous.SourceNodeId, previous.TargetNodeId, previous.Weight)) return false;
+            try
+            {
+                TrustedSkillsGraph.AddEdge(replacement.SourceNodeId, replacement.TargetNodeId, replacement.Weight);
+            }
+            catch
+            {
+                TrustedSkillsGraph.AddEdge(previous.SourceNodeId, previous.TargetNodeId, previous.Weight);
+                throw;
+            }
             outgoing[outgoingIndex] = replacement;
             incoming[incomingIndex] = replacement;
+            RemoveTrustedLinkIndexes(previous);
+            AddTrustedLinkIndexes(replacement);
+            TrustedLinkKeys.Remove(previous);
+            TrustedLinkKeys.Add(replacement);
             return true;
         }
 
@@ -4565,7 +5045,9 @@ namespace OPEN_LRD
             if (linkIndex < 0) return false;
             NodeLink removed = outgoing[linkIndex];
             if (!incoming.Contains(removed)) return false;
+            if (!TrustedSkillsGraph.RemoveEdge(removed.SourceNodeId, removed.TargetNodeId, removed.Weight)) return false;
             TrustedLinkKeys.Remove(identity);
+            RemoveTrustedLinkIndexes(removed);
             outgoing.RemoveAt(linkIndex);
             incoming.Remove(removed);
             if (outgoing.Count == 0) TrustedOutgoingLinks.Remove(identity.SourceNodeId);
@@ -4607,6 +5089,14 @@ namespace OPEN_LRD
                 throw new ArgumentOutOfRangeException(nameof(minimumConfidence));
         }
 
+        private static void ValidatePaging(int? limit, int offset)
+        {
+            if (offset < 0)
+                throw new ArgumentOutOfRangeException(nameof(offset), "Offset must be non-negative.");
+            if (limit.HasValue && limit.Value < 0)
+                throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be non-negative.");
+        }
+
         private static bool MatchesLinkQuery(
             NodeLink link,
             NodeRelationType? relationFilter,
@@ -4625,11 +5115,13 @@ namespace OPEN_LRD
         private bool HasMatchingIncidentLink(
             Guid nodeId,
             NodeRelationType? relationFilter,
-            double? minimumConfidence)
+            double? minimumConfidence,
+            DateTimeOffset activeAt)
         {
             bool Matches(NodeLink link) =>
                 (!relationFilter.HasValue || link.RelationType == relationFilter.Value) &&
-                (!minimumConfidence.HasValue || link.Weight >= minimumConfidence.Value);
+                (!minimumConfidence.HasValue || link.Weight >= minimumConfidence.Value) &&
+                link.Provenance.IsActiveAt(activeAt);
             return (TrustedOutgoingLinks.TryGetValue(nodeId, out List<NodeLink>? outgoing) && outgoing.Any(Matches)) ||
                    (TrustedIncomingLinks.TryGetValue(nodeId, out List<NodeLink>? incoming) && incoming.Any(Matches));
         }
@@ -4643,19 +5135,7 @@ namespace OPEN_LRD
         {
             Graph<Guid> graph = new Graph<Guid>(true);
             string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
-            if (!relationFilter.HasValue && !originFilter.HasValue &&
-                normalizedAuthor == null && !minimumConfidence.HasValue && !activeAt.HasValue)
-            {
-                foreach (Guid nodeId in TrustedSkillsGraph.Nodes)
-                {
-                    graph.AddNode(nodeId);
-                }
-                foreach (GraphEdge<Guid> edge in TrustedSkillsGraph.Edges)
-                {
-                    graph.AddEdge(edge.From, edge.To, edge.Weight);
-                }
-                return graph;
-            }
+            DateTimeOffset instant = activeAt ?? DateTimeOffset.UtcNow;
 
             foreach (Guid nodeId in TrustedSkillsGraph.Nodes)
             {
@@ -4665,7 +5145,7 @@ namespace OPEN_LRD
             {
                 foreach (NodeLink link in links)
                 {
-                    if (MatchesLinkQuery(link, relationFilter, originFilter, normalizedAuthor, minimumConfidence, activeAt))
+                    if (MatchesLinkQuery(link, relationFilter, originFilter, normalizedAuthor, minimumConfidence, instant))
                     {
                         graph.AddEdge(link.SourceNodeId, link.TargetNodeId, link.Weight);
                     }

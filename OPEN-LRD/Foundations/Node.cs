@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -304,6 +305,30 @@ namespace OPEN_LRD.Foundations
         private static string? NormalizeOptionalText(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+    }
+
+    internal readonly record struct KnowledgeNodeSnapshot(
+        Guid NodeId,
+        NodeTargetKind TargetKind,
+        Guid TargetId,
+        string? Label,
+        int VerifiedReferences,
+        int InvalidReferences);
+
+    /// <summary>An immutable, typed view of trusted graph nodes and assertions at a specific instant.</summary>
+    internal sealed class TrustedKnowledgeGraphSnapshot
+    {
+        public DateTimeOffset AsOf { get; }
+        public IReadOnlyList<KnowledgeNodeSnapshot> Nodes { get; }
+        public IReadOnlyList<NodeLink> Links { get; }
+
+        internal TrustedKnowledgeGraphSnapshot(DateTimeOffset asOf,
+            IEnumerable<KnowledgeNodeSnapshot> nodes, IEnumerable<NodeLink> links)
+        {
+            AsOf = asOf;
+            Nodes = new ReadOnlyCollection<KnowledgeNodeSnapshot>(new List<KnowledgeNodeSnapshot>(nodes));
+            Links = new ReadOnlyCollection<NodeLink>(new List<NodeLink>(links));
         }
     }
 
