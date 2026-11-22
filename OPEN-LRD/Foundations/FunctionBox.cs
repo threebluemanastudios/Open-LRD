@@ -47,6 +47,17 @@ namespace OPEN_LRD.Foundations
         }
     }
 
+    /// <summary>Immutable provenance for a FunctionBox result produced by dispatcher verification/dispatch.</summary>
+    internal sealed record FunctionDispatchProvenance(
+        string FunctionKey,
+        string ArgumentSnapshotHash,
+        string ResultHash,
+        string ResultType,
+        string? ResultUnitTitle,
+        long DefinitionRevision,
+        DateTimeOffset DispatchedAtUtc,
+        string DispatcherVersion);
+
     internal static class FunctionValueValidation
     {
         internal static Type ValidateType(Type? type, string parameterName)
@@ -103,6 +114,7 @@ namespace OPEN_LRD.Foundations
         private string? expectedResultUnitTitle;
         private FunctionResult? result;
         private long? resultDefinitionRevision;
+        private FunctionDispatchProvenance? dispatchProvenance;
         private bool isTrusted;
         private bool isReadOnly;
         private long definitionRevision;
@@ -145,6 +157,7 @@ namespace OPEN_LRD.Foundations
         }
 
         public FunctionResult? Result => GraphSynchronization.Execute(() => result);
+        internal FunctionDispatchProvenance? DispatchProvenance => GraphSynchronization.Execute(() => dispatchProvenance);
 
         public FunctionBox(Type expectedResultType, string? functionKey = null, string? expectedResultUnitTitle = null)
             : this(LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Function), expectedResultType, functionKey, expectedResultUnitTitle, allowRegisteredTrustedId: true)
@@ -275,6 +288,7 @@ namespace OPEN_LRD.Foundations
                 EnsureWritable();
                 result = null;
                 resultDefinitionRevision = null;
+                dispatchProvenance = null;
             });
         }
 
@@ -287,12 +301,14 @@ namespace OPEN_LRD.Foundations
                 EnsureWritable();
                 this.result = result;
                 resultDefinitionRevision = definitionRevision;
+                dispatchProvenance = null;
             });
         }
 
-        internal bool TryStoreDispatchResult(FunctionResult result, long expectedDefinitionRevision)
+        internal bool TryStoreDispatchResult(FunctionResult result, long expectedDefinitionRevision, FunctionDispatchProvenance provenance)
         {
             ArgumentNullException.ThrowIfNull(result);
+            ArgumentNullException.ThrowIfNull(provenance);
             ValidateResult(result);
             return GraphSynchronization.Execute(() =>
             {
@@ -306,6 +322,7 @@ namespace OPEN_LRD.Foundations
                 }
                 this.result = result;
                 resultDefinitionRevision = definitionRevision;
+                dispatchProvenance = provenance;
                 return true;
             });
         }
@@ -335,6 +352,15 @@ namespace OPEN_LRD.Foundations
                     throw new InvalidOperationException("The FunctionBox result is stale; dispatch the current definition before trusting it.");
                 }
                 ValidateResult(result);
+            });
+        }
+
+        internal void SetDispatchProvenance(FunctionDispatchProvenance? provenance)
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                dispatchProvenance = provenance;
             });
         }
 

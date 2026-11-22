@@ -123,7 +123,8 @@ namespace OPEN_LRD.SmokeTests
             box.FunctionKey = "Math_2.CalculateCircleArea";
             AssertThrows<InvalidOperationException>(() => MathFunctionDispatcher.ValidateDefinition(box),
                 "a result from an older definition revision must not be promoted as trusted");
-            AssertThrows<InvalidOperationException>(() => box.TryStoreDispatchResult(original!, snapshot.DefinitionRevision),
+            FunctionDispatchProvenance provenance = new FunctionDispatchProvenance("Math_2.CalculateHypotenuse", "args", "result", typeof(double).FullName ?? "double", "m", snapshot.DefinitionRevision, DateTimeOffset.UtcNow, "test");
+            AssertThrows<InvalidOperationException>(() => box.TryStoreDispatchResult(original!, snapshot.DefinitionRevision, provenance),
                 "a result computed against an obsolete definition revision must not overwrite the box");
             Assert(ReferenceEquals(box.Result, original), "stale dispatch results must not replace the last successful result");
 

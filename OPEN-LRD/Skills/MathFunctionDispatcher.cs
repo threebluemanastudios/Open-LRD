@@ -79,9 +79,10 @@ namespace OPEN_LRD.Skills
                 snapshot.ExpectedResultType,
                 snapshot.ExpectedResultUnitTitle);
             FunctionResult result = Invoke(descriptor, snapshot.Variables);
+            FunctionDispatchProvenance provenance = CreateDispatchProvenance(descriptor, snapshot, result);
             if (!snapshot.IsReadOnly)
             {
-                functionBox.TryStoreDispatchResult(result, snapshot.DefinitionRevision);
+                functionBox.TryStoreDispatchResult(result, snapshot.DefinitionRevision, provenance);
             }
             return result;
         }
@@ -138,6 +139,78 @@ namespace OPEN_LRD.Skills
                        storedArray.Cast<object?>().SequenceEqual(dispatchedArray.Cast<object?>());
             }
             return Equals(stored.Value, dispatched.Value);
+        }
+
+        private static FunctionDispatchProvenance CreateDispatchProvenance(FunctionDescriptor descriptor, FunctionDispatchSnapshot snapshot, FunctionResult result)
+        {
+            string argumentSnapshotHash = ComputeHash(SerializeDispatchPayload(writer =>
+            {
+                writer.Write(descriptor.Key);
+                writer.Write(snapshot.DefinitionRevision);
+                writer.Write(snapshot.Variables.Count);
+                foreach (FunctionVariable variable in snapshot.Variables)
+                {
+                    writer.Write(variable.Name);
+                    writer.Write(variable.DataType.AssemblyQualifiedName ?? variable.DataType.FullName ?? variable.DataType.Name);
+                    writer.Write(variable.UnitTitle ?? string.Empty);
+                    WriteHashValue(writer, variable.Value, variable.DataType);
+                }
+            }));
+            string resultHash = ComputeHash(SerializeDispatchPayload(writer => WriteHashValue(writer, result.Value, result.DataType)));
+            return new FunctionDispatchProvenance(
+                descriptor.Key,
+                argumentSnapshotHash,
+                resultHash,
+                result.DataType.AssemblyQualifiedName ?? result.DataType.FullName ?? result.DataType.Name,
+                result.UnitTitle,
+                snapshot.DefinitionRevision,
+                DateTimeOffset.UtcNow,
+                typeof(MathFunctionDispatcher).Assembly.GetName().Version?.ToString() ?? "0.0.0.0");
+        }
+
+        private static byte[] SerializeDispatchPayload(Action<BinaryWriter> write)
+        {
+            using MemoryStream stream = new MemoryStream();
+            using (BinaryWriter writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) write(writer);
+            return stream.ToArray();
+        }
+
+        private static string ComputeHash(byte[] payload) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(payload));
+
+        private static void WriteHashValue(BinaryWriter writer, object? value, Type declaredType)
+        {
+            writer.Write(declaredType.AssemblyQualifiedName ?? declaredType.FullName ?? declaredType.Name);
+            if (value == null) { writer.Write((byte)0); return; }
+            writer.Write((byte)1);
+            switch (value)
+            {
+                case string s: writer.Write((byte)1); writer.Write(s); break;
+                case bool b: writer.Write((byte)2); writer.Write(b); break;
+                case byte b: writer.Write((byte)3); writer.Write(b); break;
+                case sbyte b: writer.Write((byte)4); writer.Write(b); break;
+                case short i: writer.Write((byte)5); writer.Write(i); break;
+                case ushort i: writer.Write((byte)6); writer.Write(i); break;
+                case int i: writer.Write((byte)7); writer.Write(i); break;
+                case uint i: writer.Write((byte)8); writer.Write(i); break;
+                case long i: writer.Write((byte)9); writer.Write(i); break;
+                case ulong i: writer.Write((byte)10); writer.Write(i); break;
+                case float f: writer.Write((byte)11); writer.Write(f); break;
+                case double d: writer.Write((byte)12); writer.Write(double.IsNaN(d) ? "NaN" : double.IsPositiveInfinity(d) ? "+Inf" : double.IsNegativeInfinity(d) ? "-Inf" : d.ToString("R", CultureInfo.InvariantCulture)); break;
+                case decimal m: writer.Write((byte)13); writer.Write(m); break;
+                case char c: writer.Write((byte)14); writer.Write(c); break;
+                case Guid g: writer.Write((byte)15); writer.Write(g.ToByteArray()); break;
+                case DateTime dt: writer.Write((byte)16); writer.Write(dt.Ticks); writer.Write((int)dt.Kind); break;
+                case DateTimeOffset dto: writer.Write((byte)17); writer.Write(dto.UtcTicks); writer.Write((int)dto.Offset.TotalMinutes); break;
+                case TimeSpan ts: writer.Write((byte)18); writer.Write(ts.Ticks); break;
+                case BigInteger bi: writer.Write((byte)19); writer.Write(bi.ToString(CultureInfo.InvariantCulture)); break;
+                case Fraction fr: writer.Write((byte)20); writer.Write(fr.Numerator.ToString(CultureInfo.InvariantCulture)); writer.Write(fr.Denominator.ToString(CultureInfo.InvariantCulture)); break;
+                case OPEN_LRD.Foundations.Vector2 v2: writer.Write((byte)21); writer.Write(v2.X); writer.Write(v2.Y); break;
+                case OPEN_LRD.Foundations.Vector3 v3: writer.Write((byte)22); writer.Write(v3.X); writer.Write(v3.Y); writer.Write(v3.Z); break;
+                case Complex c: writer.Write((byte)23); writer.Write(c.Real); writer.Write(c.Imaginary); break;
+                case double[] arr: writer.Write((byte)24); writer.Write(arr.Length); foreach (double item in arr) { writer.Write(double.IsNaN(item) ? "NaN" : double.IsPositiveInfinity(item) ? "+Inf" : double.IsNegativeInfinity(item) ? "-Inf" : item.ToString("R", CultureInfo.InvariantCulture)); } break;
+                case int[] arr: writer.Write((byte)25); writer.Write(arr.Length); foreach (int item in arr) writer.Write(item); break;
+                default: writer.Write((byte)255); writer.Write(value.ToString() ?? string.Empty); break;
+            }
         }
 
         /// <summary>Resolves an alias or unqualified function name to its stable registry key.</summary>
