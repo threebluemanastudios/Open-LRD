@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -19,12 +19,24 @@ namespace OPEN_LRD.Skills
         private const int MaximumFactorizationIterations = 500000;
         private static readonly ulong[] DeterministicWitnesses = { 2, 325, 9375, 28178, 450775, 9780504, 1795265022 };
 
+        /// <summary>
+        /// Computes the modular remainder of BigInteger value modulo modulus.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <returns>The result.</returns>
         public static long Mod(long value, long modulus)
         {
             ValidateModulus(modulus);
             return (long)PositiveMod(value, modulus);
         }
 
+        /// <summary>
+        /// Computes the modular remainder of BigInteger value modulo modulus.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <returns>The result.</returns>
         public static BigInteger Mod(BigInteger value, BigInteger modulus)
         {
             ValidateModulus(modulus);
@@ -32,6 +44,13 @@ namespace OPEN_LRD.Skills
             return result.Sign < 0 ? result + modulus : result;
         }
 
+        /// <summary>
+        /// Computes modular exponentiation (value^exponent mod modulus) for BigInteger operands.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="exponent">The exponent.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <returns>The result.</returns>
         public static long ModPow(long value, long exponent, long modulus)
         {
             if (exponent < 0)
@@ -42,6 +61,13 @@ namespace OPEN_LRD.Skills
             return (long)BigInteger.ModPow(PositiveMod(value, modulus), exponent, modulus);
         }
 
+        /// <summary>
+        /// Computes modular exponentiation (value^exponent mod modulus) for BigInteger operands.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="exponent">The exponent.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <returns>The result.</returns>
         public static BigInteger ModPow(BigInteger value, BigInteger exponent, BigInteger modulus)
         {
             if (exponent < 0)
@@ -52,6 +78,12 @@ namespace OPEN_LRD.Skills
             return BigInteger.ModPow(Mod(value, modulus), exponent, modulus);
         }
 
+        /// <summary>
+        /// Computes the modular multiplicative inverse of BigInteger value modulo modulus.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <returns>The result.</returns>
         public static long ModInverse(long value, long modulus)
         {
             if (!TryModInverse(value, modulus, out long inverse))
@@ -61,6 +93,12 @@ namespace OPEN_LRD.Skills
             return inverse;
         }
 
+        /// <summary>
+        /// Computes the modular multiplicative inverse of BigInteger value modulo modulus.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <returns>The result.</returns>
         public static BigInteger ModInverse(BigInteger value, BigInteger modulus)
         {
             if (!TryModInverse(value, modulus, out BigInteger inverse))
@@ -70,6 +108,13 @@ namespace OPEN_LRD.Skills
             return inverse;
         }
 
+        /// <summary>
+        /// Attempts to compute the modular inverse of BigInteger value modulo modulus, outputting inverse if one exists.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <param name="inverse">The inverse.</param>
+        /// <returns>The result.</returns>
         public static bool TryModInverse(long value, long modulus, out long inverse)
         {
             ValidateModulus(modulus);
@@ -83,6 +128,13 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// Attempts to compute the modular inverse of BigInteger value modulo modulus, outputting inverse if one exists.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <param name="inverse">The inverse.</param>
+        /// <returns>The result.</returns>
         public static bool TryModInverse(BigInteger value, BigInteger modulus, out BigInteger inverse)
         {
             ValidateModulus(modulus);
@@ -96,6 +148,14 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// Computes gcd(a, b) and B zout coefficients x, y satisfying a*x + b*y = gcd(a, b) for BigInteger inputs.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <returns>The result.</returns>
         public static long ExtendedGcd(long a, long b, out long x, out long y)
         {
             BigInteger gcd = ExtendedGcdBig(a, b, out BigInteger bigX, out BigInteger bigY);
@@ -104,16 +164,37 @@ namespace OPEN_LRD.Skills
             return checked((long)gcd);
         }
 
+        /// <summary>
+        /// Computes gcd(a, b) and B zout coefficients x, y satisfying a*x + b*y = gcd(a, b) for BigInteger inputs.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <returns>The result.</returns>
         public static BigInteger ExtendedGcd(BigInteger a, BigInteger b, out BigInteger x, out BigInteger y)
         {
             return ExtendedGcdBig(a, b, out x, out y);
         }
 
+        /// <summary>
+        /// Determines whether two 64-bit integers a and b are coprime (gcd(a, b) == 1).
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static bool IsCoprime(long a, long b)
         {
             return BigInteger.GreatestCommonDivisor(a, b) == BigInteger.One;
         }
 
+        /// <summary>
+        /// Solves the linear congruence a*x ? b (mod modulus).
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <param name="modulus">The modulus.</param>
+        /// <returns>The result.</returns>
         public static CongruenceSolution SolveLinearCongruence(long a, long b, long modulus)
         {
             ValidateModulus(modulus);
@@ -130,6 +211,11 @@ namespace OPEN_LRD.Skills
             return new CongruenceSolution(true, checked((long)solution), checked((long)reducedModulus));
         }
 
+        /// <summary>
+        /// Generates prime numbers or a primality sieve up to limit using the Sieve of Eratosthenes.
+        /// </summary>
+        /// <param name="limit">The limit.</param>
+        /// <returns>The result.</returns>
         public static int[] Sieve(int limit)
         {
             if (limit < 0 || limit > MaximumSieveLimit)
@@ -163,6 +249,12 @@ namespace OPEN_LRD.Skills
             return primes.ToArray();
         }
 
+        /// <summary>
+        /// Generates prime numbers or a primality sieve within the range [lower, upper] using a segmented sieve.
+        /// </summary>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static long[] SegmentedSieve(long lower, long upper)
         {
             if (upper < lower)
@@ -204,16 +296,35 @@ namespace OPEN_LRD.Skills
             return result.ToArray();
         }
 
+        /// <summary>
+        /// Determines whether a 64-bit integer value is prime.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static bool IsPrime(long value)
         {
             return IsPrime64(value);
         }
 
+        /// <summary>
+        /// Performs probabilistic primality testing on BigInteger value for rounds iterations.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="rounds">The rounds.</param>
+        /// <param name="random">The random.</param>
+        /// <returns>The result.</returns>
         public static bool IsProbablePrime(long value, int rounds, Random random)
         {
             return IsProbablePrime(new BigInteger(value), rounds, random);
         }
 
+        /// <summary>
+        /// Performs probabilistic primality testing on BigInteger value for rounds iterations.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="rounds">The rounds.</param>
+        /// <param name="random">The random.</param>
+        /// <returns>The result.</returns>
         public static bool IsProbablePrime(BigInteger value, int rounds, Random random)
         {
             if (rounds < 1)
@@ -265,6 +376,11 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// Computes the prime factorization of a BigInteger value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static PrimeFactorization Factorize(long value)
         {
             if (value <= 0)
@@ -280,6 +396,11 @@ namespace OPEN_LRD.Skills
             return new PrimeFactorization(value, factors.AsReadOnly());
         }
 
+        /// <summary>
+        /// Computes the prime factorization of a BigInteger value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static BigIntegerPrimeFactorization Factorize(BigInteger value)
         {
             if (value <= BigInteger.Zero)
@@ -305,6 +426,11 @@ namespace OPEN_LRD.Skills
             return new BigIntegerPrimeFactorization(value, grouped.AsReadOnly());
         }
 
+        /// <summary>
+        /// Searches for a non-trivial factor of value using Pollard's rho algorithm.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static long PollardRho(long value)
         {
             if (value <= 1)
@@ -323,6 +449,11 @@ namespace OPEN_LRD.Skills
             return (long)factor;
         }
 
+        /// <summary>
+        /// Computes Euler's totient function ?(value), counting positive integers up to value coprime to it.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static long EulerPhi(long value)
         {
             if (value <= 0)
@@ -337,6 +468,11 @@ namespace OPEN_LRD.Skills
             return checked((long)result);
         }
 
+        /// <summary>
+        /// Computes the number of positive divisors d(value) (or ??(value)) of value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static long DivisorCount(long value)
         {
             BigInteger result = BigInteger.One;
@@ -347,6 +483,11 @@ namespace OPEN_LRD.Skills
             return checked((long)result);
         }
 
+        /// <summary>
+        /// Computes the sum of positive divisors ??(value) of value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static long DivisorSum(long value)
         {
             BigInteger result = BigInteger.One;
@@ -364,6 +505,11 @@ namespace OPEN_LRD.Skills
             return checked((long)result);
         }
 
+        /// <summary>
+        /// Evaluates the M bius function ?(value).
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int Moebius(long value)
         {
             foreach ((long _, int exponent) in Factorize(value).Factors)
@@ -376,6 +522,11 @@ namespace OPEN_LRD.Skills
             return Factorize(value).Factors.Count % 2 == 0 ? 1 : -1;
         }
 
+        /// <summary>
+        /// Evaluates the Liouville function ?(value).
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int Liouville(long value)
         {
             int totalExponent = 0;
@@ -386,12 +537,26 @@ namespace OPEN_LRD.Skills
             return totalExponent % 2 == 0 ? 1 : -1;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="remainders">The remainders.</param>
+        /// <param name="moduli">The moduli.</param>
+        /// <returns>The result.</returns>
         public static CrtResult ChineseRemainderTheorem(long[] remainders, long[] moduli)
         {
             bool exists = TryChineseRemainderTheorem(remainders, moduli, out long solution, out long combinedModulus);
             return new CrtResult(exists, solution, combinedModulus);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="remainders">The remainders.</param>
+        /// <param name="moduli">The moduli.</param>
+        /// <param name="solution">The solution.</param>
+        /// <param name="combinedModulus">The combined modulus.</param>
+        /// <returns>The result.</returns>
         public static bool TryChineseRemainderTheorem(long[] remainders, long[] moduli, out long solution, out long combinedModulus)
         {
             if (remainders == null)
@@ -443,6 +608,11 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// Computes the n-th Catalan number C_n.
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <returns>The result.</returns>
         public static BigInteger Catalan(int n)
         {
             ValidateNonNegative(n, nameof(n));
@@ -453,6 +623,11 @@ namespace OPEN_LRD.Skills
             return Binomial(2 * n, n) / (n + 1);
         }
 
+        /// <summary>
+        /// Computes the n-th Bell number B_n.
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <returns>The result.</returns>
         public static BigInteger Bell(int n)
         {
             ValidateNonNegative(n, nameof(n));
@@ -474,6 +649,12 @@ namespace OPEN_LRD.Skills
             return row[0];
         }
 
+        /// <summary>
+        /// Computes the Stirling number of the first kind for parameters n and k.
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <param name="k">The k.</param>
+        /// <returns>The result.</returns>
         public static BigInteger StirlingFirst(int n, int k)
         {
             ValidateCombinatoricsIndices(n, k);
@@ -491,6 +672,12 @@ namespace OPEN_LRD.Skills
             return row[k];
         }
 
+        /// <summary>
+        /// Computes the Stirling number of the second kind S(n, k).
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <param name="k">The k.</param>
+        /// <returns>The result.</returns>
         public static BigInteger StirlingSecond(int n, int k)
         {
             ValidateCombinatoricsIndices(n, k);
@@ -508,6 +695,11 @@ namespace OPEN_LRD.Skills
             return row[k];
         }
 
+        /// <summary>
+        /// Computes the integer partition function p(n), the number of ways to write n as a sum of positive integers.
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <returns>The result.</returns>
         public static BigInteger Partition(int n)
         {
             ValidateNonNegative(n, nameof(n));
@@ -527,6 +719,11 @@ namespace OPEN_LRD.Skills
             return values[n];
         }
 
+        /// <summary>
+        /// Computes the subfactorial / derangement count !n for n elements.
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <returns>The result.</returns>
         public static BigInteger Derangement(int n)
         {
             ValidateNonNegative(n, nameof(n));
@@ -549,6 +746,12 @@ namespace OPEN_LRD.Skills
             return current;
         }
 
+        /// <summary>
+        /// Computes the binomial coefficient C(n, k) = n! / (k!(n - k)!).
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <param name="k">The k.</param>
+        /// <returns>The result.</returns>
         public static BigInteger Binomial(int n, int k)
         {
             ValidateCombinatoricsIndices(n, k);
@@ -561,6 +764,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the multinomial coefficient for the specified category counts.
+        /// </summary>
+        /// <param name="counts">The counts.</param>
+        /// <returns>The result.</returns>
         public static BigInteger Multinomial(int[] counts)
         {
             if (counts == null)
@@ -583,6 +791,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Converts a BigInteger value into a string representation in base radix.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="radix">The radix.</param>
+        /// <returns>The result.</returns>
         public static string ToBase(BigInteger value, int radix)
         {
             ValidateRadix(radix);
@@ -604,6 +818,12 @@ namespace OPEN_LRD.Skills
             return (negative ? "-" : string.Empty) + new string(output.ToArray());
         }
 
+        /// <summary>
+        /// Parses a digits string in base radix into a numerical representation.
+        /// </summary>
+        /// <param name="digits">The digits.</param>
+        /// <param name="radix">The radix.</param>
+        /// <returns>The result.</returns>
         public static BigInteger FromBase(string digits, int radix)
         {
             ValidateRadix(radix);
@@ -642,6 +862,12 @@ namespace OPEN_LRD.Skills
             return sign < 0 ? -value : value;
         }
 
+        /// <summary>
+        /// Computes the sum of digits of value when expressed in base radix.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="radix">The radix.</param>
+        /// <returns>The result.</returns>
         public static int DigitSum(long value, int radix)
         {
             ValidateRadix(radix);

@@ -1060,6 +1060,7 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentNullException(nameof(variable));
             }
+            ExpressionParser.ValidateVariableIdentifier(variable, nameof(variable));
             ExpressionParser.ValidateExpressionLimits(expression);
             return Simplify(DifferentiateOnce(expression, variable.Trim()));
         }
@@ -1517,11 +1518,9 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentNullException(nameof(expression));
             }
-            if (string.IsNullOrWhiteSpace(variable))
-            {
-                throw new ArgumentException("The variable name cannot be null or empty.", nameof(variable));
-            }
-            return TryIntegrateInternal(expression, variable, 0, out result);
+            ExpressionParser.ValidateVariableIdentifier(variable, nameof(variable));
+            ExpressionParser.ValidateExpressionLimits(expression);
+            return TryIntegrateInternal(expression, variable.Trim(), 0, out result);
         }
 
         private static bool TryIntegrateInternal(Expression expression, string variable, int depth, out Expression? result)
@@ -2436,7 +2435,21 @@ namespace OPEN_LRD.Skills
 
         internal static bool DependsOn(Expression expression, string variable)
         {
+            if (expression == null)
+            {
+                throw new ArgumentNullException(nameof(expression));
+            }
+            ExpressionParser.ValidateExpressionLimits(expression);
             string normalizedVariable = variable?.Trim() ?? string.Empty;
+            if (normalizedVariable.Length > ExpressionParser.MaximumIdentifierLength)
+            {
+                throw new FormatException($"Identifier exceeds the {ExpressionParser.MaximumIdentifierLength} character limit.");
+            }
+            return DependsOnInternal(expression, normalizedVariable);
+        }
+
+        private static bool DependsOnInternal(Expression expression, string normalizedVariable)
+        {
             switch (expression)
             {
                 case ConstantExpression:
@@ -2444,24 +2457,24 @@ namespace OPEN_LRD.Skills
                 case VariableExpression variableExpression:
                     return variableExpression.Name == normalizedVariable;
                 case NegateExpression negate:
-                    return DependsOn(negate.Operand, normalizedVariable);
+                    return DependsOnInternal(negate.Operand, normalizedVariable);
                 case BinaryExpression binary:
-                    return DependsOn(binary.Left, normalizedVariable) || DependsOn(binary.Right, normalizedVariable);
+                    return DependsOnInternal(binary.Left, normalizedVariable) || DependsOnInternal(binary.Right, normalizedVariable);
                 case FunctionExpression function:
-                    return DependsOn(function.Argument, normalizedVariable);
+                    return DependsOnInternal(function.Argument, normalizedVariable);
                 case CallExpression call:
                     foreach (Expression argument in call.Arguments)
                     {
-                        if (DependsOn(argument, normalizedVariable))
+                        if (DependsOnInternal(argument, normalizedVariable))
                         {
                             return true;
                         }
                     }
                     return false;
                 case ConditionalExpression conditional:
-                    return DependsOn(conditional.Condition, normalizedVariable)
-                        || DependsOn(conditional.WhenTrue, normalizedVariable)
-                        || DependsOn(conditional.WhenFalse, normalizedVariable);
+                    return DependsOnInternal(conditional.Condition, normalizedVariable)
+                        || DependsOnInternal(conditional.WhenTrue, normalizedVariable)
+                        || DependsOnInternal(conditional.WhenFalse, normalizedVariable);
                 default:
                     return false;
             }
@@ -2486,6 +2499,17 @@ namespace OPEN_LRD.Skills
 
         internal static bool TryGetPolynomial(Expression expression, string variable, out double[] coefficients)
         {
+            if (expression == null)
+            {
+                throw new ArgumentNullException(nameof(expression));
+            }
+            ExpressionParser.ValidateVariableIdentifier(variable, nameof(variable));
+            ExpressionParser.ValidateExpressionLimits(expression);
+            return TryGetPolynomialInternal(expression, variable.Trim(), out coefficients);
+        }
+
+        private static bool TryGetPolynomialInternal(Expression expression, string variable, out double[] coefficients)
+        {
             switch (expression)
             {
                 case ConstantExpression constant:
@@ -2501,7 +2525,7 @@ namespace OPEN_LRD.Skills
                     return false;
                 case NegateExpression negate:
                 {
-                    if (!TryGetPolynomial(negate.Operand, variable, out double[] inner))
+                    if (!TryGetPolynomialInternal(negate.Operand, variable, out double[] inner))
                     {
                         coefficients = Array.Empty<double>();
                         return false;
@@ -2511,8 +2535,8 @@ namespace OPEN_LRD.Skills
                 }
                 case BinaryExpression binary:
                 {
-                    if (!TryGetPolynomial(binary.Left, variable, out double[] left)
-                        || !TryGetPolynomial(binary.Right, variable, out double[] right))
+                    if (!TryGetPolynomialInternal(binary.Left, variable, out double[] left)
+                        || !TryGetPolynomialInternal(binary.Right, variable, out double[] right))
                     {
                         coefficients = Array.Empty<double>();
                         return false;
@@ -3328,6 +3352,15 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentNullException(nameof(expression));
             }
+            if (variable != null)
+            {
+                string trimmed = variable.Trim();
+                if (trimmed.Length > ExpressionParser.MaximumIdentifierLength)
+                {
+                    throw new FormatException($"Identifier exceeds the {ExpressionParser.MaximumIdentifierLength} character limit.");
+                }
+                variable = trimmed;
+            }
             ExpressionParser.ValidateExpressionLimits(expression);
             return EvaluateInternal(expression, name =>
             {
@@ -3348,6 +3381,13 @@ namespace OPEN_LRD.Skills
             if (variables == null)
             {
                 throw new ArgumentNullException(nameof(variables));
+            }
+            foreach (string key in variables.Keys)
+            {
+                if (key != null && key.Trim().Length > ExpressionParser.MaximumIdentifierLength)
+                {
+                    throw new FormatException($"Identifier exceeds the {ExpressionParser.MaximumIdentifierLength} character limit.");
+                }
             }
             ExpressionParser.ValidateExpressionLimits(expression);
             return EvaluateInternal(expression, name =>

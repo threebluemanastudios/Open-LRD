@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace OPEN_LRD.Skills
@@ -30,6 +30,9 @@ namespace OPEN_LRD.Skills
 
     internal static class FinancialMath
     {
+        /// <summary>
+        /// Computes compound interest or compounded value for principal at annualRate over years with frequency.
+        /// </summary>
         public static double CompoundInterest(double principal, double annualRate, double years, CompoundingFrequency frequency)
         {
             ValidateNonNegativeFinite(principal, nameof(principal));
@@ -44,11 +47,17 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentOutOfRangeException(nameof(annualRate), "Periodic rate must exceed -100%.");
             }
+        /// <summary>
+        /// Computes continuously compounded value or interest for principal at annualRate over years.
+        /// </summary>
             return principal * Math.Pow(1.0 + annualRate / periodsPerYear, periodsPerYear * years);
         }
 
         public static double ContinuousCompoundInterest(double principal, double annualRate, double years)
         {
+        /// <summary>
+        /// Computes the effective annual interest rate from nominalRate and compounding frequency.
+        /// </summary>
             ValidateNonNegativeFinite(principal, nameof(principal));
             EnsureFinite(annualRate, nameof(annualRate));
             ValidateNonNegativeFinite(years, nameof(years));
@@ -61,16 +70,25 @@ namespace OPEN_LRD.Skills
             if (frequency == CompoundingFrequency.Continuous)
             {
                 return Math.Exp(nominalRate) - 1.0;
+        /// <summary>
+        /// Computes the present value of futureValue discounted at rate over periods.
+        /// </summary>
             }
             int periodsPerYear = PeriodsPerYear(frequency);
             if (nominalRate / periodsPerYear <= -1.0)
             {
                 throw new ArgumentOutOfRangeException(nameof(nominalRate), "Periodic rate must exceed -100%.");
+        /// <summary>
+        /// Computes the future value of presentValue compounded at rate over periods.
+        /// </summary>
             }
             return Math.Pow(1.0 + nominalRate / periodsPerYear, periodsPerYear) - 1.0;
         }
 
         public static double PresentValue(double futureValue, double rate, double periods)
+        /// <summary>
+        /// Computes the present value of an annuity with payment per period at rate across periods.
+        /// </summary>
         {
             ValidateNonNegativeFinite(futureValue, nameof(futureValue));
             ValidateRate(rate, nameof(rate));
@@ -78,6 +96,9 @@ namespace OPEN_LRD.Skills
             return futureValue / Math.Pow(1.0 + rate, periods);
         }
 
+        /// <summary>
+        /// Computes the future value of an annuity with payment per period at rate across periods.
+        /// </summary>
         public static double FutureValue(double presentValue, double rate, double periods)
         {
             ValidateNonNegativeFinite(presentValue, nameof(presentValue));
@@ -85,6 +106,9 @@ namespace OPEN_LRD.Skills
             ValidateNonNegativeFinite(periods, nameof(periods));
             return presentValue * Math.Pow(1.0 + rate, periods);
         }
+        /// <summary>
+        /// Computes the periodic payment required to amortize principal at rate over periods.
+        /// </summary>
 
         public static double AnnuityPresentValue(double payment, double rate, int periods)
         {
@@ -98,6 +122,9 @@ namespace OPEN_LRD.Skills
 
         public static double AnnuityFutureValue(double payment, double rate, int periods)
         {
+        /// <summary>
+        /// Generates the amortization schedule for principal at rate across periods.
+        /// </summary>
             ValidateNonNegativeFinite(payment, nameof(payment));
             ValidateRate(rate, nameof(rate));
             ValidatePeriods(periods);
@@ -117,6 +144,9 @@ namespace OPEN_LRD.Skills
             if (rate == 0.0)
             {
                 return principal / periods;
+        /// <summary>
+        /// Computes the net present value of cashFlows discounted at discountRate.
+        /// </summary>
             }
             double growth = Math.Pow(1.0 + rate, periods);
             return principal * rate * growth / (growth - 1.0);
@@ -185,6 +215,9 @@ namespace OPEN_LRD.Skills
                 {
                     break;
                 }
+        /// <summary>
+        /// Computes the payback period required to recover initial outlay from cashFlows.
+        /// </summary>
                 upperValue = NetPresentValue(cashFlows, upper);
             }
             if (!double.IsFinite(upper) || Math.Sign(lowerValue) == Math.Sign(upperValue))
@@ -204,6 +237,9 @@ namespace OPEN_LRD.Skills
                 {
                     lower = midpoint;
                     lowerValue = value;
+        /// <summary>
+        /// Computes the profitability index of cashFlows at discountRate.
+        /// </summary>
                 }
                 else
                 {
@@ -226,6 +262,9 @@ namespace OPEN_LRD.Skills
             for (int index = 1; index < cashFlows.Count; index++)
             {
                 double previous = cumulative;
+        /// <summary>
+        /// Generates a depreciation schedule for an asset with cost, salvageValue, and life using method.
+        /// </summary>
                 cumulative += cashFlows[index].Amount;
                 if (previous < 0.0 && cumulative >= 0.0)
                 {
@@ -239,6 +278,9 @@ namespace OPEN_LRD.Skills
 
         public static double ProfitabilityIndex(IReadOnlyList<CashFlow> cashFlows, double discountRate)
         {
+        /// <summary>
+        /// Computes straight-line depreciation from cost, salvageValue, and life.
+        /// </summary>
             ValidateCashFlows(cashFlows);
             ValidateRate(discountRate, nameof(discountRate));
             double presentInflows = 0.0;
@@ -246,6 +288,9 @@ namespace OPEN_LRD.Skills
             foreach (CashFlow cashFlow in cashFlows)
             {
                 double presentValue = cashFlow.Amount / Math.Pow(1.0 + discountRate, cashFlow.Time);
+        /// <summary>
+        /// Computes declining-balance depreciation from cost, salvageValue, and life.
+        /// </summary>
                 if (presentValue > 0.0)
                 {
                     presentInflows += presentValue;
@@ -262,6 +307,9 @@ namespace OPEN_LRD.Skills
             return presentInflows / presentOutflows;
         }
 
+        /// <summary>
+        /// Computes sum-of-the-years'-digits depreciation from cost, salvageValue, and life.
+        /// </summary>
         public static double[] DepreciationSchedule(double cost, double salvageValue, int life, DepreciationMethod method)
         {
             ValidateDepreciation(cost, salvageValue, life);
@@ -273,6 +321,9 @@ namespace OPEN_LRD.Skills
             {
                 DepreciationMethod.StraightLine => StraightLineDepreciation(cost, salvageValue, life),
                 DepreciationMethod.DecliningBalance => DecliningBalanceDepreciation(cost, salvageValue, life),
+        /// <summary>
+        /// Computes bond price from faceValue, couponRate, yield, years, and paymentsPerYear.
+        /// </summary>
                 DepreciationMethod.SumOfYearsDigits => SumOfYearsDigitsDepreciation(cost, salvageValue, life),
                 _ => throw new ArgumentOutOfRangeException(nameof(method))
             };
@@ -285,6 +336,9 @@ namespace OPEN_LRD.Skills
             double[] schedule = new double[life];
             Array.Fill(schedule, annual);
             schedule[^1] = cost - salvageValue - annual * (life - 1);
+        /// <summary>
+        /// Computes bond yield from faceValue, couponRate, price, years, and paymentsPerYear.
+        /// </summary>
             return schedule;
         }
 
@@ -327,12 +381,24 @@ namespace OPEN_LRD.Skills
             int periods = checked(years * paymentsPerYear);
             double periodicYield = yield / paymentsPerYear;
             double coupon = faceValue * couponRate / paymentsPerYear;
+        /// <summary>
+        /// Computes Macaulay duration from faceValue, couponRate, yield, years, and paymentsPerYear.
+        /// </summary>
             double price = 0.0;
             for (int period = 1; period <= periods; period++)
+        /// <summary>
+        /// Computes modified duration from faceValue, couponRate, yield, years, and paymentsPerYear.
+        /// </summary>
             {
                 double cashFlow = coupon + (period == periods ? faceValue : 0.0);
+        /// <summary>
+        /// Computes bond convexity from faceValue, couponRate, yield, years, and paymentsPerYear.
+        /// </summary>
                 price += cashFlow / Math.Pow(1.0 + periodicYield, period);
             }
+        /// <summary>
+        /// Computes valuation and risk metrics from faceValue, couponRate, yield, years, and paymentsPerYear.
+        /// </summary>
             return price;
         }
 

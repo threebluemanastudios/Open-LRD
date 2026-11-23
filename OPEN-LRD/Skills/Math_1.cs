@@ -9,11 +9,22 @@ namespace OPEN_LRD.Skills
     
     internal static class Math_1
     {
+        /// <summary>
+        /// Computes the sum of two 32-bit signed integers.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int AddInt(int a, int b)
         {
             return a + b;
         }
 
+        /// <summary>
+        /// Computes the sum of all integers in the specified list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static int AddRange(List<int> numbers)
         {
             if (numbers.Count == 0)
@@ -23,16 +34,34 @@ namespace OPEN_LRD.Skills
             return CalculateSum(numbers);
         }
 
+        /// <summary>
+        /// Computes the difference between two integers (a - b).
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int SubtractInt(int a, int b)
         {
             return a - b;
         }
 
+        /// <summary>
+        /// Computes the product of two integers.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int MultiplyInt(int a, int b)
         {
             return a * b;
         }
 
+        /// <summary>
+        /// Divides the first integer by the second integer (a / b).
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int DivideInt(int a, int b)
         {
             if (b == 0)
@@ -42,6 +71,12 @@ namespace OPEN_LRD.Skills
             return a / b;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int ModulusInt(int a, int b)
         {
             if (b == 0)
@@ -51,11 +86,22 @@ namespace OPEN_LRD.Skills
             return a % b;
         }
 
+        /// <summary>
+        /// Computes the sum of two double-precision floating-point values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static double AddDouble(double a, double b)
         {
             return a + b;
         }
 
+        /// <summary>
+        /// Computes the sum of all double-precision floating-point values in the specified list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static double AddRangeDouble(List<double> numbers)
         {
             if (numbers.Count == 0)
@@ -65,16 +111,34 @@ namespace OPEN_LRD.Skills
             return CalculateSum(numbers);
         }
 
+        /// <summary>
+        /// Computes the difference between two double-precision floating-point values (a - b).
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static double SubtractDouble(double a, double b)
         {
             return a - b;
         }
 
+        /// <summary>
+        /// Computes the product of two double-precision floating-point values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static double MultiplyDouble(double a, double b)
         {
             return a * b;
         }
 
+        /// <summary>
+        /// Divides the first double-precision value by the second (a / b).
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static double DivideDouble(double a, double b)
         {
             if (b == 0.0)
@@ -84,6 +148,12 @@ namespace OPEN_LRD.Skills
             return a / b;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static double ModulusDouble(double a, double b)
         {
             if (b == 0.0)
@@ -93,11 +163,22 @@ namespace OPEN_LRD.Skills
             return a % b;
         }
 
+        /// <summary>
+        /// Computes the sum of two single-precision floating-point values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static float AddFloat(float a, float b)
         {
             return a + b;
         }
 
+        /// <summary>
+        /// Computes the sum of all single-precision floating-point values in the specified list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float AddRangeFloat(List<float> numbers)
         {
             if (numbers.Count == 0)
@@ -107,14 +188,32 @@ namespace OPEN_LRD.Skills
             return CalculateSum(numbers);
         }
 
+        /// <summary>
+        /// Computes the difference between two single-precision floating-point values (a - b).
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static float SubtractFloat(float a, float b)
         {
             return a - b;
         }
+        /// <summary>
+        /// Computes the product of two single-precision floating-point values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static float MultiplyFloat(float a, float b)
         {
             return a * b;
         }
+        /// <summary>
+        /// Divides the first single-precision value by the second (a / b).
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static float DivideFloat(float a, float b)
         {
             if (b == 0.0f)
@@ -123,6 +222,12 @@ namespace OPEN_LRD.Skills
             }
             return a / b;
         }
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static float ModulusFloat(float a, float b)
         {
             if (b == 0.0f)
@@ -131,6 +236,11 @@ namespace OPEN_LRD.Skills
             }
             return a % b;
         }
+        /// <summary>
+        /// Computes the arithmetic mean of a sequence of single-precision values.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateAverage(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -140,6 +250,11 @@ namespace OPEN_LRD.Skills
             return CalculateSum(numbers) / numbers.Count;
         }
 
+        /// <summary>
+        /// Computes the standard deviation of a sequence of single-precision values.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateStandardDeviation(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -149,6 +264,11 @@ namespace OPEN_LRD.Skills
             return (float)Math.Sqrt(CalculateVariance(numbers));
         }
         
+        /// <summary>
+        /// Computes the variance of a sequence of single-precision values.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateVariance(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -164,6 +284,12 @@ namespace OPEN_LRD.Skills
             return sumOfSquares / numbers.Count;
         }
 
+        /// <summary>
+        /// Computes the standard score (z-score) of a value relative to the sample distribution.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateZScore(float value, List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -179,6 +305,12 @@ namespace OPEN_LRD.Skills
             return (value - average) / standardDeviation;
         }
 
+        /// <summary>
+        /// Computes the percentile rank or percentile value for the dataset.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculatePercentile(float value, List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -196,6 +328,11 @@ namespace OPEN_LRD.Skills
             return (float)count / numbers.Count * 100.0f;
         }
 
+        /// <summary>
+        /// Computes the median of a sequence of single-precision values.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMedian(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -217,6 +354,11 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Computes the mode (most frequent value) of a sequence of single-precision values.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMode(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -248,6 +390,11 @@ namespace OPEN_LRD.Skills
             return mode;
         }
 
+        /// <summary>
+        /// Computes the difference between the maximum and minimum values in the dataset.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateRange(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -270,6 +417,11 @@ namespace OPEN_LRD.Skills
             return max - min;
         }
 
+        /// <summary>
+        /// Computes the relative standard deviation (ratio of standard deviation to mean).
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateCoefficientOfVariation(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -285,6 +437,11 @@ namespace OPEN_LRD.Skills
             return standardDeviation / average;
         }
 
+        /// <summary>
+        /// Computes the skewness measuring asymmetry of the data distribution.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateSkewness(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -305,6 +462,11 @@ namespace OPEN_LRD.Skills
             return sumCubedDeviations / (numbers.Count * (float)Math.Pow(standardDeviation, 3));
         }
 
+        /// <summary>
+        /// Computes the kurtosis measuring tail weight of the data distribution.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateKurtosis(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -325,6 +487,12 @@ namespace OPEN_LRD.Skills
             return sumQuarticDeviations / (numbers.Count * (float)Math.Pow(standardDeviation, 4)) - 3.0f; // Excess kurtosis
         }
 
+        /// <summary>
+        /// Computes the sample or population covariance between two paired series.
+        /// </summary>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <returns>The result.</returns>
         public static float CalculateCovariance(List<float> x, List<float> y)
         {
             if (x == null || y == null || x.Count != y.Count || x.Count == 0)
@@ -341,6 +509,12 @@ namespace OPEN_LRD.Skills
             return covariance / x.Count;
         }
 
+        /// <summary>
+        /// Computes the Pearson linear correlation coefficient between two paired series.
+        /// </summary>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <returns>The result.</returns>
         public static float CalculateCorrelationCoefficient(List<float> x, List<float> y)
         {
             if (x == null || y == null || x.Count != y.Count || x.Count == 0)
@@ -357,6 +531,12 @@ namespace OPEN_LRD.Skills
             return covariance / (standardDeviationX * standardDeviationY);
         }
 
+        /// <summary>
+        /// Computes the ordinary least-squares slope of a linear regression line.
+        /// </summary>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <returns>The result.</returns>
         public static float CalculateLinearRegressionSlope(List<float> x, List<float> y)
         {
             if (x == null || y == null || x.Count != y.Count || x.Count == 0)
@@ -372,6 +552,12 @@ namespace OPEN_LRD.Skills
             return covariance / varianceX;
         }
 
+        /// <summary>
+        /// Computes the y-intercept of an ordinary least-squares linear regression line.
+        /// </summary>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <returns>The result.</returns>
         public static float CalculateLinearRegressionIntercept(List<float> x, List<float> y)
         {
             if (x == null || y == null || x.Count != y.Count || x.Count == 0)
@@ -384,6 +570,13 @@ namespace OPEN_LRD.Skills
             return averageY - slope * averageX;
         }
 
+        /// <summary>
+        /// Predicts the dependent response at x using a fitted linear regression model.
+        /// </summary>
+        /// <param name="x">The x.</param>
+        /// <param name="xValues">The x values.</param>
+        /// <param name="yValues">The y values.</param>
+        /// <returns>The result.</returns>
         public static float CalculateLinearRegressionPredict(float x, List<float> xValues, List<float> yValues)
         {
             if (xValues == null || yValues == null || xValues.Count != yValues.Count || xValues.Count == 0)
@@ -397,6 +590,12 @@ namespace OPEN_LRD.Skills
             return slope * x + intercept;
         }
 
+        /// <summary>
+        /// Computes the exponential moving average using the specified smoothing factor.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <param name="smoothingFactor">The smoothing factor.</param>
+        /// <returns>The result.</returns>
         public static float CalculateExponentialMovingAverage(List<float> numbers, float smoothingFactor)
         {
             if (numbers == null || numbers.Count == 0)
@@ -415,6 +614,12 @@ namespace OPEN_LRD.Skills
             return ema;
         }
 
+        /// <summary>
+        /// Computes the weighted arithmetic mean of values using corresponding weights.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <param name="weights">The weights.</param>
+        /// <returns>The result.</returns>
         public static float CalculateWeightedAverage(List<float> numbers, List<float> weights)
         {
             if (numbers == null || weights == null || numbers.Count != weights.Count || numbers.Count == 0)
@@ -435,6 +640,11 @@ namespace OPEN_LRD.Skills
             return weightedSum / totalWeight;
         }
 
+        /// <summary>
+        /// Computes the geometric mean of a set of positive values.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateGeometricMean(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -452,6 +662,11 @@ namespace OPEN_LRD.Skills
             return (float)Math.Pow(product, 1.0f / numbers.Count);
         }
 
+        /// <summary>
+        /// Computes the harmonic mean of a set of non-zero values.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateHarmonicMean(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -470,6 +685,11 @@ namespace OPEN_LRD.Skills
             return numbers.Count / sumOfReciprocals;
         }
 
+        /// <summary>
+        /// Computes the quadratic mean (root-mean-square) of a sequence of values.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateRootMeanSquare(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -484,6 +704,11 @@ namespace OPEN_LRD.Skills
             return (float)Math.Sqrt(sumOfSquares / numbers.Count);
         }
 
+        /// <summary>
+        /// Computes the mean absolute deviation around the central tendency.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMeanAbsoluteDeviation(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -499,6 +724,11 @@ namespace OPEN_LRD.Skills
             return sumOfAbsoluteDeviations / numbers.Count;
         }
 
+        /// <summary>
+        /// Computes the interquartile range (Q3 - Q1) of the dataset.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateInterquartileRange(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -513,6 +743,12 @@ namespace OPEN_LRD.Skills
             return q3 - q1;
         }
 
+        /// <summary>
+        /// Computes the mean absolute percentage error (MAPE) between actual and predicted values.
+        /// </summary>
+        /// <param name="actual">The actual.</param>
+        /// <param name="predicted">The predicted.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMeanAbsolutePercentageError(List<float> actual, List<float> predicted)
         {
             if (actual == null || predicted == null || actual.Count != predicted.Count || actual.Count == 0)
@@ -531,6 +767,12 @@ namespace OPEN_LRD.Skills
             return (sumOfPercentageErrors / actual.Count) * 100.0f;
         }
 
+        /// <summary>
+        /// Computes the mean squared error (MSE) between actual and predicted values.
+        /// </summary>
+        /// <param name="actual">The actual.</param>
+        /// <param name="predicted">The predicted.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMeanSquaredError(List<float> actual, List<float> predicted)
         {
             if (actual == null || predicted == null || actual.Count != predicted.Count || actual.Count == 0)
@@ -546,12 +788,24 @@ namespace OPEN_LRD.Skills
             return sumOfSquaredErrors / actual.Count;
         }
 
+        /// <summary>
+        /// Computes the root-mean-square error (RMSE) between actual and predicted values.
+        /// </summary>
+        /// <param name="actual">The actual.</param>
+        /// <param name="predicted">The predicted.</param>
+        /// <returns>The result.</returns>
         public static float CalculateRootMeanSquaredError(List<float> actual, List<float> predicted)
         {
             float mse = CalculateMeanSquaredError(actual, predicted);
             return (float)Math.Sqrt(mse);
         }   
 
+        /// <summary>
+        /// Computes the coefficient of determination (R ) for predicted versus actual values.
+        /// </summary>
+        /// <param name="actual">The actual.</param>
+        /// <param name="predicted">The predicted.</param>
+        /// <returns>The result.</returns>
         public static float CalculateR2Score(List<float> actual, List<float> predicted)
         {
             if (actual == null || predicted == null || actual.Count != predicted.Count || actual.Count == 0)
@@ -569,6 +823,13 @@ namespace OPEN_LRD.Skills
             return 1.0f - (residualSumOfSquares / totalSumOfSquares);
         }
 
+        /// <summary>
+        /// Computes the predictor-adjusted coefficient of determination (Adjusted R ).
+        /// </summary>
+        /// <param name="actual">The actual.</param>
+        /// <param name="predicted">The predicted.</param>
+        /// <param name="numberOfPredictors">The number of predictors.</param>
+        /// <returns>The result.</returns>
         public static float CalculateAdjustedR2Score(List<float> actual, List<float> predicted, int numberOfPredictors)
         {
             if (actual == null || predicted == null || actual.Count != predicted.Count || actual.Count == 0)
@@ -584,6 +845,12 @@ namespace OPEN_LRD.Skills
             return 1.0f - ((1.0f - r2) * (n - 1) / (n - numberOfPredictors - 1));
         }
 
+        /// <summary>
+        /// Computes the mean absolute scaled error (MASE) of a forecast series.
+        /// </summary>
+        /// <param name="actual">The actual.</param>
+        /// <param name="predicted">The predicted.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMeanAbsoluteScaledError(List<float> actual, List<float> predicted)
         {
             if (actual == null || predicted == null || actual.Count != predicted.Count || actual.Count < 2)
@@ -604,6 +871,12 @@ namespace OPEN_LRD.Skills
             return meanAbsoluteError / meanAbsoluteDifference;
         }
 
+        /// <summary>
+        /// Computes the proportion of steps where predicted direction matches actual direction.
+        /// </summary>
+        /// <param name="actual">The actual.</param>
+        /// <param name="predicted">The predicted.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMeanDirectionalAccuracy(List<float> actual, List<float> predicted)
         {
             if (actual == null || predicted == null || actual.Count != predicted.Count || actual.Count < 2)
@@ -623,6 +896,12 @@ namespace OPEN_LRD.Skills
             return (float)correctDirectionCount / (actual.Count - 1) * 100.0f;
         }
 
+        /// <summary>
+        /// Computes the sum of two fractions.
+        /// </summary>
+        /// <param name="fraction1">The fraction1.</param>
+        /// <param name="fraction2">The fraction2.</param>
+        /// <returns>The result.</returns>
         public static Fraction AddFraction(Fraction fraction1, Fraction fraction2)
         {
             ArgumentNullException.ThrowIfNull(fraction1);
@@ -630,6 +909,12 @@ namespace OPEN_LRD.Skills
             return fraction1 + fraction2;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="fraction1">The fraction1.</param>
+        /// <param name="fraction2">The fraction2.</param>
+        /// <returns>The result.</returns>
         public static Fraction SubtractFraction(Fraction fraction1, Fraction fraction2)
         {
             ArgumentNullException.ThrowIfNull(fraction1);
@@ -637,6 +922,12 @@ namespace OPEN_LRD.Skills
             return fraction1 - fraction2;
         }
 
+        /// <summary>
+        /// Computes the product of two fractions.
+        /// </summary>
+        /// <param name="fraction1">The fraction1.</param>
+        /// <param name="fraction2">The fraction2.</param>
+        /// <returns>The result.</returns>
         public static Fraction MultiplyFraction(Fraction fraction1, Fraction fraction2)
         {
             ArgumentNullException.ThrowIfNull(fraction1);
@@ -644,6 +935,12 @@ namespace OPEN_LRD.Skills
             return fraction1 * fraction2;
         }
 
+        /// <summary>
+        /// Divides the first fraction by the second fraction.
+        /// </summary>
+        /// <param name="fraction1">The fraction1.</param>
+        /// <param name="fraction2">The fraction2.</param>
+        /// <returns>The result.</returns>
         public static  Fraction DivideFraction(Fraction fraction1, Fraction fraction2)
         {
             ArgumentNullException.ThrowIfNull(fraction1);
@@ -651,32 +948,64 @@ namespace OPEN_LRD.Skills
             return fraction1 / fraction2;
         }
 
+        /// <summary>
+        /// Constructs and reduces a fraction to lowest terms from integer numerator and denominator.
+        /// </summary>
+        /// <param name="fraction">The fraction.</param>
+        /// <returns>The result.</returns>
         public static  Fraction SimplifyFraction(Fraction fraction)
         {
             ArgumentNullException.ThrowIfNull(fraction);
             return new Fraction(fraction.Numerator, fraction.Denominator);
         }
 
+        /// <summary>
+        /// Constructs and reduces a fraction to lowest terms from integer numerator and denominator.
+        /// </summary>
+        /// <param name="numerator">The numerator.</param>
+        /// <param name="denominator">The denominator.</param>
+        /// <returns>The result.</returns>
         public static Fraction SimplifyFraction(BigInteger numerator, BigInteger denominator)
         {
             return new Fraction(numerator, denominator);
         }
 
+        /// <summary>
+        /// Constructs and reduces a fraction to lowest terms from integer numerator and denominator.
+        /// </summary>
+        /// <param name="numerator">The numerator.</param>
+        /// <param name="denominator">The denominator.</param>
+        /// <returns>The result.</returns>
         public static Fraction SimplifyFraction(int numerator, int denominator) =>
             SimplifyFraction(new BigInteger(numerator), new BigInteger(denominator));
 
+        /// <summary>
+        /// Returns the reciprocal (1 / fraction) of the specified fraction.
+        /// </summary>
+        /// <param name="fraction">The fraction.</param>
+        /// <returns>The result.</returns>
         public static Fraction InvertFraction(Fraction fraction)
         {
             ArgumentNullException.ThrowIfNull(fraction);
             return fraction.Invert();
         }
 
+        /// <summary>
+        /// Returns the additive inverse (-fraction) of the specified fraction.
+        /// </summary>
+        /// <param name="fraction">The fraction.</param>
+        /// <returns>The result.</returns>
         public static Fraction NegateFraction(Fraction fraction)
         {
             ArgumentNullException.ThrowIfNull(fraction);
             return -fraction;
         }
 
+        /// <summary>
+        /// Computes the sum of all fractions in the specified list.
+        /// </summary>
+        /// <param name="fractions">The fractions.</param>
+        /// <returns>The result.</returns>
         public static Fraction AddFractions(List<Fraction> fractions)
         {
             if (fractions == null || fractions.Count == 0)
@@ -691,17 +1020,34 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the greatest common divisor of two BigInteger values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int CalculateGCD(int a, int b)
         {
             BigInteger gcd = CalculateGCD(new BigInteger(a), new BigInteger(b));
             return gcd > int.MaxValue ? throw new OverflowException("The greatest common divisor is outside the range of Int32.") : (int)gcd;
         }
 
+        /// <summary>
+        /// Computes the greatest common divisor of two BigInteger values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static BigInteger CalculateGCD(BigInteger a, BigInteger b)
         {
             return BigInteger.GreatestCommonDivisor(BigInteger.Abs(a), BigInteger.Abs(b));
         }
 
+        /// <summary>
+        /// Sequentially subtracts subsequent integers in the list from the first element.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static int SubtractRange(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -716,6 +1062,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Sequentially subtracts subsequent double-precision values in the list from the first element.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static double SubtractRangeDouble(List<double> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -730,6 +1081,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Sequentially subtracts subsequent single-precision values in the list from the first element.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float SubtractRangeFloat(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -744,6 +1100,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the product of all integers in the specified list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static int MultiplyRange(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -758,6 +1119,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the product of all double-precision floating-point values in the specified list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static double MultiplyRangeDouble(List<double> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -772,6 +1138,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the product of all single-precision floating-point values in the specified list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float MultiplyRangeFloat(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -786,6 +1157,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Sequentially divides the first integer by each subsequent integer in the list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static int DivideRange(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -804,6 +1180,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Sequentially divides the first double-precision value by each subsequent value in the list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static double DivideRangeDouble(List<double> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -822,6 +1203,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Sequentially divides the first single-precision value by each subsequent value in the list.
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float DivideRangeFloat(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -840,6 +1226,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Returns the absolute value of a 32-bit signed integer.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int AbsInt(int value)
         {
             if (value == int.MinValue)
@@ -849,16 +1240,31 @@ namespace OPEN_LRD.Skills
             return Math.Abs(value);
         }
 
+        /// <summary>
+        /// Returns the absolute value of a double-precision floating-point number.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double AbsDouble(double value)
         {
             return Math.Abs(value);
         }
 
+        /// <summary>
+        /// Returns the absolute value of a single-precision floating-point number.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float AbsFloat(float value)
         {
             return Math.Abs(value);
         }
 
+        /// <summary>
+        /// Returns the arithmetic negation (-value) of an integer.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int NegateInt(int value)
         {
             if (value == int.MinValue)
@@ -868,76 +1274,163 @@ namespace OPEN_LRD.Skills
             return -value;
         }
 
+        /// <summary>
+        /// Returns the arithmetic negation (-value) of a double-precision floating-point number.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double NegateDouble(double value)
         {
             return -value;
         }
 
+        /// <summary>
+        /// Returns the arithmetic negation (-value) of a single-precision floating-point number.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float NegateFloat(float value)
         {
             return -value;
         }
 
+        /// <summary>
+        /// Returns the smaller of two integers.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int MinInt(int a, int b)
         {
             return Math.Min(a, b);
         }
 
+        /// <summary>
+        /// Returns the smaller of two double-precision floating-point values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static double MinDouble(double a, double b)
         {
             return Math.Min(a, b);
         }
 
+        /// <summary>
+        /// Returns the smaller of two single-precision floating-point values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static float MinFloat(float a, float b)
         {
             return Math.Min(a, b);
         }
 
+        /// <summary>
+        /// Returns the larger of two integers.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int MaxInt(int a, int b)
         {
             return Math.Max(a, b);
         }
 
+        /// <summary>
+        /// Returns the larger of two double-precision floating-point values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static double MaxDouble(double a, double b)
         {
             return Math.Max(a, b);
         }
 
+        /// <summary>
+        /// Returns the larger of two single-precision floating-point values.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static float MaxFloat(float a, float b)
         {
             return Math.Max(a, b);
         }
 
+        /// <summary>
+        /// Clamps an integer to the inclusive range [min, max].
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="min">The min.</param>
+        /// <param name="max">The max.</param>
+        /// <returns>The result.</returns>
         public static int ClampInt(int value, int min, int max)
         {
             return Math.Clamp(value, min, max);
         }
 
+        /// <summary>
+        /// Clamps a double-precision value to the inclusive range [min, max].
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="min">The min.</param>
+        /// <param name="max">The max.</param>
+        /// <returns>The result.</returns>
         public static double ClampDouble(double value, double min, double max)
         {
             return Math.Clamp(value, min, max);
         }
 
+        /// <summary>
+        /// Clamps a single-precision value to the inclusive range [min, max].
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="min">The min.</param>
+        /// <param name="max">The max.</param>
+        /// <returns>The result.</returns>
         public static float ClampFloat(float value, float min, float max)
         {
             return Math.Clamp(value, min, max);
         }
 
+        /// <summary>
+        /// Computes the square (value ) of an integer.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int SquareInt(int value)
         {
             return value * value;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double SquareDouble(double value)
         {
             return value * value;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float SquareFloat(float value)
         {
             return value * value;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double SqrtInt(int value)
         {
             if (value < 0)
@@ -947,6 +1440,11 @@ namespace OPEN_LRD.Skills
             return Math.Sqrt(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double SqrtDouble(double value)
         {
             if (value < 0.0)
@@ -956,6 +1454,11 @@ namespace OPEN_LRD.Skills
             return Math.Sqrt(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float SqrtFloat(float value)
         {
             if (value < 0.0f)
@@ -965,116 +1468,235 @@ namespace OPEN_LRD.Skills
             return (float)Math.Sqrt(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double CbrtInt(int value)
         {
             return Math.Cbrt(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double CbrtDouble(double value)
         {
             return Math.Cbrt(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float CbrtFloat(float value)
         {
             return (float)Math.Cbrt(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="exponent">The exponent.</param>
+        /// <returns>The result.</returns>
         public static double PowDouble(double value, double exponent)
         {
             return Math.Pow(value, exponent);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="exponent">The exponent.</param>
+        /// <returns>The result.</returns>
         public static float PowFloat(float value, float exponent)
         {
             return (float)Math.Pow(value, exponent);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int FloorInt(int value)
         {
             return value;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double FloorDouble(double value)
         {
             return Math.Floor(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float FloorFloat(float value)
         {
             return (float)Math.Floor(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int CeilingInt(int value)
         {
             return value;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double CeilingDouble(double value)
         {
             return Math.Ceiling(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float CeilingFloat(float value)
         {
             return (float)Math.Ceiling(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int RoundInt(int value)
         {
             return value;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double RoundDouble(double value)
         {
             return Math.Round(value, MidpointRounding.AwayFromZero);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="digits">The digits.</param>
+        /// <returns>The result.</returns>
         public static double RoundDouble(double value, int digits)
         {
             return Math.Round(value, digits, MidpointRounding.AwayFromZero);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float RoundFloat(float value)
         {
             return (float)Math.Round(value, MidpointRounding.AwayFromZero);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="digits">The digits.</param>
+        /// <returns>The result.</returns>
         public static float RoundFloat(float value, int digits)
         {
             return (float)Math.Round(value, digits, MidpointRounding.AwayFromZero);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int TruncateInt(int value)
         {
             return value;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double TruncateDouble(double value)
         {
             return Math.Truncate(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float TruncateFloat(float value)
         {
             return (float)Math.Truncate(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int SignInt(int value)
         {
             return Math.Sign(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int SignDouble(double value)
         {
             return Math.Sign(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static int SignFloat(float value)
         {
             return Math.Sign(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double LogDouble(double value)
         {
             if (value <= 0.0)
@@ -1084,6 +1706,11 @@ namespace OPEN_LRD.Skills
             return Math.Log(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float LogFloat(float value)
         {
             if (value <= 0.0f)
@@ -1093,6 +1720,11 @@ namespace OPEN_LRD.Skills
             return (float)Math.Log(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double Log10Double(double value)
         {
             if (value <= 0.0)
@@ -1102,6 +1734,11 @@ namespace OPEN_LRD.Skills
             return Math.Log10(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float Log10Float(float value)
         {
             if (value <= 0.0f)
@@ -1111,6 +1748,12 @@ namespace OPEN_LRD.Skills
             return (float)Math.Log10(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="baseValue">The base value.</param>
+        /// <returns>The result.</returns>
         public static double LogBaseDouble(double value, double baseValue)
         {
             if (value <= 0.0)
@@ -1124,6 +1767,12 @@ namespace OPEN_LRD.Skills
             return Math.Log(value, baseValue);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="baseValue">The base value.</param>
+        /// <returns>The result.</returns>
         public static float LogBaseFloat(float value, float baseValue)
         {
             if (value <= 0.0f)
@@ -1137,76 +1786,153 @@ namespace OPEN_LRD.Skills
             return (float)Math.Log(value, baseValue);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double ExpDouble(double value)
         {
             return Math.Exp(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float ExpFloat(float value)
         {
             return (float)Math.Exp(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="radians">The radians.</param>
+        /// <returns>The result.</returns>
         public static double SinDouble(double radians)
         {
             return Math.Sin(radians);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="radians">The radians.</param>
+        /// <returns>The result.</returns>
         public static double CosDouble(double radians)
         {
             return Math.Cos(radians);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="radians">The radians.</param>
+        /// <returns>The result.</returns>
         public static double TanDouble(double radians)
         {
             return Math.Tan(radians);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="radians">The radians.</param>
+        /// <returns>The result.</returns>
         public static float SinFloat(float radians)
         {
             return (float)Math.Sin(radians);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="radians">The radians.</param>
+        /// <returns>The result.</returns>
         public static float CosFloat(float radians)
         {
             return (float)Math.Cos(radians);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="radians">The radians.</param>
+        /// <returns>The result.</returns>
         public static float TanFloat(float radians)
         {
             return (float)Math.Tan(radians);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="y">The y.</param>
+        /// <param name="x">The x.</param>
+        /// <returns>The result.</returns>
         public static double Atan2Double(double y, double x)
         {
             return Math.Atan2(y, x);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="y">The y.</param>
+        /// <param name="x">The x.</param>
+        /// <returns>The result.</returns>
         public static float Atan2Float(float y, float x)
         {
             return (float)Math.Atan2(y, x);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="degrees">The degrees.</param>
+        /// <returns>The result.</returns>
         public static double DegreesToRadians(double degrees)
         {
             return degrees * (Math.PI / 180.0);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="degrees">The degrees.</param>
+        /// <returns>The result.</returns>
         public static float DegreesToRadians(float degrees)
         {
             return degrees * (MathF.PI / 180.0f);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="radians">The radians.</param>
+        /// <returns>The result.</returns>
         public static double RadiansToDegrees(double radians)
         {
             return radians * (180.0 / Math.PI);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="radians">The radians.</param>
+        /// <returns>The result.</returns>
         public static float RadiansToDegrees(float radians)
         {
             return radians * (180.0f / MathF.PI);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static int CalculateMin(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1224,6 +1950,11 @@ namespace OPEN_LRD.Skills
             return min;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static double CalculateMin(List<double> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1241,6 +1972,11 @@ namespace OPEN_LRD.Skills
             return min;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMin(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1258,6 +1994,11 @@ namespace OPEN_LRD.Skills
             return min;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static int CalculateMax(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1275,6 +2016,11 @@ namespace OPEN_LRD.Skills
             return max;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static double CalculateMax(List<double> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1292,6 +2038,11 @@ namespace OPEN_LRD.Skills
             return max;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMax(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1309,6 +2060,11 @@ namespace OPEN_LRD.Skills
             return max;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static int CalculateSum(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1323,6 +2079,11 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static double CalculateSum(List<double> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1337,6 +2098,11 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateSum(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1351,6 +2117,11 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static int CalculateProduct(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1365,6 +2136,11 @@ namespace OPEN_LRD.Skills
             return product;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static double CalculateProduct(List<double> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1379,6 +2155,11 @@ namespace OPEN_LRD.Skills
             return product;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateProduct(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1393,6 +2174,11 @@ namespace OPEN_LRD.Skills
             return product;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static List<int> CalculateCumulativeSum(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1409,6 +2195,11 @@ namespace OPEN_LRD.Skills
             return cumulative;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static List<double> CalculateCumulativeSum(List<double> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1425,6 +2216,11 @@ namespace OPEN_LRD.Skills
             return cumulative;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static List<float> CalculateCumulativeSum(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1441,6 +2237,12 @@ namespace OPEN_LRD.Skills
             return cumulative;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <param name="windowSize">The window size.</param>
+        /// <returns>The result.</returns>
         public static List<float> CalculateMovingAverage(List<float> numbers, int windowSize)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1464,11 +2266,22 @@ namespace OPEN_LRD.Skills
             return movingAverages;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <param name="windowSize">The window size.</param>
+        /// <returns>The result.</returns>
         public static List<float> CalculateSimpleMovingAverage(List<float> numbers, int windowSize)
         {
             return CalculateMovingAverage(numbers, windowSize);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMedianAbsoluteDeviation(List<float> numbers)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1484,6 +2297,12 @@ namespace OPEN_LRD.Skills
             return CalculateMedian(deviations);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <param name="trimPercentage">The trim percentage.</param>
+        /// <returns>The result.</returns>
         public static float CalculateTrimmedMean(List<float> numbers, float trimPercentage)
         {
             if (numbers == null || numbers.Count == 0)
@@ -1505,6 +2324,12 @@ namespace OPEN_LRD.Skills
             return CalculateAverage(trimmedNumbers);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="actual">The actual.</param>
+        /// <param name="predicted">The predicted.</param>
+        /// <returns>The result.</returns>
         public static float CalculateMeanAbsoluteError(List<float> actual, List<float> predicted)
         {
             if (actual == null || predicted == null || actual.Count != predicted.Count || actual.Count == 0)
@@ -1519,6 +2344,11 @@ namespace OPEN_LRD.Skills
             return sumOfAbsoluteErrors / actual.Count;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateSampleVariance(List<float> numbers)
         {
             if (numbers == null || numbers.Count < 2)
@@ -1534,11 +2364,22 @@ namespace OPEN_LRD.Skills
             return sumOfSquares / (numbers.Count - 1);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="numbers">The numbers.</param>
+        /// <returns>The result.</returns>
         public static float CalculateSampleStandardDeviation(List<float> numbers)
         {
             return (float)Math.Sqrt(CalculateSampleVariance(numbers));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int CalculateLCM(int a, int b)
         {
             if (a == 0 || b == 0)
@@ -1553,6 +2394,11 @@ namespace OPEN_LRD.Skills
             return (int)result;
         }
 
+        /// <summary>
+        /// Determines whether a 64-bit integer value is prime.
+        /// </summary>
+        /// <param name="number">The number.</param>
+        /// <returns>The result.</returns>
         public static bool IsPrime(int number)
         {
             if (number < 2)
@@ -1577,16 +2423,31 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="number">The number.</param>
+        /// <returns>The result.</returns>
         public static bool IsEven(int number)
         {
             return number % 2 == 0;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="number">The number.</param>
+        /// <returns>The result.</returns>
         public static bool IsOdd(int number)
         {
             return number % 2 != 0;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="number">The number.</param>
+        /// <returns>The result.</returns>
         public static bool IsPerfectSquare(int number)
         {
             if (number < 0)
@@ -1597,6 +2458,11 @@ namespace OPEN_LRD.Skills
             return root * root == number;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="number">The number.</param>
+        /// <returns>The result.</returns>
         public static long CalculateFactorial(int number)
         {
             if (number < 0)
@@ -1615,6 +2481,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <param name="r">The r.</param>
+        /// <returns>The result.</returns>
         public static long CalculateCombinations(int n, int r)
         {
             if (n < 0)
@@ -1637,6 +2509,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <param name="r">The r.</param>
+        /// <returns>The result.</returns>
         public static long CalculatePermutations(int n, int r)
         {
             if (n < 0)
@@ -1655,6 +2533,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="number">The number.</param>
+        /// <returns>The result.</returns>
         public static List<int> CalculatePrimeFactors(int number)
         {
             if (number < 2)
@@ -1678,6 +2561,11 @@ namespace OPEN_LRD.Skills
             return factors;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="number">The number.</param>
+        /// <returns>The result.</returns>
         public static int SumOfDigits(int number)
         {
             long value = Math.Abs((long)number);
@@ -1690,6 +2578,11 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="number">The number.</param>
+        /// <returns>The result.</returns>
         public static int ReverseInt(int number)
         {
             long value = Math.Abs((long)number);
@@ -1710,6 +2603,12 @@ namespace OPEN_LRD.Skills
             return (int)reversed;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="baseValue">The base value.</param>
+        /// <param name="exponent">The exponent.</param>
+        /// <returns>The result.</returns>
         public static int CalculatePowerInt(int baseValue, int exponent)
         {
             if (exponent < 0)
@@ -1724,6 +2623,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="total">The total.</param>
+        /// <returns>The result.</returns>
         public static float CalculatePercentage(float value, float total)
         {
             if (total == 0.0f)
@@ -1733,6 +2638,12 @@ namespace OPEN_LRD.Skills
             return (value / total) * 100.0f;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="oldValue">The old value.</param>
+        /// <param name="newValue">The new value.</param>
+        /// <returns>The result.</returns>
         public static float CalculatePercentageChange(float oldValue, float newValue)
         {
             if (oldValue == 0.0f)
@@ -1742,16 +2653,34 @@ namespace OPEN_LRD.Skills
             return ((newValue - oldValue) / Math.Abs(oldValue)) * 100.0f;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="percentage">The percentage.</param>
+        /// <returns>The result.</returns>
         public static float CalculatePercentageIncrease(float value, float percentage)
         {
             return value * (1.0f + (percentage / 100.0f));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="percentage">The percentage.</param>
+        /// <returns>The result.</returns>
         public static float CalculatePercentageDecrease(float value, float percentage)
         {
             return value * (1.0f - (percentage / 100.0f));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="fraction1">The fraction1.</param>
+        /// <param name="fraction2">The fraction2.</param>
+        /// <returns>The result.</returns>
         public static int CompareFractions(Fraction fraction1, Fraction fraction2)
         {
             ArgumentNullException.ThrowIfNull(fraction1);
@@ -1759,6 +2688,12 @@ namespace OPEN_LRD.Skills
             return fraction1.CompareTo(fraction2);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static int CalculateLCD(int a, int b)
         {
             if (a == 0 || b == 0)
@@ -1768,6 +2703,11 @@ namespace OPEN_LRD.Skills
             return Math.Abs(CalculateLCM(a, b));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="fraction">The fraction.</param>
+        /// <returns>The result.</returns>
         public static string ConvertToMixedNumber(Fraction fraction)
         {
             ArgumentNullException.ThrowIfNull(fraction);

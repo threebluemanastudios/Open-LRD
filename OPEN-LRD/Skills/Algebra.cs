@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using OPEN_LRD.Foundations;
@@ -16,6 +16,10 @@ namespace OPEN_LRD.Skills
 
     internal readonly record struct Interval(double Lower, double Upper, bool LowerClosed, bool UpperClosed)
     {
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <returns>The result.</returns>
         public override string ToString()
         {
             string lower = double.IsNegativeInfinity(Lower)
@@ -47,8 +51,15 @@ namespace OPEN_LRD.Skills
 
     internal readonly record struct Quaternion(double W, double X, double Y, double Z)
     {
+        /// <summary>
+        /// </summary>
+        /// </summary>
         public static Quaternion Identity => new Quaternion(1.0, 0.0, 0.0, 0.0);
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <returns>The result.</returns>
         public override string ToString()
         {
             return string.Format(
@@ -67,6 +78,11 @@ namespace OPEN_LRD.Skills
         private const int MaxExpansionDepth = 64;
         private const int MaxExpansionPower = 32;
 
+        /// <summary>
+        /// Normalizes a polynomial coefficient array by trimming trailing near-zero or leading zero terms into a canonical representation.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static double[] NormalizePolynomial(double[] coefficients)
         {
             if (coefficients == null)
@@ -91,18 +107,34 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the algebraic degree of the polynomial represented by coefficients.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static int PolynomialDegree(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
             return IsZeroPolynomial(polynomial) ? -1 : polynomial.Length - 1;
         }
 
+        /// <summary>
+        /// Returns the leading coefficient of the highest-degree non-zero term in the polynomial.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static double PolynomialLeadingCoefficient(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
             return IsZeroPolynomial(polynomial) ? 0.0 : polynomial[polynomial.Length - 1];
         }
 
+        /// <summary>
+        /// Evaluates the polynomial at a Complex number value (typically via Horner's method).
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double PolynomialEvaluate(double[] coefficients, double value)
         {
             if (coefficients == null)
@@ -117,6 +149,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Evaluates the polynomial at a Complex number value (typically via Horner's method).
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex PolynomialEvaluate(double[] coefficients, Complex value)
         {
             if (coefficients == null)
@@ -131,6 +169,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the sum of two polynomials (left + right) and returns the resulting coefficient array.
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double[] AddPolynomials(double[] left, double[] right)
         {
             double[] first = NormalizePolynomial(left);
@@ -146,6 +190,12 @@ namespace OPEN_LRD.Skills
             return NormalizePolynomial(result);
         }
 
+        /// <summary>
+        /// Computes the difference of two polynomials (left - right) and returns the resulting coefficient array.
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double[] SubtractPolynomials(double[] left, double[] right)
         {
             double[] first = NormalizePolynomial(left);
@@ -161,6 +211,12 @@ namespace OPEN_LRD.Skills
             return NormalizePolynomial(result);
         }
 
+        /// <summary>
+        /// Computes the Cauchy product of two polynomials (left * right) and returns the resulting coefficient array.
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double[] MultiplyPolynomials(double[] left, double[] right)
         {
             double[] first = NormalizePolynomial(left);
@@ -180,6 +236,12 @@ namespace OPEN_LRD.Skills
             return NormalizePolynomial(result);
         }
 
+        /// <summary>
+        /// Multiplies every coefficient of the polynomial by a scalar scale factor.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <param name="scale">The scale.</param>
+        /// <returns>The result.</returns>
         public static double[] ScalePolynomial(double[] coefficients, double scale)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -191,6 +253,12 @@ namespace OPEN_LRD.Skills
             return NormalizePolynomial(result);
         }
 
+        /// <summary>
+        /// Computes the functional composition outer(inner(x)) of two polynomials.
+        /// </summary>
+        /// <param name="outer">The outer.</param>
+        /// <param name="inner">The inner.</param>
+        /// <returns>The result.</returns>
         public static double[] ComposePolynomials(double[] outer, double[] inner)
         {
             double[] outerPolynomial = NormalizePolynomial(outer);
@@ -203,6 +271,12 @@ namespace OPEN_LRD.Skills
             return NormalizePolynomial(result);
         }
 
+        /// <summary>
+        /// Performs polynomial long division of dividend by divisor to obtain quotient and remainder.
+        /// </summary>
+        /// <param name="dividend">The dividend.</param>
+        /// <param name="divisor">The divisor.</param>
+        /// <returns>The result.</returns>
         public static PolynomialDivisionResult DividePolynomials(double[] dividend, double[] divisor)
         {
             double[] current = NormalizePolynomial(dividend);
@@ -234,6 +308,11 @@ namespace OPEN_LRD.Skills
             return new PolynomialDivisionResult(NormalizePolynomial(quotient), NormalizePolynomial(remainder));
         }
 
+        /// <summary>
+        /// Computes the first symbolic derivative of the polynomial with respect to its variable.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static double[] PolynomialDerivative(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -249,6 +328,11 @@ namespace OPEN_LRD.Skills
             return NormalizePolynomial(result);
         }
 
+        /// <summary>
+        /// Computes the indefinite integral (antiderivative) of the polynomial with constant of integration set to zero.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static double[] PolynomialIntegral(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -260,6 +344,14 @@ namespace OPEN_LRD.Skills
             return NormalizePolynomial(result);
         }
 
+        /// <summary>
+        /// Attempts synthetic division of the polynomial by linear factor (x - root), outputting quotient and remainder.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <param name="root">The root.</param>
+        /// <param name="quotient">The quotient.</param>
+        /// <param name="remainder">The remainder.</param>
+        /// <returns>The result.</returns>
         public static bool TrySyntheticDivision(double[] coefficients, double root, out double[] quotient, out double remainder)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -283,6 +375,12 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// Computes the polynomial greatest common divisor (GCD) of left and right using the Euclidean algorithm.
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double[] PolynomialGCD(double[] left, double[] right)
         {
             double[] first = NormalizePolynomial(left);
@@ -304,6 +402,12 @@ namespace OPEN_LRD.Skills
             return MonicPolynomial(first);
         }
 
+        /// <summary>
+        /// Computes the polynomial least common multiple (LCM) of left and right.
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double[] PolynomialLCM(double[] left, double[] right)
         {
             double[] first = NormalizePolynomial(left);
@@ -317,6 +421,11 @@ namespace OPEN_LRD.Skills
             return MonicPolynomial(DividePolynomials(product, gcd).Quotient);
         }
 
+        /// <summary>
+        /// Finds all rational roots of a polynomial using the Rational Root Theorem.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static double[] FindRationalRoots(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -369,6 +478,11 @@ namespace OPEN_LRD.Skills
             return roots.ToArray();
         }
 
+        /// <summary>
+        /// Factors a polynomial into lower-degree algebraic or linear/quadratic factors.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static PolynomialFactor[] FactorPolynomial(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -411,6 +525,13 @@ namespace OPEN_LRD.Skills
             return factors.ToArray();
         }
 
+        /// <summary>
+        /// Attempts to parse and extract polynomial coefficients in variable from an expression string.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static bool TryGetPolynomial(string expression, string variable, out double[] coefficients)
         {
             if (expression == null)
@@ -424,6 +545,12 @@ namespace OPEN_LRD.Skills
             return SymbolicCalculus.TryGetPolynomial(ExpressionParser.Parse(expression), variable, out coefficients);
         }
 
+        /// <summary>
+        /// Converts a polynomial coefficient array into a symbolic Expression in variable.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression PolynomialToExpression(double[] coefficients, string variable)
         {
             if (variable == null)
@@ -463,11 +590,23 @@ namespace OPEN_LRD.Skills
             return SymbolicCalculus.Simplify(result);
         }
 
+        /// <summary>
+        /// Formats a polynomial coefficient array as a human-readable mathematical string in variable.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static string FormatPolynomial(double[] coefficients, string variable)
         {
             return PolynomialToExpression(coefficients, variable).ToString();
         }
 
+        /// <summary>
+        /// Solves the linear equation coefficient * x + constant = 0 (or a*x + b = 0) for x.
+        /// </summary>
+        /// <param name="coefficient">The coefficient.</param>
+        /// <param name="constant">The constant.</param>
+        /// <returns>The result.</returns>
         public static LinearSolution SolveLinear(double coefficient, double constant)
         {
             if (Math.Abs(coefficient) <= Tolerance)
@@ -479,11 +618,24 @@ namespace OPEN_LRD.Skills
             return new LinearSolution(LinearSolutionKind.Unique, -constant / coefficient);
         }
 
+        /// <summary>
+        /// Computes the quadratic discriminant (? = b  - 4ac) for ax  + bx + c = 0.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <param name="c">The c.</param>
+        /// <returns>The result.</returns>
         public static double CalculateDiscriminant(double a, double b, double c)
         {
             return b * b - 4.0 * a * c;
         }
 
+        /// <summary>
+        /// Computes the axis of symmetry (x = -b / (2a)) of the parabola defined by a and b.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <returns>The result.</returns>
         public static double CalculateQuadraticAxisOfSymmetry(double a, double b)
         {
             if (Math.Abs(a) <= Tolerance)
@@ -493,12 +645,26 @@ namespace OPEN_LRD.Skills
             return -b / (2.0 * a);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="a">The quadratic coefficient.</param>
+        /// <param name="b">The linear coefficient.</param>
+        /// <param name="c">The constant coefficient.</param>
+        /// <returns>The vertex coordinates.</returns>
         public static (double X, double Y) CalculateQuadraticVertex(double a, double b, double c)
         {
             double x = CalculateQuadraticAxisOfSymmetry(a, b);
             return (x, a * x * x + b * x + c);
         }
 
+        /// <summary>
+        /// Solves ax  + bx + c = 0 for real roots using the quadratic formula.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <param name="c">The c.</param>
+        /// <returns>The result.</returns>
         public static double[] SolveQuadraticReal(double a, double b, double c)
         {
             if (Math.Abs(a) <= Tolerance)
@@ -521,6 +687,13 @@ namespace OPEN_LRD.Skills
             return first <= second ? new[] { first, second } : new[] { second, first };
         }
 
+        /// <summary>
+        /// Solves ax  + bx + c = 0 over the complex numbers, including conjugate pairs when discriminant is negative.
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <param name="c">The c.</param>
+        /// <returns>The result.</returns>
         public static Complex[] SolveQuadraticComplex(double a, double b, double c)
         {
             if (Math.Abs(a) <= Tolerance)
@@ -536,6 +709,11 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Finds roots (real and/or complex) of the polynomial defined by coefficients.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static Complex[] SolvePolynomial(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -592,6 +770,11 @@ namespace OPEN_LRD.Skills
             return roots.ToArray();
         }
 
+        /// <summary>
+        /// Finds the real roots of the polynomial defined by coefficients.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         public static double[] SolvePolynomialReal(double[] coefficients)
         {
             Complex[] roots = SolvePolynomial(coefficients);
@@ -607,6 +790,12 @@ namespace OPEN_LRD.Skills
             return result.ToArray();
         }
 
+        /// <summary>
+        /// Computes the degree-th root (value^(1/degree)) of value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="degree">The degree.</param>
+        /// <returns>The result.</returns>
         public static double NthRoot(double value, int degree)
         {
             if (degree < 1)
@@ -628,6 +817,13 @@ namespace OPEN_LRD.Skills
             return Math.Pow(value, 1.0 / degree);
         }
 
+        /// <summary>
+        /// Evaluates value^(numerator / denominator) for integer numerator and non-zero denominator.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="numerator">The numerator.</param>
+        /// <param name="denominator">The denominator.</param>
+        /// <returns>The result.</returns>
         public static double RationalPower(double value, int numerator, int denominator)
         {
             if (denominator == 0)
@@ -651,6 +847,11 @@ namespace OPEN_LRD.Skills
             return magnitude;
         }
 
+        /// <summary>
+        /// Simplifies a square root ?radicand by extracting the largest square factor.
+        /// </summary>
+        /// <param name="radicand">The radicand.</param>
+        /// <returns>The result.</returns>
         public static SquareRootSimplification SimplifySquareRoot(int radicand)
         {
             if (radicand < 0)
@@ -674,6 +875,12 @@ namespace OPEN_LRD.Skills
             return new SquareRootSimplification(outside, inside);
         }
 
+        /// <summary>
+        /// Solves baseValue^x = result for x using logarithms.
+        /// </summary>
+        /// <param name="baseValue">The base value.</param>
+        /// <param name="result">The result.</param>
+        /// <returns>The result.</returns>
         public static double SolveExponentialEquation(double baseValue, double result)
         {
             if (baseValue <= 0.0 || Math.Abs(baseValue - 1.0) <= Tolerance)
@@ -687,6 +894,12 @@ namespace OPEN_LRD.Skills
             return Math.Log(result, baseValue);
         }
 
+        /// <summary>
+        /// Solves log_{baseValue}(x) = result (or equivalent logarithmic form) for x.
+        /// </summary>
+        /// <param name="baseValue">The base value.</param>
+        /// <param name="result">The result.</param>
+        /// <returns>The result.</returns>
         public static double SolveLogarithmicEquation(double baseValue, double result)
         {
             if (baseValue <= 0.0 || Math.Abs(baseValue - 1.0) <= Tolerance)
@@ -696,6 +909,11 @@ namespace OPEN_LRD.Skills
             return Math.Pow(baseValue, result);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="size">The size.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixIdentity(int size)
         {
             if (size < 1)
@@ -710,6 +928,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixTranspose(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -726,6 +949,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixAdd(double[,] left, double[,] right)
         {
             EnsureSameShape(left, right);
@@ -742,6 +971,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixSubtract(double[,] left, double[,] right)
         {
             EnsureSameShape(left, right);
@@ -758,6 +993,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <param name="scale">The scale.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixScale(double[,] matrix, double scale)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -774,6 +1015,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixMultiply(double[,] left, double[,] right)
         {
             EnsureMatrix(left, nameof(left));
@@ -802,6 +1049,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <param name="exponent">The exponent.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixPower(double[,] matrix, int exponent)
         {
             EnsureSquare(matrix, nameof(matrix));
@@ -828,6 +1081,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the trace (sum of main diagonal entries) of a square matrix.
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <returns>The result.</returns>
         public static double MatrixTrace(double[,] matrix)
         {
             EnsureSquare(matrix, nameof(matrix));
@@ -840,6 +1098,11 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Computes the determinant (det(A)) of a square matrix.
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <returns>The result.</returns>
         public static double MatrixDeterminant(double[,] matrix)
         {
             EnsureSquare(matrix, nameof(matrix));
@@ -891,6 +1154,11 @@ namespace OPEN_LRD.Skills
             return determinant * sign;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixInverse(double[,] matrix)
         {
             EnsureSquare(matrix, nameof(matrix));
@@ -962,6 +1230,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the rank (number of linearly independent rows or columns) of the matrix.
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <returns>The result.</returns>
         public static int MatrixRank(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -988,6 +1261,11 @@ namespace OPEN_LRD.Skills
             return rank;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <returns>The result.</returns>
         public static double[,] MatrixRowReduce(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -1042,6 +1320,13 @@ namespace OPEN_LRD.Skills
             return working;
         }
 
+        /// <summary>
+        /// Attempts to solve the linear system matrix * x = rightHandSide, outputting solution if a unique solution exists.
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <param name="rightHandSide">The right hand side.</param>
+        /// <param name="solution">The solution.</param>
+        /// <returns>The result.</returns>
         public static bool TrySolveLinearSystem(double[,] matrix, double[] rightHandSide, out double[] solution)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -1115,6 +1400,12 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <param name="rightHandSide">The right hand side.</param>
+        /// <returns>The result.</returns>
         public static double[] SolveLinearSystem(double[,] matrix, double[] rightHandSide)
         {
             if (!TrySolveLinearSystem(matrix, rightHandSide, out double[] solution))
@@ -1124,21 +1415,45 @@ namespace OPEN_LRD.Skills
             return solution;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static Complex AddComplex(Complex left, Complex right)
         {
             return left + right;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static Complex SubtractComplex(Complex left, Complex right)
         {
             return left - right;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static Complex MultiplyComplex(Complex left, Complex right)
         {
             return left * right;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static Complex DivideComplex(Complex left, Complex right)
         {
             if (Complex.Abs(right) <= Tolerance)
@@ -1148,71 +1463,143 @@ namespace OPEN_LRD.Skills
             return left / right;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex NegateComplex(Complex value)
         {
             return -value;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex ConjugateComplex(Complex value)
         {
             return Complex.Conjugate(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double ComplexModulus(Complex value)
         {
             return Complex.Abs(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double ComplexArgument(Complex value)
         {
             return value.Phase;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="exponent">The exponent.</param>
+        /// <returns>The result.</returns>
         public static Complex ComplexPower(Complex value, Complex exponent)
         {
             return Complex.Pow(value, exponent);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex ComplexSquareRoot(Complex value)
         {
             return Complex.Sqrt(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex ComplexExponential(Complex value)
         {
             return Complex.Exp(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex ComplexLogarithm(Complex value)
         {
             return Complex.Log(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex ComplexSine(Complex value)
         {
             return Complex.Sin(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex ComplexCosine(Complex value)
         {
             return Complex.Cos(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Complex ComplexTangent(Complex value)
         {
             return Complex.Tan(value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="modulus">The modulus.</param>
+        /// <param name="argument">The argument.</param>
+        /// <returns>The result.</returns>
         public static Complex ComplexFromPolar(double modulus, double argument)
         {
             return Complex.FromPolarCoordinates(modulus, argument);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The complex value.</param>
+        /// <returns>The modulus and argument.</returns>
         public static (double Modulus, double Argument) ComplexToPolar(Complex value)
         {
             return (Complex.Abs(value), value.Phase);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="degree">The degree.</param>
+        /// <returns>The result.</returns>
         public static Complex[] ComplexRootsOfUnity(int degree)
         {
             if (degree < 1)
@@ -1227,26 +1614,55 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static Quaternion AddQuaternions(Quaternion left, Quaternion right)
         {
             return new Quaternion(left.W + right.W, left.X + right.X, left.Y + right.Y, left.Z + right.Z);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static Quaternion SubtractQuaternions(Quaternion left, Quaternion right)
         {
             return new Quaternion(left.W - right.W, left.X - right.X, left.Y - right.Y, left.Z - right.Z);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Quaternion NegateQuaternion(Quaternion value)
         {
             return new Quaternion(-value.W, -value.X, -value.Y, -value.Z);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="scale">The scale.</param>
+        /// <returns>The result.</returns>
         public static Quaternion ScaleQuaternion(Quaternion value, double scale)
         {
             return new Quaternion(value.W * scale, value.X * scale, value.Y * scale, value.Z * scale);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static Quaternion MultiplyQuaternions(Quaternion left, Quaternion right)
         {
             double w = left.W * right.W - left.X * right.X - left.Y * right.Y - left.Z * right.Z;
@@ -1256,21 +1672,41 @@ namespace OPEN_LRD.Skills
             return new Quaternion(w, x, y, z);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Quaternion ConjugateQuaternion(Quaternion value)
         {
             return new Quaternion(value.W, -value.X, -value.Y, -value.Z);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double QuaternionNormSquared(Quaternion value)
         {
             return value.W * value.W + value.X * value.X + value.Y * value.Y + value.Z * value.Z;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double QuaternionNorm(Quaternion value)
         {
             return Math.Sqrt(QuaternionNormSquared(value));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Quaternion NormalizeQuaternion(Quaternion value)
         {
             double norm = QuaternionNorm(value);
@@ -1281,6 +1717,11 @@ namespace OPEN_LRD.Skills
             return ScaleQuaternion(value, 1.0 / norm);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Quaternion InverseQuaternion(Quaternion value)
         {
             double normSquared = QuaternionNormSquared(value);
@@ -1291,11 +1732,23 @@ namespace OPEN_LRD.Skills
             return ScaleQuaternion(ConjugateQuaternion(value), 1.0 / normSquared);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>The result.</returns>
         public static double DotQuaternions(Quaternion left, Quaternion right)
         {
             return left.W * right.W + left.X * right.X + left.Y * right.Y + left.Z * right.Z;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="axis">The axis.</param>
+        /// <param name="angleRadians">The angle radians.</param>
+        /// <returns>The result.</returns>
         public static Quaternion QuaternionFromAxisAngle(Vector3 axis, double angleRadians)
         {
             double magnitude = Math.Sqrt(axis.X * axis.X + axis.Y * axis.Y + axis.Z * axis.Z);
@@ -1312,11 +1765,25 @@ namespace OPEN_LRD.Skills
                 axis.Z / magnitude * sine);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="angleRadians">The angle radians.</param>
+        /// <returns>The result.</returns>
         public static Quaternion QuaternionFromAxisAngle(double x, double y, double z, double angleRadians)
         {
             return QuaternionFromAxisAngle(new Vector3(x, y, z), angleRadians);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="axis">The axis.</param>
+        /// <param name="angleRadians">The angle radians.</param>
         public static void QuaternionToAxisAngle(Quaternion value, out Vector3 axis, out double angleRadians)
         {
             Quaternion normalized = NormalizeQuaternion(value);
@@ -1331,6 +1798,12 @@ namespace OPEN_LRD.Skills
             axis = new Vector3(normalized.X / sine, normalized.Y / sine, normalized.Z / sine);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="rotation">The rotation.</param>
+        /// <param name="vector">The vector.</param>
+        /// <returns>The result.</returns>
         public static Vector3 RotateVector(Quaternion rotation, Vector3 vector)
         {
             Quaternion normalized = NormalizeQuaternion(rotation);
@@ -1343,6 +1816,13 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="start">The start.</param>
+        /// <param name="end">The end.</param>
+        /// <param name="amount">The amount.</param>
+        /// <returns>The result.</returns>
         public static Quaternion QuaternionLerp(Quaternion start, Quaternion end, double amount)
         {
             if (amount < 0.0 || amount > 1.0)
@@ -1356,6 +1836,13 @@ namespace OPEN_LRD.Skills
                 ScaleQuaternion(second, amount)));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="start">The start.</param>
+        /// <param name="end">The end.</param>
+        /// <param name="amount">The amount.</param>
+        /// <returns>The result.</returns>
         public static Quaternion QuaternionSlerp(Quaternion start, Quaternion end, double amount)
         {
             if (amount < 0.0 || amount > 1.0)
@@ -1384,16 +1871,37 @@ namespace OPEN_LRD.Skills
                 ScaleQuaternion(second, secondScale)));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="coefficient">The coefficient.</param>
+        /// <param name="constant">The constant.</param>
+        /// <param name="relation">The relation.</param>
+        /// <returns>The result.</returns>
         public static Interval[] SolveLinearInequality(double coefficient, double constant, InequalityRelation relation)
         {
             return SolvePolynomialInequality(new[] { constant, coefficient }, relation);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="a">The a.</param>
+        /// <param name="b">The b.</param>
+        /// <param name="c">The c.</param>
+        /// <param name="relation">The relation.</param>
+        /// <returns>The result.</returns>
         public static Interval[] SolveQuadraticInequality(double a, double b, double c, InequalityRelation relation)
         {
             return SolvePolynomialInequality(new[] { c, b, a }, relation);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <param name="relation">The relation.</param>
+        /// <returns>The result.</returns>
         public static Interval[] SolvePolynomialInequality(double[] coefficients, InequalityRelation relation)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -1449,35 +1957,70 @@ namespace OPEN_LRD.Skills
             return MergeIntervals(intervals);
         }
 
+        /// <summary>
+        /// Algebraically simplifies a parsed mathematical Expression.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <returns>The result.</returns>
         public static Expression Simplify(Expression expression)
         {
             return SymbolicCalculus.Simplify(expression);
         }
 
+        /// <summary>
+        /// Algebraically simplifies a parsed mathematical Expression.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <returns>The result.</returns>
         public static string Simplify(string expression)
         {
             return SymbolicCalculus.Simplify(ExpressionParser.Parse(expression)).ToString();
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <returns>The result.</returns>
         public static Expression Expand(Expression expression)
         {
             if (expression == null)
             {
                 throw new ArgumentNullException(nameof(expression));
             }
-            return ExpandInternal(expression, 0);
+            ExpressionParser.ValidateExpressionLimits(expression);
+            Expression expanded = ExpandInternal(expression, 0);
+            ExpressionParser.ValidateExpressionLimits(expanded);
+            return expanded;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <returns>The result.</returns>
         public static Expression Expand(string expression)
         {
             return Expand(ExpressionParser.Parse(expression));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <returns>The result.</returns>
         public static string ExpandToString(string expression)
         {
             return Expand(expression).ToString();
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="replacement">The replacement.</param>
+        /// <returns>The result.</returns>
         public static Expression Substitute(Expression expression, string variable, Expression replacement)
         {
             if (expression == null)
@@ -1489,23 +2032,49 @@ namespace OPEN_LRD.Skills
                 throw new ArgumentNullException(nameof(variable));
             }
             string normalizedVariable = variable.Trim();
+            if (normalizedVariable.Length > ExpressionParser.MaximumIdentifierLength)
+            {
+                throw new FormatException($"Identifier exceeds the {ExpressionParser.MaximumIdentifierLength} character limit.");
+            }
             if (replacement == null)
             {
                 throw new ArgumentNullException(nameof(replacement));
             }
+            ExpressionParser.ValidateExpressionLimits(expression);
+            ExpressionParser.ValidateExpressionLimits(replacement);
             return SymbolicCalculus.Simplify(SubstituteInternal(expression, normalizedVariable, replacement));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Expression Substitute(Expression expression, string variable, double value)
         {
             return Substitute(expression, variable, ExpressionBuilder.Constant(value));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static Expression Substitute(string expression, string variable, double value)
         {
             return Substitute(ExpressionParser.Parse(expression), variable, value);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression CollectPolynomialTerms(Expression expression, string variable)
         {
             if (!SymbolicCalculus.TryGetPolynomial(expression, variable, out double[] coefficients))
@@ -1515,6 +2084,12 @@ namespace OPEN_LRD.Skills
             return PolynomialToExpression(coefficients, variable);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression Factor(Expression expression, string variable)
         {
             if (!SymbolicCalculus.TryGetPolynomial(expression, variable, out double[] coefficients))
@@ -1537,11 +2112,23 @@ namespace OPEN_LRD.Skills
             return SymbolicCalculus.Simplify(result);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression Factor(string expression, string variable)
         {
             return Factor(ExpressionParser.Parse(expression), variable);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static string FactorToString(string expression, string variable)
         {
             return Factor(expression, variable).ToString();

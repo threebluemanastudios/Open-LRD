@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using OPEN_LRD.Foundations;
 
@@ -32,51 +32,111 @@ namespace OPEN_LRD.Skills
         private const double DefaultTolerance = 1e-10;
         private const double LimitTolerance = 1e-8;
 
+        /// <summary>
+        /// Parses a mathematical expression string into an expression tree/AST.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <returns>The result.</returns>
         public static Expression Parse(string expression)
         {
             return ExpressionParser.Parse(expression);
         }
 
+        /// <summary>
+        /// Algebraically simplifies a parsed mathematical Expression.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <returns>The result.</returns>
         public static string Simplify(string expression)
         {
             return SymbolicCalculus.Simplify(Parse(expression)).ToString();
         }
 
+        /// <summary>
+        /// Algebraically simplifies a parsed mathematical Expression.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <returns>The result.</returns>
         public static string Simplify(Expression expression)
         {
             return SymbolicCalculus.Simplify(expression).ToString();
         }
 
+        /// <summary>
+        /// Computes the order-th symbolic derivative of an expression string with respect to variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression Differentiate(Expression expression, string variable = "x")
         {
             return SymbolicCalculus.Differentiate(expression, variable);
         }
 
+        /// <summary>
+        /// Computes the order-th symbolic derivative of an expression string with respect to variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression Differentiate(string expression, string variable = "x")
         {
             return SymbolicCalculus.Differentiate(Parse(expression), variable);
         }
 
+        /// <summary>
+        /// Computes the order-th symbolic derivative of an expression string with respect to variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="order">The order.</param>
+        /// <returns>The result.</returns>
         public static Expression Differentiate(Expression expression, string variable, int order)
         {
             return SymbolicCalculus.Differentiate(expression, variable, order);
         }
 
+        /// <summary>
+        /// Computes the order-th symbolic derivative of an expression string with respect to variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="order">The order.</param>
+        /// <returns>The result.</returns>
         public static Expression Differentiate(string expression, string variable, int order)
         {
             return SymbolicCalculus.Differentiate(Parse(expression), variable, order);
         }
 
+        /// <summary>
+        /// Computes the order-th symbolic derivative with respect to variable and formats it as a string.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static string DifferentiateToString(string expression, string variable = "x")
         {
             return Simplify(Differentiate(expression, variable));
         }
 
+        /// <summary>
+        /// Computes the order-th symbolic derivative with respect to variable and formats it as a string.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="order">The order.</param>
+        /// <returns>The result.</returns>
         public static string DifferentiateToString(string expression, string variable, int order)
         {
             return Simplify(Differentiate(expression, variable, order));
         }
 
+        /// <summary>
+        /// Computes the symbolic antiderivative (indefinite integral) of an expression string with respect to variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression Integrate(Expression expression, string variable = "x")
         {
             if (!SymbolicCalculus.TryIntegrate(expression, variable, out Expression? result))
@@ -86,46 +146,107 @@ namespace OPEN_LRD.Skills
             return result!;
         }
 
+        /// <summary>
+        /// Computes the symbolic antiderivative (indefinite integral) of an expression string with respect to variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression Integrate(string expression, string variable = "x")
         {
             return Integrate(Parse(expression), variable);
         }
 
+        /// <summary>
+        /// Attempts to compute a symbolic antiderivative for an expression string, returning true if successful.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="result">The result.</param>
+        /// <returns>The result.</returns>
         public static bool TryIntegrate(Expression expression, string variable, out Expression? result)
         {
             return SymbolicCalculus.TryIntegrate(expression, variable, out result);
         }
 
+        /// <summary>
+        /// Attempts to compute a symbolic antiderivative for an expression string, returning true if successful.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="result">The result.</param>
+        /// <returns>The result.</returns>
         public static bool TryIntegrate(string expression, string variable, out Expression? result)
         {
             return SymbolicCalculus.TryIntegrate(Parse(expression), variable, out result);
         }
 
+        /// <summary>
+        /// Computes the symbolic antiderivative with respect to variable and formats it as a string.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static string IntegrateToString(string expression, string variable = "x")
         {
             return Simplify(Integrate(expression, variable));
         }
 
+        /// <summary>
+        /// Evaluates an Expression numerically using the provided variable-to-value mapping.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double Evaluate(Expression expression, string variable, double value)
         {
             return SymbolicCalculus.Evaluate(expression, variable, value);
         }
 
+        /// <summary>
+        /// Evaluates an Expression numerically using the provided variable-to-value mapping.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static double Evaluate(string expression, string variable, double value)
         {
             return Evaluate(Parse(expression), variable, value);
         }
 
+        /// <summary>
+        /// Evaluates an expression string in single precision by substituting value for variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         public static float EvaluateFloat(string expression, string variable, float value)
         {
             return (float)Evaluate(expression, variable, value);
         }
 
+        /// <summary>
+        /// Evaluates an Expression numerically using the provided variable-to-value mapping.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variables">The variables.</param>
+        /// <returns>The result.</returns>
         public static double Evaluate(Expression expression, IReadOnlyDictionary<string, double> variables)
         {
             return SymbolicCalculus.Evaluate(expression, variables);
         }
 
+        /// <summary>
+        /// Computes the definite integral of an expression string over [lower, upper] with respect to variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double DefiniteIntegral(Expression expression, string variable, double lower, double upper)
         {
             if (lower == upper)
@@ -153,16 +274,39 @@ namespace OPEN_LRD.Skills
             return NumericIntegral(value => SymbolicCalculus.Evaluate(expression, variable, value), lower, upper);
         }
 
+        /// <summary>
+        /// Computes the definite integral of an expression string over [lower, upper] with respect to variable.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double DefiniteIntegral(string expression, string variable, double lower, double upper)
         {
             return DefiniteIntegral(Parse(expression), variable, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the definite integral of an expression string in single precision over [lower, upper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static float DefiniteIntegralFloat(string expression, string variable, float lower, float upper)
         {
             return (float)DefiniteIntegral(expression, variable, lower, upper);
         }
 
+        /// <summary>
+        /// Numerically approximates the order-th derivative of function at point with step size step.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="point">The point.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double NumericDerivative(Func<double, double> function, double point, double step = 0.0)
         {
             if (function == null)
@@ -179,6 +323,14 @@ namespace OPEN_LRD.Skills
             return (4.0 * fine - coarse) / 3.0;
         }
 
+        /// <summary>
+        /// Numerically approximates the order-th derivative of function at point with step size step.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="point">The point.</param>
+        /// <param name="order">The order.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double NumericDerivative(Func<double, double> function, double point, int order, double step = 0.0)
         {
             if (order < 1)
@@ -194,6 +346,13 @@ namespace OPEN_LRD.Skills
             return current(point);
         }
 
+        /// <summary>
+        /// Numerically approximates the second derivative (f''(point)) using step size step.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="point">The point.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double NumericSecondDerivative(Func<double, double> function, double point, double step = 0.0)
         {
             if (function == null)
@@ -207,12 +366,28 @@ namespace OPEN_LRD.Skills
             return (function(point + step) - 2.0 * function(point) + function(point - step)) / (step * step);
         }
 
+        /// <summary>
+        /// Numerically approximates the derivative of an expression string with respect to variable at point.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="point">The point.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double NumericDerivativeAtPoint(string expression, string variable, double point, double step = 0.0)
         {
             Expression parsed = Parse(expression);
             return NumericDerivative(value => SymbolicCalculus.Evaluate(parsed, variable, value), point, step);
         }
 
+        /// <summary>
+        /// Numerically integrates function over [lower, upper] using the specified number of subintervals.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double NumericIntegral(Func<double, double> function, double lower, double upper, int intervals = 1000)
         {
             if (function == null)
@@ -237,6 +412,15 @@ namespace OPEN_LRD.Skills
             return sum * step / 3.0;
         }
 
+        /// <summary>
+        /// Numerically integrates function over [lower, upper] with adaptive subdivision to meet tolerance within maxDepth.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="maxDepth">The max depth.</param>
+        /// <returns>The result.</returns>
         public static double AdaptiveIntegral(Func<double, double> function, double lower, double upper, double tolerance = DefaultTolerance, int maxDepth = 20)
         {
             if (function == null)
@@ -250,6 +434,14 @@ namespace OPEN_LRD.Skills
             return AdaptiveSimpson(function, lower, upper, tolerance, maxDepth);
         }
 
+        /// <summary>
+        /// Numerically integrates function over [lower, upper] via the composite trapezoidal rule.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double TrapezoidalIntegral(Func<double, double> function, double lower, double upper, int intervals = 1000)
         {
             if (function == null)
@@ -269,6 +461,14 @@ namespace OPEN_LRD.Skills
             return sum * step;
         }
 
+        /// <summary>
+        /// Evaluates the limit of an expression string as variable approaches approach from direction.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="approach">The approach.</param>
+        /// <param name="direction">The direction.</param>
+        /// <returns>The result.</returns>
         public static double Limit(Expression expression, string variable, double approach, LimitDirection direction = LimitDirection.Both)
         {
             if (expression == null)
@@ -310,11 +510,26 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("The two-sided limit does not exist.");
         }
 
+        /// <summary>
+        /// Evaluates the limit of an expression string as variable approaches approach from direction.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="approach">The approach.</param>
+        /// <param name="direction">The direction.</param>
+        /// <returns>The result.</returns>
         public static double Limit(string expression, string variable, double approach, LimitDirection direction = LimitDirection.Both)
         {
             return Limit(Parse(expression), variable, approach, direction);
         }
 
+        /// <summary>
+        /// Evaluates the limit of an expression string as variable approaches +? or -?.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="positive">The positive.</param>
+        /// <returns>The result.</returns>
         public static double LimitAtInfinity(Expression expression, string variable, bool positive)
         {
             if (expression == null)
@@ -381,11 +596,26 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("The limit at infinity does not appear to exist.");
         }
 
+        /// <summary>
+        /// Evaluates the limit of an expression string as variable approaches +? or -?.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="positive">The positive.</param>
+        /// <returns>The result.</returns>
         public static double LimitAtInfinity(string expression, string variable, bool positive)
         {
             return LimitAtInfinity(Parse(expression), variable, positive);
         }
 
+        /// <summary>
+        /// Constructs the Taylor polynomial of degree order for an expression string expanded around center.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="center">The center.</param>
+        /// <param name="order">The order.</param>
+        /// <returns>The result.</returns>
         public static Expression TaylorSeries(Expression expression, string variable, double center, int order)
         {
             if (expression == null)
@@ -417,32 +647,79 @@ namespace OPEN_LRD.Skills
             return SymbolicCalculus.Simplify(result);
         }
 
+        /// <summary>
+        /// Constructs the Taylor polynomial of degree order for an expression string expanded around center.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="center">The center.</param>
+        /// <param name="order">The order.</param>
+        /// <returns>The result.</returns>
         public static Expression TaylorSeries(string expression, string variable, double center, int order)
         {
             return TaylorSeries(Parse(expression), variable, center, order);
         }
 
+        /// <summary>
+        /// Constructs the Taylor series expansion around center up to order and formats it as a string.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="center">The center.</param>
+        /// <param name="order">The order.</param>
+        /// <returns>The result.</returns>
         public static string TaylorSeriesToString(string expression, string variable, double center, int order)
         {
             return Simplify(TaylorSeries(expression, variable, center, order));
         }
 
+        /// <summary>
+        /// Constructs the Maclaurin series (expansion centered at 0) of degree order for an expression string.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="order">The order.</param>
+        /// <returns>The result.</returns>
         public static Expression MaclaurinSeries(Expression expression, string variable, int order)
         {
             return TaylorSeries(expression, variable, 0.0, order);
         }
 
+        /// <summary>
+        /// Constructs the Maclaurin series (expansion centered at 0) of degree order for an expression string.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="order">The order.</param>
+        /// <returns>The result.</returns>
         public static Expression MaclaurinSeries(string expression, string variable, int order)
         {
             return TaylorSeries(expression, variable, 0.0, order);
         }
 
+        /// <summary>
+        /// Evaluates the degree-order Taylor approximation centered at center at target point.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="center">The center.</param>
+        /// <param name="order">The order.</param>
+        /// <param name="point">The point.</param>
+        /// <returns>The result.</returns>
         public static double TaylorSeriesValue(Expression expression, string variable, double center, int order, double point)
         {
             Expression series = TaylorSeries(expression, variable, center, order);
             return SymbolicCalculus.Evaluate(series, variable, point);
         }
 
+        /// <summary>
+        /// Computes the coefficient of the (x - center)^degree term in the Taylor expansion.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="center">The center.</param>
+        /// <param name="degree">The degree.</param>
+        /// <returns>The result.</returns>
         public static double TaylorCoefficient(Expression expression, string variable, double center, int degree)
         {
             if (degree < 0)
@@ -460,6 +737,12 @@ namespace OPEN_LRD.Skills
             return value / Factorial(degree);
         }
 
+        /// <summary>
+        /// Computes the infinite geometric series sum a / (1 - r) when |r| < 1.
+        /// </summary>
+        /// <param name="firstTerm">The first term.</param>
+        /// <param name="ratio">The ratio.</param>
+        /// <returns>The result.</returns>
         public static double GeometricSeriesSum(double firstTerm, double ratio)
         {
             if (Math.Abs(ratio) >= 1.0)
@@ -469,6 +752,14 @@ namespace OPEN_LRD.Skills
             return firstTerm / (1.0 - ratio);
         }
 
+        /// <summary>
+        /// Numerically sums an infinite series starting at firstIndex until convergence within tolerance or maxTerms.
+        /// </summary>
+        /// <param name="term">The term.</param>
+        /// <param name="firstIndex">The first index.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="maxTerms">The max terms.</param>
+        /// <returns>The result.</returns>
         public static double InfiniteSeriesSum(Func<int, double> term, int firstIndex = 0, double tolerance = 1e-12, int maxTerms = 100000)
         {
             if (term == null)
@@ -502,6 +793,15 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("The series did not converge within the term limit.");
         }
 
+        /// <summary>
+        /// Computes a Riemann sum approximation (left, right, or midpoint) over [lower, upper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <param name="type">The type.</param>
+        /// <returns>The result.</returns>
         public static double RiemannSum(Func<double, double> function, double lower, double upper, int intervals, RiemannSumType type = RiemannSumType.Midpoint)
         {
             if (function == null)
@@ -538,6 +838,14 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Computes the arc length of a ParametricCurve for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double ArcLength(Expression expression, string variable, double lower, double upper)
         {
             Expression derivative = SymbolicCalculus.Differentiate(expression, variable);
@@ -549,11 +857,27 @@ namespace OPEN_LRD.Skills
             return AdaptiveIntegral(function, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the arc length of a ParametricCurve for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double ArcLength(string expression, string variable, double lower, double upper)
         {
             return ArcLength(Parse(expression), variable, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the arc length of a parametric curve (x(t), y(t)) for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="xOfT">The x of t.</param>
+        /// <param name="yOfT">The y of t.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double ArcLengthParametric(Func<double, double> xOfT, Func<double, double> yOfT, double lower, double upper)
         {
             if (xOfT == null)
@@ -573,6 +897,14 @@ namespace OPEN_LRD.Skills
             return AdaptiveIntegral(speed, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the solid of revolution volume using the disk method for an expression string over [lower, upper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double VolumeOfRevolutionDisk(Expression expression, string variable, double lower, double upper)
         {
             Func<double, double> function = value =>
@@ -583,11 +915,28 @@ namespace OPEN_LRD.Skills
             return AdaptiveIntegral(function, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the solid of revolution volume using the disk method for an expression string over [lower, upper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double VolumeOfRevolutionDisk(string expression, string variable, double lower, double upper)
         {
             return VolumeOfRevolutionDisk(Parse(expression), variable, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the solid of revolution volume using the washer method between outer and inner radii.
+        /// </summary>
+        /// <param name="outer">The outer.</param>
+        /// <param name="inner">The inner.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double VolumeOfRevolutionWasher(Expression outer, Expression inner, string variable, double lower, double upper)
         {
             Func<double, double> function = value =>
@@ -599,6 +948,14 @@ namespace OPEN_LRD.Skills
             return AdaptiveIntegral(function, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the solid of revolution volume using the cylindrical shell method over [lower, upper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double VolumeOfRevolutionShell(Expression expression, string variable, double lower, double upper)
         {
             Func<double, double> function = value =>
@@ -609,6 +966,14 @@ namespace OPEN_LRD.Skills
             return AdaptiveIntegral(function, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the surface area of a solid formed by revolving a curve over [lower, upper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double SurfaceAreaOfRevolution(Expression expression, string variable, double lower, double upper)
         {
             Expression derivative = SymbolicCalculus.Differentiate(expression, variable);
@@ -621,6 +986,14 @@ namespace OPEN_LRD.Skills
             return AdaptiveIntegral(function, lower, upper);
         }
 
+        /// <summary>
+        /// Numerically computes the mean value of a 2D scalar function over the rectangular domain [xLower, xUpper]   [yLower, yUpper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double AverageValue(Expression expression, string variable, double lower, double upper)
         {
             if (lower == upper)
@@ -630,11 +1003,27 @@ namespace OPEN_LRD.Skills
             return DefiniteIntegral(expression, variable, lower, upper) / (upper - lower);
         }
 
+        /// <summary>
+        /// Numerically computes the mean value of a 2D scalar function over the rectangular domain [xLower, xUpper]   [yLower, yUpper].
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double AverageValue(string expression, string variable, double lower, double upper)
         {
             return AverageValue(Parse(expression), variable, lower, upper);
         }
 
+        /// <summary>
+        /// Finds a point c in (lower, upper) satisfying the Mean Value Theorem for derivatives.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double MeanValueTheoremPoint(Expression expression, string variable, double lower, double upper)
         {
             if (lower == upper)
@@ -647,11 +1036,28 @@ namespace OPEN_LRD.Skills
             return FindRoot(target, 0.5 * (lower + upper), lower, upper);
         }
 
+        /// <summary>
+        /// Finds a root of an expression string with respect to variable using Newton-Raphson iteration.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="initialGuess">The initial guess.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="maxIterations">The max iterations.</param>
+        /// <returns>The result.</returns>
         public static double NewtonRaphson(Func<double, double> function, double initialGuess, double tolerance = 1e-10, int maxIterations = 100)
         {
             return NewtonRaphson(function, value => NumericDerivative(function, value), initialGuess, tolerance, maxIterations);
         }
 
+        /// <summary>
+        /// Finds a root of an expression string with respect to variable using Newton-Raphson iteration.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="derivative">The derivative.</param>
+        /// <param name="initialGuess">The initial guess.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="maxIterations">The max iterations.</param>
+        /// <returns>The result.</returns>
         public static double NewtonRaphson(Func<double, double> function, Func<double, double> derivative, double initialGuess, double tolerance = 1e-10, int maxIterations = 100)
         {
             if (function == null)
@@ -697,16 +1103,43 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("Newton's method did not converge.");
         }
 
+        /// <summary>
+        /// Finds a root of an expression string with respect to variable using Newton-Raphson iteration.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="initialGuess">The initial guess.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="maxIterations">The max iterations.</param>
+        /// <returns>The result.</returns>
         public static double NewtonRaphson(Expression expression, string variable, double initialGuess, double tolerance = 1e-10, int maxIterations = 100)
         {
             return NewtonRaphson(value => SymbolicCalculus.Evaluate(expression, variable, value), initialGuess, tolerance, maxIterations);
         }
 
+        /// <summary>
+        /// Finds a root of an expression string with respect to variable using Newton-Raphson iteration.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="initialGuess">The initial guess.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="maxIterations">The max iterations.</param>
+        /// <returns>The result.</returns>
         public static double NewtonRaphson(string expression, string variable, double initialGuess, double tolerance = 1e-10, int maxIterations = 100)
         {
             return NewtonRaphson(Parse(expression), variable, initialGuess, tolerance, maxIterations);
         }
 
+        /// <summary>
+        /// Finds a root of function on [lower, upper] via the bisection method.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="maxIterations">The max iterations.</param>
+        /// <returns>The result.</returns>
         public static double Bisection(Func<double, double> function, double lower, double upper, double tolerance = 1e-10, int maxIterations = 200)
         {
             if (function == null)
@@ -753,6 +1186,16 @@ namespace OPEN_LRD.Skills
             return 0.5 * (lower + upper);
         }
 
+        /// <summary>
+        /// Searches for a root of function using sampling and local refinement over [lower, upper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="initialGuess">The initial guess.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="samples">The samples.</param>
+        /// <returns>The result.</returns>
         public static double FindRoot(Func<double, double> function, double initialGuess, double lower, double upper, double tolerance = 1e-10, int samples = 1000)
         {
             try
@@ -781,6 +1224,15 @@ namespace OPEN_LRD.Skills
             return best;
         }
 
+        /// <summary>
+        /// Finds multiple roots of function across [lower, upper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="samples">The samples.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <returns>The result.</returns>
         public static double[] FindRoots(Func<double, double> function, double lower, double upper, int samples = 1000, double tolerance = 1e-10)
         {
             if (function == null)
@@ -821,6 +1273,15 @@ namespace OPEN_LRD.Skills
             return roots.ToArray();
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="samples">The samples.</param>
+        /// <returns>The result.</returns>
         public static double[] FindCriticalPoints(Expression expression, string variable, double lower, double upper, int samples = 1000)
         {
             Expression derivative = SymbolicCalculus.Differentiate(expression, variable);
@@ -828,11 +1289,29 @@ namespace OPEN_LRD.Skills
             return FindRoots(function, lower, upper, samples);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="samples">The samples.</param>
+        /// <returns>The result.</returns>
         public static double[] FindCriticalPoints(string expression, string variable, double lower, double upper, int samples = 1000)
         {
             return FindCriticalPoints(Parse(expression), variable, lower, upper, samples);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="samples">The samples.</param>
+        /// <returns>The result.</returns>
         public static double[] FindInflectionPoints(Expression expression, string variable, double lower, double upper, int samples = 1000)
         {
             Expression derivative = SymbolicCalculus.Differentiate(expression, variable, 2);
@@ -840,11 +1319,27 @@ namespace OPEN_LRD.Skills
             return FindRoots(function, lower, upper, samples);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="samples">The samples.</param>
+        /// <returns>The result.</returns>
         public static double[] FindInflectionPoints(string expression, string variable, double lower, double upper, int samples = 1000)
         {
             return FindInflectionPoints(Parse(expression), variable, lower, upper, samples);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="point">The point.</param>
+        /// <returns>The result.</returns>
         public static ExtremumType ClassifyCriticalPoint(Expression expression, string variable, double point)
         {
             Expression derivative = SymbolicCalculus.Differentiate(expression, variable, 2);
@@ -872,6 +1367,13 @@ namespace OPEN_LRD.Skills
             return ExtremumType.Inflection;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="point">The point.</param>
+        /// <returns>The result.</returns>
         public static ExtremumType ClassifyCriticalPoint(string expression, string variable, double point)
         {
             return ClassifyCriticalPoint(Parse(expression), variable, point);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using OPEN_LRD.Foundations;
 
@@ -22,6 +22,9 @@ namespace OPEN_LRD.Skills
     {
         private const double Tolerance = 1e-10;
 
+        /// <summary>
+        /// Computes the 2D convex hull enclosing points.
+        /// </summary>
         public static IReadOnlyList<Vector2> ConvexHull(IReadOnlyList<Vector2> points)
         {
             ValidatePoints(points, 1, nameof(points));
@@ -62,6 +65,9 @@ namespace OPEN_LRD.Skills
             lower.RemoveAt(lower.Count - 1);
             upper.RemoveAt(upper.Count - 1);
             lower.AddRange(upper);
+        /// <summary>
+        /// Determines whether point lies inside polygon.
+        /// </summary>
             return lower.AsReadOnly();
         }
 
@@ -82,6 +88,9 @@ namespace OPEN_LRD.Skills
                     && point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X;
                 if (crosses)
                 {
+        /// <summary>
+        /// Tests or computes the intersection between segment ab and segment cd, outputting the intersection point.
+        /// </summary>
                     inside = !inside;
                 }
             }
@@ -131,6 +140,9 @@ namespace OPEN_LRD.Skills
 
             double t = Cross(between, secondDirection) / denominator;
             double u = Cross(between, firstDirection) / denominator;
+        /// <summary>
+        /// Clips polygon to the axis-aligned bounds defined by clipMin and clipMax.
+        /// </summary>
             if (t < -Tolerance || t > 1.0 + Tolerance || u < -Tolerance || u > 1.0 + Tolerance)
             {
                 intersection = default;
@@ -144,6 +156,9 @@ namespace OPEN_LRD.Skills
         {
             List<Vector2> vertices = NormalizePolygon(polygon, nameof(polygon));
             EnsureFinite(clipMin, nameof(clipMin));
+        /// <summary>
+        /// Triangulates 2D polygon into non-overlapping triangles.
+        /// </summary>
             EnsureFinite(clipMax, nameof(clipMax));
             if (clipMin.X > clipMax.X || clipMin.Y > clipMax.Y)
             {
@@ -202,6 +217,9 @@ namespace OPEN_LRD.Skills
                     {
                         continue;
                     }
+        /// <summary>
+        /// Computes barycentric coordinates of 2D point relative to vertices a, b, and c.
+        /// </summary>
                     triangles.Add(new Triangle2D(a, b, c));
                     remaining.RemoveAt(position);
                     clipped = true;
@@ -218,20 +236,32 @@ namespace OPEN_LRD.Skills
         }
 
         public static BarycentricCoordinates BarycentricCoordinates(Vector2 point, Vector2 a, Vector2 b, Vector2 c)
+        /// <summary>
+        /// Determines whether 2D point lies inside triangle (a, b, c).
+        /// </summary>
         {
             EnsureFinite(point, nameof(point));
             EnsureFinite(a, nameof(a));
             EnsureFinite(b, nameof(b));
+        /// <summary>
+        /// Computes the normal vector of 3D triangle (a, b, c).
+        /// </summary>
             EnsureFinite(c, nameof(c));
             Vector2 first = b - a;
             Vector2 second = c - a;
             double denominator = Cross(first, second);
             if (Math.Abs(denominator) <= Tolerance)
+        /// <summary>
+        /// Computes the area of 3D triangle (a, b, c).
+        /// </summary>
             {
                 throw new ArgumentException("Triangle vertices must not be collinear.");
             }
             Vector2 relative = point - a;
             double secondWeight = Cross(relative, second) / denominator;
+        /// <summary>
+        /// Computes barycentric coordinates of 2D point relative to vertices a, b, and c.
+        /// </summary>
             double thirdWeight = Cross(first, relative) / denominator;
             return new BarycentricCoordinates(1.0 - secondWeight - thirdWeight, secondWeight, thirdWeight);
         }
@@ -253,6 +283,9 @@ namespace OPEN_LRD.Skills
 
         public static double TriangleArea(Vector3 a, Vector3 b, Vector3 c)
         {
+        /// <summary>
+        /// Computes the intersection of ray with plane.
+        /// </summary>
             EnsureFinite(a, nameof(a));
             EnsureFinite(b, nameof(b));
             EnsureFinite(c, nameof(c));
@@ -277,6 +310,9 @@ namespace OPEN_LRD.Skills
             if (Math.Abs(denominator) <= Tolerance)
             {
                 throw new ArgumentException("Triangle vertices must not be collinear.", nameof(triangle));
+        /// <summary>
+        /// Computes the intersection of ray with the sphere at center of given radius.
+        /// </summary>
             }
             double secondWeight = (d11 * d20 - d01 * d21) / denominator;
             double thirdWeight = (d00 * d21 - d01 * d20) / denominator;
@@ -302,6 +338,9 @@ namespace OPEN_LRD.Skills
                 return Miss();
             }
             double distance = (normalizedOffset - Dot(normal, ray.Origin)) / denominator;
+        /// <summary>
+        /// Computes the intersection of ray with triangle.
+        /// </summary>
             if (distance < 0.0)
             {
                 return Miss();
@@ -340,6 +379,9 @@ namespace OPEN_LRD.Skills
 
         public static RayHit RayTriangleIntersection(Ray ray, Triangle triangle)
         {
+        /// <summary>
+        /// Computes the intersection of ray with axis-aligned box.
+        /// </summary>
             Vector3 direction = NormalizeDirection(ray.Direction);
             EnsureFinite(ray.Origin, nameof(ray));
             EnsureFinite(triangle.A, nameof(triangle));
@@ -398,6 +440,9 @@ namespace OPEN_LRD.Skills
                 double origin = Component(ray.Origin, axis);
                 double delta = Component(direction, axis);
                 double minimum = Component(box.Minimum, axis);
+        /// <summary>
+        /// Computes an axis-aligned bounding box enclosing 3D points.
+        /// </summary>
                 double maximum = Component(box.Maximum, axis);
                 if (Math.Abs(delta) <= Tolerance)
                 {
@@ -416,6 +461,9 @@ namespace OPEN_LRD.Skills
                     (first, second) = (second, first);
                     (firstNormal, secondNormal) = (secondNormal, firstNormal);
                 }
+        /// <summary>
+        /// Evaluates a point on the Bézier curve defined by controlPoints at parameter t.
+        /// </summary>
                 if (first > near)
                 {
                     near = first;
@@ -431,6 +479,9 @@ namespace OPEN_LRD.Skills
                     return Miss();
                 }
             }
+        /// <summary>
+        /// Evaluates the derivative vector of the Bézier curve for controlPoints at parameter t.
+        /// </summary>
             double distance = near >= 0.0 ? near : far;
             Vector3 normal = near >= 0.0 ? nearNormal : farNormal;
             if (distance < 0.0 || !double.IsFinite(distance))
@@ -444,6 +495,9 @@ namespace OPEN_LRD.Skills
         {
             ValidatePoints(points, 1, nameof(points));
             double minX = points[0].X;
+        /// <summary>
+        /// Evaluates a point on the Catmull-Rom spline through control points p0p3 at parameter t.
+        /// </summary>
             double minY = points[0].Y;
             double minZ = points[0].Z;
             double maxX = minX;
@@ -456,6 +510,9 @@ namespace OPEN_LRD.Skills
                 minZ = Math.Min(minZ, point.Z);
                 maxX = Math.Max(maxX, point.X);
                 maxY = Math.Max(maxY, point.Y);
+        /// <summary>
+        /// Evaluates the tangent vector of the Catmull-Rom spline through p0p3 at parameter t.
+        /// </summary>
                 maxZ = Math.Max(maxZ, point.Z);
             }
             return new BoundingBox(new Vector3(minX, minY, minZ), new Vector3(maxX, maxY, maxZ));
@@ -536,6 +593,9 @@ namespace OPEN_LRD.Skills
         }
 
         public static double[,] RotationXMatrix(double radians)
+        /// <summary>
+        /// Transforms 3D point by transformation matrix.
+        /// </summary>
         {
             EnsureFinite(radians, nameof(radians));
             double cosine = Math.Cos(radians);
@@ -548,6 +608,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Transforms 3D direction vector by transformation matrix.
+        /// </summary>
         public static double[,] RotationYMatrix(double radians)
         {
             EnsureFinite(radians, nameof(radians));

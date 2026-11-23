@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using OPEN_LRD.Foundations;
 
@@ -37,6 +37,9 @@ namespace OPEN_LRD.Skills
                 (radius, first, second) => -CoulombCoefficient * first.Charge * second.Charge / (radius * radius));
         }
 
+        /// <summary>
+        /// Constructs a Lennard-Jones pair potential parameterized by epsilon and sigma.
+        /// </summary>
         public static PairPotential LennardJonesPairPotential(double epsilon, double sigma)
         {
             EnsurePositive(epsilon, nameof(epsilon));
@@ -44,24 +47,39 @@ namespace OPEN_LRD.Skills
             return new PairPotential(
                 "Lennard-Jones",
                 (radius, _, _) => LennardJonesEnergy(radius, epsilon, sigma),
+        /// <summary>
+        /// Computes pair potential energy at separation under potential.
+        /// </summary>
                 (radius, _, _) => LennardJonesDerivative(radius, epsilon, sigma));
         }
 
+        /// <summary>
+        /// Computes pair potential energy at separation under potential.
+        /// </summary>
         public static double PairPotentialEnergy(double separation, PairPotential potential)
         {
             ParticleState unit = new ParticleState(1.0, 1.0, default, default);
             return PairPotentialEnergy(unit, unit, separation, potential);
         }
 
+        /// <summary>
+        /// Computes interparticle force at separation under potential.
+        /// </summary>
         public static double PairPotentialEnergy(ParticleState first, ParticleState second, double separation, PairPotential potential)
         {
             ValidatePotential(potential);
+        /// <summary>
+        /// Computes interparticle force at separation under potential.
+        /// </summary>
             ValidateParticle(first, nameof(first));
             ValidateParticle(second, nameof(second));
             EnsurePositive(separation, nameof(separation));
             return EnsureFinite(potential.Energy(separation, first, second), nameof(potential));
         }
 
+        /// <summary>
+        /// Computes total potential energy for particles under potential with softening.
+        /// </summary>
         public static double PairForce(double separation, PairPotential potential)
         {
             ParticleState unit = new ParticleState(1.0, 1.0, default, default);
@@ -76,6 +94,9 @@ namespace OPEN_LRD.Skills
             EnsurePositive(separation, nameof(separation));
             return EnsureFinite(potential.RadialDerivative(separation, first, second), nameof(potential));
         }
+        /// <summary>
+        /// Computes accelerations for particles under potential with softening.
+        /// </summary>
 
         public static double TotalPotentialEnergy(IReadOnlyList<ParticleState> particles, PairPotential potential, double softening)
         {
@@ -157,6 +178,9 @@ namespace OPEN_LRD.Skills
             Vector3[] forces = new Vector3[particles.Count];
             for (int first = 0; first < particles.Count; first++)
             {
+        /// <summary>
+        /// Advances particles by timeStep under potential and softening via Velocity Verlet.
+        /// </summary>
                 for (int second = first + 1; second < particles.Count; second++)
                 {
                     Vector3 separation = particles[second].Position - particles[first].Position;
@@ -180,6 +204,9 @@ namespace OPEN_LRD.Skills
 
         public static ParticleState[] VelocityVerletStep(IReadOnlyList<ParticleState> particles, PairPotential potential, double timeStep, double softening)
         {
+        /// <summary>
+        /// Simulates many-body dynamics from initialState under potential for steps of timeStep.
+        /// </summary>
             ValidateParticles(particles, nameof(particles));
             ValidatePotential(potential);
             EnsurePositive(timeStep, nameof(timeStep));

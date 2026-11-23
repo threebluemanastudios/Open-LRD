@@ -1,0 +1,117 @@
+Core Refinement Implementation
+Date: 2026-11-22
+Scope: source in OPEN-LRD / OPEN-LRD.SmokeTests
+
+STATUS
+------
+Not fully/properly implemented. Substantially implemented (~85-90%), but several
+checklist items are only partial.
+
+
+CONFIRMED GAPS
+------------------------------
+
+1. Documentation — NOT done
+
+   Actual state:
+   - OPEN-LRD/Foundations/GraphSynchronization.cs: undocumented; no explicit
+     thread-safety contract.
+
+2. Concurrency and performance gates incomplete.
+   - No parallel read/query workload, mutation-burst, or snapshot-consumer stress
+     tests around GraphSynchronization. Only write-side races exist in
+     OPEN-LRD.SmokeTests/CoreIdentityTests.cs:74-81 and :373-435 (concurrent init,
+     32-way adds, duplicate promotions).
+   - The Random(42) 10k-node/100k-link harness exists
+     (OPEN-LRD.SmokeTests/CoreNodeGraphTests.cs:915-1007) but only PRINTS timings
+     (around :995-999). There is no assertion against any threshold/budget, so
+      "agree pass/fail thresholds" is not implemented.
+
+3. Compact/upgrade failure paths not exercised.
+   - CompactTrustedDiskStore is simply FlushTrustedDiskStore
+     (OPEN-LRD/LRD_Core.cs:3973-3980); no compact test exists.
+   - UpgradeLegacyDiskStore has only a success-path test
+     (OPEN-LRD.SmokeTests/CoreDiskStreamingTests.cs:318-374); failed-upgrade
+     original-store preservation is untested.
+   - The comment at CoreDiskStreamingTests.cs:1019 claiming
+     "failed open/merge/compact/upgrade original store preservation" is misleading:
+     only failed create and failed merge are actually covered.
+   - Index (.lrdidx) and per-partition data-header corruption tests are missing;
+     only manifest magic/version rejection is tested (CoreDiskStreamingTests.cs:291-307).
+
+4. Data Partitions.
+   - Incremental SHA-256 is used for data partitions, but the index hash is still
+     computed by reopening and re-reading the index file after the count patch
+     (OPEN-LRD/Persistence/PartitionedBinaryStore.cs:284-296). Not fully incremental.
+   - Paging limit/offset is implemented for GetTrustedNodeIds/GetTrustedNodes,
+     GetAllTrustedLinks, GetTrustedLinksByProvenanceTarget, and FindTrustedNodes,
+     but NOT for GetOutgoingLinks, GetIncomingLinks, or GetTrustedNodesByTarget.
+   - One rollback path still performs a full RebuildTrustedSkillsGraph()
+     (OPEN-LRD/LRD_Core.cs:4621-4625); rebuild churn is reduced, not eliminated.
+
+5. ExpressionParser.
+   - VariableExpression / CallExpression enforce identifier and argument-count
+     limits only (OPEN-LRD/Foundations/Expressions.cs:32-44, :180-211); they do not
+     enforce AST node/depth/literal limits.
+   - Math_3 / Math_4 have no direct limit validation; enforcement is transitive
+     through ExpressionParser/SymbolicCalculus.
+
+6. PartitionedBinaryStore.
+   - Old-reader rejection of provenance-bearing trailing bytes is implemented in
+     behavior but not directly tested; FunctionBox trailing-byte acceptance is not
+     directly tested either (presentation records are).
+
+7. Section 3 — Reinterpreted, not literally met.
+   The original intent "expand the registry to discover and register all public
+   static methods across OPEN_LRD.Skills." has changed and instead now Open_LRD uses
+   an explicit allowlist where Math_4, LinearAlgebraAdvanced, Optimization,
+   ManyBodyInteractions, and ExtremeScalars currently have ZERO dispatchable methods.
+
+WHAT IS SOLID (verified in source and tests)
+--------------------------------------------
+- dedup via Distinct (LRD_Core.cs:2516,2558,2568);
+- ReplaceTrustedLink TrustedLinkKeys fix (:5864-5894);
+- assertion-ID conflict rejection (:5740-5760);
+- labeled untrusted cleanup (:5162-5197);
+- paged-aware FindTrustedNodes / HasTrustedTarget / HasAnyTrustedTarget (:735-754, :3550, :5103-5117, :5502-5521);
+- narrowed exception rollback (:5796-5826);
+- GetWordByGuid (:541-552);
+- indexed sum/prod long-bound overflow (ExpressionParser.cs:766-798);
+- AST limits (:11-18, :51-127); 
+- Fraction limits (Fractions.cs:9-108); 
+- normalization(SymbolicCalculus.cs:2436-2448, Algebra.cs:1484-1505);
+- allowlist dispatcher (MathFunctionDispatcher.cs:50-60);
+- SI units for six physics libraries (:881-953)
+- dispatch provenance/trust verification (:116-201, FunctionBox.cs:378-478)
+- extended scalar persistence (FoundationBinarySerializer.cs:16-23, :567-661)
+- discovery diagnostics/collisions.
+- defensive read-only results (GraphAlgorithms.cs:160-278, :584-683, :924-929);
+- sparse MaximumFlow (:739-829);
+- Floyd-Warshall 512 cap (:283, :441-447);
+- weighted PageRank (:831-929);
+- undirected self-loop guard (:81-99);
+- cost/negative policy documented+enforced (:72-80, :349-352, :873-874);
+- edge snapshots (:130-146).
+- -ln(max(conf,1e-12)) projection (LRD_Core.cs:3450-3475);
+- typed epoch snapshot (Node.cs:337-403, LRD_Core.cs:3424-3447);
+- active-time filtering; atomic ReasoningTransaction (LRD_Core.cs:33-225, :2814-3217);
+- noisy-OR source-group collapse (:942-992).
+- (core mechanics): v3 with v1/v2 reads (PartitionedBinaryStore.cs:49-51, :321-333);
+- allocation guards (FoundationBinarySerializer.cs:487-563, :675-717);
+- per-status provenance diagnostics (PartitionedBinaryStore.cs:28-39, LRD_Core.cs:4111-4462);
+- atomic create with backup/restore (PartitionedBinaryStore.cs:74-117).
+- Smoke suite 228/0 and zero-warning Windows-targeted build confirmed.
+
+RECOMMENDED REMAINING WORK (to make the plan truly complete)
+------------------------------------------------------------
+1. Add thread-safety/mutability contracts (GraphSynchronization).
+2. Add GraphSynchronization concurrency stress tests: parallel readers, mutation
+   bursts, and snapshot consumers.
+3. Make the scale gate enforce pass/fail thresholds.
+4. Add failed-compact and failed-upgrade original-store-preservation tests; add
+   index/partition-header corruption tests.
+5. Finish incremental hashing for index partitions; extend paging to
+   outgoing/incoming/by-target queries; remove the remaining full rebuild rollback.
+
+
+

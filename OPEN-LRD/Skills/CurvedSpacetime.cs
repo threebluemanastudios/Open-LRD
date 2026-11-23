@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using OPEN_LRD.Foundations;
 
 namespace OPEN_LRD.Skills
@@ -15,6 +15,11 @@ namespace OPEN_LRD.Skills
     {
         private const int Dimension = 4;
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="coordinates">The coordinates.</param>
+        /// <returns>The result.</returns>
         public static double[,] MinkowskiMetric(double[] coordinates)
         {
             ValidateCoordinates(coordinates);
@@ -27,6 +32,12 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="massLength">The mass length.</param>
+        /// <param name="coordinates">The coordinates.</param>
+        /// <returns>The result.</returns>
         public static double[,] SchwarzschildMetric(double massLength, double[] coordinates)
         {
             EnsurePositive(massLength, nameof(massLength));
@@ -51,6 +62,11 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Computes the Schwarzschild radius (r_s = 2GM / c ) corresponding to massKg.
+        /// </summary>
+        /// <param name="massKg">The mass kg.</param>
+        /// <returns>The result.</returns>
         public static double SchwarzschildRadius(double massKg)
         {
             EnsurePositive(massKg, nameof(massKg));
@@ -58,6 +74,11 @@ namespace OPEN_LRD.Skills
             return 2.0 * PhysicalConstants.GravitationalConstant.ValueSI * massKg / (c * c);
         }
 
+        /// <summary>
+        /// Computes the geometrized mass length (M = GM / c ) corresponding to massKg.
+        /// </summary>
+        /// <param name="massKg">The mass kg.</param>
+        /// <returns>The result.</returns>
         public static double SchwarzschildMassLength(double massKg)
         {
             EnsurePositive(massKg, nameof(massKg));
@@ -65,6 +86,13 @@ namespace OPEN_LRD.Skills
             return PhysicalConstants.GravitationalConstant.ValueSI * massKg / (c * c);
         }
 
+        /// <summary>
+        /// Computes the spacetime interval (ds  = g_{??} dx^? dx^?) for displacement at point under metric.
+        /// </summary>
+        /// <param name="metric">The metric.</param>
+        /// <param name="point">The point.</param>
+        /// <param name="displacement">The displacement.</param>
+        /// <returns>The result.</returns>
         public static double MetricInterval(SpacetimeMetric metric, double[] point, double[] displacement)
         {
             if (metric == null)
@@ -85,6 +113,13 @@ namespace OPEN_LRD.Skills
             return EnsureFinite(interval, nameof(metric));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="metric">The metric.</param>
+        /// <param name="coordinates">The coordinates.</param>
+        /// <param name="finiteDifferenceStep">The finite difference step.</param>
+        /// <returns>The result.</returns>
         public static double[,,] ChristoffelSymbols(SpacetimeMetric metric, double[] coordinates, double finiteDifferenceStep)
         {
             if (metric == null)
@@ -142,6 +177,17 @@ namespace OPEN_LRD.Skills
             return symbols;
         }
 
+        /// <summary>
+        /// Numerically integrates the geodesic equation from affineStart to affineEnd under metric with tolerance and maxSteps.
+        /// </summary>
+        /// <param name="metric">The metric.</param>
+        /// <param name="initialCoordinates">The initial coordinates.</param>
+        /// <param name="initialTangent">The initial tangent.</param>
+        /// <param name="affineStart">The affine start.</param>
+        /// <param name="affineEnd">The affine end.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="maxSteps">The max steps.</param>
+        /// <returns>The result.</returns>
         public static GeodesicSolution IntegrateGeodesic(
             SpacetimeMetric metric,
             double[] initialCoordinates,
@@ -220,6 +266,13 @@ namespace OPEN_LRD.Skills
             return new GeodesicSolution(integration.X, positions, tangents, true);
         }
 
+        /// <summary>
+        /// Computes the gravitational redshift factor between emitterRadius and observerRadius in Schwarzschild spacetime.
+        /// </summary>
+        /// <param name="massLength">The mass length.</param>
+        /// <param name="emitterRadius">The emitter radius.</param>
+        /// <param name="observerRadius">The observer radius.</param>
+        /// <returns>The result.</returns>
         public static double SchwarzschildGravitationalRedshift(double massLength, double emitterRadius, double observerRadius)
         {
             EnsurePositive(massLength, nameof(massLength));
@@ -230,6 +283,12 @@ namespace OPEN_LRD.Skills
             return Math.Sqrt(observerFactor / emitterFactor) - 1.0;
         }
 
+        /// <summary>
+        /// Computes the Kretschmann curvature scalar (K = R_{abcd} R^{abcd}) at radius in Schwarzschild spacetime.
+        /// </summary>
+        /// <param name="massLength">The mass length.</param>
+        /// <param name="radius">The radius.</param>
+        /// <returns>The result.</returns>
         public static double SchwarzschildKretschmannScalar(double massLength, double radius)
         {
             EnsurePositive(massLength, nameof(massLength));

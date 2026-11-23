@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using OPEN_LRD.Foundations;
 
@@ -22,16 +22,34 @@ namespace OPEN_LRD.Skills
 
     internal static class Math_4
     {
+        /// <summary>
+        /// Numerically approximates the first partial derivative of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression PartialDerivative(Expression expression, string variable)
         {
             return SymbolicCalculus.Differentiate(expression, variable);
         }
 
+        /// <summary>
+        /// Numerically approximates the first partial derivative of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <returns>The result.</returns>
         public static Expression PartialDerivative(string expression, string variable)
         {
             return SymbolicCalculus.Differentiate(Math_3.Parse(expression), variable);
         }
 
+        /// <summary>
+        /// Numerically approximates the gradient of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variables">The variables.</param>
+        /// <returns>The result.</returns>
         public static Expression[] Gradient(Expression expression, params string[] variables)
         {
             if (expression == null)
@@ -50,11 +68,23 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Numerically approximates the gradient of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variables">The variables.</param>
+        /// <returns>The result.</returns>
         public static Expression[] Gradient(string expression, params string[] variables)
         {
             return Gradient(Math_3.Parse(expression), variables);
         }
 
+        /// <summary>
+        /// Numerically approximates the Laplacian (? f) of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variables">The variables.</param>
+        /// <returns>The result.</returns>
         public static Expression Laplacian(Expression expression, params string[] variables)
         {
             Expression[] gradient = Gradient(expression, variables);
@@ -68,11 +98,24 @@ namespace OPEN_LRD.Skills
             return SymbolicCalculus.Simplify(second);
         }
 
+        /// <summary>
+        /// Numerically approximates the Laplacian (? f) of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variables">The variables.</param>
+        /// <returns>The result.</returns>
         public static Expression Laplacian(string expression, params string[] variables)
         {
             return Laplacian(Math_3.Parse(expression), variables);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="firstVariable">The first variable.</param>
+        /// <param name="secondVariable">The second variable.</param>
+        /// <returns>The result.</returns>
         public static Expression[,] Hessian(Expression expression, string firstVariable, string secondVariable)
         {
             Expression[,] result = new Expression[2, 2];
@@ -85,16 +128,37 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Evaluates an Expression numerically using the provided variable-to-value mapping.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variables">The variables.</param>
+        /// <returns>The result.</returns>
         public static double Evaluate(Expression expression, IReadOnlyDictionary<string, double> variables)
         {
             return SymbolicCalculus.Evaluate(expression, variables);
         }
 
+        /// <summary>
+        /// Evaluates an Expression numerically using the provided variable-to-value mapping.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variables">The variables.</param>
+        /// <returns>The result.</returns>
         public static double Evaluate(string expression, IReadOnlyDictionary<string, double> variables)
         {
             return SymbolicCalculus.Evaluate(Math_3.Parse(expression), variables);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="xVariable">The x variable.</param>
+        /// <param name="yVariable">The y variable.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <returns>The result.</returns>
         public static Vector2 GradientAtPoint(Expression expression, string xVariable, string yVariable, double x, double y)
         {
             IReadOnlyDictionary<string, double> values = new Dictionary<string, double>
@@ -107,6 +171,17 @@ namespace OPEN_LRD.Skills
                 SymbolicCalculus.Evaluate(SymbolicCalculus.Differentiate(expression, yVariable), values));
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="xVariable">The x variable.</param>
+        /// <param name="yVariable">The y variable.</param>
+        /// <param name="zVariable">The z variable.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <returns>The result.</returns>
         public static Vector3 GradientAtPoint(Expression expression, string xVariable, string yVariable, string zVariable, double x, double y, double z)
         {
             IReadOnlyDictionary<string, double> values = new Dictionary<string, double>
@@ -121,6 +196,15 @@ namespace OPEN_LRD.Skills
                 SymbolicCalculus.Evaluate(SymbolicCalculus.Differentiate(expression, zVariable), values));
         }
 
+        /// <summary>
+        /// Numerically approximates the first partial derivative of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="variableIndex">The variable index.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double PartialDerivative(ScalarFunction2D function, double x, double y, int variableIndex, double step = 0.0)
         {
             if (function == null)
@@ -142,6 +226,16 @@ namespace OPEN_LRD.Skills
             return (4.0 * Coarse(scale * 0.5) - Coarse(scale)) / 3.0;
         }
 
+        /// <summary>
+        /// Numerically approximates the first partial derivative of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="variableIndex">The variable index.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double PartialDerivative(ScalarFunction3D function, double x, double y, double z, int variableIndex, double step = 0.0)
         {
             if (function == null)
@@ -171,6 +265,14 @@ namespace OPEN_LRD.Skills
             return (4.0 * Coarse(scale * 0.5) - Coarse(scale)) / 3.0;
         }
 
+        /// <summary>
+        /// Numerically approximates the gradient of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static Vector2 Gradient(ScalarFunction2D function, double x, double y, double step = 0.0)
         {
             return new Vector2(
@@ -178,6 +280,15 @@ namespace OPEN_LRD.Skills
                 PartialDerivative(function, x, y, 1, step));
         }
 
+        /// <summary>
+        /// Numerically approximates the gradient of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static Vector3 Gradient(ScalarFunction3D function, double x, double y, double z, double step = 0.0)
         {
             return new Vector3(
@@ -186,6 +297,15 @@ namespace OPEN_LRD.Skills
                 PartialDerivative(function, x, y, z, 2, step));
         }
 
+        /// <summary>
+        /// Numerically approximates an unmixed second partial derivative of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="variableIndex">The variable index.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double SecondPartialDerivative(ScalarFunction2D function, double x, double y, int variableIndex, double step = 0.0)
         {
             if (function == null)
@@ -203,6 +323,16 @@ namespace OPEN_LRD.Skills
                 : (function(x, y + scale) - 2.0 * function(x, y) + function(x, y - scale)) / (scale * scale);
         }
 
+        /// <summary>
+        /// Numerically approximates an unmixed second partial derivative of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="variableIndex">The variable index.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double SecondPartialDerivative(ScalarFunction3D function, double x, double y, double z, int variableIndex, double step = 0.0)
         {
             if (function == null)
@@ -228,6 +358,14 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Numerically approximates the mixed second partial derivative (? f / (?x ?y)) of a 2D scalar function at (x, y).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double MixedPartialDerivative(ScalarFunction2D function, double x, double y, double step = 0.0)
         {
             if (function == null)
@@ -242,6 +380,14 @@ namespace OPEN_LRD.Skills
                 + function(x - xStep, y - yStep)) / (4.0 * xStep * yStep);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double[,] Hessian(ScalarFunction2D function, double x, double y, double step = 0.0)
         {
             if (function == null)
@@ -256,6 +402,15 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double[,] Hessian(ScalarFunction3D function, double x, double y, double z, double step = 0.0)
         {
             if (function == null)
@@ -279,6 +434,16 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Numerically computes the directional derivative of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="xDirection">The x direction.</param>
+        /// <param name="yDirection">The y direction.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double DirectionalDerivative(ScalarFunction2D function, double x, double y, double xDirection, double yDirection, double step = 0.0)
         {
             double length = Math.Sqrt(xDirection * xDirection + yDirection * yDirection);
@@ -290,6 +455,18 @@ namespace OPEN_LRD.Skills
             return (gradient.X * xDirection + gradient.Y * yDirection) / length;
         }
 
+        /// <summary>
+        /// Numerically computes the directional derivative of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="xDirection">The x direction.</param>
+        /// <param name="yDirection">The y direction.</param>
+        /// <param name="zDirection">The z direction.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double DirectionalDerivative(ScalarFunction3D function, double x, double y, double z, double xDirection, double yDirection, double zDirection, double step = 0.0)
         {
             double length = Math.Sqrt(xDirection * xDirection + yDirection * yDirection + zDirection * zDirection);
@@ -301,12 +478,29 @@ namespace OPEN_LRD.Skills
             return (gradient.X * xDirection + gradient.Y * yDirection + gradient.Z * zDirection) / length;
         }
 
+        /// <summary>
+        /// Numerically approximates the Laplacian (? f) of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double Laplacian(ScalarFunction2D function, double x, double y, double step = 0.0)
         {
             return SecondPartialDerivative(function, x, y, 0, step)
                 + SecondPartialDerivative(function, x, y, 1, step);
         }
 
+        /// <summary>
+        /// Numerically approximates the Laplacian (? f) of a 3D scalar function at (x, y, z).
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double Laplacian(ScalarFunction3D function, double x, double y, double z, double step = 0.0)
         {
             return SecondPartialDerivative(function, x, y, z, 0, step)
@@ -314,6 +508,14 @@ namespace OPEN_LRD.Skills
                 + SecondPartialDerivative(function, x, y, z, 2, step);
         }
 
+        /// <summary>
+        /// Numerically approximates the divergence (?   F) of a 3D vector field at (x, y, z).
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double Divergence(VectorField2D field, double x, double y, double step = 0.0)
         {
             if (field == null)
@@ -324,6 +526,15 @@ namespace OPEN_LRD.Skills
                 + PartialDerivative((a, b) => field(a, b).Y, x, y, 1, step);
         }
 
+        /// <summary>
+        /// Numerically approximates the divergence (?   F) of a 3D vector field at (x, y, z).
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double Divergence(VectorField3D field, double x, double y, double z, double step = 0.0)
         {
             if (field == null)
@@ -335,6 +546,14 @@ namespace OPEN_LRD.Skills
                 + PartialDerivative((a, b, c) => field(a, b, c).Z, x, y, z, 2, step);
         }
 
+        /// <summary>
+        /// Numerically approximates the curl vector (?   F) of a 3D vector field at (x, y, z).
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double Curl(VectorField2D field, double x, double y, double step = 0.0)
         {
             if (field == null)
@@ -345,6 +564,15 @@ namespace OPEN_LRD.Skills
                 - PartialDerivative((a, b) => field(a, b).X, x, y, 1, step);
         }
 
+        /// <summary>
+        /// Numerically approximates the curl vector (?   F) of a 3D vector field at (x, y, z).
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static Vector3 Curl(VectorField3D field, double x, double y, double z, double step = 0.0)
         {
             if (field == null)
@@ -360,6 +588,15 @@ namespace OPEN_LRD.Skills
                     - PartialDerivative((a, b, c) => field(a, b, c).X, x, y, z, 1, step));
         }
 
+        /// <summary>
+        /// Numerically approximates the Jacobian matrix/determinant for two 2D scalar component functions at (x, y).
+        /// </summary>
+        /// <param name="firstComponent">The first component.</param>
+        /// <param name="secondComponent">The second component.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static double Jacobian(ScalarFunction2D firstComponent, ScalarFunction2D secondComponent, double x, double y, double step = 0.0)
         {
             if (firstComponent == null)
@@ -374,6 +611,16 @@ namespace OPEN_LRD.Skills
                 - PartialDerivative(firstComponent, x, y, 1, step) * PartialDerivative(secondComponent, x, y, 0, step);
         }
 
+        /// <summary>
+        /// Numerically computes the double integral of a 2D scalar function over a non-rectangular region bounded vertically by yLower(x) and yUpper(x) for x in [xLower, xUpper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="xLower">The x lower.</param>
+        /// <param name="xUpper">The x upper.</param>
+        /// <param name="yLower">The y lower.</param>
+        /// <param name="yUpper">The y upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double DoubleIntegral(ScalarFunction2D function, double xLower, double xUpper, double yLower, double yUpper, int intervals = 100)
         {
             if (function == null)
@@ -387,6 +634,16 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the double integral of a 2D scalar function over a non-rectangular region bounded vertically by yLower(x) and yUpper(x) for x in [xLower, xUpper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="xLower">The x lower.</param>
+        /// <param name="xUpper">The x upper.</param>
+        /// <param name="yLower">The y lower.</param>
+        /// <param name="yUpper">The y upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double DoubleIntegral(ScalarFunction2D function, double xLower, double xUpper, Func<double, double> yLower, Func<double, double> yUpper, int intervals = 100)
         {
             if (function == null)
@@ -408,6 +665,16 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the double integral in polar coordinates (r, ?) over [radiusLower, radiusUpper]   [angleLower, angleUpper], applying the r Jacobian area element.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="radiusLower">The radius lower.</param>
+        /// <param name="radiusUpper">The radius upper.</param>
+        /// <param name="angleLower">The angle lower.</param>
+        /// <param name="angleUpper">The angle upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double DoubleIntegralInPolarCoordinates(ScalarFunction2D function, double radiusLower, double radiusUpper, double angleLower, double angleUpper, int intervals = 100)
         {
             return DoubleIntegral(
@@ -419,6 +686,18 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the triple integral of a 3D scalar function over the box domain [xLower, xUpper]   [yLower, yUpper]   [zLower, zUpper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="xLower">The x lower.</param>
+        /// <param name="xUpper">The x upper.</param>
+        /// <param name="yLower">The y lower.</param>
+        /// <param name="yUpper">The y upper.</param>
+        /// <param name="zLower">The z lower.</param>
+        /// <param name="zUpper">The z upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double TripleIntegral(ScalarFunction3D function, double xLower, double xUpper, double yLower, double yUpper, double zLower, double zUpper, int intervals = 60)
         {
             if (function == null)
@@ -436,6 +715,18 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the triple integral in cylindrical coordinates (r, ?, z), applying the r Jacobian volume element.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="radiusLower">The radius lower.</param>
+        /// <param name="radiusUpper">The radius upper.</param>
+        /// <param name="angleLower">The angle lower.</param>
+        /// <param name="angleUpper">The angle upper.</param>
+        /// <param name="zLower">The z lower.</param>
+        /// <param name="zUpper">The z upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double TripleIntegralInCylindricalCoordinates(ScalarFunction3D function, double radiusLower, double radiusUpper, double angleLower, double angleUpper, double zLower, double zUpper, int intervals = 60)
         {
             return TripleIntegral(
@@ -449,6 +740,18 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the triple integral in spherical coordinates (?, ?, ?), applying the ?  sin(?) Jacobian volume element.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="rhoLower">The rho lower.</param>
+        /// <param name="rhoUpper">The rho upper.</param>
+        /// <param name="thetaLower">The theta lower.</param>
+        /// <param name="thetaUpper">The theta upper.</param>
+        /// <param name="phiLower">The phi lower.</param>
+        /// <param name="phiUpper">The phi upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double TripleIntegralInSphericalCoordinates(ScalarFunction3D function, double rhoLower, double rhoUpper, double thetaLower, double thetaUpper, double phiLower, double phiUpper, int intervals = 60)
         {
             return TripleIntegral(
@@ -469,6 +772,15 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Computes the scalar line integral (? f(r(t)) ds) of a 3D scalar field along a ParametricCurve for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="xOfT">The x of t.</param>
+        /// <param name="yOfT">The y of t.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double ScalarLineIntegral(ScalarFunction2D function, Func<double, double> xOfT, Func<double, double> yOfT, double lower, double upper)
         {
             if (function == null)
@@ -492,6 +804,14 @@ namespace OPEN_LRD.Skills
             return Math_3.AdaptiveIntegral(integrand, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the scalar line integral (? f(r(t)) ds) of a 3D scalar field along a ParametricCurve for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="curve">The curve.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double ScalarLineIntegral(ScalarFunction3D function, ParametricCurve curve, double lower, double upper)
         {
             if (function == null)
@@ -511,6 +831,15 @@ namespace OPEN_LRD.Skills
             return Math_3.AdaptiveIntegral(integrand, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the line integral (? F   dr) of a 3D vector field along a ParametricCurve for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="xOfT">The x of t.</param>
+        /// <param name="yOfT">The y of t.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double VectorLineIntegral(VectorField2D field, Func<double, double> xOfT, Func<double, double> yOfT, double lower, double upper)
         {
             if (field == null)
@@ -535,6 +864,14 @@ namespace OPEN_LRD.Skills
             return Math_3.AdaptiveIntegral(integrand, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the line integral (? F   dr) of a 3D vector field along a ParametricCurve for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="curve">The curve.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double VectorLineIntegral(VectorField3D field, ParametricCurve curve, double lower, double upper)
         {
             if (field == null)
@@ -555,6 +892,15 @@ namespace OPEN_LRD.Skills
             return Math_3.AdaptiveIntegral(integrand, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the 2D normal flux line integral (? F   n ds) across the parametric curve (x(t), y(t)) for t in [lower, upper].
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="xOfT">The x of t.</param>
+        /// <param name="yOfT">The y of t.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double FluxLineIntegral(VectorField2D field, Func<double, double> xOfT, Func<double, double> yOfT, double lower, double upper)
         {
             if (field == null)
@@ -579,6 +925,16 @@ namespace OPEN_LRD.Skills
             return Math_3.AdaptiveIntegral(integrand, lower, upper);
         }
 
+        /// <summary>
+        /// Numerically computes the surface area of a ParametricSurface over the parameter domain [uLower, uUpper]   [vLower, vUpper].
+        /// </summary>
+        /// <param name="surface">The surface.</param>
+        /// <param name="uLower">The u lower.</param>
+        /// <param name="uUpper">The u upper.</param>
+        /// <param name="vLower">The v lower.</param>
+        /// <param name="vUpper">The v upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double SurfaceArea(ParametricSurface surface, double uLower, double uUpper, double vLower, double vUpper, int intervals = 40)
         {
             if (surface == null)
@@ -592,6 +948,16 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the surface area of the explicit graph z = f(x, y) over [xLower, xUpper]   [yLower, yUpper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="xLower">The x lower.</param>
+        /// <param name="xUpper">The x upper.</param>
+        /// <param name="yLower">The y lower.</param>
+        /// <param name="yUpper">The y upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double SurfaceAreaOfGraph(ScalarFunction2D function, double xLower, double xUpper, double yLower, double yUpper, int intervals = 100)
         {
             if (function == null)
@@ -614,6 +980,17 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the surface integral (? f(x, y, z) dS) of a 3D scalar function over a ParametricSurface on [uLower, uUpper]   [vLower, vUpper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="surface">The surface.</param>
+        /// <param name="uLower">The u lower.</param>
+        /// <param name="uUpper">The u upper.</param>
+        /// <param name="vLower">The v lower.</param>
+        /// <param name="vUpper">The v upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double ScalarSurfaceIntegral(ScalarFunction3D function, ParametricSurface surface, double uLower, double uUpper, double vLower, double vUpper, int intervals = 40)
         {
             if (function == null)
@@ -639,6 +1016,17 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the surface flux integral (? F   dS) of a 3D vector field across a ParametricSurface on [uLower, uUpper]   [vLower, vUpper].
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="surface">The surface.</param>
+        /// <param name="uLower">The u lower.</param>
+        /// <param name="uUpper">The u upper.</param>
+        /// <param name="vLower">The v lower.</param>
+        /// <param name="vUpper">The v upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double FluxIntegral(VectorField3D field, ParametricSurface surface, double uLower, double uUpper, double vLower, double vUpper, int intervals = 40)
         {
             if (field == null)
@@ -666,6 +1054,13 @@ namespace OPEN_LRD.Skills
                 intervals);
         }
 
+        /// <summary>
+        /// Computes the arc length of a ParametricCurve for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="curve">The curve.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double ArcLength(ParametricCurve curve, double lower, double upper)
         {
             if (curve == null)
@@ -676,11 +1071,26 @@ namespace OPEN_LRD.Skills
             return Math_3.AdaptiveIntegral(integrand, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the arc length of a 2D parametric curve (x(t), y(t)) for parameter t in [lower, upper].
+        /// </summary>
+        /// <param name="xOfT">The x of t.</param>
+        /// <param name="yOfT">The y of t.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double ArcLengthParametric2D(Func<double, double> xOfT, Func<double, double> yOfT, double lower, double upper)
         {
             return Math_3.ArcLengthParametric(xOfT, yOfT, lower, upper);
         }
 
+        /// <summary>
+        /// Computes the area (0.5 ? r(?)  d?) of a polar region bounded by r(?) for angle ? in [lower, upper].
+        /// </summary>
+        /// <param name="radius">The radius.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double AreaOfPolarRegion(Func<double, double> radius, double lower, double upper)
         {
             if (radius == null)
@@ -695,6 +1105,16 @@ namespace OPEN_LRD.Skills
             return Math_3.AdaptiveIntegral(integrand, lower, upper);
         }
 
+        /// <summary>
+        /// Numerically computes the center of mass (x?, ?) of a 2D planar lamina with areal density over [xLower, xUpper]   [yLower, yUpper].
+        /// </summary>
+        /// <param name="density">The density.</param>
+        /// <param name="xLower">The x lower.</param>
+        /// <param name="xUpper">The x upper.</param>
+        /// <param name="yLower">The y lower.</param>
+        /// <param name="yUpper">The y upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static Vector2 CenterOfMass(ScalarFunction2D density, double xLower, double xUpper, double yLower, double yUpper, int intervals = 100)
         {
             if (density == null)
@@ -711,6 +1131,16 @@ namespace OPEN_LRD.Skills
             return new Vector2(momentX / mass, momentY / mass);
         }
 
+        /// <summary>
+        /// Numerically computes the moment of inertia (I_x = ? y  ?(x, y) dA) about the x-axis for a 2D lamina over [xLower, xUpper]   [yLower, yUpper].
+        /// </summary>
+        /// <param name="density">The density.</param>
+        /// <param name="xLower">The x lower.</param>
+        /// <param name="xUpper">The x upper.</param>
+        /// <param name="yLower">The y lower.</param>
+        /// <param name="yUpper">The y upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double MomentOfInertiaAboutX(ScalarFunction2D density, double xLower, double xUpper, double yLower, double yUpper, int intervals = 100)
         {
             if (density == null)
@@ -720,6 +1150,16 @@ namespace OPEN_LRD.Skills
             return DoubleIntegral((x, y) => y * y * density(x, y), xLower, xUpper, yLower, yUpper, intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the moment of inertia (I_y = ? x  ?(x, y) dA) about the y-axis for a 2D lamina over [xLower, xUpper]   [yLower, yUpper].
+        /// </summary>
+        /// <param name="density">The density.</param>
+        /// <param name="xLower">The x lower.</param>
+        /// <param name="xUpper">The x upper.</param>
+        /// <param name="yLower">The y lower.</param>
+        /// <param name="yUpper">The y upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double MomentOfInertiaAboutY(ScalarFunction2D density, double xLower, double xUpper, double yLower, double yUpper, int intervals = 100)
         {
             if (density == null)
@@ -729,6 +1169,16 @@ namespace OPEN_LRD.Skills
             return DoubleIntegral((x, y) => x * x * density(x, y), xLower, xUpper, yLower, yUpper, intervals);
         }
 
+        /// <summary>
+        /// Numerically computes the mean value of a 2D scalar function over the rectangular domain [xLower, xUpper]   [yLower, yUpper].
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="xLower">The x lower.</param>
+        /// <param name="xUpper">The x upper.</param>
+        /// <param name="yLower">The y lower.</param>
+        /// <param name="yUpper">The y upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         public static double AverageValue(ScalarFunction2D function, double xLower, double xUpper, double yLower, double yUpper, int intervals = 100)
         {
             double area = (xUpper - xLower) * (yUpper - yLower);
@@ -739,11 +1189,30 @@ namespace OPEN_LRD.Skills
             return DoubleIntegral(function, xLower, xUpper, yLower, yUpper, intervals) / area;
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <param name="curve">The curve.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <returns>The result.</returns>
         public static double WorkDoneByField(VectorField3D field, ParametricCurve curve, double lower, double upper)
         {
             return VectorLineIntegral(field, curve, lower, upper);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="learningRate">The learning rate.</param>
+        /// <param name="maxIterations">The max iterations.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         public static Vector2 GradientDescent(ScalarFunction2D function, double x, double y, double learningRate, int maxIterations, double tolerance = 1e-9, double step = 0.0)
         {
             if (function == null)
@@ -778,6 +1247,15 @@ namespace OPEN_LRD.Skills
             return new Vector2(x, y);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="derivative">The derivative.</param>
+        /// <param name="xStart">The x start.</param>
+        /// <param name="yStart">The y start.</param>
+        /// <param name="xEnd">The x end.</param>
+        /// <param name="steps">The steps.</param>
+        /// <returns>The result.</returns>
         public static OdeSolution Euler(ScalarFunction2D derivative, double xStart, double yStart, double xEnd, int steps)
         {
             ValidateOdeArguments(derivative, steps, xStart, xEnd);
@@ -798,6 +1276,15 @@ namespace OPEN_LRD.Skills
             return new OdeSolution(xValues, yValues);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="derivative">The derivative.</param>
+        /// <param name="xStart">The x start.</param>
+        /// <param name="yStart">The y start.</param>
+        /// <param name="xEnd">The x end.</param>
+        /// <param name="steps">The steps.</param>
+        /// <returns>The result.</returns>
         public static OdeSolution ImprovedEuler(ScalarFunction2D derivative, double xStart, double yStart, double xEnd, int steps)
         {
             ValidateOdeArguments(derivative, steps, xStart, xEnd);
@@ -821,6 +1308,15 @@ namespace OPEN_LRD.Skills
             return new OdeSolution(xValues, yValues);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="derivative">The derivative.</param>
+        /// <param name="xStart">The x start.</param>
+        /// <param name="yStart">The y start.</param>
+        /// <param name="xEnd">The x end.</param>
+        /// <param name="steps">The steps.</param>
+        /// <returns>The result.</returns>
         public static OdeSolution RungeKutta4(ScalarFunction2D derivative, double xStart, double yStart, double xEnd, int steps)
         {
             ValidateOdeArguments(derivative, steps, xStart, xEnd);
@@ -845,6 +1341,15 @@ namespace OPEN_LRD.Skills
             return new OdeSolution(xValues, yValues);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="derivative">The derivative.</param>
+        /// <param name="start">The start.</param>
+        /// <param name="initial">The initial.</param>
+        /// <param name="end">The end.</param>
+        /// <param name="steps">The steps.</param>
+        /// <returns>The result.</returns>
         public static OdeSystemSolution RungeKutta4System(Func<double, double[], double[]> derivative, double start, double[] initial, double end, int steps)
         {
             if (derivative == null)

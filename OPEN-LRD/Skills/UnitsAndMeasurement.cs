@@ -449,7 +449,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>Converts a value to its SI base-unit value (for example, length to meters).</summary>
-        public static double ConvertToSI(double value, Unit from)
         {
             ValidateUnit(from, nameof(from));
             EnsureFinite(value, nameof(value));
@@ -458,6 +457,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Converts an SI base-unit value into the requested unit.</summary>
         /// <summary>Converts an SI base-unit value into the requested unit.</summary>
         public static double ConvertFromSI(double siValue, Unit to)
         {

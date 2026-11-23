@@ -27,6 +27,13 @@ namespace OPEN_LRD.Skills
         }
     }
 
+    /// <summary>Describes the deterministic capability and signature metadata of a dispatchable function.</summary>
+        string FunctionKey,
+        string MethodName,
+        IReadOnlyList<Type> ParameterTypes,
+        Type ReturnType,
+        bool IsDeterministic);
+
     internal static class MathFunctionDispatcher
     {
         private sealed record FunctionDescriptor(
@@ -69,11 +76,43 @@ namespace OPEN_LRD.Skills
         private static readonly IReadOnlyList<FunctionDescriptor> ScalarFunctions = BuildScalarFunctionRegistry();
 
         /// <summary>Returns stable diagnostics for allowlisted methods excluded from function dispatch.</summary>
+        /// <summary>Returns stable diagnostics for allowlisted methods excluded from function dispatch.</summary>
         public static IReadOnlyList<string> GetDiscoveryDiagnostics() => DiscoveryRejections.AsReadOnly();
 
-        internal static bool IsDeterministicFunctionKey(string? functionKey)
-            => !string.IsNullOrWhiteSpace(functionKey) && !NonDeterministicFunctionKeys.Contains(functionKey.Trim());
+        /// <summary>Returns deterministic capability metadata for all registered dispatchable functions.</summary>
+            Functions.Select(f => new FunctionCapabilityMetadata(f.Key, f.Name, f.ParameterTypes, f.ReturnType, IsDeterministicFunctionKey(f.Key, f.Method)))
+                     .ToList()
+                     .AsReadOnly();
 
+        /// <summary>Returns whether a function key resolves to a deterministic function eligible for trust promotion.</summary>
+        /// <summary>Returns whether a function key resolves to a deterministic function eligible for trust promotion.</summary>
+        public static bool IsDeterministicFunction(string? functionKey) => IsDeterministicFunctionKey(functionKey);
+
+        /// <summary>Configures deterministic capability override for a function key during runtime or staged reasoning workflows.</summary>
+        {
+            if (string.IsNullOrWhiteSpace(functionKey))
+                throw new ArgumentException("A function key is required.", nameof(functionKey));
+            string normalized = functionKey.Trim();
+            lock (NonDeterministicFunctionKeys)
+            {
+                if (isDeterministic) NonDeterministicFunctionKeys.Remove(normalized);
+                else NonDeterministicFunctionKeys.Add(normalized);
+            }
+        }
+
+        internal static bool IsDeterministicFunctionKey(string? functionKey, MethodInfo? method = null)
+        {
+            if (string.IsNullOrWhiteSpace(functionKey)) return false;
+            string normalized = functionKey.Trim();
+            FunctionCapabilityAttribute? attr = method?.GetCustomAttribute<FunctionCapabilityAttribute>(inherit: false);
+            if (attr != null && !attr.IsDeterministic) return false;
+            lock (NonDeterministicFunctionKeys)
+            {
+                return !NonDeterministicFunctionKeys.Contains(normalized);
+            }
+        }
+
+        /// <summary>Dispatches a FunctionBox definition and stores the successful result if its revision is unchanged.</summary>
         /// <summary>Dispatches a FunctionBox definition and stores the successful result if its revision is unchanged.</summary>
         public static FunctionResult Dispatch(FunctionBox functionBox)
         {
@@ -89,7 +128,8 @@ namespace OPEN_LRD.Skills
                 snapshot.ExpectedResultType,
                 snapshot.ExpectedResultUnitTitle);
             FunctionResult result = Invoke(descriptor, snapshot.Variables);
-            FunctionDispatchProvenance provenance = CreateDispatchProvenance(descriptor, snapshot, result);
+            bool isDeterministic = IsDeterministicFunctionKey(descriptor.Key, descriptor.Method);
+            FunctionDispatchProvenance provenance = CreateDispatchProvenance(descriptor with { IsDeterministic = isDeterministic }, snapshot, result);
             if (!snapshot.IsReadOnly)
             {
                 functionBox.TryStoreDispatchResult(result, snapshot.DefinitionRevision, provenance);
@@ -202,7 +242,8 @@ namespace OPEN_LRD.Skills
                 snapshot.DefinitionRevision,
                 DateTimeOffset.UtcNow,
                 typeof(MathFunctionDispatcher).Assembly.GetName().Version?.ToString() ?? "0.0.0.0",
-                descriptor.IsDeterministic);
+                descriptor.IsDeterministic,
+                ArgumentSnapshotSummary: FunctionBox.BuildArgumentSnapshotSummary(snapshot.Variables));
         }
 
         private static byte[] SerializeDispatchPayload(Action<BinaryWriter> write)
@@ -251,7 +292,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>Resolves an alias or unqualified function name to its stable registry key.</summary>
-        public static string ResolveFunctionKey(
             string? functionKey,
             IReadOnlyList<FunctionVariable> variables,
             Type expectedResultType,
@@ -263,6 +303,7 @@ namespace OPEN_LRD.Skills
                 NormalizeOptionalText(expectedResultUnitTitle)).Key;
         }
 
+        /// <summary>Dispatches the best matching registered overload for typed arguments and expected output.</summary>
         /// <summary>Dispatches the best matching registered overload for typed arguments and expected output.</summary>
         public static FunctionResult Dispatch(
             string functionKey,
@@ -292,7 +333,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>Dispatches a named overload using runtime argument types; null arguments require typed variables.</summary>
-        public static FunctionResult Dispatch(string functionKey, Type expectedResultType, params object?[] values)
         {
             if (values == null)
             {
@@ -312,6 +352,7 @@ namespace OPEN_LRD.Skills
             return Dispatch(functionKey, variables, expectedResultType);
         }
 
+        /// <summary>Dispatches a named overload and returns its value as <typeparamref name="T"/>.</summary>
         /// <summary>Dispatches a named overload and returns its value as <typeparamref name="T"/>.</summary>
         public static T Dispatch<T>(string functionKey, params object?[] values)
         {

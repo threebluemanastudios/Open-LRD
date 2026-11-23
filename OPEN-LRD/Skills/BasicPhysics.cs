@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using OPEN_LRD.Foundations;
 
@@ -13,6 +13,12 @@ namespace OPEN_LRD.Skills
 
     internal static class BasicPhysics
     {
+        /// <summary>
+        /// Computes scalar force (F = m * a) from mass and scalar acceleration.
+        /// </summary>
+        /// <param name="mass">The mass.</param>
+        /// <param name="acceleration">The acceleration.</param>
+        /// <returns>The result.</returns>
         public static Vector3 Force(double mass, Vector3 acceleration)
         {
             EnsurePositive(mass, nameof(mass));
@@ -20,6 +26,12 @@ namespace OPEN_LRD.Skills
             return Math_2.ScaleVector(acceleration, mass);
         }
 
+        /// <summary>
+        /// Computes scalar force (F = m * a) from mass and scalar acceleration.
+        /// </summary>
+        /// <param name="mass">The mass.</param>
+        /// <param name="acceleration">The acceleration.</param>
+        /// <returns>The result.</returns>
         public static double Force(double mass, double acceleration)
         {
             EnsurePositive(mass, nameof(mass));
@@ -27,6 +39,12 @@ namespace OPEN_LRD.Skills
             return mass * acceleration;
         }
 
+        /// <summary>
+        /// Computes mass (m = F / a) from force and non-zero acceleration.
+        /// </summary>
+        /// <param name="force">The force.</param>
+        /// <param name="acceleration">The acceleration.</param>
+        /// <returns>The result.</returns>
         public static double MassFromForce(double force, double acceleration)
         {
             EnsureFinite(force, nameof(force));
@@ -43,6 +61,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes scalar acceleration (a = F / m) from force and mass.
+        /// </summary>
+        /// <param name="force">The force.</param>
+        /// <param name="mass">The mass.</param>
+        /// <returns>The result.</returns>
         public static Vector3 Acceleration(Vector3 force, double mass)
         {
             EnsureFinite(force, nameof(force));
@@ -50,6 +74,12 @@ namespace OPEN_LRD.Skills
             return Math_2.ScaleVector(force, 1.0 / mass);
         }
 
+        /// <summary>
+        /// Computes scalar acceleration (a = F / m) from force and mass.
+        /// </summary>
+        /// <param name="force">The force.</param>
+        /// <param name="mass">The mass.</param>
+        /// <returns>The result.</returns>
         public static double Acceleration(double force, double mass)
         {
             EnsureFinite(force, nameof(force));
@@ -57,14 +87,31 @@ namespace OPEN_LRD.Skills
             return force / mass;
         }
 
+        /// <summary>
+        /// Computes scalar weight from mass using standard gravitational acceleration.
+        /// </summary>
+        /// <param name="mass">The mass.</param>
+        /// <param name="gravity)">The gravity).</param>
+        /// <returns>The result.</returns>
         public static Vector3 Weight(double mass, Vector3 gravity) => Force(mass, gravity);
 
+        /// <summary>
+        /// Computes scalar weight from mass using standard gravitational acceleration.
+        /// </summary>
+        /// <param name="mass">The mass.</param>
+        /// <returns>The result.</returns>
         public static double Weight(double mass)
         {
             EnsurePositive(mass, nameof(mass));
             return mass * PhysicalConstants.StandardGravity.ValueSI;
         }
 
+        /// <summary>
+        /// Computes linear momentum (p = m * v) from mass and 3D velocity.
+        /// </summary>
+        /// <param name="mass">The mass.</param>
+        /// <param name="velocity">The velocity.</param>
+        /// <returns>The result.</returns>
         public static Vector3 Momentum(double mass, Vector3 velocity)
         {
             EnsurePositive(mass, nameof(mass));
@@ -72,6 +119,12 @@ namespace OPEN_LRD.Skills
             return Math_2.ScaleVector(velocity, mass);
         }
 
+        /// <summary>
+        /// Computes linear impulse (J = F * ?t) from constant force over elapsed time.
+        /// </summary>
+        /// <param name="force">The force.</param>
+        /// <param name="time">The time.</param>
+        /// <returns>The result.</returns>
         public static Vector3 Impulse(Vector3 force, double time)
         {
             EnsureFinite(force, nameof(force));
@@ -79,12 +132,23 @@ namespace OPEN_LRD.Skills
             return Math_2.ScaleVector(force, time);
         }
 
+        /// <summary>
+        /// Computes distance traveled (d = v * t) at constant speed over time.
+        /// </summary>
+        /// <param name="displacement">The displacement.</param>
+        /// <returns>The result.</returns>
         public static double Distance(Vector3 displacement)
         {
             EnsureFinite(displacement, nameof(displacement));
             return Math_2.CalculateVectorMagnitude(displacement);
         }
 
+        /// <summary>
+        /// Computes distance traveled (d = v * t) at constant speed over time.
+        /// </summary>
+        /// <param name="speed">The speed.</param>
+        /// <param name="time">The time.</param>
+        /// <returns>The result.</returns>
         public static double Distance(double speed, double time)
         {
             EnsureNonNegative(speed, nameof(speed));
@@ -92,6 +156,12 @@ namespace OPEN_LRD.Skills
             return speed * time;
         }
 
+        /// <summary>
+        /// Computes elapsed travel time (t = d / v) over distance at constant speed.
+        /// </summary>
+        /// <param name="distance">The distance.</param>
+        /// <param name="speed">The speed.</param>
+        /// <returns>The result.</returns>
         public static double TravelTime(double distance, double speed)
         {
             EnsureNonNegative(distance, nameof(distance));
@@ -99,6 +169,12 @@ namespace OPEN_LRD.Skills
             return distance / speed;
         }
 
+        /// <summary>
+        /// Computes translational kinetic energy (KE = 0.5 * m * v ) from mass and speed.
+        /// </summary>
+        /// <param name="mass">The mass.</param>
+        /// <param name="speed">The speed.</param>
+        /// <returns>The result.</returns>
         public static double KineticEnergy(double mass, double speed)
         {
             EnsurePositive(mass, nameof(mass));
@@ -106,6 +182,13 @@ namespace OPEN_LRD.Skills
             return 0.5 * mass * speed * speed;
         }
 
+        /// <summary>
+        /// Computes gravitational potential energy (PE = m * g * h) from mass, gravity, and height.
+        /// </summary>
+        /// <param name="mass">The mass.</param>
+        /// <param name="gravity">The gravity.</param>
+        /// <param name="height">The height.</param>
+        /// <returns>The result.</returns>
         public static double GravitationalPotentialEnergy(double mass, double gravity, double height)
         {
             EnsurePositive(mass, nameof(mass));
@@ -114,6 +197,12 @@ namespace OPEN_LRD.Skills
             return mass * gravity * height;
         }
 
+        /// <summary>
+        /// Computes mechanical work (W = F   d) as the dot product of force and displacement.
+        /// </summary>
+        /// <param name="force">The force.</param>
+        /// <param name="displacement">The displacement.</param>
+        /// <returns>The result.</returns>
         public static double Work(Vector3 force, Vector3 displacement)
         {
             EnsureFinite(force, nameof(force));
@@ -121,6 +210,12 @@ namespace OPEN_LRD.Skills
             return Math_2.CalculateDotProduct(force, displacement);
         }
 
+        /// <summary>
+        /// Computes instantaneous mechanical power (P = F   v) from force and velocity.
+        /// </summary>
+        /// <param name="work">The work.</param>
+        /// <param name="time">The time.</param>
+        /// <returns>The result.</returns>
         public static double Power(double work, double time)
         {
             EnsureFinite(work, nameof(work));
@@ -128,6 +223,12 @@ namespace OPEN_LRD.Skills
             return work / time;
         }
 
+        /// <summary>
+        /// Computes instantaneous mechanical power (P = F   v) from force and velocity.
+        /// </summary>
+        /// <param name="force">The force.</param>
+        /// <param name="velocity">The velocity.</param>
+        /// <returns>The result.</returns>
         public static double Power(Vector3 force, Vector3 velocity)
         {
             EnsureFinite(force, nameof(force));
@@ -135,6 +236,12 @@ namespace OPEN_LRD.Skills
             return Math_2.CalculateDotProduct(force, velocity);
         }
 
+        /// <summary>
+        /// Computes torque vector (? = r   F) as the cross product of leverArm and force.
+        /// </summary>
+        /// <param name="leverArm">The lever arm.</param>
+        /// <param name="force">The force.</param>
+        /// <returns>The result.</returns>
         public static Vector3 Torque(Vector3 leverArm, Vector3 force)
         {
             EnsureFinite(leverArm, nameof(leverArm));
@@ -142,6 +249,12 @@ namespace OPEN_LRD.Skills
             return Math_2.CalculateCrossProduct(leverArm, force);
         }
 
+        /// <summary>
+        /// Computes rotational power (P = ?   ?) from torque and angularVelocity.
+        /// </summary>
+        /// <param name="torque">The torque.</param>
+        /// <param name="angularVelocity">The angular velocity.</param>
+        /// <returns>The result.</returns>
         public static double RotationalPower(Vector3 torque, Vector3 angularVelocity)
         {
             EnsureFinite(torque, nameof(torque));
@@ -149,6 +262,14 @@ namespace OPEN_LRD.Skills
             return Math_2.CalculateDotProduct(torque, angularVelocity);
         }
 
+        /// <summary>
+        /// Computes 3D position (r(t) = r? + v?t + 0.5at ) under constant acceleration at time.
+        /// </summary>
+        /// <param name="initialPosition">The initial position.</param>
+        /// <param name="initialVelocity">The initial velocity.</param>
+        /// <param name="acceleration">The acceleration.</param>
+        /// <param name="time">The time.</param>
+        /// <returns>The result.</returns>
         public static Vector3 PositionAtTime(Vector3 initialPosition, Vector3 initialVelocity, Vector3 acceleration, double time)
         {
             EnsureFinite(initialPosition, nameof(initialPosition));
@@ -158,6 +279,13 @@ namespace OPEN_LRD.Skills
             return initialPosition + (initialVelocity * time) + (acceleration * (0.5 * time * time));
         }
 
+        /// <summary>
+        /// Computes 3D velocity (v(t) = v? + at) under constant acceleration at time.
+        /// </summary>
+        /// <param name="initialVelocity">The initial velocity.</param>
+        /// <param name="acceleration">The acceleration.</param>
+        /// <param name="time">The time.</param>
+        /// <returns>The result.</returns>
         public static Vector3 VelocityAtTime(Vector3 initialVelocity, Vector3 acceleration, double time)
         {
             EnsureFinite(initialVelocity, nameof(initialVelocity));
@@ -166,6 +294,13 @@ namespace OPEN_LRD.Skills
             return initialVelocity + (acceleration * time);
         }
 
+        /// <summary>
+        /// Computes Newton's gravitational force vector between firstMass and secondMass separated by separation.
+        /// </summary>
+        /// <param name="firstMass">The first mass.</param>
+        /// <param name="secondMass">The second mass.</param>
+        /// <param name="separation">The separation.</param>
+        /// <returns>The result.</returns>
         public static Vector3 GravitationalForce(double firstMass, double secondMass, Vector3 separation)
         {
             EnsurePositive(firstMass, nameof(firstMass));
@@ -177,6 +312,12 @@ namespace OPEN_LRD.Skills
             return Math_2.ScaleVector(separation, magnitude / radius);
         }
 
+        /// <summary>
+        /// Computes escape speed (v_e = ?(2GM / r)) from a celestial body of mass at radius.
+        /// </summary>
+        /// <param name="mass">The mass.</param>
+        /// <param name="radius">The radius.</param>
+        /// <returns>The result.</returns>
         public static double EscapeVelocity(double mass, double radius)
         {
             EnsurePositive(mass, nameof(mass));
@@ -184,6 +325,12 @@ namespace OPEN_LRD.Skills
             return Math.Sqrt(2.0 * PhysicalConstants.GravitationalConstant.ValueSI * mass / radius);
         }
 
+        /// <summary>
+        /// Computes circular orbital speed (v_o = ?(GM / r)) around centralMass at orbital radius.
+        /// </summary>
+        /// <param name="centralMass">The central mass.</param>
+        /// <param name="radius">The radius.</param>
+        /// <returns>The result.</returns>
         public static double CircularOrbitSpeed(double centralMass, double radius)
         {
             EnsurePositive(centralMass, nameof(centralMass));
@@ -191,11 +338,27 @@ namespace OPEN_LRD.Skills
             return Math.Sqrt(PhysicalConstants.GravitationalConstant.ValueSI * centralMass / radius);
         }
 
+        /// <summary>
+        /// Computes 3D projectile position at time under gravity from initialPosition and initialVelocity.
+        /// </summary>
+        /// <param name="initialPosition">The initial position.</param>
+        /// <param name="initialVelocity">The initial velocity.</param>
+        /// <param name="gravity">The gravity.</param>
+        /// <param name="time">The time.</param>
+        /// <returns>The result.</returns>
         public static Vector3 ProjectilePosition(Vector3 initialPosition, Vector3 initialVelocity, Vector3 gravity, double time)
         {
             return PositionAtTime(initialPosition, initialVelocity, gravity, time);
         }
 
+        /// <summary>
+        /// Computes sampled 3D projectile positions along sampleTimes under gravity.
+        /// </summary>
+        /// <param name="initialPosition">The initial position.</param>
+        /// <param name="initialVelocity">The initial velocity.</param>
+        /// <param name="gravity">The gravity.</param>
+        /// <param name="sampleTimes">The sample times.</param>
+        /// <returns>The result.</returns>
         public static TrajectoryResult ProjectileTrajectory(
             Vector3 initialPosition,
             Vector3 initialVelocity,
@@ -245,6 +408,14 @@ namespace OPEN_LRD.Skills
             return new TrajectoryResult(samples.AsReadOnly(), impactTime.HasValue, impactTime);
         }
 
+        /// <summary>
+        /// </summary>
+        /// </summary>
+        /// <param name="launchHeight">The launch height.</param>
+        /// <param name="verticalSpeed">The vertical speed.</param>
+        /// <param name="horizontalSpeed">The horizontal speed.</param>
+        /// <param name="gravity">The gravity.</param>
+        /// <returns>The impact time and range.</returns>
         public static (double Time, double Range) FlatGroundImpact(double launchHeight, double verticalSpeed, double horizontalSpeed, double gravity)
         {
             EnsureNonNegative(launchHeight, nameof(launchHeight));
