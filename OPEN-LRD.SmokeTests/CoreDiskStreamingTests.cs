@@ -22,6 +22,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Merge imports reconcile existing container memberships", MergeReconcilesContainerMemberships());
             Program.Run("Truncated checkpoints are rejected without replacing core", TruncatedCheckpointIsRejected());
             Program.Run("Malformed foundation payloads are rejected deterministically", MalformedFoundationPayloadsAreRejected());
+            Program.Run("In-memory and disk-paged modes maintain query parity", PagedModeParityMatchesInMemoryMode());
         }
 
         private static Action CheckpointRoundTripsAndPagesTrustedData()
@@ -953,6 +954,310 @@ namespace OPEN_LRD.SmokeTests
                     "Malformed payload headers must be rejected deterministically.");
                 Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeWord(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF }),
                     "Malformed truncated word payloads must be rejected deterministically.");
+
+                // Allocation guard and malformed payload boundary tests (mismatched lengths, invalid UTF-8, boundary dates/numerics)
+                using (MemoryStream badUtf8Stream = new MemoryStream())
+                using (BinaryWriter writer = new BinaryWriter(badUtf8Stream))
+                {
+                    writer.Write(Guid.NewGuid().ToByteArray());
+                    writer.Write(true);
+                    writer.Write((byte)2);
+                    writer.Write(new byte[] { 0xC3, 0x28 }); // invalid UTF-8 sequence
+                    writer.Write(0);
+                    Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeGroup(badUtf8Stream.ToArray()),
+                        "Invalid UTF-8 bytes in foundation strings must throw InvalidDataException.");
+                }
+
+                using (MemoryStream oversizedBigIntStream = new MemoryStream())
+                using (BinaryWriter writer = new BinaryWriter(oversizedBigIntStream))
+                {
+                    writer.Write(Guid.NewGuid().ToByteArray());
+                    writer.Write((byte)0); // object type
+                    writer.Write(false);
+                    writer.Write(false);
+                    writer.Write(1); // 1 variable
+                    writer.Write((byte)1);
+                    writer.Write((byte)'x');
+                    writer.Write((byte)19); // BigInteger tag
+                    writer.Write(500_000); // claims 500KB but stream ends immediately
+                    Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeFunction(oversizedBigIntStream.ToArray()),
+                        "BigInteger length exceeding remaining stream bytes must be rejected before allocation.");
+                }
+
+                using (MemoryStream oversizedArrayStream = new MemoryStream())
+                using (BinaryWriter writer = new BinaryWriter(oversizedArrayStream))
+                {
+                    writer.Write(Guid.NewGuid().ToByteArray());
+                    writer.Write((byte)0);
+                    writer.Write(false);
+                    writer.Write(false);
+                    writer.Write(1);
+                    writer.Write((byte)1);
+                    writer.Write((byte)'a');
+                    writer.Write((byte)24); // double[] tag
+                    writer.Write(900_000); // claims 900k doubles but stream has no bytes remaining
+                    Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeFunction(oversizedArrayStream.ToArray()),
+                        "Numeric array count exceeding remaining stream bytes must be rejected before allocation.");
+                }
+
+                using (MemoryStream invalidDateStream = new MemoryStream())
+                using (BinaryWriter writer = new BinaryWriter(invalidDateStream))
+                {
+                    writer.Write(Guid.NewGuid().ToByteArray());
+                    writer.Write(Guid.NewGuid().ToByteArray());
+                    writer.Write((int)NodeRelationType.Custom);
+                    writer.Write(0.5);
+                    writer.Write(false);
+                    writer.Write(Guid.NewGuid().ToByteArray());
+                    writer.Write((byte)NodeLinkOrigin.User);
+                    writer.Write(long.MaxValue); // invalid DateTimeOffset ticks
+                    writer.Write((short)0);
+                    Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeLink(invalidDateStream.ToArray()),
+                        "Out-of-range DateTimeOffset ticks must be rejected as InvalidDataException.");
+                }
+
+                // PartitionedBinaryStore duplicate keys and failed open/merge/compact/upgrade original store preservation
+                string dupDir = Path.Combine(Path.GetTempPath(), "open-lrd-dup-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Guid dupKey = Guid.NewGuid();
+                    byte[] validSensePayload = FoundationBinarySerializer.SerializeSense(new SenseBox(dupKey));
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> badPartitions = new Dictionary<DiskPartition, IEnumerable<DiskRecord>>
+                    {
+                        [DiskPartition.Senses] = new[]
+                        {
+                            new DiskRecord(dupKey, validSensePayload),
+                            new DiskRecord(dupKey, validSensePayload)
+                        }
+                    };
+                    Program.AssertThrows<InvalidDataException>(() => PartitionedBinaryStore.Create(dupDir, badPartitions),
+                        "Duplicate record keys within a partition must be rejected deterministically.");
+                    Program.Assert(!Directory.Exists(dupDir) &&
+                                   Directory.GetDirectories(Path.GetTempPath(), Path.GetFileName(dupDir) + ".staging-*").Length == 0,
+                        "Failed checkpoint creation must clean up staging directories and leave no partial store.");
+                }
+                finally
+                {
+                    if (Directory.Exists(dupDir)) Directory.Delete(dupDir, true);
+                }
+
+                string preserveDir = Path.Combine(Path.GetTempPath(), "open-lrd-preserve-" + Guid.NewGuid().ToString("N"));
+                string badIncomingDir = Path.Combine(Path.GetTempPath(), "open-lrd-bad-incoming-" + Guid.NewGuid().ToString("N"));
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    Guid senseId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    FunctionBox verifiedFn = new FunctionBox(Guid.NewGuid(), typeof(int), "Math_1.AddInt");
+                    verifiedFn.AddVariable(new FunctionVariable("a", 2, typeof(int)));
+                    verifiedFn.AddVariable(new FunctionVariable("b", 3, typeof(int)));
+                    MathFunctionDispatcher.Dispatch(verifiedFn);
+                    Program.Assert(core.AddTrustedFunction(verifiedFn), "Verified function should be trusted.");
+                    core.StreamTrustedDictionariesToDisk(preserveDir);
+
+                    // Open in paged mode and check validation provenance summary diagnostics
+                    core.StreamTrustedDictionariesFromDisk(preserveDir, replaceExisting: true, preloadAllIntoMemory: false, maxCachedRecordsPerPartition: 16);
+                    DiskStoreDiagnostics? diag = core.GetDiskStoreDiagnostics();
+                    Program.Assert(diag != null &&
+                                   diag.LastValidationProvenanceSummary != null &&
+                                   diag.LastValidationProvenanceSummary.VerifiedProvenanceCount == 1 &&
+                                   diag.LastValidationProvenanceSummary.UnverifiedProvenanceCount == 0 &&
+                                   diag.LastValidationProvenanceSummary.TamperedProvenanceCount == 0 &&
+                                   diag.LastValidationProvenanceSummary.VerifiedFunctionIds != null &&
+                                   diag.LastValidationProvenanceSummary.VerifiedFunctionIds.Contains(verifiedFn.GetFunctionID()),
+                        "DiskStoreDiagnostics should expose per-status provenance counts and function IDs on open and validate.");
+
+                    // Prepare corrupted incoming directory and verify failed merge preserves original state and cleans staging
+                    Directory.CreateDirectory(badIncomingDir);
+                    File.WriteAllBytes(Path.Combine(badIncomingDir, "manifest.lrdmeta"), new byte[] { 1, 2, 3, 4 });
+                    core.MaterializeDiskStore();
+                    Program.AssertThrows<InvalidDataException>(() => core.StreamTrustedDictionariesFromDisk(badIncomingDir, replaceExisting: false),
+                        "Merging a corrupted store must throw InvalidDataException.");
+                    Program.Assert(core.GetTrustedSenseBox(senseId) != null &&
+                                   core.GetTrustedFunctionBox(verifiedFn.GetFunctionID()) != null,
+                        "Failed merge must preserve existing in-memory trusted state.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                    if (Directory.Exists(preserveDir)) Directory.Delete(preserveDir, true);
+                    if (Directory.Exists(badIncomingDir)) Directory.Delete(badIncomingDir, true);
+                }
+            };
+        }
+
+        private static Action PagedModeParityMatchesInMemoryMode()
+        {
+            return () =>
+            {
+                string directory = Path.Combine(Path.GetTempPath(), "open-lrd-paged-parity-" + Guid.NewGuid().ToString("N"));
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+
+                    Guid senseId = Guid.NewGuid();
+                    Guid usageId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    Program.Assert(core.AddTrustedUsage(new UsageBox(usageId)), "Usage should be trusted.");
+
+                    Guid symbolAId = Guid.NewGuid();
+                    SymbolBox symbolA = new SymbolBox(symbolAId, 'p');
+                    symbolA.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(symbolA), "Symbol P should be trusted.");
+
+                    Guid symbolBId = Guid.NewGuid();
+                    SymbolBox symbolB = new SymbolBox(symbolBId, 'q');
+                    symbolB.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(symbolB), "Symbol Q should be trusted.");
+
+                    Guid wordId = Guid.NewGuid();
+                    WordBox word = new WordBox(wordId, senseId, usageId, new List<Guid> { symbolAId, symbolBId }, PartOfSpeech.Noun);
+                    Program.Assert(core.AddTrustedWord(word), "Word PQ should be trusted.");
+
+                    Guid sentenceId = Guid.NewGuid();
+                    SentenceBox sentence = new SentenceBox(sentenceId, senseId, new List<Guid> { wordId });
+                    Program.Assert(core.AddTrustedSentence(sentence), "Sentence should be trusted.");
+
+                    Guid groupId = Guid.NewGuid();
+                    GroupBox group = new GroupBox(groupId, "ParityGroup", new List<Guid> { sentenceId });
+                    Program.Assert(core.AddTrustedGroup(group), "Group should be trusted.");
+
+                    Guid sourceId = Guid.NewGuid();
+                    SourceBox source = new SourceBox(sourceId, "ParitySource", new List<Guid> { groupId });
+                    Program.Assert(core.AddTrustedSource(source), "Source should be trusted.");
+
+                    FunctionBox function = new FunctionBox(Guid.NewGuid(), typeof(double), "Math_2.CalculateCircleArea", null);
+                    function.AddVariable(new FunctionVariable("radius", 2.0, typeof(double), "m"));
+                    MathFunctionDispatcher.Dispatch(function);
+                    Program.Assert(core.AddTrustedFunction(function), "Function should be trusted.");
+
+                    Node wordNode = core.GetTrustedNodeByTarget(NodeTargetKind.Word, wordId)!;
+                    Node funcNode = core.GetTrustedNodeByTarget(NodeTargetKind.Function, function.GetFunctionID())!;
+                    Guid wordNodeId = wordNode.GetNodeID();
+                    Guid funcNodeId = funcNode.GetNodeID();
+
+                    NodeLinkProvenance provenance = NodeLinkProvenance.CreateReasoning(
+                        wordNodeId, funcNodeId, NodeRelationType.EvaluatesWithFunction, "eval", 0.95, "parity-tester",
+                        sourceTargetId: sourceId, evidenceTargetId: sentenceId, validFrom: null, validUntil: null);
+                    Program.Assert(core.AddTrustedLink(wordNodeId, funcNodeId, NodeRelationType.EvaluatesWithFunction, 0.95, "eval", provenance),
+                        "Qualified evaluation link should be added.");
+                    core.UpdateNodeLayoutOptions(0.25, 0.35);
+
+                    // In-memory baseline captures
+                    string inMemorySentenceText = core.GetTextFromSentenceID(sentenceId);
+                    string inMemoryWordText = core.GetTextFromWordID(wordId);
+                    WordBox? inMemoryWordBox = core.GetWordByGuid(wordId);
+                    List<Node> inMemoryAllNodes = core.FindTrustedNodes();
+                    List<Node> inMemoryWordNodes = core.FindTrustedNodes(NodeTargetKind.Word);
+                    List<NodeLink> inMemoryLinks = core.GetAllTrustedLinks();
+                    List<NodeLink> inMemoryOutgoing = core.GetOutgoingLinks(wordNodeId, NodeRelationType.EvaluatesWithFunction);
+                    List<NodeLink> inMemoryIncoming = core.GetIncomingLinks(funcNodeId, NodeRelationType.EvaluatesWithFunction);
+                    List<NodeLink> inMemoryProvenance = core.GetTrustedLinksByProvenanceTarget(sourceId);
+                    List<NodeLink> inMemoryEvidenceProvenance = core.GetTrustedLinksByProvenanceTarget(sentenceId, includeSourceTarget: false);
+                    TrustedKnowledgeGraphSnapshot inMemorySnapshot = core.BuildTrustedKnowledgeGraphSnapshot();
+                    Graph<Guid> inMemoryCostGraph = core.BuildSkillsCostGraphSnapshot();
+                    NodeLayoutOptions inMemoryLayoutOptions = core.GetNodeLayoutOptions();
+                    NodeRepresentation? inMemoryWordRep = core.GetNodeRepresentationByNodeId(wordNodeId);
+                    Vector3 inMemoryPos = inMemoryWordRep?.GetPosition() ?? Vector3.Zero;
+                    uint inMemoryColor = inMemoryWordRep?.GetColor() ?? 0;
+
+                    // Stream to disk and open in read-only paged mode
+                    core.StreamTrustedDictionariesToDisk(directory);
+                    core.StreamTrustedDictionariesFromDisk(directory, true, false, 0);
+                    Program.Assert(core.IsDiskPagedReadOnly, "Core should be in disk-paged read-only mode.");
+
+                    // Parity assertions under paged mode
+                    string pagedSentenceText = core.GetTextFromSentenceID(sentenceId);
+                    Program.Assert(pagedSentenceText == inMemorySentenceText && pagedSentenceText == "pq",
+                        "GetTextFromSentenceID should have exact parity in paged mode.");
+
+                    string pagedWordText = core.GetTextFromWordID(wordId);
+                    Program.Assert(pagedWordText == inMemoryWordText && pagedWordText == "pq",
+                        "GetTextFromWordID should have exact parity in paged mode.");
+
+                    WordBox? pagedWordBox = core.GetWordByGuid(wordId);
+                    Program.Assert(pagedWordBox != null && pagedWordBox.GetWordID() == wordId &&
+                                   pagedWordBox.GetSenseID() == senseId && pagedWordBox.GetUsageID() == usageId,
+                        "GetWordByGuid should have exact parity in paged mode.");
+
+                    List<Node> pagedAllNodes = core.FindTrustedNodes();
+                    Program.Assert(pagedAllNodes.Count == inMemoryAllNodes.Count,
+                        "FindTrustedNodes() count should have parity in paged mode.");
+                    for (int i = 0; i < inMemoryAllNodes.Count; i++)
+                    {
+                        Program.Assert(pagedAllNodes[i].GetNodeID() == inMemoryAllNodes[i].GetNodeID() &&
+                                       pagedAllNodes[i].GetTargetKind() == inMemoryAllNodes[i].GetTargetKind() &&
+                                       pagedAllNodes[i].GetTargetID() == inMemoryAllNodes[i].GetTargetID(),
+                            "FindTrustedNodes() deterministic ordering and content must match in paged mode.");
+                    }
+
+                    List<Node> pagedWordNodes = core.FindTrustedNodes(NodeTargetKind.Word);
+                    Program.Assert(pagedWordNodes.Count == inMemoryWordNodes.Count &&
+                                   pagedWordNodes[0].GetNodeID() == wordNodeId,
+                        "FindTrustedNodes(kind) should filter correctly in paged mode.");
+
+                    List<NodeLink> pagedLinks = core.GetAllTrustedLinks();
+                    Program.Assert(pagedLinks.Count == inMemoryLinks.Count,
+                        "GetAllTrustedLinks count should have parity in paged mode.");
+
+                    List<NodeLink> pagedOutgoing = core.GetOutgoingLinks(wordNodeId, NodeRelationType.EvaluatesWithFunction);
+                    Program.Assert(pagedOutgoing.Count == inMemoryOutgoing.Count &&
+                                   pagedOutgoing[0].TargetNodeId == funcNodeId &&
+                                   pagedOutgoing[0].Provenance.AssertionId == provenance.AssertionId,
+                        "GetOutgoingLinks should have parity in paged mode.");
+
+                    List<NodeLink> pagedIncoming = core.GetIncomingLinks(funcNodeId, NodeRelationType.EvaluatesWithFunction);
+                    Program.Assert(pagedIncoming.Count == inMemoryIncoming.Count &&
+                                   pagedIncoming[0].SourceNodeId == wordNodeId,
+                        "GetIncomingLinks should have parity in paged mode.");
+
+                    List<NodeLink> pagedProvenance = core.GetTrustedLinksByProvenanceTarget(sourceId);
+                    Program.Assert(pagedProvenance.Count == inMemoryProvenance.Count &&
+                                   pagedProvenance[0].Provenance.AssertionId == provenance.AssertionId,
+                        "GetTrustedLinksByProvenanceTarget should match in paged mode.");
+
+                    List<NodeLink> pagedEvidenceProvenance = core.GetTrustedLinksByProvenanceTarget(sentenceId, includeSourceTarget: false);
+                    Program.Assert(pagedEvidenceProvenance.Count == inMemoryEvidenceProvenance.Count &&
+                                   pagedEvidenceProvenance[0].Provenance.AssertionId == provenance.AssertionId,
+                        "GetTrustedLinksByProvenanceTarget evidence-only lookup should match in paged mode.");
+
+                    TrustedKnowledgeGraphSnapshot pagedSnapshot = core.BuildTrustedKnowledgeGraphSnapshot();
+                    Program.Assert(pagedSnapshot.Nodes.Count == inMemorySnapshot.Nodes.Count &&
+                                   pagedSnapshot.Links.Count == inMemorySnapshot.Links.Count,
+                        "BuildTrustedKnowledgeGraphSnapshot should match in paged mode.");
+
+                    Graph<Guid> pagedCostGraph = core.BuildSkillsCostGraphSnapshot();
+                    Program.Assert(pagedCostGraph.NodeCount == inMemoryCostGraph.NodeCount &&
+                                   pagedCostGraph.EdgeCount == inMemoryCostGraph.EdgeCount,
+                        "BuildSkillsCostGraphSnapshot should match in paged mode.");
+
+                    NodeLayoutOptions pagedLayoutOptions = core.GetNodeLayoutOptions();
+                    Program.Assert(pagedLayoutOptions.NodeWeightBias == inMemoryLayoutOptions.NodeWeightBias &&
+                                   pagedLayoutOptions.NeighborPositionBias == inMemoryLayoutOptions.NeighborPositionBias,
+                        "GetNodeLayoutOptions should match in paged mode.");
+
+                    NodeRepresentation? pagedWordRep = core.GetNodeRepresentationByNodeId(wordNodeId);
+                    Program.Assert(pagedWordRep != null &&
+                                   pagedWordRep.GetPosition() == inMemoryPos &&
+                                   pagedWordRep.GetColor() == inMemoryColor,
+                        "NodeRepresentation should match in paged mode.");
+
+                    core.MaterializeDiskStore();
+                    Program.Assert(!core.IsDiskPagedReadOnly, "Core should materialize out of paged mode.");
+                    core.UpdateNodeLayoutOptions(0.4, 0.2);
+                    NodeRepresentation? materializedWordRep = core.GetNodeRepresentationByNodeId(wordNodeId);
+                    Program.Assert(materializedWordRep != null && materializedWordRep.GetPosition().IsFinite,
+                        "Layout updates after materialization should recalculate finite node positions.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                    if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                }
             };
         }
     }

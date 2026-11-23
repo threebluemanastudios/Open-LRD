@@ -35,7 +35,12 @@ namespace OPEN_LRD.Foundations
             {
                 throw new ArgumentException("A variable name is required.", nameof(name));
             }
-            Name = name.Trim();
+            string normalized = name.Trim();
+            if (normalized.Length > ExpressionParser.MaximumIdentifierLength)
+            {
+                throw new FormatException($"Variable identifier exceeds the {ExpressionParser.MaximumIdentifierLength} character limit.");
+            }
+            Name = normalized;
         }
 
         public override string ToString() => Name;
@@ -178,10 +183,19 @@ namespace OPEN_LRD.Foundations
             {
                 throw new ArgumentException("A call function name is required.", nameof(functionName));
             }
+            string normalizedName = functionName.Trim();
+            if (normalizedName.Length > ExpressionParser.MaximumIdentifierLength)
+            {
+                throw new FormatException($"Call identifier exceeds the {ExpressionParser.MaximumIdentifierLength} character limit.");
+            }
             ArgumentNullException.ThrowIfNull(arguments);
             if (arguments.Count == 0)
             {
                 throw new ArgumentException("A call requires at least one argument.", nameof(arguments));
+            }
+            if (arguments.Count > ExpressionParser.MaximumFunctionArguments)
+            {
+                throw new FormatException($"Function call exceeds the {ExpressionParser.MaximumFunctionArguments} argument limit.");
             }
             List<Expression> copy = new List<Expression>(arguments.Count);
             foreach (Expression argument in arguments)
@@ -192,7 +206,7 @@ namespace OPEN_LRD.Foundations
                 }
                 copy.Add(argument);
             }
-            FunctionName = functionName.Trim();
+            FunctionName = normalizedName;
             Arguments = copy.AsReadOnly();
         }
 

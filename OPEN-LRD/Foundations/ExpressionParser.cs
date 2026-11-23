@@ -14,7 +14,21 @@ namespace OPEN_LRD.Foundations
         internal const int MaximumAstNodes = 4_096;
         internal const int MaximumAstDepth = 256;
         internal const int MaximumIdentifierLength = 128;
+        internal const int MaximumNumericLiteralLength = 512;
         private const int MaximumIndexedIterations = 1_000;
+
+        internal static void ValidateVariableIdentifier(string variable, string parameterName = "variable")
+        {
+            if (string.IsNullOrWhiteSpace(variable))
+            {
+                throw new ArgumentException("The variable name cannot be null or empty.", parameterName);
+            }
+            string normalized = variable.Trim();
+            if (normalized.Length > MaximumIdentifierLength)
+            {
+                throw new FormatException($"Identifier '{normalized[..Math.Min(16, normalized.Length)]}...' exceeds the {MaximumIdentifierLength} character limit.");
+            }
+        }
 
         internal static Expression Parse(string input)
         {
@@ -59,6 +73,12 @@ namespace OPEN_LRD.Foundations
                 }
                 switch (current)
                 {
+                    case VariableExpression variable:
+                        if (variable.Name.Length > MaximumIdentifierLength)
+                        {
+                            throw new FormatException($"Variable identifier exceeds the {MaximumIdentifierLength} character limit.");
+                        }
+                        break;
                     case NegateExpression negate:
                         stack.Push((negate.Operand, depth + 1));
                         break;
@@ -70,6 +90,14 @@ namespace OPEN_LRD.Foundations
                         stack.Push((function.Argument, depth + 1));
                         break;
                     case CallExpression call:
+                        if (call.FunctionName.Length > MaximumIdentifierLength)
+                        {
+                            throw new FormatException($"Call identifier exceeds the {MaximumIdentifierLength} character limit.");
+                        }
+                        if (call.Arguments.Count > MaximumFunctionArguments)
+                        {
+                            throw new FormatException($"Function call exceeds the {MaximumFunctionArguments} argument limit.");
+                        }
                         for (int i = call.Arguments.Count - 1; i >= 0; i--)
                         {
                             stack.Push((call.Arguments[i], depth + 1));
@@ -429,6 +457,10 @@ namespace OPEN_LRD.Foundations
                         throw Error("Expected exponent digits", exponentStart + 1);
                     }
                 }
+                if (index - start > MaximumNumericLiteralLength)
+                {
+                    throw Error($"Numeric literal exceeds the {MaximumNumericLiteralLength} character limit", start);
+                }
                 string token = text.Substring(start, index - start).Replace("_", string.Empty);
                 if (!double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out double value) || !double.IsFinite(value))
                 {
@@ -443,6 +475,10 @@ namespace OPEN_LRD.Foundations
                 ulong value = 0;
                 while (index < text.Length)
                 {
+                    if (index - start > MaximumNumericLiteralLength)
+                    {
+                        throw Error($"Numeric literal exceeds the {MaximumNumericLiteralLength} character limit", start);
+                    }
                     int digit = GetDigit(text[index], radix);
                     if (digit >= 0)
                     {

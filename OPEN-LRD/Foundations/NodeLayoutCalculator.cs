@@ -74,6 +74,10 @@ namespace OPEN_LRD.Foundations
         private const double ClearanceFactor = 0.55;
         private const double GoldenAngle = 2.399963229728653;
 
+        // At scale (>256 nodes), expensive O(N²) all-pairs spacing and O(E*N) link-clearance
+        // passes are bypassed so full presentation recalculation remains O(N + E).
+        private const int MaxNodesForQuadraticRefinement = 256;
+
         internal static NodeLayoutResult Calculate(
             IReadOnlyDictionary<Guid, NodeDerivationSnapshot> snapshots,
             IReadOnlyDictionary<Guid, double> sizes,
@@ -167,8 +171,11 @@ namespace OPEN_LRD.Foundations
             }
 
             ApplyNeighborPasses(snapshots, positions, bucketByKey, nodeBuckets, options, sizes);
-            ApplySpacingPasses(snapshots, positions, bucketByKey, nodeBuckets, sizes);
-            ApplyLinkClearancePasses(snapshots, positions, bucketByKey, nodeBuckets, options, sizes);
+            if (snapshots.Count <= MaxNodesForQuadraticRefinement)
+            {
+                ApplySpacingPasses(snapshots, positions, bucketByKey, nodeBuckets, sizes);
+                ApplyLinkClearancePasses(snapshots, positions, bucketByKey, nodeBuckets, options, sizes);
+            }
             ApplyFinalClamp(snapshots, positions, bucketByKey, nodeBuckets, sizes);
 
             return new NodeLayoutResult(positions, buckets, nodeBuckets, CoreAnchor);

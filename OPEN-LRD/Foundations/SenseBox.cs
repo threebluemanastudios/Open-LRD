@@ -247,6 +247,21 @@ namespace OPEN_LRD.Foundations
             GraphSynchronization.Execute(() => { EnsureUntrustedMutable(); _trailingWords.Remove(wordId); _trailingWordSet.Remove(wordId); });
         }
 
+        internal void RemoveSentenceFromCore(Guid sentenceId)
+        {
+            GraphSynchronization.Execute(() => { EnsureWritable(); _sentences.Remove(sentenceId); _sentenceSet.Remove(sentenceId); });
+        }
+
+        internal void RemoveLeadingWordFromCore(Guid wordId)
+        {
+            GraphSynchronization.Execute(() => { EnsureWritable(); _leadingWords.Remove(wordId); _leadingWordSet.Remove(wordId); });
+        }
+
+        internal void RemoveTrailingWordFromCore(Guid wordId)
+        {
+            GraphSynchronization.Execute(() => { EnsureWritable(); _trailingWords.Remove(wordId); _trailingWordSet.Remove(wordId); });
+        }
+
         internal void MarkTrusted() => GraphSynchronization.Execute(() => _isTrusted = true);
 
         internal void MarkReadOnly() => GraphSynchronization.Execute(() => { _isTrusted = true; _isReadOnly = true; });

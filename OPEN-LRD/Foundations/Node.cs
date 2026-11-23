@@ -330,19 +330,76 @@ namespace OPEN_LRD.Foundations
         int VerifiedReferences,
         int InvalidReferences);
 
-    /// <summary>An immutable, typed view of trusted graph nodes and assertions at a specific instant.</summary>
+    /// <summary>
+    /// An immutable, typed epoch snapshot of trusted graph nodes and active assertions.
+    /// Provides snapshot isolation for concurrent reasoning evaluators without locking during read traversal.
+    /// </summary>
     internal sealed class TrustedKnowledgeGraphSnapshot
     {
+        /// <summary>Gets the monotonic graph epoch counter at which this snapshot was captured.</summary>
+        public long Epoch { get; }
+
+        /// <summary>Gets the effective temporal instant used to filter active assertions.</summary>
         public DateTimeOffset AsOf { get; }
+
+        /// <summary>Gets the deterministically ordered list of trusted node snapshots.</summary>
         public IReadOnlyList<KnowledgeNodeSnapshot> Nodes { get; }
+
+        /// <summary>Gets the deterministically ordered list of active trusted links.</summary>
         public IReadOnlyList<NodeLink> Links { get; }
 
-        internal TrustedKnowledgeGraphSnapshot(DateTimeOffset asOf,
-            IEnumerable<KnowledgeNodeSnapshot> nodes, IEnumerable<NodeLink> links)
+        /// <summary>Gets an immutable epoch view of trusted nodes keyed by node identifier.</summary>
+        public IReadOnlyDictionary<Guid, Node> NodesById { get; }
+
+        /// <summary>Gets an immutable epoch view of trusted node snapshots keyed by node identifier.</summary>
+        public IReadOnlyDictionary<Guid, KnowledgeNodeSnapshot> NodeSnapshotsById { get; }
+
+        /// <summary>Gets an immutable epoch view of active primary assertions keyed by assertion identifier.</summary>
+        public IReadOnlyDictionary<Guid, NodeLink> LinksByAssertionId { get; }
+
+        internal TrustedKnowledgeGraphSnapshot(
+            long epoch,
+            DateTimeOffset asOf,
+            IEnumerable<KnowledgeNodeSnapshot> nodes,
+            IEnumerable<NodeLink> links,
+            IReadOnlyDictionary<Guid, Node>? nodesById = null)
         {
+            Epoch = epoch;
             AsOf = asOf;
-            Nodes = new ReadOnlyCollection<KnowledgeNodeSnapshot>(new List<KnowledgeNodeSnapshot>(nodes));
-            Links = new ReadOnlyCollection<NodeLink>(new List<NodeLink>(links));
+            List<KnowledgeNodeSnapshot> nodeList = new List<KnowledgeNodeSnapshot>(nodes);
+            List<NodeLink> linkList = new List<NodeLink>(links);
+            Nodes = new ReadOnlyCollection<KnowledgeNodeSnapshot>(nodeList);
+            Links = new ReadOnlyCollection<NodeLink>(linkList);
+
+            Dictionary<Guid, KnowledgeNodeSnapshot> snapshotMap = new Dictionary<Guid, KnowledgeNodeSnapshot>(nodeList.Count);
+            Dictionary<Guid, Node> nodeMap = new Dictionary<Guid, Node>(nodeList.Count);
+            foreach (KnowledgeNodeSnapshot snapshot in nodeList)
+            {
+                snapshotMap[snapshot.NodeId] = snapshot;
+                if (nodesById != null && nodesById.TryGetValue(snapshot.NodeId, out Node? existingNode))
+                {
+                    Node clone = new Node(existingNode.GetNodeID(), existingNode.GetTargetKind(), existingNode.GetTargetID(), existingNode.GetLabel(), allowRegisteredTrustedId: true);
+                    clone.ReconcileReferenceCounts(existingNode.GetVerifiedReferences(), existingNode.GetInvalidReferences());
+                    clone.MarkReadOnly();
+                    nodeMap[snapshot.NodeId] = clone;
+                }
+                else
+                {
+                    Node clone = new Node(snapshot.NodeId, snapshot.TargetKind, snapshot.TargetId, snapshot.Label, allowRegisteredTrustedId: true);
+                    clone.ReconcileReferenceCounts(snapshot.VerifiedReferences, snapshot.InvalidReferences);
+                    clone.MarkReadOnly();
+                    nodeMap[snapshot.NodeId] = clone;
+                }
+            }
+            NodeSnapshotsById = new ReadOnlyDictionary<Guid, KnowledgeNodeSnapshot>(snapshotMap);
+            NodesById = new ReadOnlyDictionary<Guid, Node>(nodeMap);
+
+            Dictionary<Guid, NodeLink> assertionMap = new Dictionary<Guid, NodeLink>();
+            foreach (NodeLink link in linkList)
+            {
+                assertionMap.TryAdd(link.Provenance.AssertionId, link);
+            }
+            LinksByAssertionId = new ReadOnlyDictionary<Guid, NodeLink>(assertionMap);
         }
     }
 
@@ -546,6 +603,11 @@ namespace OPEN_LRD.Foundations
         internal void MarkTrusted()
         {
             GraphSynchronization.Execute(() => { EnsureWritable(); isTrusted = true; });
+        }
+
+        internal void UnmarkTrusted()
+        {
+            GraphSynchronization.Execute(() => { EnsureWritable(); isTrusted = false; });
         }
 
         internal void MarkReadOnly() => GraphSynchronization.Execute(() => { isTrusted = true; isReadOnly = true; });

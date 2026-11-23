@@ -21,7 +21,7 @@ namespace OPEN_LRD.SmokeTests
             Guid WordNodeId,
             Guid SentenceNodeId);
 
-        internal static void RunAll()
+        internal static void RunAll(bool runFullScaleGate = false)
         {
             Program.Run("Foundation identity identifiers reject Guid.Empty", EmptyIdentityIdsAreRejected());
             Program.Run("Fresh core initializes stable default sources and groups", DefaultSourcesAreInitializedAndStable());
@@ -37,6 +37,10 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Reasoning links support provenance and validity queries", ReasoningLinksSupportProvenanceAndTimeQueries());
             Program.Run("Conversation and function APIs return validated snapshots", ConversationAndFunctionApisAreHardened());
             Program.Run("Core assertion and checkpoint performance smoke baseline", CorePerformanceSmokeBaseline());
+            if (runFullScaleGate)
+            {
+                Program.Run("Deterministic seeded 10k-node/100k-link scale calibration gate", RunSeededScaleCalibrationGate(10_000, 100_000));
+            }
         }
 
         private static Action DefaultSourcesAreInitializedAndStable()
@@ -684,6 +688,17 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert(Math.Abs(groupedConfidence - 0.95) < 1e-12,
                     "Aggregation should collapse same SourceGroupId evidence by max before noisy-OR.");
 
+                // Dependent inference chain without explicit SourceGroupId: same (Origin, Author, SourceTargetId) collapses by max
+                Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Implies, 0.6, "chain-step-1", "agent-alpha", sourceTargetId: fixture.WordId),
+                    "First chain assertion should be accepted.");
+                Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Implies, 0.8, "chain-step-2", "AGENT-ALPHA", sourceTargetId: fixture.WordId),
+                    "Second chain assertion from same author and source target should be accepted.");
+                Program.Assert(core.AddReasoningLink(firstNodeId, secondNodeId, NodeRelationType.Implies, 0.5, "indep-step", "agent-beta", sourceTargetId: fixture.SenseId),
+                    "Independent author/source assertion should be accepted.");
+                double chainAggregated = core.GetAggregatedLinkConfidence(firstNodeId, secondNodeId, NodeRelationType.Implies);
+                Program.Assert(Math.Abs(chainAggregated - (1.0 - (1.0 - 0.8) * (1.0 - 0.5))) < 1e-12,
+                    "Noisy-OR should collapse dependent (Origin, Author, SourceTargetId) assertions by max before combining independent sources.");
+
                 core.GetTrustedNode(firstNodeId)!.RegisterVerifiedReference(2);
                 List<Node> matchingNodes = core.FindTrustedNodes(NodeTargetKind.Word, minimumNetTrustWeight: 1,
                     relationFilter: NodeRelationType.Synonym, minimumIncidentLinkConfidence: 0.8, canonicalOnly: true);
@@ -719,6 +734,80 @@ namespace OPEN_LRD.SmokeTests
                 }
                 Program.Assert(core.GetAllTrustedLinks(NodeRelationType.Custom, NodeLinkOrigin.Reasoning).Count == customReasoningAfterFailure + 2,
                     "successful reasoning batches should atomically commit all assertions");
+
+                // Two-phase ReasoningTransaction staging boxes, nodes, and links atomically + epoch snapshot isolation
+                TrustedKnowledgeGraphSnapshot preTxSnapshot = core.BuildTrustedKnowledgeGraphSnapshot();
+                long epochBeforeTx = core.CurrentGraphEpoch;
+                Program.Assert(preTxSnapshot.Epoch == epochBeforeTx &&
+                               preTxSnapshot.NodesById.ContainsKey(firstNodeId) &&
+                               preTxSnapshot.LinksByAssertionId.Count > 0,
+                    "Epoch snapshot should expose NodesById, LinksByAssertionId, and current monotonic epoch.");
+                Program.AssertThrows<InvalidOperationException>(() => preTxSnapshot.NodesById[firstNodeId].RegisterVerifiedReference(),
+                    "Snapshot NodesById entries must be read-only clones isolated from live mutations.");
+
+                int nodeCountBeforeFailedTx = core.GetTrustedNodeCount();
+                int linkCountBeforeFailedTx = core.GetTrustedLinkCount();
+                int presentationCountBeforeFailedTx = core.GetNodePresentationCount();
+                Guid failedTxSymbolId = Guid.NewGuid();
+                Guid failedTxWordId = Guid.NewGuid();
+                using (LRD_Core.ReasoningTransaction failedTx = core.BeginReasoningTransaction())
+                {
+                    SymbolBox sym = new SymbolBox(failedTxSymbolId, 'z');
+                    sym.SetSenseID(fixture.SenseId);
+                    WordBox wrd = new WordBox(failedTxWordId, fixture.SenseId, fixture.UsageId, new List<Guid> { failedTxSymbolId }, PartOfSpeech.Noun);
+                    Node customWordNode = new Node(Guid.NewGuid(), NodeTargetKind.Word, failedTxWordId);
+                    failedTx.StageSymbol(sym);
+                    failedTx.StageWord(wrd);
+                    failedTx.StageNode(customWordNode);
+                    failedTx.AddReasoningLink(customWordNode.GetNodeID(), firstNodeId, NodeRelationType.Synonym, 0.75, "tx-syn");
+                    // Invalid link to non-existent node triggers rollback after boxes/nodes were staged
+                    failedTx.AddReasoningLink(customWordNode.GetNodeID(), Guid.NewGuid(), NodeRelationType.Synonym, 0.5, "tx-bad");
+                    Program.AssertThrows<InvalidOperationException>(failedTx.Commit,
+                        "Transaction with invalid link after staged boxes/nodes must fail atomically.");
+                }
+                Program.Assert(core.GetTrustedSymbolBox(failedTxSymbolId) == null &&
+                               core.GetTrustedWordBox(failedTxWordId) == null &&
+                               core.GetTrustedWordsBySenseID(fixture.SenseId).All(id => id != failedTxWordId) &&
+                               core.GetTrustedNodeCount() == nodeCountBeforeFailedTx &&
+                               core.GetTrustedLinkCount() == linkCountBeforeFailedTx &&
+                               core.GetNodePresentationCount() == presentationCountBeforeFailedTx &&
+                               core.CurrentGraphEpoch == epochBeforeTx,
+                    "Failed ReasoningTransaction must roll back staged boxes, nodes, reverse indexes, presentations, and epoch without partial visibility.");
+
+                Guid txSymbolId = Guid.NewGuid();
+                Guid txWordId = Guid.NewGuid();
+                Guid txNodeId = Guid.NewGuid();
+                Guid txLabeledNodeId = Guid.NewGuid();
+                FunctionBox txFunc = new FunctionBox(Guid.NewGuid(), typeof(int), "Math_1.AddInt");
+                txFunc.AddVariable(new FunctionVariable("a", 4, typeof(int)));
+                txFunc.AddVariable(new FunctionVariable("b", 6, typeof(int)));
+                MathFunctionDispatcher.Dispatch(txFunc);
+                using (LRD_Core.ReasoningTransaction tx = core.BeginReasoningTransaction())
+                {
+                    SymbolBox sym = new SymbolBox(txSymbolId, 'k');
+                    sym.SetSenseID(fixture.SenseId);
+                    WordBox wrd = new WordBox(txWordId, fixture.SenseId, fixture.UsageId, new List<Guid> { txSymbolId }, PartOfSpeech.Noun);
+                    Node canonicalWordNode = new Node(txNodeId, NodeTargetKind.Word, txWordId);
+                    Node labeledWordNode = new Node(txLabeledNodeId, NodeTargetKind.Word, txWordId, "tx-role");
+                    tx.StageSymbol(sym);
+                    tx.StageWord(wrd);
+                    tx.StageFunction(txFunc);
+                    tx.StageNode(canonicalWordNode);
+                    tx.StageNode(labeledWordNode);
+                    tx.AddReasoningLink(txNodeId, firstNodeId, NodeRelationType.Synonym, 0.85, "tx-committed",
+                        author: "tx-engine", sourceTargetId: txWordId, evidenceTargetId: txFunc.GetFunctionID());
+                    tx.Commit();
+                }
+                TrustedKnowledgeGraphSnapshot postTxSnapshot = core.BuildTrustedKnowledgeGraphSnapshot();
+                Program.Assert(core.GetTrustedSymbolBox(txSymbolId) != null &&
+                               core.GetTrustedWordBox(txWordId) != null &&
+                               core.GetTrustedFunctionBox(txFunc.GetFunctionID()) != null &&
+                               core.GetTrustedNode(txNodeId) != null &&
+                               core.GetTrustedNode(txLabeledNodeId) != null &&
+                               postTxSnapshot.Epoch > preTxSnapshot.Epoch &&
+                               postTxSnapshot.NodesById.ContainsKey(txNodeId) &&
+                               !preTxSnapshot.NodesById.ContainsKey(txNodeId),
+                    "Committed ReasoningTransaction should promote boxes, nodes, and links atomically and advance snapshot epoch while isolating prior snapshots.");
             };
         }
 
@@ -814,6 +903,100 @@ namespace OPEN_LRD.SmokeTests
                         $"updatesMs={updateTimer.Elapsed.TotalMilliseconds:F3} provenanceMs={provenanceTimer.Elapsed.TotalMilliseconds:F3} " +
                         $"removesMs={removeTimer.Elapsed.TotalMilliseconds:F3} checkpointWriteMs={writeTimer.Elapsed.TotalMilliseconds:F3} " +
                         $"checkpointValidateMs={validateTimer.Elapsed.TotalMilliseconds:F3}");
+                }
+                finally
+                {
+                    core.ResetCore();
+                    if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                }
+            };
+        }
+
+        internal static Action RunSeededScaleCalibrationGate(int targetNodeCount = 10_000, int targetLinkCount = 100_000)
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                ResetCore();
+                Random rng = new Random(42);
+                string directory = Path.Combine(Path.GetTempPath(), "open-lrd-scale-gate-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Guid NextDeterministicGuid()
+                    {
+                        byte[] bytes = new byte[16];
+                        rng.NextBytes(bytes);
+                        if (bytes.All(b => b == 0)) bytes[0] = 1;
+                        return new Guid(bytes);
+                    }
+
+                    List<Guid> nodeIds = new List<Guid>(targetNodeCount);
+                    List<Guid> senseIds = new List<Guid>(targetNodeCount);
+                    Guid primarySourceId = NextDeterministicGuid();
+                    List<Guid> trackedAssertions = new List<Guid>(32);
+
+                    using (core.SuspendPresentationRecalculation())
+                    {
+                        int sensesToCreate = Math.Max(16, targetNodeCount - core.GetTrustedNodeCount());
+                        for (int i = 0; i < sensesToCreate; i++)
+                        {
+                            Guid senseId = i == 0 ? primarySourceId : NextDeterministicGuid();
+                            Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Scale sense should be trusted.");
+                            senseIds.Add(senseId);
+                            nodeIds.Add(core.GetTrustedNodeByTarget(NodeTargetKind.Sense, senseId)!.GetNodeID());
+                        }
+
+                        int linksCreated = 0;
+                        while (linksCreated < targetLinkCount)
+                        {
+                            Guid sourceNodeId = nodeIds[rng.Next(nodeIds.Count)];
+                            Guid targetNodeId = nodeIds[rng.Next(nodeIds.Count)];
+                            if (sourceNodeId == targetNodeId) continue;
+                            Guid assertionId = NextDeterministicGuid();
+                            Guid? provenanceTarget = (linksCreated < 64) ? primarySourceId : null;
+                            double weight = 0.25 + (rng.NextDouble() * 0.7);
+                            NodeLinkProvenance prov = new NodeLinkProvenance(
+                                assertionId, NodeLinkOrigin.Reasoning, DateTimeOffset.UnixEpoch,
+                                author: "scale-harness", sourceTargetId: provenanceTarget, confidence: weight);
+                            NodeLink link = new NodeLink(sourceNodeId, targetNodeId, NodeRelationType.Custom, weight, $"s-{linksCreated}", prov);
+                            if (core.AddTrustedLink(link))
+                            {
+                                if (trackedAssertions.Count < 32) trackedAssertions.Add(assertionId);
+                                linksCreated++;
+                            }
+                        }
+                    }
+
+                    // 1. O(1) link lookup & reverse provenance lookup
+                    Stopwatch provenanceLookupTimer = Stopwatch.StartNew();
+                    List<NodeLink> byProvenance = core.GetTrustedLinksByProvenanceTarget(primarySourceId);
+                    provenanceLookupTimer.Stop();
+                    Program.Assert(byProvenance.Count == 64, "Reverse provenance index should locate all 64 tagged assertions.");
+
+                    // 2. Incremental link weight update (with presentation suspended to measure O(1) index/graph mutation)
+                    Stopwatch incrementalUpdateTimer;
+                    using (core.SuspendPresentationRecalculation())
+                    {
+                        incrementalUpdateTimer = Stopwatch.StartNew();
+                        Program.Assert(core.UpdateTrustedLinkWeight(trackedAssertions[0], 0.99), "Assertion weight update should succeed at scale.");
+                        incrementalUpdateTimer.Stop();
+                    }
+
+                    // 3. Full O(N + E) presentation recalculation
+                    Stopwatch fullRecalcTimer = Stopwatch.StartNew();
+                    core.RecalculateAllNodePresentations();
+                    fullRecalcTimer.Stop();
+
+                    // 4. Checkpoint write (serialize + incremental SHA256)
+                    Stopwatch checkpointWriteTimer = Stopwatch.StartNew();
+                    core.StreamTrustedDictionariesToDisk(directory);
+                    checkpointWriteTimer.Stop();
+
+                    Console.WriteLine($"SCALE GATE (Random(42)) nodes={core.GetTrustedNodeCount()} links={core.GetTrustedLinkCount()} " +
+                        $"provenanceLookupMs={provenanceLookupTimer.Elapsed.TotalMilliseconds:F3} " +
+                        $"incrementalUpdateMs={incrementalUpdateTimer.Elapsed.TotalMilliseconds:F3} " +
+                        $"fullPresentationRecalcMs={fullRecalcTimer.Elapsed.TotalMilliseconds:F3} " +
+                        $"checkpointWriteMs={checkpointWriteTimer.Elapsed.TotalMilliseconds:F3}");
                 }
                 finally
                 {

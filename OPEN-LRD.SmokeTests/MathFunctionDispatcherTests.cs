@@ -177,10 +177,68 @@ namespace OPEN_LRD.SmokeTests
                 Assert(core.AddTrustedFunction(box), "dispatch-verified staged function should promote successfully");
                 FunctionDispatchAudit trustedAudit = core.GetFunctionDispatchAudit(box.GetFunctionID())
                     ?? throw new InvalidOperationException("Trusted function should return an audit snapshot.");
-                Assert(trustedAudit.IsTrusted && trustedAudit.IsResultVerified && trustedAudit.ActiveProvenance != null,
+                Assert(trustedAudit.IsTrusted && trustedAudit.IsResultVerified &&
+                       trustedAudit.VerificationStatus == FunctionResultVerificationState.DispatchVerified &&
+                       trustedAudit.ActiveProvenance != null,
                     "audit should report trusted dispatch provenance after promotion");
                 Assert(core.GetFunctionDispatchAudit(Guid.NewGuid()) == null,
                     "an unregistered function identity should have no audit result");
+
+                // Non-deterministic staged function workflow & capability metadata
+                Assert(MathFunctionDispatcher.GetFunctionCapabilities().Any(c => c.FunctionKey == "Math_1.AddInt" && c.IsDeterministic),
+                    "capability metadata should report deterministic allowlisted functions");
+                FunctionBox nonDet = new FunctionBox(typeof(double), "ProbabilityAndStatistics.NormalSample");
+                nonDet.AddVariable(new FunctionVariable("mean", 0.0, typeof(double)));
+                nonDet.AddVariable(new FunctionVariable("stdDev", 1.0, typeof(double)));
+                nonDet.StageNonDeterministicResult(new FunctionResult(0.42, typeof(double), null),
+                    randomSeed: 1337L, callerSource: "monte-carlo-worker", invokedAtUtc: DateTimeOffset.UtcNow);
+                Assert(core.SetUntrustedFunction(nonDet), "staged non-deterministic function should register in untrusted staging");
+                FunctionDispatchAudit nonDetAudit = core.GetFunctionDispatchAudit(nonDet.GetFunctionID())!;
+                Assert(!nonDetAudit.IsTrusted &&
+                       !nonDetAudit.IsResultVerified &&
+                       nonDetAudit.VerificationStatus == FunctionResultVerificationState.StagedNonDeterministic &&
+                       nonDetAudit.ActiveProvenance != null &&
+                       !nonDetAudit.ActiveProvenance.IsDeterministic &&
+                       nonDetAudit.ActiveProvenance.RandomSeed == 1337L &&
+                       nonDetAudit.ActiveProvenance.CallerSource == "monte-carlo-worker" &&
+                       !string.IsNullOrWhiteSpace(nonDetAudit.ActiveProvenance.ArgumentSnapshotSummary) &&
+                       nonDetAudit.DiagnosticsWarnings.Count > 0,
+                    "staged non-deterministic function audit should expose seed, caller, argument summary, StagedNonDeterministic status, and warning");
+                AssertThrows<InvalidOperationException>(() => core.AddTrustedFunction(nonDet),
+                    "non-deterministic staged function results must never promote to trusted");
+
+                // Serializer round-trip for staged non-deterministic metadata
+                FunctionBox nonDetRestored = FoundationBinarySerializer.DeserializeFunction(
+                    FoundationBinarySerializer.SerializeFunction(nonDet));
+                Assert(nonDetRestored.ResultVerificationState == FunctionResultVerificationState.StagedNonDeterministic &&
+                       nonDetRestored.DispatchProvenance?.RandomSeed == 1337L &&
+                       nonDetRestored.DispatchProvenance?.CallerSource == "monte-carlo-worker" &&
+                       nonDetRestored.DispatchProvenance?.ArgumentSnapshotSummary == nonDet.DispatchProvenance?.ArgumentSnapshotSummary,
+                    "serializer should preserve non-deterministic seed, caller source, and argument summary");
+
+                // Reasoning citation: allowed only when required non-deterministic invocation/timestamp metadata is present
+                Guid senseId = Guid.NewGuid();
+                Guid usageId = Guid.NewGuid();
+                Assert(core.AddTrustedSense(new SenseBox(senseId)) && core.AddTrustedUsage(new UsageBox(usageId)), "sense/usage should trust");
+                Guid symA = Guid.NewGuid(); SymbolBox sbA = new SymbolBox(symA, 'a'); sbA.SetSenseID(senseId);
+                Guid symB = Guid.NewGuid(); SymbolBox sbB = new SymbolBox(symB, 'b'); sbB.SetSenseID(senseId);
+                Assert(core.AddTrustedSymbol(sbA) && core.AddTrustedSymbol(sbB), "symbols should trust");
+                Guid wA = Guid.NewGuid(); Guid wB = Guid.NewGuid();
+                Assert(core.AddTrustedWord(new WordBox(wA, senseId, usageId, new List<Guid> { symA }, PartOfSpeech.Noun)), "word A should trust");
+                Assert(core.AddTrustedWord(new WordBox(wB, senseId, usageId, new List<Guid> { symB }, PartOfSpeech.Noun)), "word B should trust");
+                Guid nodeA = core.GetTrustedNodeByTarget(NodeTargetKind.Word, wA)!.GetNodeID();
+                Guid nodeB = core.GetTrustedNodeByTarget(NodeTargetKind.Word, wB)!.GetNodeID();
+                Assert(core.AddReasoningLink(nodeA, nodeB, NodeRelationType.Custom, 0.75, "cited-nondet", "reasoner",
+                        sourceTargetId: wA, evidenceTargetId: nonDet.GetFunctionID()),
+                    "reasoning should allow citing a staged non-deterministic function box with complete invocation/seed/timestamp provenance as evidence");
+
+                FunctionBox unverifiedStaged = new FunctionBox(typeof(double), "ProbabilityAndStatistics.NormalSample");
+                unverifiedStaged.AddVariable(new FunctionVariable("mean", 0.0, typeof(double)));
+                unverifiedStaged.StoreResult(new FunctionResult(0.1, typeof(double), null));
+                Assert(core.SetUntrustedFunction(unverifiedStaged), "unverified manual function should stage");
+                Assert(!core.AddReasoningLink(nodeA, nodeB, NodeRelationType.Custom, 0.75, "uncited-manual", "reasoner",
+                        sourceTargetId: wA, evidenceTargetId: unverifiedStaged.GetFunctionID()),
+                    "reasoning must reject citing an unverified manual staged function lacking non-deterministic provenance metadata");
             }
             finally
             {

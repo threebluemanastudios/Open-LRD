@@ -8,10 +8,15 @@ namespace OPEN_LRD.SmokeTests
         private static int passed;
         private static int failed;
 
-        private static void Main()
+        private static void Main(string[] args)
         {
+            bool runScaleGate = Array.Exists(args, arg =>
+                string.Equals(arg, "--scale-gate", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--scale", StringComparison.OrdinalIgnoreCase)) ||
+                string.Equals(Environment.GetEnvironmentVariable("OPEN_LRD_RUN_SCALE_GATE"), "1", StringComparison.OrdinalIgnoreCase);
+
             CoreIdentityTests.RunAll();
-            CoreNodeGraphTests.RunAll();
+            CoreNodeGraphTests.RunAll(runScaleGate);
             NodeDerivationTests.RunAll();
             CoreDiskStreamingTests.RunAll();
             FoundationHardeningTests.RunAll();

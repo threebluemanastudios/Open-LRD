@@ -621,6 +621,51 @@ namespace OPEN_LRD.SmokeTests
                 Program.Assert((double)((ConstantExpression)Algebra.Substitute(new VariableExpression("x"), " x ", 2.0)).Value == 2.0,
                     "Substitute should normalize variable identifiers.");
 
+                // Entry-point AST/identifier/literal caps across ExpressionParser, Math_3, Math_4, Algebra, and Fraction.Parse
+                string hugeLiteral = "0." + new string('1', ExpressionParser.MaximumNumericLiteralLength + 5);
+                Program.AssertThrows<FormatException>(() => ExpressionParser.Parse(hugeLiteral),
+                    "Numeric literals exceeding MaximumNumericLiteralLength must be rejected.");
+                string oversizedIdentifier = new string('x', ExpressionParser.MaximumIdentifierLength + 1);
+                Program.AssertThrows<FormatException>(() => new VariableExpression(oversizedIdentifier),
+                    "VariableExpression must reject identifiers exceeding MaximumIdentifierLength.");
+                Program.AssertThrows<FormatException>(() => new CallExpression("min",
+                    Enumerable.Range(0, ExpressionParser.MaximumFunctionArguments + 1).Select(i => (Expression)new ConstantExpression(i)).ToList()),
+                    "CallExpression must reject argument lists exceeding MaximumFunctionArguments.");
+
+                Expression deepManualAst = new ConstantExpression(1.0);
+                for (int i = 0; i < ExpressionParser.MaximumAstDepth + 2; i++)
+                {
+                    deepManualAst = new NegateExpression(deepManualAst);
+                }
+                Program.AssertThrows<FormatException>(() => Math_3.Simplify(deepManualAst),
+                    "Math_3.Simplify(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Math_3.Differentiate(deepManualAst, "x"),
+                    "Math_3.Differentiate(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Math_3.Integrate(deepManualAst, "x"),
+                    "Math_3.Integrate(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Math_3.Evaluate(deepManualAst, "x", 1.0),
+                    "Math_3.Evaluate(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Math_4.PartialDerivative(deepManualAst, "x"),
+                    "Math_4.PartialDerivative(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Math_4.Gradient(deepManualAst, "x", "y"),
+                    "Math_4.Gradient(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Math_4.Evaluate(deepManualAst, new Dictionary<string, double> { ["x"] = 1.0 }),
+                    "Math_4.Evaluate(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Algebra.Expand(deepManualAst),
+                    "Algebra.Expand(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Algebra.Substitute(deepManualAst, "x", 1.0),
+                    "Algebra.Substitute(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Algebra.Factor(deepManualAst, "x"),
+                    "Algebra.Factor(Expression) must enforce AST depth limits.");
+                Program.AssertThrows<FormatException>(() => Math_3.Differentiate(new VariableExpression("x"), oversizedIdentifier),
+                    "Symbolic differentiation must reject oversized variable identifiers.");
+
+                string hugeFractionComponent = new string('9', Fraction.MaximumComponentDigitLength + 10) + "/2";
+                Program.Assert(!Fraction.TryParse(hugeFractionComponent, out _),
+                    "Fraction.TryParse must reject component digits exceeding MaximumComponentDigitLength.");
+                Program.AssertThrows<FormatException>(() => Fraction.Parse(hugeFractionComponent),
+                    "Fraction.Parse must reject component digits exceeding MaximumComponentDigitLength.");
+
                 Program.Assert(new ConstantExpression(1.2345678901234567).ToString() ==
                                1.2345678901234567.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
                     "Expression constants should use round-trip invariant formatting.");

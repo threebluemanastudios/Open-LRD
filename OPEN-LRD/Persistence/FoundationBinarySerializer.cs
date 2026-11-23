@@ -221,7 +221,7 @@ namespace OPEN_LRD.Persistence
                 if (reader.BaseStream.Position != reader.BaseStream.Length)
                 {
                     int historyCount = reader.ReadInt32();
-                    if (historyCount < 0 || historyCount > 10_000)
+                    if (historyCount < 0 || historyCount > 10_000 || historyCount > reader.BaseStream.Length - reader.BaseStream.Position)
                         throw new InvalidDataException("Function provenance history count is invalid.");
                     for (int i = 0; i < historyCount; i++)
                     {
@@ -498,7 +498,8 @@ namespace OPEN_LRD.Persistence
         private static int ReadCount(BinaryReader reader)
         {
             int count = reader.ReadInt32();
-            if (count < 0 || count > MaximumCollectionCount) throw new InvalidDataException("Stored item count is invalid.");
+            if (count < 0 || count > MaximumCollectionCount || count > reader.BaseStream.Length - reader.BaseStream.Position)
+                throw new InvalidDataException("Stored item count is invalid.");
             return count;
         }
 
@@ -654,8 +655,8 @@ namespace OPEN_LRD.Persistence
                 21 => new Vector2(reader.ReadDouble(), reader.ReadDouble()),
                 22 => new Vector3(reader.ReadDouble(), reader.ReadDouble(), reader.ReadDouble()),
                 23 => new Complex(reader.ReadDouble(), reader.ReadDouble()),
-                24 => ReadNumericArray(reader, static input => input.ReadDouble()),
-                25 => ReadNumericArray(reader, static input => input.ReadInt32()),
+                24 => ReadNumericArray(reader, sizeof(double), static input => input.ReadDouble()),
+                25 => ReadNumericArray(reader, sizeof(int), static input => input.ReadInt32()),
                 _ => throw new InvalidDataException("Stored scalar tag is invalid.")
             };
         }
@@ -674,7 +675,7 @@ namespace OPEN_LRD.Persistence
         private static BigInteger ReadBigInteger(BinaryReader reader)
         {
             int length = reader.ReadInt32();
-            if (length <= 0 || length > MaximumStringByteLength)
+            if (length <= 0 || length > MaximumStringByteLength || length > reader.BaseStream.Length - reader.BaseStream.Position)
             {
                 throw new InvalidDataException("Stored BigInteger length is invalid.");
             }
@@ -707,10 +708,11 @@ namespace OPEN_LRD.Persistence
             foreach (T value in values) writeValue(writer, value);
         }
 
-        private static T[] ReadNumericArray<T>(BinaryReader reader, Func<BinaryReader, T> readValue)
+        private static T[] ReadNumericArray<T>(BinaryReader reader, int elementByteSize, Func<BinaryReader, T> readValue)
         {
             int count = reader.ReadInt32();
-            if (count < 0 || count > MaximumCollectionCount)
+            if (count < 0 || count > MaximumCollectionCount ||
+                count > (reader.BaseStream.Length - reader.BaseStream.Position) / elementByteSize)
             {
                 throw new InvalidDataException("Stored numeric array length is invalid.");
             }
@@ -731,6 +733,13 @@ namespace OPEN_LRD.Persistence
             writer.Write((short)provenance.DispatchedAtUtc.Offset.TotalMinutes);
             WriteBoundedString(writer, provenance.DispatcherVersion);
             writer.Write(provenance.IsDeterministic);
+            if (!provenance.IsDeterministic)
+            {
+                writer.Write(provenance.RandomSeed.HasValue);
+                if (provenance.RandomSeed.HasValue) writer.Write(provenance.RandomSeed.Value);
+                WriteNullableString(writer, provenance.CallerSource);
+                WriteNullableString(writer, provenance.ArgumentSnapshotSummary);
+            }
         }
 
         private static FunctionDispatchProvenance ReadFunctionProvenance(BinaryReader reader)
@@ -745,8 +754,18 @@ namespace OPEN_LRD.Persistence
             short offsetMinutes = reader.ReadInt16();
             string dispatcherVersion = ReadBoundedString(reader);
             bool isDeterministic = reader.BaseStream.Position != reader.BaseStream.Length ? reader.ReadBoolean() : true;
+            long? randomSeed = null;
+            string? callerSource = null;
+            string? argSummary = null;
+            if (!isDeterministic && reader.BaseStream.Position != reader.BaseStream.Length)
+            {
+                if (reader.ReadBoolean()) randomSeed = reader.ReadInt64();
+                if (reader.BaseStream.Position != reader.BaseStream.Length) callerSource = ReadNullableString(reader);
+                if (reader.BaseStream.Position != reader.BaseStream.Length) argSummary = ReadNullableString(reader);
+            }
             DateTimeOffset dispatchedAt = new DateTimeOffset(ticks, TimeSpan.FromMinutes(offsetMinutes));
-            return new FunctionDispatchProvenance(functionKey, argHash, resultHash, resultType, resultUnit, definitionRevision, dispatchedAt, dispatcherVersion, isDeterministic);
+            return new FunctionDispatchProvenance(functionKey, argHash, resultHash, resultType, resultUnit, definitionRevision,
+                dispatchedAt, dispatcherVersion, isDeterministic, randomSeed, callerSource, argSummary);
         }
 
         private static DateTime ReadDateTime(BinaryReader reader)

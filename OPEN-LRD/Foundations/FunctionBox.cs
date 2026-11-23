@@ -47,6 +47,31 @@ namespace OPEN_LRD.Foundations
         }
     }
 
+    /// <summary>Attribute declaring whether a skill function is deterministic and eligible for trusted promotion.</summary>
+    [AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
+    public sealed class FunctionCapabilityAttribute : Attribute
+    {
+        /// <summary>Gets whether the function produces deterministic results for identical inputs.</summary>
+        public bool IsDeterministic { get; }
+
+        /// <summary>Initializes capability metadata for a dispatchable skill method.</summary>
+        public FunctionCapabilityAttribute(bool isDeterministic = true)
+        {
+            IsDeterministic = isDeterministic;
+        }
+    }
+
+    /// <summary>Tracks dispatch verification state for a FunctionBox result.</summary>
+    public enum FunctionResultVerificationState
+    {
+        /// <summary>Result was stored manually or lacks dispatch verification.</summary>
+        Unverified = 0,
+        /// <summary>Result was verified by deterministic dispatcher execution.</summary>
+        DispatchVerified = 1,
+        /// <summary>Result was produced by non-deterministic execution; staged with provenance and cannot become trusted.</summary>
+        StagedNonDeterministic = 2
+    }
+
     /// <summary>Immutable audit metadata for a function result produced by dispatcher verification or dispatch.</summary>
     public sealed record FunctionDispatchProvenance(
         string FunctionKey,
@@ -57,7 +82,10 @@ namespace OPEN_LRD.Foundations
         long DefinitionRevision,
         DateTimeOffset DispatchedAtUtc,
         string DispatcherVersion,
-        bool IsDeterministic = true);
+        bool IsDeterministic = true,
+        long? RandomSeed = null,
+        string? CallerSource = null,
+        string? ArgumentSnapshotSummary = null);
 
     /// <summary>Immutable snapshot of a function result's dispatch provenance and trust status.</summary>
     public sealed class FunctionDispatchAudit
@@ -68,8 +96,11 @@ namespace OPEN_LRD.Foundations
         /// <summary>Gets whether the function box is trusted.</summary>
         public bool IsTrusted { get; }
 
-        /// <summary>Gets whether the current result has dispatch verification.</summary>
+        /// <summary>Gets whether the current result has deterministic dispatch verification.</summary>
         public bool IsResultVerified { get; }
+
+        /// <summary>Gets the detailed verification status of the current function result.</summary>
+        public FunctionResultVerificationState VerificationStatus { get; }
 
         /// <summary>Gets provenance for the current result, when available.</summary>
         public FunctionDispatchProvenance? ActiveProvenance { get; }
@@ -77,22 +108,27 @@ namespace OPEN_LRD.Foundations
         /// <summary>Gets a read-only snapshot of provenance entries retained for this function box.</summary>
         public IReadOnlyList<FunctionDispatchProvenance> ProvenanceHistory { get; }
 
+        /// <summary>Gets any diagnostics or warnings emitted during dispatch or automated reasoning evaluation.</summary>
+        public IReadOnlyList<string> DiagnosticsWarnings { get; }
+
         internal FunctionDispatchAudit(Guid functionId, bool isTrusted, bool isResultVerified,
-            FunctionDispatchProvenance? activeProvenance, IEnumerable<FunctionDispatchProvenance> provenanceHistory)
+            FunctionDispatchProvenance? activeProvenance, IEnumerable<FunctionDispatchProvenance> provenanceHistory,
+            FunctionResultVerificationState verificationStatus = FunctionResultVerificationState.Unverified,
+            IEnumerable<string>? diagnosticsWarnings = null)
         {
             FunctionId = functionId;
             IsTrusted = isTrusted;
             IsResultVerified = isResultVerified;
+            VerificationStatus = verificationStatus;
             ActiveProvenance = activeProvenance;
             ProvenanceHistory = new ReadOnlyCollection<FunctionDispatchProvenance>(provenanceHistory.ToList());
+            List<string> warnings = diagnosticsWarnings?.ToList() ?? new List<string>();
+            if (verificationStatus == FunctionResultVerificationState.StagedNonDeterministic && warnings.Count == 0)
+            {
+                warnings.Add($"Non-deterministic function '{activeProvenance?.FunctionKey ?? functionId.ToString()}' is staged-only and cannot be promoted to trusted state.");
+            }
+            DiagnosticsWarnings = new ReadOnlyCollection<string>(warnings);
         }
-    }
-
-    /// <summary>Tracks dispatch verification state for a FunctionBox result.</summary>
-    internal enum FunctionResultVerificationState
-    {
-        Unverified = 0,
-        DispatchVerified = 1
     }
 
     internal static class FunctionValueValidation
@@ -375,9 +411,91 @@ namespace OPEN_LRD.Foundations
                 RecordDispatchProvenance(provenance);
                 resultVerificationState = provenance.IsDeterministic
                     ? FunctionResultVerificationState.DispatchVerified
-                    : FunctionResultVerificationState.Unverified;
+                    : FunctionResultVerificationState.StagedNonDeterministic;
                 return true;
             });
+        }
+
+        /// <summary>
+        /// Stages a non-deterministic function result for reasoning assertion citation without promoting it to trusted state.
+        /// Records invocation arguments, optional random seed, caller/source metadata, and UTC timestamp in provenance.
+        /// </summary>
+        public void StageNonDeterministicResult(
+            FunctionResult result,
+            long? randomSeed = null,
+            string? callerSource = null,
+            DateTimeOffset? invokedAtUtc = null)
+        {
+            ArgumentNullException.ThrowIfNull(result);
+            ValidateResult(result);
+            GraphSynchronization.Execute(() =>
+            {
+                EnsureWritable();
+                if (string.IsNullOrWhiteSpace(functionKey))
+                {
+                    throw new InvalidOperationException("A FunctionKey is required to stage a non-deterministic function result.");
+                }
+                string normalizedKey = functionKey.Trim();
+                string argSummary = BuildArgumentSnapshotSummary(variables);
+                string argHash = ComputeStagedSnapshotHash(normalizedKey, definitionRevision, argSummary);
+                string resultHash = ComputeStagedSnapshotHash(result.DataType.FullName ?? result.DataType.Name, 0, $"{result.Value}:{result.UnitTitle}");
+                string resultType = result.DataType.AssemblyQualifiedName ?? result.DataType.FullName ?? result.DataType.Name;
+                FunctionDispatchProvenance provenance = new FunctionDispatchProvenance(
+                    normalizedKey,
+                    argHash,
+                    resultHash,
+                    resultType,
+                    result.UnitTitle,
+                    definitionRevision,
+                    invokedAtUtc ?? DateTimeOffset.UtcNow,
+                    typeof(FunctionBox).Assembly.GetName().Version?.ToString() ?? "0.0.0.0",
+                    IsDeterministic: false,
+                    RandomSeed: randomSeed,
+                    CallerSource: NormalizeOptionalText(callerSource),
+                    ArgumentSnapshotSummary: argSummary);
+                this.result = result;
+                resultDefinitionRevision = definitionRevision;
+                RecordDispatchProvenance(provenance);
+                resultVerificationState = FunctionResultVerificationState.StagedNonDeterministic;
+            });
+        }
+
+        /// <summary>
+        /// Returns whether this function box has valid staged non-deterministic provenance
+        /// (invocation arguments, timestamp, and current definition revision) suitable for reasoning evidence citation.
+        /// </summary>
+        internal bool HasValidStagedNonDeterministicProvenance => GraphSynchronization.Execute(() =>
+            !isTrusted &&
+            result != null &&
+            resultDefinitionRevision == definitionRevision &&
+            resultVerificationState == FunctionResultVerificationState.StagedNonDeterministic &&
+            dispatchProvenance != null &&
+            !dispatchProvenance.IsDeterministic &&
+            dispatchProvenance.DefinitionRevision == definitionRevision &&
+            !string.IsNullOrWhiteSpace(dispatchProvenance.FunctionKey) &&
+            !string.IsNullOrWhiteSpace(dispatchProvenance.ArgumentSnapshotHash) &&
+            !string.IsNullOrWhiteSpace(dispatchProvenance.ArgumentSnapshotSummary) &&
+            dispatchProvenance.DispatchedAtUtc != default);
+
+        internal static string BuildArgumentSnapshotSummary(IReadOnlyList<FunctionVariable> vars)
+        {
+            return string.Join("; ", vars.Select(v =>
+                $"{v.Name}:{v.DataType.Name}={FormatVariableValue(v.Value)}{(v.UnitTitle != null ? $" [{v.UnitTitle}]" : string.Empty)}"));
+        }
+
+        private static string FormatVariableValue(object? value)
+        {
+            if (value == null) return "null";
+            if (value is double d) return d.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+            if (value is float f) return f.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+            if (value is Array arr) return $"[{string.Join(",", arr.Cast<object?>().Select(FormatVariableValue))}]";
+            return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
+        private static string ComputeStagedSnapshotHash(string key, long revision, string payload)
+        {
+            byte[] bytes = System.Text.Encoding.UTF8.GetBytes($"{key}|{revision}|{payload}");
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
         }
 
         internal void MarkResultUnverified()
@@ -413,7 +531,10 @@ namespace OPEN_LRD.Foundations
                    left.DefinitionRevision == right.DefinitionRevision &&
                    left.DispatchedAtUtc == right.DispatchedAtUtc &&
                    string.Equals(left.DispatcherVersion, right.DispatcherVersion, StringComparison.Ordinal) &&
-                   left.IsDeterministic == right.IsDeterministic;
+                   left.IsDeterministic == right.IsDeterministic &&
+                   left.RandomSeed == right.RandomSeed &&
+                   string.Equals(left.CallerSource, right.CallerSource, StringComparison.Ordinal) &&
+                   string.Equals(left.ArgumentSnapshotSummary, right.ArgumentSnapshotSummary, StringComparison.Ordinal);
         }
 
         internal void ValidateDefinition()
@@ -467,9 +588,11 @@ namespace OPEN_LRD.Foundations
                 {
                     provenanceHistory.Add(provenance);
                 }
-                resultVerificationState = provenance?.IsDeterministic == true
-                    ? FunctionResultVerificationState.DispatchVerified
-                    : FunctionResultVerificationState.Unverified;
+                resultVerificationState = provenance == null
+                    ? FunctionResultVerificationState.Unverified
+                    : provenance.IsDeterministic
+                        ? FunctionResultVerificationState.DispatchVerified
+                        : FunctionResultVerificationState.StagedNonDeterministic;
             });
         }
 
@@ -495,9 +618,11 @@ namespace OPEN_LRD.Foundations
                 {
                     provenanceHistory.Add(activeProvenance);
                 }
-                resultVerificationState = activeProvenance?.IsDeterministic == true
-                    ? FunctionResultVerificationState.DispatchVerified
-                    : FunctionResultVerificationState.Unverified;
+                resultVerificationState = activeProvenance == null
+                    ? FunctionResultVerificationState.Unverified
+                    : activeProvenance.IsDeterministic
+                        ? FunctionResultVerificationState.DispatchVerified
+                        : FunctionResultVerificationState.StagedNonDeterministic;
             });
         }
 

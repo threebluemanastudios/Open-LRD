@@ -6,6 +6,9 @@ namespace OPEN_LRD.Foundations
 {
     internal sealed class Fraction : IEquatable<Fraction>, IComparable<Fraction>
     {
+        public const int MaximumParseLength = 16_384;
+        public const int MaximumComponentDigitLength = 4_096;
+
         public BigInteger Numerator { get; }
         public BigInteger Denominator { get; }
 
@@ -70,7 +73,7 @@ namespace OPEN_LRD.Foundations
         public static bool TryParse(string? value, out Fraction? fraction)
         {
             fraction = null;
-            if (string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrWhiteSpace(value) || value.Length > MaximumParseLength)
             {
                 return false;
             }
@@ -79,7 +82,8 @@ namespace OPEN_LRD.Foundations
             int separator = text.IndexOf('/');
             if (separator < 0)
             {
-                if (!BigInteger.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out BigInteger integer))
+                if (text.Length > MaximumComponentDigitLength ||
+                    !BigInteger.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out BigInteger integer))
                 {
                     return false;
                 }
@@ -87,9 +91,13 @@ namespace OPEN_LRD.Foundations
                 return true;
             }
 
+            ReadOnlySpan<char> numeratorSpan = text.AsSpan(0, separator).Trim();
+            ReadOnlySpan<char> denominatorSpan = text.AsSpan(separator + 1).Trim();
             if (separator != text.LastIndexOf('/') ||
-                !BigInteger.TryParse(text.AsSpan(0, separator).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out BigInteger numerator) ||
-                !BigInteger.TryParse(text.AsSpan(separator + 1).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out BigInteger denominator) ||
+                numeratorSpan.Length > MaximumComponentDigitLength ||
+                denominatorSpan.Length > MaximumComponentDigitLength ||
+                !BigInteger.TryParse(numeratorSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out BigInteger numerator) ||
+                !BigInteger.TryParse(denominatorSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out BigInteger denominator) ||
                 denominator.IsZero)
             {
                 return false;

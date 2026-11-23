@@ -24,8 +24,20 @@ namespace OPEN_LRD.Persistence
 
     internal readonly record struct DiskRecord(Guid Key, byte[] Payload);
     internal readonly record struct DiskPartitionDiagnostics(DiskPartition Partition, int RecordCount, long DataBytes, long IndexBytes);
-    /// <summary>Validation counts for trusted function provenance integrity in a checkpoint.</summary>
-    internal sealed record DiskValidationProvenanceSummary(int VerifiedProvenanceCount, int UnverifiedProvenanceCount, int TamperedProvenanceCount);
+    /// <summary>Validation counts and per-status details for trusted function provenance integrity in a checkpoint.</summary>
+    internal sealed record DiskValidationProvenanceSummary(
+        int VerifiedProvenanceCount,
+        int UnverifiedProvenanceCount,
+        int TamperedProvenanceCount,
+        int StagedNonDeterministicCount = 0,
+        IReadOnlyList<Guid>? VerifiedFunctionIds = null,
+        IReadOnlyList<Guid>? UnverifiedFunctionIds = null,
+        IReadOnlyList<Guid>? TamperedFunctionIds = null,
+        IReadOnlyList<Guid>? StagedNonDeterministicFunctionIds = null)
+    {
+        /// <summary>Gets the total number of function records inspected during validation.</summary>
+        public int TotalInspectedCount => VerifiedProvenanceCount + UnverifiedProvenanceCount + TamperedProvenanceCount + StagedNonDeterministicCount;
+    }
 
     internal sealed record DiskStoreDiagnostics(string? StorePath, int FormatVersion, bool IsPagedReadOnly,
         long CacheHits, long CacheMisses, string? LastValidationError,
@@ -311,41 +323,48 @@ namespace OPEN_LRD.Persistence
             string path = Path.Combine(directory, "manifest.lrdmeta");
             using FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             using BinaryReader reader = new BinaryReader(stream);
-            int magic = reader.ReadInt32();
-            int formatVersion = reader.ReadInt32();
-            if (magic != ManifestMagic || formatVersion is not (LegacyFormatVersion or PreviousFormatVersion or CurrentFormatVersion))
+            try
             {
-                throw new InvalidDataException("Unsupported or invalid disk-store manifest.");
-            }
-            _ = reader.ReadInt64();
-            int count = reader.ReadInt32();
-            int minimumCount = AllPartitions.Length - 2;
-            if (count < minimumCount || count > AllPartitions.Length)
-                throw new InvalidDataException("Manifest partition count is invalid.");
-            Dictionary<DiskPartition, PartitionManifestEntry> result = new Dictionary<DiskPartition, PartitionManifestEntry>();
-            for (int i = 0; i < count; i++)
-            {
-                DiskPartition partition = (DiskPartition)reader.ReadByte();
-                int recordCount = reader.ReadInt32();
-                byte[] dataHash = reader.ReadBytes(32);
-                byte[] indexHash = reader.ReadBytes(32);
-                if (!Enum.IsDefined(partition) || recordCount < 0 || recordCount > MaximumRecordsPerPartition ||
-                    dataHash.Length != 32 || indexHash.Length != 32 ||
-                    !result.TryAdd(partition, new PartitionManifestEntry(recordCount, dataHash, indexHash)))
+                int magic = reader.ReadInt32();
+                int formatVersion = reader.ReadInt32();
+                if (magic != ManifestMagic || formatVersion is not (LegacyFormatVersion or PreviousFormatVersion or CurrentFormatVersion))
                 {
-                    throw new InvalidDataException("Manifest contains an invalid partition entry.");
+                    throw new InvalidDataException("Unsupported or invalid disk-store manifest.");
                 }
-            }
-            foreach (DiskPartition partition in AllPartitions)
-            {
-                if (partition != DiskPartition.NodePresentations && partition != DiskPartition.LayoutSettings &&
-                    !result.ContainsKey(partition))
+                _ = reader.ReadInt64();
+                int count = reader.ReadInt32();
+                int minimumCount = AllPartitions.Length - 2;
+                if (count < minimumCount || count > AllPartitions.Length)
+                    throw new InvalidDataException("Manifest partition count is invalid.");
+                Dictionary<DiskPartition, PartitionManifestEntry> result = new Dictionary<DiskPartition, PartitionManifestEntry>();
+                for (int i = 0; i < count; i++)
                 {
-                    throw new InvalidDataException($"Manifest is missing partition {partition}.");
+                    DiskPartition partition = (DiskPartition)reader.ReadByte();
+                    int recordCount = reader.ReadInt32();
+                    byte[] dataHash = reader.ReadBytes(32);
+                    byte[] indexHash = reader.ReadBytes(32);
+                    if (!Enum.IsDefined(partition) || recordCount < 0 || recordCount > MaximumRecordsPerPartition ||
+                        dataHash.Length != 32 || indexHash.Length != 32 ||
+                        !result.TryAdd(partition, new PartitionManifestEntry(recordCount, dataHash, indexHash)))
+                    {
+                        throw new InvalidDataException("Manifest contains an invalid partition entry.");
+                    }
                 }
+                foreach (DiskPartition partition in AllPartitions)
+                {
+                    if (partition != DiskPartition.NodePresentations && partition != DiskPartition.LayoutSettings &&
+                        !result.ContainsKey(partition))
+                    {
+                        throw new InvalidDataException($"Manifest is missing partition {partition}.");
+                    }
+                }
+                if (stream.Position != stream.Length) throw new InvalidDataException("Manifest has trailing data.");
+                return (formatVersion, result);
             }
-            if (stream.Position != stream.Length) throw new InvalidDataException("Manifest has trailing data.");
-            return (formatVersion, result);
+            catch (EndOfStreamException exception)
+            {
+                throw new InvalidDataException("Manifest is truncated.", exception);
+            }
         }
 
         private static void ValidateHash(string path, byte[] expected)

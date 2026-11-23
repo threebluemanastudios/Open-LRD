@@ -30,14 +30,98 @@ namespace OPEN_LRD
             }
         }
 
-        /// <summary>Stages reasoning assertions for atomic, single-layout batch commit.</summary>
-        public sealed class ReasoningWriteBatch : IDisposable
+        /// <summary>
+        /// Stages reasoning foundation boxes, nodes, and assertions for atomic two-phase commit
+        /// with a single presentation recalculation pass and incremental rollback without full graph rebuilds.
+        /// </summary>
+        public sealed class ReasoningTransaction : IDisposable
         {
             private readonly LRD_Core owner;
-            private readonly List<NodeLink> pending = new List<NodeLink>();
+            private readonly List<SenseBox> stagedSenses = new List<SenseBox>();
+            private readonly List<UsageBox> stagedUsages = new List<UsageBox>();
+            private readonly List<SymbolBox> stagedSymbols = new List<SymbolBox>();
+            private readonly List<WordBox> stagedWords = new List<WordBox>();
+            private readonly List<SentenceBox> stagedSentences = new List<SentenceBox>();
+            private readonly List<GroupBox> stagedGroups = new List<GroupBox>();
+            private readonly List<SourceBox> stagedSources = new List<SourceBox>();
+            private readonly List<FunctionBox> stagedFunctions = new List<FunctionBox>();
+            private readonly List<Node> stagedNodes = new List<Node>();
+            private readonly List<NodeLink> pendingLinks = new List<NodeLink>();
             private bool completed;
 
-            internal ReasoningWriteBatch(LRD_Core owner) => this.owner = owner;
+            internal ReasoningTransaction(LRD_Core owner) => this.owner = owner;
+
+            /// <summary>Stages a sense box to be promoted to trusted during transaction commit.</summary>
+            public void StageSense(SenseBox senseBox)
+            {
+                ArgumentNullException.ThrowIfNull(senseBox);
+                EnsureOpen();
+                stagedSenses.Add(senseBox);
+            }
+
+            /// <summary>Stages a usage box to be promoted to trusted during transaction commit.</summary>
+            public void StageUsage(UsageBox usageBox)
+            {
+                ArgumentNullException.ThrowIfNull(usageBox);
+                EnsureOpen();
+                stagedUsages.Add(usageBox);
+            }
+
+            /// <summary>Stages a symbol box to be promoted to trusted during transaction commit.</summary>
+            public void StageSymbol(SymbolBox symbolBox)
+            {
+                ArgumentNullException.ThrowIfNull(symbolBox);
+                EnsureOpen();
+                stagedSymbols.Add(symbolBox);
+            }
+
+            /// <summary>Stages a word box to be promoted to trusted during transaction commit.</summary>
+            public void StageWord(WordBox wordBox)
+            {
+                ArgumentNullException.ThrowIfNull(wordBox);
+                EnsureOpen();
+                stagedWords.Add(wordBox);
+            }
+
+            /// <summary>Stages a sentence box to be promoted to trusted during transaction commit.</summary>
+            public void StageSentence(SentenceBox sentenceBox)
+            {
+                ArgumentNullException.ThrowIfNull(sentenceBox);
+                EnsureOpen();
+                stagedSentences.Add(sentenceBox);
+            }
+
+            /// <summary>Stages a group box to be promoted to trusted during transaction commit.</summary>
+            public void StageGroup(GroupBox groupBox)
+            {
+                ArgumentNullException.ThrowIfNull(groupBox);
+                EnsureOpen();
+                stagedGroups.Add(groupBox);
+            }
+
+            /// <summary>Stages a source box to be promoted to trusted during transaction commit.</summary>
+            public void StageSource(SourceBox sourceBox)
+            {
+                ArgumentNullException.ThrowIfNull(sourceBox);
+                EnsureOpen();
+                stagedSources.Add(sourceBox);
+            }
+
+            /// <summary>Stages a dispatch-verified deterministic function box to be promoted to trusted during commit.</summary>
+            public void StageFunction(FunctionBox functionBox)
+            {
+                ArgumentNullException.ThrowIfNull(functionBox);
+                EnsureOpen();
+                stagedFunctions.Add(functionBox);
+            }
+
+            /// <summary>Stages a node to be promoted to trusted during transaction commit.</summary>
+            public void StageNode(Node node)
+            {
+                ArgumentNullException.ThrowIfNull(node);
+                EnsureOpen();
+                stagedNodes.Add(node);
+            }
 
             /// <summary>Stages one assertion without mutating trusted graph state until commit.</summary>
             public void AddReasoningLink(Guid sourceNodeId, Guid targetNodeId, NodeRelationType relationType,
@@ -49,28 +133,95 @@ namespace OPEN_LRD
                 EnsureOpen();
                 NodeLinkProvenance provenance = NodeLinkProvenance.CreateReasoning(sourceNodeId, targetNodeId,
                     relationType, label, confidence, author, sourceTargetId, evidenceTargetId, validFrom, validUntil, sourceGroupId);
-                pending.Add(new NodeLink(sourceNodeId, targetNodeId, relationType, confidence, label, provenance));
+                pendingLinks.Add(new NodeLink(sourceNodeId, targetNodeId, relationType, confidence, label, provenance));
             }
 
-            /// <summary>Atomically applies all staged assertions or restores the pre-commit graph state.</summary>
+            /// <summary>Atomically applies all staged boxes, nodes, and assertions or restores pre-commit graph state.</summary>
             public void Commit()
             {
                 EnsureOpen();
-                owner.CommitReasoningLinks(pending);
+                owner.CommitReasoningTransaction(
+                    stagedSenses, stagedUsages, stagedSymbols, stagedWords, stagedSentences,
+                    stagedGroups, stagedSources, stagedFunctions, stagedNodes, pendingLinks);
                 completed = true;
-                pending.Clear();
+                ClearStaged();
             }
 
+            /// <summary>Disposes the transaction and discards any uncommitted staged items.</summary>
             public void Dispose()
             {
                 completed = true;
-                pending.Clear();
+                ClearStaged();
+            }
+
+            private void ClearStaged()
+            {
+                stagedSenses.Clear();
+                stagedUsages.Clear();
+                stagedSymbols.Clear();
+                stagedWords.Clear();
+                stagedSentences.Clear();
+                stagedGroups.Clear();
+                stagedSources.Clear();
+                stagedFunctions.Clear();
+                stagedNodes.Clear();
+                pendingLinks.Clear();
             }
 
             private void EnsureOpen()
             {
-                if (completed) throw new InvalidOperationException("The reasoning batch is already completed.");
+                if (completed) throw new InvalidOperationException("The reasoning transaction is already completed.");
             }
+        }
+
+        /// <summary>Stages reasoning assertions, boxes, and nodes for atomic, single-layout batch commit.</summary>
+        public sealed class ReasoningWriteBatch : IDisposable
+        {
+            private readonly ReasoningTransaction inner;
+
+            internal ReasoningWriteBatch(LRD_Core owner) => inner = new ReasoningTransaction(owner);
+
+            /// <summary>Stages a sense box to be promoted to trusted during batch commit.</summary>
+            public void StageSense(SenseBox senseBox) => inner.StageSense(senseBox);
+
+            /// <summary>Stages a usage box to be promoted to trusted during batch commit.</summary>
+            public void StageUsage(UsageBox usageBox) => inner.StageUsage(usageBox);
+
+            /// <summary>Stages a symbol box to be promoted to trusted during batch commit.</summary>
+            public void StageSymbol(SymbolBox symbolBox) => inner.StageSymbol(symbolBox);
+
+            /// <summary>Stages a word box to be promoted to trusted during batch commit.</summary>
+            public void StageWord(WordBox wordBox) => inner.StageWord(wordBox);
+
+            /// <summary>Stages a sentence box to be promoted to trusted during batch commit.</summary>
+            public void StageSentence(SentenceBox sentenceBox) => inner.StageSentence(sentenceBox);
+
+            /// <summary>Stages a group box to be promoted to trusted during batch commit.</summary>
+            public void StageGroup(GroupBox groupBox) => inner.StageGroup(groupBox);
+
+            /// <summary>Stages a source box to be promoted to trusted during batch commit.</summary>
+            public void StageSource(SourceBox sourceBox) => inner.StageSource(sourceBox);
+
+            /// <summary>Stages a dispatch-verified deterministic function box to be promoted to trusted during batch commit.</summary>
+            public void StageFunction(FunctionBox functionBox) => inner.StageFunction(functionBox);
+
+            /// <summary>Stages a node to be promoted to trusted during batch commit.</summary>
+            public void StageNode(Node node) => inner.StageNode(node);
+
+            /// <summary>Stages one assertion without mutating trusted graph state until commit.</summary>
+            public void AddReasoningLink(Guid sourceNodeId, Guid targetNodeId, NodeRelationType relationType,
+                double confidence = 1.0, string? label = null, string? author = null,
+                Guid? sourceTargetId = null, Guid? evidenceTargetId = null,
+                DateTimeOffset? validFrom = null, DateTimeOffset? validUntil = null,
+                Guid? sourceGroupId = null) =>
+                inner.AddReasoningLink(sourceNodeId, targetNodeId, relationType, confidence, label, author,
+                    sourceTargetId, evidenceTargetId, validFrom, validUntil, sourceGroupId);
+
+            /// <summary>Atomically applies all staged items or restores the pre-commit graph state.</summary>
+            public void Commit() => inner.Commit();
+
+            /// <summary>Disposes the batch and discards any uncommitted staged items.</summary>
+            public void Dispose() => inner.Dispose();
         }
 
         private sealed class OrderedGuidIndexList : IEnumerable<Guid>
@@ -88,6 +239,16 @@ namespace OPEN_LRD
                     return false;
                 }
                 ordered.Add(value);
+                return true;
+            }
+
+            internal bool Remove(Guid value)
+            {
+                if (!membership.Remove(value))
+                {
+                    return false;
+                }
+                ordered.Remove(value);
                 return true;
             }
 
@@ -146,6 +307,10 @@ namespace OPEN_LRD
         private bool _nodePresentationIdSpaceExhausted;
         private NodeLayoutOptions _nodeLayoutOptions = new NodeLayoutOptions();
         private int _nodePresentationRecalculationSuspendCount;
+        private long _graphEpoch;
+
+        /// <summary>Gets the current monotonic trusted graph epoch counter.</summary>
+        public long CurrentGraphEpoch => GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return _graphEpoch; });
         private static readonly Guid DefaultDictionarySourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000001");
         private static readonly Guid DefaultUserSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000002");
         private static readonly Guid DefaultImportSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000003");
@@ -281,11 +446,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        ///    
-        /// </summary>
-        /// <param name="symbolId"></param>
-        /// <returns></returns>
+        /// <summary>Gets a trusted symbol box by identifier across in-memory and disk-paged modes.</summary>
+        /// <param name="symbolId">Symbol identifier to resolve.</param>
+        /// <returns>The matching <see cref="SymbolBox"/>, or <see langword="null"/> if not found.</returns>
         public SymbolBox? GetTrustedSymbolBox(Guid symbolId)
         {
             return GraphSynchronization.Execute(() =>
@@ -298,11 +461,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="usageId"></param>
-        /// <returns></returns>
+        /// <summary>Gets a trusted usage box by identifier across in-memory and disk-paged modes.</summary>
+        /// <param name="usageId">Usage identifier to resolve.</param>
+        /// <returns>The matching <see cref="UsageBox"/>, or <see langword="null"/> if not found.</returns>
         public UsageBox? GetTrustedUsageBox(Guid usageId)
         {
             return GraphSynchronization.Execute(() =>
@@ -315,11 +476,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="senseId"></param>
-        /// <returns></returns>
+        /// <summary>Gets a trusted sense box by identifier across in-memory and disk-paged modes.</summary>
+        /// <param name="senseId">Sense identifier to resolve.</param>
+        /// <returns>The matching <see cref="SenseBox"/>, or <see langword="null"/> if not found.</returns>
         public SenseBox? GetTrustedSenseBox(Guid senseId)
         {
             return GraphSynchronization.Execute(() =>
@@ -332,11 +491,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <returns></returns>
+        /// <summary>Gets a trusted word box by identifier across in-memory and disk-paged modes.</summary>
+        /// <param name="wordId">Word identifier to resolve.</param>
+        /// <returns>The matching <see cref="WordBox"/>, or <see langword="null"/> if not found.</returns>
         public WordBox? GetTrustedWordBox(Guid wordId)
         {
             return GraphSynchronization.Execute(() =>
@@ -349,11 +506,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <returns></returns>
+        /// <summary>Gets a trusted sentence box by identifier across in-memory and disk-paged modes.</summary>
+        /// <param name="sentenceId">Sentence identifier to resolve.</param>
+        /// <returns>The matching <see cref="SentenceBox"/>, or <see langword="null"/> if not found.</returns>
         public SentenceBox? GetTrustedSentenceBox(Guid sentenceId)
         {
             return GraphSynchronization.Execute(() =>
@@ -366,11 +521,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolId"></param>
-        /// <returns></returns>
+        /// <summary>Gets an untrusted staged symbol box by identifier.</summary>
+        /// <param name="symbolId">Symbol identifier to resolve.</param>
+        /// <returns>The matching untrusted <see cref="SymbolBox"/>, or <see langword="null"/> if not staged.</returns>
         public SymbolBox? GetUntrustedSymbolBox(Guid symbolId)
         {
             return GraphSynchronization.Execute(() =>
@@ -398,11 +551,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <returns></returns>
+        /// <summary>Gets an untrusted staged word box by identifier.</summary>
+        /// <param name="wordId">Word identifier to resolve.</param>
+        /// <returns>The matching untrusted <see cref="WordBox"/>, or <see langword="null"/> if not staged.</returns>
         public WordBox? GetUntrustedWordBox(Guid wordId)
         {
             return GraphSynchronization.Execute(() =>
@@ -412,11 +563,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <returns></returns>
+        /// <summary>Gets an untrusted staged sentence box by identifier.</summary>
+        /// <param name="sentenceId">Sentence identifier to resolve.</param>
+        /// <returns>The matching untrusted <see cref="SentenceBox"/>, or <see langword="null"/> if not staged.</returns>
         public SentenceBox? GetUntrustedSentenceBox(Guid sentenceId)
         {
             return GraphSynchronization.Execute(() =>
@@ -426,6 +575,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets a trusted source box by identifier across in-memory and disk-paged modes.</summary>
         public SourceBox? GetTrustedSourceBox(Guid sourceId)
         {
             return GraphSynchronization.Execute(() =>
@@ -438,6 +588,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets a trusted group box by identifier across in-memory and disk-paged modes.</summary>
         public GroupBox? GetTrustedGroupBox(Guid groupId)
         {
             return GraphSynchronization.Execute(() =>
@@ -450,6 +601,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets a trusted function box by identifier across in-memory and disk-paged modes.</summary>
         public FunctionBox? GetTrustedFunctionBox(Guid functionId)
         {
             return GraphSynchronization.Execute(() =>
@@ -489,10 +641,12 @@ namespace OPEN_LRD
                     functionBox.IsTrusted,
                     functionBox.IsResultDispatchVerified,
                     functionBox.DispatchProvenance,
-                    functionBox.DispatchProvenanceHistory);
+                    functionBox.DispatchProvenanceHistory,
+                    functionBox.ResultVerificationState);
             });
         }
 
+        /// <summary>Gets an untrusted staged function box by identifier.</summary>
         public FunctionBox? GetUntrustedFunctionBox(Guid functionId)
         {
             return GraphSynchronization.Execute(() =>
@@ -502,6 +656,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Stages a function box in the untrusted registry and ensures its canonical untrusted node exists.</summary>
         public bool SetUntrustedFunction(FunctionBox functionBox)
         {
             ArgumentNullException.ThrowIfNull(functionBox);
@@ -526,6 +681,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Removes a staged untrusted function box and cleans up any canonical or labeled untrusted nodes targeting it.</summary>
         public bool RemoveUntrustedFunction(Guid functionId)
         {
             return GraphSynchronization.Execute(() =>
@@ -540,6 +696,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Promotes a staged untrusted function box to trusted state after validating deterministic dispatch provenance.</summary>
         public bool ConvertUntrustedFunctionToTrusted(Guid functionId)
         {
             return GraphSynchronization.Execute(() =>
@@ -555,6 +712,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets a registered text conversation by identifier.</summary>
         public ConversationText? GetTextConversation(Guid conversationId)
         {
             return GraphSynchronization.Execute(() =>
@@ -564,6 +722,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets a registered symbolic conversation by identifier.</summary>
         public ConversationSymbolic? GetSymbolicConversation(Guid conversationId)
         {
             return GraphSynchronization.Execute(() =>
@@ -594,6 +753,7 @@ namespace OPEN_LRD
                 .Cast<Node>();
         }
 
+        /// <summary>Gets a trusted node by identifier across in-memory and disk-paged modes.</summary>
         public Node? GetTrustedNode(Guid nodeId)
         {
             return GraphSynchronization.Execute(() =>
@@ -603,6 +763,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets an untrusted staged node by identifier.</summary>
         public Node? GetUntrustedNode(Guid nodeId)
         {
             return GraphSynchronization.Execute(() =>
@@ -612,6 +773,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets the canonical null-label trusted node for a foundation target across in-memory and disk-paged modes.</summary>
         public Node? GetTrustedNodeByTarget(NodeTargetKind kind, Guid targetId)
         {
             return GraphSynchronization.Execute(() =>
@@ -626,6 +788,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets a trusted node by target kind, target identifier, and optional role label across in-memory and disk-paged modes.</summary>
         public Node? GetTrustedNodeByTarget(NodeTargetKind kind, Guid targetId, string? label)
         {
             return GraphSynchronization.Execute(() =>
@@ -636,6 +799,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns an immutable snapshot of all canonical and labeled trusted nodes wrapping a foundation target.</summary>
         public IReadOnlyList<Node> GetTrustedNodesByTarget(NodeTargetKind kind, Guid targetId)
         {
             return GraphSynchronization.Execute<IReadOnlyList<Node>>(() =>
@@ -653,6 +817,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets the canonical null-label untrusted node for a staged foundation target.</summary>
         public Node? GetUntrustedNodeByTarget(NodeTargetKind kind, Guid targetId)
         {
             return GraphSynchronization.Execute(() =>
@@ -667,6 +832,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets an untrusted staged node by target kind, target identifier, and optional role label.</summary>
         public Node? GetUntrustedNodeByTarget(NodeTargetKind kind, Guid targetId, string? label)
         {
             return GraphSynchronization.Execute(() =>
@@ -678,6 +844,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns a deterministically ordered snapshot of trusted node identifiers with optional kind filtering and paging.</summary>
         public List<Guid> GetTrustedNodeIds(NodeTargetKind? kindFilter = null, int? limit = null, int offset = 0)
         {
             return GraphSynchronization.Execute(() =>
@@ -698,6 +865,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns a deterministically ordered snapshot of trusted nodes across in-memory and disk-paged modes.</summary>
         public List<Node> GetTrustedNodes(NodeTargetKind? kindFilter = null, int? limit = null, int offset = 0)
         {
             return GraphSynchronization.Execute(() =>
@@ -714,6 +882,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns a deterministically ordered snapshot of untrusted staged node identifiers.</summary>
         public List<Guid> GetUntrustedNodeIds(NodeTargetKind? kindFilter = null)
         {
             return GraphSynchronization.Execute(() =>
@@ -731,6 +900,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns a deterministically ordered snapshot of active trusted links with optional relation, origin, author, confidence, and paging filters.</summary>
         public List<NodeLink> GetAllTrustedLinks(
             NodeRelationType? relationFilter = null,
             NodeLinkOrigin? originFilter = null,
@@ -758,7 +928,12 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>Aggregates active assertions between two endpoints using noisy-OR, collapsing dependent source groups.</summary>
+        /// <summary>
+        /// Aggregates active assertions between two endpoints using noisy-OR after collapsing dependent source groups.
+        /// Assertions sharing the same <see cref="NodeLinkProvenance.SourceGroupId"/>, or (when absent) the same
+        /// <c>(Origin, Author, SourceTargetId)</c> provenance chain, are treated as dependent evidence from the same
+        /// inference source and collapsed by maximum confidence before independent groups are combined via noisy-OR.
+        /// </summary>
         /// <param name="sourceNodeId">Trusted source node identifier.</param>
         /// <param name="targetNodeId">Trusted target node identifier.</param>
         /// <param name="relationType">Relation type shared by the assertions.</param>
@@ -784,13 +959,13 @@ namespace OPEN_LRD
                     ? outgoing.Where(link => link.TargetNodeId == targetNodeId && link.RelationType == relationType &&
                         link.Provenance.IsActiveAt(instant))
                     : Enumerable.Empty<NodeLink>();
-                Dictionary<Guid, double> independentConfidences = new Dictionary<Guid, double>();
+                Dictionary<string, double> independentConfidences = new Dictionary<string, double>(StringComparer.Ordinal);
                 foreach (NodeLink link in links)
                 {
                     double confidence = link.Provenance.Confidence ?? link.Weight;
                     if (!double.IsFinite(confidence)) confidence = 0.0;
                     confidence = Math.Clamp(confidence, 0.0, 1.0);
-                    Guid groupKey = link.Provenance.SourceGroupId ?? link.Provenance.AssertionId;
+                    string groupKey = GetNoisyOrSourceGroupKey(link.Provenance);
                     if (independentConfidences.TryGetValue(groupKey, out double existing))
                         independentConfidences[groupKey] = Math.Max(existing, confidence);
                     else
@@ -803,10 +978,29 @@ namespace OPEN_LRD
             });
         }
 
+        private static string GetNoisyOrSourceGroupKey(NodeLinkProvenance provenance)
+        {
+            if (provenance.SourceGroupId.HasValue)
+            {
+                return $"group:{provenance.SourceGroupId.Value:N}";
+            }
+            if (!string.IsNullOrWhiteSpace(provenance.Author) && provenance.SourceTargetId.HasValue)
+            {
+                return $"chain:{(int)provenance.Origin}:{provenance.Author.Trim().ToLowerInvariant()}:{provenance.SourceTargetId.Value:N}";
+            }
+            return $"assertion:{provenance.AssertionId:N}";
+        }
+
+        /// <summary>Returns the count of registered trusted nodes across in-memory and disk-paged modes.</summary>
         public int GetTrustedNodeCount() => GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return TrustedNodeByIdentityIndex.Count; });
+
+        /// <summary>Returns the count of staged untrusted nodes.</summary>
         public int GetUntrustedNodeCount() => GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return UntrustedNodeDictionary.Count; });
+
+        /// <summary>Returns the count of registered trusted links.</summary>
         public int GetTrustedLinkCount() => GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return TrustedLinkKeys.Count; });
 
+        /// <summary>Gets a node representation by its presentation identifier.</summary>
         public NodeRepresentation? GetNodeRepresentation(UInt128 presentationId)
         {
             return GraphSynchronization.Execute(() =>
@@ -818,6 +1012,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets a node representation by its associated node identifier.</summary>
         public NodeRepresentation? GetNodeRepresentationByNodeId(Guid nodeId)
         {
             return GraphSynchronization.Execute(() =>
@@ -830,6 +1025,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Gets the sequential presentation identifier assigned to a registered node.</summary>
         public UInt128? GetNodePresentationId(Guid nodeId)
         {
             return GraphSynchronization.Execute<UInt128?>(() =>
@@ -841,6 +1037,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns an immutable snapshot dictionary of all registered node presentations.</summary>
         public IReadOnlyDictionary<UInt128, NodeRepresentation> GetNodePresentations()
         {
             return GraphSynchronization.Execute<IReadOnlyDictionary<UInt128, NodeRepresentation>>(() =>
@@ -851,12 +1048,14 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns the total count of registered node presentations.</summary>
         public int GetNodePresentationCount() => GraphSynchronization.Execute(() =>
         {
             EnsureCoreInitialized();
             return NodePresentation.Count;
         });
 
+        /// <summary>Updates position, size, color, or display label overrides for a registered node presentation.</summary>
         public bool UpdateNodeRepresentation(
             Guid nodeId,
             Vector3? position = null,
@@ -880,6 +1079,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns a copy of the active 3D node layout bias options across in-memory and disk-paged modes.</summary>
         public NodeLayoutOptions GetNodeLayoutOptions()
         {
             return GraphSynchronization.Execute(() =>
@@ -889,6 +1089,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Updates the active 3D node layout bias options and recalculates all node presentations.</summary>
         public void UpdateNodeLayoutOptions(double nodeWeightBias, double neighborPositionBias)
         {
             GraphSynchronization.Execute(() =>
@@ -899,6 +1100,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Recalculates 3D layout positions, colors, sizes, and labels for all registered nodes.</summary>
         public void RecalculateAllNodePresentations()
         {
             GraphSynchronization.Execute(() =>
@@ -908,6 +1110,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Recalculates presentation derivation and layout position for a single node.</summary>
         public bool RecalculateNodePresentation(Guid nodeId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1155,23 +1358,18 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolId"></param>
-        /// <returns></returns>
+        /// <summary>Gets the character assigned to a trusted symbol by identifier across in-memory and disk-paged modes.</summary>
+        /// <param name="symbolId">Symbol identifier to resolve.</param>
+        /// <returns>The symbol character, or <see langword="null"/> if not found.</returns>
         public char? GetTrustedSymbolChar(Guid symbolId)
-
         {
             return GraphSynchronization.Execute<char?>(() =>
                 GetTrustedSymbolBox(symbolId)?.GetSymbolChar());
         }
         
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolChar"></param>
-        /// <returns></returns>
+        /// <summary>Gets the unique trusted symbol identifier for a character when exactly one sense exists.</summary>
+        /// <param name="symbolChar">Character to resolve.</param>
+        /// <returns>The unique symbol identifier, or <see langword="null"/> if zero or multiple senses exist.</returns>
         public Guid? GetTrustedSymbolID(char symbolChar)
         {
             return GraphSynchronization.Execute<Guid?>(() =>
@@ -1183,6 +1381,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns an isolated snapshot of all trusted symbol identifiers matching a character.</summary>
         public List<Guid> GetTrustedSymbolIDs(char symbolChar)
         {
             return GraphSynchronization.Execute(() =>
@@ -1195,11 +1394,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <returns></returns>
+        /// <summary>Returns an isolated snapshot of symbol identifiers contained in a trusted word.</summary>
+        /// <param name="wordId">Trusted word identifier to inspect.</param>
+        /// <returns>A list of constituent symbol identifiers.</returns>
         public List<Guid> GetSymbolsByTrustedWordID(Guid wordId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1218,62 +1415,62 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="senseId"></param>
-        /// <returns></returns>
+        /// <summary>Returns an isolated snapshot of trusted symbol identifiers associated with a sense.</summary>
+        /// <param name="senseId">Sense identifier to query.</param>
+        /// <returns>A list of matching trusted symbol identifiers.</returns>
         public List<Guid> GetTrustedSymbolsBySenseID(Guid senseId)
         {
             return GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return CopyIndexValues(SymbolsBySenseIndex, senseId); });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="senseId"></param>
-        /// <returns></returns>
+        /// <summary>Returns an isolated snapshot of trusted word identifiers associated with a sense.</summary>
+        /// <param name="senseId">Sense identifier to query.</param>
+        /// <returns>A list of matching trusted word identifiers.</returns>
         public List<Guid> GetTrustedWordsBySenseID(Guid senseId)
         {
             return GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return CopyIndexValues(WordsBySenseIndex, senseId); });
         }
 
+        /// <summary>Returns an isolated snapshot of trusted sentence identifiers associated with a sense.</summary>
         public List<Guid> GetTrustedSentencesBySenseID(Guid senseId)
         {
             return GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return CopyIndexValues(SentencesBySenseIndex, senseId); });
         }
 
+        /// <summary>Returns an isolated snapshot of trusted word identifiers associated with a usage.</summary>
         public List<Guid> GetTrustedWordsByUsageID(Guid usageId)
         {
             return GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return CopyIndexValues(WordsByUsageIndex, usageId); });
         }
 
+        /// <summary>Returns an isolated snapshot of trusted word identifiers containing a symbol.</summary>
         public List<Guid> GetTrustedWordsContainingSymbol(Guid symbolId)
         {
             return GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return CopyIndexValues(WordsBySymbolIndex, symbolId); });
         }
 
+        /// <summary>Returns an isolated snapshot of trusted sentence identifiers containing a word.</summary>
         public List<Guid> GetTrustedSentencesContainingWord(Guid wordId)
         {
             return GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return CopyIndexValues(SentencesByWordIndex, wordId); });
         }
 
+        /// <summary>Returns an isolated snapshot of trusted group identifiers containing a sentence.</summary>
         public List<Guid> GetTrustedGroupsContainingSentence(Guid sentenceId)
         {
             return GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return CopyIndexValues(GroupsBySentenceIndex, sentenceId); });
         }
 
+        /// <summary>Returns an isolated snapshot of trusted source identifiers containing a group.</summary>
         public List<Guid> GetTrustedSourcesContainingGroup(Guid groupId)
         {
             return GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return CopyIndexValues(SourcesByGroupIndex, groupId); });
         }
 
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <returns></returns>
+        /// <summary>Returns an isolated snapshot of word identifiers for a trusted sentence across in-memory and paged modes.</summary>
+        /// <param name="sentenceId">Trusted sentence identifier to inspect.</param>
+        /// <returns>The list of constituent word identifiers, or <see langword="null"/> if the sentence is not trusted.</returns>
         public List<Guid>? GetWordsFromTrustedSentenceID(Guid sentenceId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1284,22 +1481,18 @@ namespace OPEN_LRD
             
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <returns></returns>
+        /// <summary>Reconstructs the text of a trusted word across in-memory and disk-paged modes.</summary>
+        /// <param name="wordId">Trusted word identifier to render.</param>
+        /// <returns>The reconstructed word text, or <see cref="string.Empty"/> if not found.</returns>
         public string GetTextFromWordID(Guid wordId)
         {
             return GraphSynchronization.Execute(() =>
                 GetTrustedWordBox(wordId) is WordBox wordBox ? GetTextFromWordBox(wordBox) : string.Empty);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <returns></returns>
+        /// <summary>Reconstructs the space-joined text of a trusted sentence across in-memory and disk-paged modes.</summary>
+        /// <param name="sentenceId">Trusted sentence identifier to render.</param>
+        /// <returns>The reconstructed sentence text, or <see cref="string.Empty"/> if not found.</returns>
         public string GetTextFromSentenceID(Guid sentenceId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1347,9 +1540,7 @@ namespace OPEN_LRD
             return text.ToString();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        /// <summary>Disposes any attached disk store and clears all trusted and untrusted registries, indexes, and conversations.</summary>
         public void ClearAllDictionaries()
         {
             GraphSynchronization.Execute(() =>
@@ -1418,13 +1609,12 @@ namespace OPEN_LRD
                 UntrustedWordDictionary.Clear();
                 UntrustedSentenceDictionary.Clear();
                 UntrustedFunctionDictionary.Clear();
+                _graphEpoch = 0;
                 _initialized = false;
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        /// <summary>Clears all staged untrusted symbol, word, sentence, and function registries and removes their untrusted nodes.</summary>
         public void ClearUntrustedDictionaries()
         {
             GraphSynchronization.Execute(() =>
@@ -1441,9 +1631,7 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        /// <summary>Clears all staged untrusted symbols and removes their associated untrusted nodes.</summary>
         public void ClearUntrustedSymbols()
         {
             GraphSynchronization.Execute(() =>
@@ -1457,9 +1645,7 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        /// <summary>Clears all staged untrusted words and removes their associated untrusted nodes.</summary>
         public void ClearUntrustedWords()
         {
             GraphSynchronization.Execute(() =>
@@ -1473,9 +1659,7 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
+        /// <summary>Clears all staged untrusted sentences and removes their associated untrusted nodes.</summary>
         public void ClearUntrustedSentences()
         {
             GraphSynchronization.Execute(() =>
@@ -1490,12 +1674,10 @@ namespace OPEN_LRD
         }
 
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolId"></param>
-        /// <param name="senseId"></param>
-        /// <returns></returns>
+        /// <summary>Assigns a sense identifier to a staged untrusted symbol box.</summary>
+        /// <param name="symbolId">Staged symbol identifier.</param>
+        /// <param name="senseId">Sense identifier to assign.</param>
+        /// <returns><see langword="true"/> if the staged symbol was found and updated; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedSymbolSenseID(Guid symbolId, Guid senseId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1511,6 +1693,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Assigns a character to a staged untrusted symbol box.</summary>
         public bool SetUntrustedSymbolChar(Guid symbolId, char symbolChar)
         {
             return GraphSynchronization.Execute(() =>
@@ -1526,12 +1709,10 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <param name="senseId"></param>
-        /// <returns></returns>
+        /// <summary>Assigns a sense identifier to a staged untrusted word box.</summary>
+        /// <param name="wordId">Staged word identifier.</param>
+        /// <param name="senseId">Sense identifier to assign.</param>
+        /// <returns><see langword="true"/> if the staged word was found and updated; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedWordSenseID(Guid wordId, Guid senseId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1547,12 +1728,10 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <param name="senseId"></param>
-        /// <returns></returns>
+        /// <summary>Assigns a sense identifier to a staged untrusted sentence box.</summary>
+        /// <param name="sentenceId">Staged sentence identifier.</param>
+        /// <param name="senseId">Sense identifier to assign.</param>
+        /// <returns><see langword="true"/> if the staged sentence was found and updated; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedSentenceSenseID(Guid sentenceId, Guid senseId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1568,12 +1747,10 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <param name="symbols"></param>
-        /// <returns></returns>
+        /// <summary>Assigns the constituent symbol sequence to a staged untrusted word box.</summary>
+        /// <param name="wordId">Staged word identifier.</param>
+        /// <param name="symbols">Ordered list of constituent symbol identifiers.</param>
+        /// <returns><see langword="true"/> if the staged word was found and updated; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedWordSymbols(Guid wordId, List<Guid> symbols)
         {
             return GraphSynchronization.Execute(() =>
@@ -1589,11 +1766,10 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <param name="words"></param>
+        /// <summary>Assigns the constituent word sequence to a staged untrusted sentence box.</summary>
+        /// <param name="sentenceId">Staged sentence identifier.</param>
+        /// <param name="words">Ordered list of constituent word identifiers.</param>
+        /// <returns><see langword="true"/> if the staged sentence was found and updated; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedSentenceWords(Guid sentenceId, List<Guid> words)
         {
             return GraphSynchronization.Execute(() =>
@@ -1609,12 +1785,10 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <param name="usageId"></param>
-        /// <returns></returns>
+        /// <summary>Assigns a usage identifier to a staged untrusted word box.</summary>
+        /// <param name="wordId">Staged word identifier.</param>
+        /// <param name="usageId">Usage identifier to assign.</param>
+        /// <returns><see langword="true"/> if the staged word was found and updated; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedWordUsageID(Guid wordId, Guid usageId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1630,12 +1804,10 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <param name="pos"></param>
-        /// <returns></returns>
+        /// <summary>Assigns a part-of-speech classification to a staged untrusted word box.</summary>
+        /// <param name="wordId">Staged word identifier.</param>
+        /// <param name="pos">Part-of-speech value to assign.</param>
+        /// <returns><see langword="true"/> if the staged word was found and updated; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedWordPartOfSpeech(Guid wordId, PartOfSpeech pos)
         {
             return GraphSynchronization.Execute(() =>
@@ -1651,10 +1823,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolBox"></param>
+        /// <summary>Registers a symbol box directly in the trusted registry if its identity is complete and unique.</summary>
+        /// <param name="symbolBox">Symbol box to trust.</param>
+        /// <returns><see langword="true"/> if trusted and wired into the graph; otherwise <see langword="false"/>.</returns>
         public bool AddTrustedSymbol(SymbolBox symbolBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -1686,10 +1857,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordBox"></param>
+        /// <summary>Registers a word box directly in the trusted registry if its identity and dependencies are trusted.</summary>
+        /// <param name="wordBox">Word box to trust.</param>
+        /// <returns><see langword="true"/> if trusted and wired into the graph; otherwise <see langword="false"/>.</returns>
         public bool AddTrustedWord(WordBox wordBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -1724,10 +1894,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceBox"></param>
+        /// <summary>Registers a sentence box directly in the trusted registry if its identity and dependencies are trusted.</summary>
+        /// <param name="sentenceBox">Sentence box to trust.</param>
+        /// <returns><see langword="true"/> if trusted and wired into the graph; otherwise <see langword="false"/>.</returns>
         public bool AddTrustedSentence(SentenceBox sentenceBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -1761,10 +1930,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="usageBox"></param>
+        /// <summary>Registers a usage box in the trusted registry and creates its canonical trusted node.</summary>
+        /// <param name="usageBox">Usage box to trust.</param>
+        /// <returns><see langword="true"/> if trusted; otherwise <see langword="false"/>.</returns>
         public bool AddTrustedUsage(UsageBox usageBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -1784,10 +1952,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="senseBox"></param>
+        /// <summary>Registers a sense box in the trusted registry and creates its canonical trusted node.</summary>
+        /// <param name="senseBox">Sense box to trust.</param>
+        /// <returns><see langword="true"/> if trusted; otherwise <see langword="false"/>.</returns>
         public bool AddTrustedSense(SenseBox senseBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -1807,6 +1974,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Registers a group box in the trusted registry if all constituent sentences are trusted.</summary>
         public bool AddTrustedGroup(GroupBox groupBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -1832,6 +2000,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Registers a dispatch-verified deterministic function box in the trusted registry.</summary>
         public bool AddTrustedFunction(FunctionBox functionBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -1861,6 +2030,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Registers a source box in the trusted registry if all constituent groups are trusted.</summary>
         public bool AddTrustedSource(SourceBox sourceBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -1886,6 +2056,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Appends a trusted sentence membership to a trusted group box and wires its structural link.</summary>
         public bool AddSentenceToTrustedGroup(Guid groupId, Guid sentenceId)
         {
             return GraphSynchronization.Execute(() =>
@@ -1981,10 +2152,9 @@ namespace OPEN_LRD
         }
 
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolBox"></param>
+        /// <summary>Stages a symbol box in the untrusted registry and ensures its canonical untrusted node exists.</summary>
+        /// <param name="symbolBox">Symbol box to stage.</param>
+        /// <returns><see langword="true"/> if staged; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedSymbol(SymbolBox symbolBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -2004,10 +2174,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordBox"></param>
+        /// <summary>Stages a word box in the untrusted registry and ensures its canonical untrusted node exists.</summary>
+        /// <param name="wordBox">Word box to stage.</param>
+        /// <returns><see langword="true"/> if staged; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedWord(WordBox wordBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -2027,10 +2196,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceBox"></param>
+        /// <summary>Stages a sentence box in the untrusted registry and ensures its canonical untrusted node exists.</summary>
+        /// <param name="sentenceBox">Sentence box to stage.</param>
+        /// <returns><see langword="true"/> if staged; otherwise <see langword="false"/>.</returns>
         public bool SetUntrustedSentence(SentenceBox sentenceBox)
         {
             return GraphSynchronization.Execute(() =>
@@ -2050,11 +2218,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolId"></param>
-        /// <returns></returns>
+        /// <summary>Removes a staged untrusted symbol box and cleans up any canonical or labeled untrusted nodes targeting it.</summary>
+        /// <param name="symbolId">Staged symbol identifier to remove.</param>
+        /// <returns><see langword="true"/> if removed; otherwise <see langword="false"/>.</returns>
         public bool RemoveUntrustedSymbol(Guid symbolId)
         {
             return GraphSynchronization.Execute(() =>
@@ -2066,11 +2232,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <returns></returns>
+        /// <summary>Removes a staged untrusted word box and cleans up any canonical or labeled untrusted nodes targeting it.</summary>
+        /// <param name="wordId">Staged word identifier to remove.</param>
+        /// <returns><see langword="true"/> if removed; otherwise <see langword="false"/>.</returns>
         public bool RemoveUntrustedWord(Guid wordId)
         {
             return GraphSynchronization.Execute(() =>
@@ -2082,11 +2246,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <returns></returns>
+        /// <summary>Removes a staged untrusted sentence box and cleans up any canonical or labeled untrusted nodes targeting it.</summary>
+        /// <param name="sentenceId">Staged sentence identifier to remove.</param>
+        /// <returns><see langword="true"/> if removed; otherwise <see langword="false"/>.</returns>
         public bool RemoveUntrustedSentence(Guid sentenceId)
         {
             return GraphSynchronization.Execute(() =>
@@ -2099,11 +2261,9 @@ namespace OPEN_LRD
         }
 
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolId"></param>
-        /// <returns></returns>
+        /// <summary>Promotes a staged untrusted symbol box to trusted state if its identity is complete and unique.</summary>
+        /// <param name="symbolId">Staged symbol identifier to promote.</param>
+        /// <returns><see langword="true"/> if promoted; otherwise <see langword="false"/>.</returns>
         public bool ConvertUntrustedSymbolToTrusted(Guid symbolId)
         {
             return GraphSynchronization.Execute(() =>
@@ -2134,11 +2294,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="wordId"></param>
-        /// <returns></returns>
+        /// <summary>Promotes a staged untrusted word box to trusted state if its identity and dependencies are trusted.</summary>
+        /// <param name="wordId">Staged word identifier to promote.</param>
+        /// <returns><see langword="true"/> if promoted; otherwise <see langword="false"/>.</returns>
         public bool ConvertUntrustedWordToTrusted(Guid wordId)
         {
             return GraphSynchronization.Execute(() =>
@@ -2172,11 +2330,9 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <returns></returns>
+        /// <summary>Promotes a staged untrusted sentence box to trusted state if its identity and dependencies are trusted.</summary>
+        /// <param name="sentenceId">Staged sentence identifier to promote.</param>
+        /// <returns><see langword="true"/> if promoted; otherwise <see langword="false"/>.</returns>
         public bool ConvertUntrustedSentenceToTrusted(Guid sentenceId)
         {
             return GraphSynchronization.Execute(() =>
@@ -2551,6 +2707,7 @@ namespace OPEN_LRD
                 TrustedNodeDictionary.Add(nodeId, node);
                 TrustedNodeByIdentityIndex.Add(identityKey, nodeId);
                 TrustedSkillsGraph.AddNode(nodeId);
+                _graphEpoch = checked(_graphEpoch + 1);
                 EnsureNodeRepresentation(node, isTrusted: true);
                 if (identityKey.Label == null)
                 {
@@ -2624,40 +2781,432 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>Begins a link-only reasoning transaction that commits assertions and presentation once.</summary>
+        /// <summary>Begins a two-phase reasoning transaction that stages boxes, nodes, and assertions atomically.</summary>
+        public ReasoningTransaction BeginReasoningTransaction()
+        {
+            GraphSynchronization.Execute(EnsureCoreInitialized);
+            return new ReasoningTransaction(this);
+        }
+
+        /// <summary>Begins a reasoning write batch that commits staged items and presentation once.</summary>
         public ReasoningWriteBatch BeginReasoningWriteBatch()
         {
             GraphSynchronization.Execute(EnsureCoreInitialized);
             return new ReasoningWriteBatch(this);
         }
 
-        private void CommitReasoningLinks(IReadOnlyList<NodeLink> pending)
+        private void CommitReasoningTransaction(
+            IReadOnlyList<SenseBox> stagedSenses,
+            IReadOnlyList<UsageBox> stagedUsages,
+            IReadOnlyList<SymbolBox> stagedSymbols,
+            IReadOnlyList<WordBox> stagedWords,
+            IReadOnlyList<SentenceBox> stagedSentences,
+            IReadOnlyList<GroupBox> stagedGroups,
+            IReadOnlyList<SourceBox> stagedSources,
+            IReadOnlyList<FunctionBox> stagedFunctions,
+            IReadOnlyList<Node> stagedNodes,
+            IReadOnlyList<NodeLink> pendingLinks)
         {
             GraphSynchronization.Execute(() =>
             {
                 EnsureMutableStorageMode();
-                List<Guid> addedAssertionIds = new List<Guid>();
+
+                // Phase 1: Pre-validate staged boxes, nodes, and links against canonical + staged state before applying mutations.
+                HashSet<Guid> newSenses = new HashSet<Guid>();
+                foreach (SenseBox box in stagedSenses)
+                {
+                    Guid id = box.GetSenseID();
+                    if (id == Guid.Empty || TrustedSenseDictionary.ContainsKey(id) || !newSenses.Add(id))
+                        throw new InvalidOperationException($"Staged SenseBox '{id}' conflicts with an existing or duplicate identity.");
+                }
+
+                HashSet<Guid> newUsages = new HashSet<Guid>();
+                foreach (UsageBox box in stagedUsages)
+                {
+                    Guid id = box.GetUsageID();
+                    if (id == Guid.Empty || TrustedUsageDictionary.ContainsKey(id) || !newUsages.Add(id))
+                        throw new InvalidOperationException($"Staged UsageBox '{id}' conflicts with an existing or duplicate identity.");
+                }
+
+                bool IsSenseAvailable(Guid? id) => id.HasValue && (HasTrustedSense(id) || newSenses.Contains(id.Value));
+                bool IsUsageAvailable(Guid? id) => id.HasValue && (TrustedUsageDictionary.ContainsKey(id.Value) || newUsages.Contains(id.Value));
+
+                HashSet<Guid> newSymbols = new HashSet<Guid>();
+                HashSet<SymbolIdentityKey> newSymbolKeys = new HashSet<SymbolIdentityKey>();
+                foreach (SymbolBox box in stagedSymbols)
+                {
+                    Guid id = box.GetSymbolID();
+                    if (!box.HasCompleteIdentity || TrustedSymbolDictionary.ContainsKey(id) || !newSymbols.Add(id) || !IsSenseAvailable(box.GetSenseID()))
+                        throw new InvalidOperationException($"Staged SymbolBox '{id}' has an incomplete, unresolved, or duplicate identity.");
+                    SymbolIdentityKey key = box.GetIdentityKey();
+                    if (TrustedSymbolIdentityIndex.ContainsKey(key) || !newSymbolKeys.Add(key))
+                        throw new InvalidOperationException($"Staged SymbolBox '{id}' conflicts with an existing or duplicate symbol identity.");
+                }
+
+                bool IsSymbolAvailable(Guid id) => TrustedSymbolDictionary.ContainsKey(id) || newSymbols.Contains(id);
+
+                HashSet<Guid> newWords = new HashSet<Guid>();
+                HashSet<WordIdentityKey> newWordKeys = new HashSet<WordIdentityKey>();
+                foreach (WordBox box in stagedWords)
+                {
+                    Guid id = box.GetWordID();
+                    List<Guid>? symbols = box.GetSymbols();
+                    if (!box.HasCompleteIdentity || TrustedWordDictionary.ContainsKey(id) || !newWords.Add(id) ||
+                        !IsSenseAvailable(box.GetSenseID()) || !IsUsageAvailable(box.GetUsageID()) ||
+                        symbols == null || !symbols.All(IsSymbolAvailable))
+                    {
+                        throw new InvalidOperationException($"Staged WordBox '{id}' has an incomplete, unresolved, or duplicate identity.");
+                    }
+                    WordIdentityKey key = box.GetIdentityKey();
+                    if (TrustedWordIdentityIndex.ContainsKey(key) || !newWordKeys.Add(key))
+                        throw new InvalidOperationException($"Staged WordBox '{id}' conflicts with an existing or duplicate word identity.");
+                }
+
+                bool IsWordAvailable(Guid id) => TrustedWordDictionary.ContainsKey(id) || newWords.Contains(id);
+
+                HashSet<Guid> newSentences = new HashSet<Guid>();
+                HashSet<SentenceIdentityKey> newSentenceKeys = new HashSet<SentenceIdentityKey>();
+                foreach (SentenceBox box in stagedSentences)
+                {
+                    Guid id = box.GetSentenceID();
+                    List<Guid>? words = box.GetWords();
+                    if (!box.HasCompleteIdentity || TrustedSentenceDictionary.ContainsKey(id) || !newSentences.Add(id) ||
+                        !IsSenseAvailable(box.GetSenseID()) || words == null || !words.All(IsWordAvailable))
+                    {
+                        throw new InvalidOperationException($"Staged SentenceBox '{id}' has an incomplete, unresolved, or duplicate identity.");
+                    }
+                    SentenceIdentityKey key = box.GetIdentityKey();
+                    if (TrustedSentenceIdentityIndex.ContainsKey(key) || !newSentenceKeys.Add(key))
+                        throw new InvalidOperationException($"Staged SentenceBox '{id}' conflicts with an existing or duplicate sentence identity.");
+                }
+
+                bool IsSentenceAvailable(Guid id) => TrustedSentenceDictionary.ContainsKey(id) || newSentences.Contains(id);
+
+                HashSet<Guid> newGroups = new HashSet<Guid>();
+                foreach (GroupBox box in stagedGroups)
+                {
+                    Guid id = box.GetGroupingID();
+                    List<Guid>? sentences = box.GetSentences();
+                    if (id == Guid.Empty || TrustedGroupDictionary.ContainsKey(id) || !newGroups.Add(id) ||
+                        sentences == null || !sentences.All(IsSentenceAvailable))
+                    {
+                        throw new InvalidOperationException($"Staged GroupBox '{id}' has an unresolved sentence or duplicate identity.");
+                    }
+                }
+
+                bool IsGroupAvailable(Guid id) => TrustedGroupDictionary.ContainsKey(id) || newGroups.Contains(id);
+
+                HashSet<Guid> newSources = new HashSet<Guid>();
+                foreach (SourceBox box in stagedSources)
+                {
+                    Guid id = box.GetSourceID();
+                    List<Guid>? groups = box.GetGroupingIDs();
+                    if (id == Guid.Empty || SourceDictionary.ContainsKey(id) || !newSources.Add(id) ||
+                        groups == null || !groups.All(IsGroupAvailable))
+                    {
+                        throw new InvalidOperationException($"Staged SourceBox '{id}' has an unresolved group or duplicate identity.");
+                    }
+                }
+
+                HashSet<Guid> newFunctions = new HashSet<Guid>();
+                foreach (FunctionBox box in stagedFunctions)
+                {
+                    Guid id = box.GetFunctionID();
+                    if (id == Guid.Empty || TrustedFunctionDictionary.ContainsKey(id) || !newFunctions.Add(id))
+                        throw new InvalidOperationException($"Staged FunctionBox '{id}' conflicts with an existing or duplicate identity.");
+                    MathFunctionDispatcher.ValidateDefinition(box);
+                }
+
+                bool IsTargetAvailable(NodeTargetKind kind, Guid targetId) => kind switch
+                {
+                    NodeTargetKind.Sense => IsSenseAvailable(targetId),
+                    NodeTargetKind.Usage => IsUsageAvailable(targetId),
+                    NodeTargetKind.Symbol => IsSymbolAvailable(targetId),
+                    NodeTargetKind.Word => IsWordAvailable(targetId),
+                    NodeTargetKind.Sentence => IsSentenceAvailable(targetId),
+                    NodeTargetKind.Group => IsGroupAvailable(targetId),
+                    NodeTargetKind.Source => SourceDictionary.ContainsKey(targetId) || newSources.Contains(targetId),
+                    NodeTargetKind.Function => TrustedFunctionDictionary.ContainsKey(targetId) || newFunctions.Contains(targetId),
+                    _ => false
+                };
+
+                HashSet<Guid> newNodeIds = new HashSet<Guid>();
+                HashSet<NodeIdentityKey> newNodeKeys = new HashSet<NodeIdentityKey>();
+                foreach (Node node in stagedNodes)
+                {
+                    Guid id = node.GetNodeID();
+                    NodeIdentityKey key = node.GetIdentityKey();
+                    if (node.IsTrusted || TrustedNodeDictionary.ContainsKey(id) || !newNodeIds.Add(id) ||
+                        TrustedNodeByIdentityIndex.ContainsKey(key) || !newNodeKeys.Add(key) ||
+                        !IsTargetAvailable(node.GetTargetKind(), node.GetTargetID()))
+                    {
+                        throw new InvalidOperationException($"Staged Node '{id}' has an invalid target or conflicting identity.");
+                    }
+                }
+
+                // Phase 2: Apply mutations under suspended presentation recalculation with incremental rollback stack on failure.
+                long initialEpoch = _graphEpoch;
+                UInt128 initialNextPresentationId = _nextNodePresentationId;
+                bool initialPresentationExhausted = _nodePresentationIdSpaceExhausted;
+                Stack<Action> rollbackActions = new Stack<Action>();
                 _nodePresentationRecalculationSuspendCount = checked(_nodePresentationRecalculationSuspendCount + 1);
                 try
                 {
-                    foreach (NodeLink link in pending)
+                    void RegisterCanonicalOrStagedNode(NodeTargetKind kind, Guid targetId, Node? explicitNode = null)
+                    {
+                        (NodeTargetKind Kind, Guid TargetId) targetKey = (kind, targetId);
+                        if (explicitNode == null && TrustedNodeByTargetIndex.ContainsKey(targetKey))
+                        {
+                            return;
+                        }
+
+                        Node? promotedFromUntrusted = null;
+                        if (explicitNode != null)
+                        {
+                            if (UntrustedNodeDictionary.TryGetValue(explicitNode.GetNodeID(), out Node? existingUntrusted) &&
+                                ReferenceEquals(existingUntrusted, explicitNode))
+                            {
+                                promotedFromUntrusted = existingUntrusted;
+                            }
+                        }
+                        else if (UntrustedNodeByTargetIndex.TryGetValue(targetKey, out Guid untrustedId) &&
+                                 UntrustedNodeDictionary.TryGetValue(untrustedId, out Node? canonicalUntrusted))
+                        {
+                            promotedFromUntrusted = canonicalUntrusted;
+                        }
+
+                        Node node = explicitNode ?? promotedFromUntrusted ?? new Node(kind, targetId);
+                        Guid nodeId = node.GetNodeID();
+                        NodeIdentityKey identityKey = node.GetIdentityKey();
+                        bool hadExistingPresentation = NodePresentationKeyByNodeId.TryGetValue(nodeId, out UInt128 prevPresId) &&
+                                                       NodePresentation.TryGetValue(prevPresId, out NodeRepresentation? prevRep);
+                        uint prevColor = hadExistingPresentation ? NodePresentation[prevPresId].GetColor() : 0;
+                        double prevSize = hadExistingPresentation ? NodePresentation[prevPresId].GetSize() : 1.0;
+                        string? prevLabel = hadExistingPresentation ? NodePresentation[prevPresId].GetTextLabel() : null;
+                        Vector3 prevPos = hadExistingPresentation ? NodePresentation[prevPresId].GetPosition() : Vector3.Zero;
+
+                        if (promotedFromUntrusted != null)
+                        {
+                            UntrustedNodeDictionary.Remove(nodeId);
+                            UntrustedNodeByIdentityIndex.Remove(identityKey);
+                            if (identityKey.Label == null)
+                                UntrustedNodeByTargetIndex.Remove(targetKey);
+                        }
+
+                        node.SetIdentityChangingHandler(null);
+                        node.SetIdentityChangedHandler(null);
+                        node.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
+                        node.MarkTrusted();
+                        TrustedNodeDictionary.Add(nodeId, node);
+                        TrustedNodeByIdentityIndex.Add(identityKey, nodeId);
+                        if (identityKey.Label == null)
+                            TrustedNodeByTargetIndex.Add(targetKey, nodeId);
+                        TrustedSkillsGraph.AddNode(nodeId);
+                        EnsureNodeRepresentation(node, isTrusted: true);
+
+                        List<NodeLink> wiredLinks = new List<NodeLink>();
+                        List<Action> membershipRollbacks = new List<Action>();
+                        if (identityKey.Label == null)
+                        {
+                            WireNodeRelationsTransactional(node, wiredLinks, membershipRollbacks);
+                        }
+
+                        rollbackActions.Push(() =>
+                        {
+                            for (int i = membershipRollbacks.Count - 1; i >= 0; i--)
+                                membershipRollbacks[i]();
+                            for (int i = wiredLinks.Count - 1; i >= 0; i--)
+                                RemoveTrustedLinkInternal(wiredLinks[i]);
+                            TrustedSkillsGraph.RemoveNode(nodeId);
+                            if (identityKey.Label == null)
+                                TrustedNodeByTargetIndex.Remove(targetKey);
+                            TrustedNodeByIdentityIndex.Remove(identityKey);
+                            TrustedNodeDictionary.Remove(nodeId);
+                            node.UnmarkTrusted();
+                            if (promotedFromUntrusted != null)
+                            {
+                                UntrustedNodeDictionary.Add(nodeId, node);
+                                UntrustedNodeByIdentityIndex.Add(identityKey, nodeId);
+                                if (identityKey.Label == null)
+                                    UntrustedNodeByTargetIndex.Add(targetKey, nodeId);
+                                node.SetIdentityChangingHandler((oldK, newK) => HandleUntrustedNodeIdentityChange(nodeId, oldK, newK));
+                                node.SetIdentityChangedHandler((oldK, newK) => HandleNodeIdentityChange(nodeId, oldK, newK));
+                                node.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
+                                if (hadExistingPresentation && NodePresentation.TryGetValue(prevPresId, out NodeRepresentation? rep))
+                                {
+                                    rep.SetColor(prevColor);
+                                    rep.SetSize(prevSize);
+                                    rep.SetTextLabel(prevLabel);
+                                    rep.SetPosition(prevPos);
+                                }
+                            }
+                            else if (!hadExistingPresentation)
+                            {
+                                RemoveNodeRepresentation(nodeId);
+                            }
+                        });
+                    }
+
+                    foreach (SenseBox box in stagedSenses)
+                    {
+                        Guid id = box.GetSenseID();
+                        box.MarkTrusted();
+                        TrustedSenseDictionary.Add(id, box);
+                        rollbackActions.Push(() => TrustedSenseDictionary.Remove(id));
+                        RegisterCanonicalOrStagedNode(NodeTargetKind.Sense, id);
+                    }
+
+                    foreach (UsageBox box in stagedUsages)
+                    {
+                        Guid id = box.GetUsageID();
+                        box.MarkTrusted();
+                        TrustedUsageDictionary.Add(id, box);
+                        rollbackActions.Push(() => TrustedUsageDictionary.Remove(id));
+                        RegisterCanonicalOrStagedNode(NodeTargetKind.Usage, id);
+                    }
+
+                    foreach (Node node in stagedNodes)
+                    {
+                        RegisterCanonicalOrStagedNode(node.GetTargetKind(), node.GetTargetID(), node);
+                    }
+
+                    foreach (SymbolBox box in stagedSymbols)
+                    {
+                        Guid id = box.GetSymbolID();
+                        bool wasUntrusted = UntrustedSymbolDictionary.Remove(id);
+                        SymbolIdentityKey key = box.GetIdentityKey();
+                        box.FreezeIdentity();
+                        TrustedSymbolDictionary.Add(id, box);
+                        TrustedSymbolIdentityIndex.Add(key, id);
+                        AddIndex(TrustedSymbolCharIndex, key.SymbolChar, id);
+                        AddIndex(SymbolsBySenseIndex, key.SenseId, id);
+                        rollbackActions.Push(() =>
+                        {
+                            RemoveFromIndex(SymbolsBySenseIndex, key.SenseId, id);
+                            RemoveFromIndex(TrustedSymbolCharIndex, key.SymbolChar, id);
+                            TrustedSymbolIdentityIndex.Remove(key);
+                            TrustedSymbolDictionary.Remove(id);
+                            if (wasUntrusted) UntrustedSymbolDictionary.Add(id, box);
+                        });
+                        RegisterCanonicalOrStagedNode(NodeTargetKind.Symbol, id);
+                    }
+
+                    foreach (WordBox box in stagedWords)
+                    {
+                        Guid id = box.GetWordID();
+                        bool wasUntrusted = UntrustedWordDictionary.Remove(id);
+                        WordIdentityKey key = box.GetIdentityKey();
+                        box.FreezeIdentity();
+                        TrustedWordDictionary.Add(id, box);
+                        TrustedWordIdentityIndex.Add(key, id);
+                        AddIndex(WordsBySenseIndex, key.SenseId, id);
+                        AddIndex(WordsByUsageIndex, key.UsageId, id);
+                        List<Guid> symbols = box.GetSymbols() ?? new List<Guid>();
+                        foreach (Guid symId in symbols) AddIndex(WordsBySymbolIndex, symId, id);
+                        rollbackActions.Push(() =>
+                        {
+                            foreach (Guid symId in symbols) RemoveFromIndex(WordsBySymbolIndex, symId, id);
+                            RemoveFromIndex(WordsByUsageIndex, key.UsageId, id);
+                            RemoveFromIndex(WordsBySenseIndex, key.SenseId, id);
+                            TrustedWordIdentityIndex.Remove(key);
+                            TrustedWordDictionary.Remove(id);
+                            if (wasUntrusted) UntrustedWordDictionary.Add(id, box);
+                        });
+                        RegisterCanonicalOrStagedNode(NodeTargetKind.Word, id);
+                    }
+
+                    foreach (SentenceBox box in stagedSentences)
+                    {
+                        Guid id = box.GetSentenceID();
+                        bool wasUntrusted = UntrustedSentenceDictionary.Remove(id);
+                        SentenceIdentityKey key = box.GetIdentityKey();
+                        box.FreezeIdentity();
+                        TrustedSentenceDictionary.Add(id, box);
+                        TrustedSentenceIdentityIndex.Add(key, id);
+                        AddIndex(SentencesBySenseIndex, key.SenseId, id);
+                        List<Guid> words = box.GetWords() ?? new List<Guid>();
+                        foreach (Guid wordId in words) AddIndex(SentencesByWordIndex, wordId, id);
+                        rollbackActions.Push(() =>
+                        {
+                            foreach (Guid wordId in words) RemoveFromIndex(SentencesByWordIndex, wordId, id);
+                            RemoveFromIndex(SentencesBySenseIndex, key.SenseId, id);
+                            TrustedSentenceIdentityIndex.Remove(key);
+                            TrustedSentenceDictionary.Remove(id);
+                            if (wasUntrusted) UntrustedSentenceDictionary.Add(id, box);
+                        });
+                        RegisterCanonicalOrStagedNode(NodeTargetKind.Sentence, id);
+                    }
+
+                    foreach (GroupBox box in stagedGroups)
+                    {
+                        Guid id = box.GetGroupingID();
+                        List<Guid> sentences = box.GetSentences() ?? new List<Guid>();
+                        box.FreezeIdentity();
+                        TrustedGroupDictionary.Add(id, box);
+                        foreach (Guid sentId in sentences) AddIndex(GroupsBySentenceIndex, sentId, id);
+                        rollbackActions.Push(() =>
+                        {
+                            foreach (Guid sentId in sentences) RemoveFromIndex(GroupsBySentenceIndex, sentId, id);
+                            TrustedGroupDictionary.Remove(id);
+                        });
+                        RegisterCanonicalOrStagedNode(NodeTargetKind.Group, id);
+                    }
+
+                    foreach (SourceBox box in stagedSources)
+                    {
+                        Guid id = box.GetSourceID();
+                        List<Guid> groups = box.GetGroupingIDs() ?? new List<Guid>();
+                        box.FreezeIdentity();
+                        SourceDictionary.Add(id, box);
+                        foreach (Guid grpId in groups) AddIndex(SourcesByGroupIndex, grpId, id);
+                        rollbackActions.Push(() =>
+                        {
+                            foreach (Guid grpId in groups) RemoveFromIndex(SourcesByGroupIndex, grpId, id);
+                            SourceDictionary.Remove(id);
+                        });
+                        RegisterCanonicalOrStagedNode(NodeTargetKind.Source, id);
+                    }
+
+                    foreach (FunctionBox box in stagedFunctions)
+                    {
+                        Guid id = box.GetFunctionID();
+                        bool wasUntrusted = UntrustedFunctionDictionary.Remove(id);
+                        box.MarkTrusted();
+                        TrustedFunctionDictionary.Add(id, box);
+                        rollbackActions.Push(() =>
+                        {
+                            TrustedFunctionDictionary.Remove(id);
+                            if (wasUntrusted) UntrustedFunctionDictionary.Add(id, box);
+                        });
+                        RegisterCanonicalOrStagedNode(NodeTargetKind.Function, id);
+                    }
+
+                    foreach (NodeLink link in pendingLinks)
                     {
                         if (IsStructuralRelation(link.RelationType) || !IsValidLinkKindCombination(link) ||
                             !AreProvenanceTargetsTrusted(link.Provenance))
                             throw new InvalidOperationException("A staged reasoning assertion has invalid endpoints, relation, or provenance references.");
                         if (!AddTrustedLinkInternal(link))
                             throw new InvalidOperationException($"Reasoning assertion '{link.Provenance.AssertionId}' could not be committed.");
-                        addedAssertionIds.Add(link.Provenance.AssertionId);
+                        Guid assertionId = link.Provenance.AssertionId;
+                        rollbackActions.Push(() =>
+                        {
+                            if (!LinksByAssertionId.TryGetValue(assertionId, out List<NodeLink>? links)) return;
+                            foreach (NodeLink added in new List<NodeLink>(links)) RemoveTrustedLinkInternal(added);
+                        });
                     }
+
+                    _graphEpoch = checked(initialEpoch + 1);
                 }
                 catch
                 {
-                    foreach (Guid assertionId in addedAssertionIds)
+                    while (rollbackActions.Count > 0)
                     {
-                        if (!LinksByAssertionId.TryGetValue(assertionId, out List<NodeLink>? links)) continue;
-                        foreach (NodeLink added in new List<NodeLink>(links)) RemoveTrustedLinkInternal(added);
+                        rollbackActions.Pop()();
                     }
-                    RebuildTrustedSkillsGraph();
+                    _nextNodePresentationId = initialNextPresentationId;
+                    _nodePresentationIdSpaceExhausted = initialPresentationExhausted;
+                    _graphEpoch = initialEpoch;
                     throw;
                 }
                 finally
@@ -2667,6 +3216,129 @@ namespace OPEN_LRD
                         RecalculateAllNodePresentationsInternal();
                 }
             });
+        }
+
+        private void RemoveFromIndex<TKey>(Dictionary<TKey, OrderedGuidIndexList> index, TKey key, Guid value)
+            where TKey : notnull
+        {
+            if (!index.TryGetValue(key, out OrderedGuidIndexList? values)) return;
+            values.Remove(value);
+            if (values.Count == 0) index.Remove(key);
+        }
+
+        private void WireNodeRelationsTransactional(Node node, List<NodeLink> wiredLinks, List<Action> membershipRollbacks)
+        {
+            if (node.GetLabel() != null) return;
+            Guid nodeId = node.GetNodeID();
+            Guid targetId = node.GetTargetID();
+
+            void LinkIds(Guid srcId, Guid dstId, NodeRelationType rel)
+            {
+                if (srcId == Guid.Empty || dstId == Guid.Empty) return;
+                NodeLinkProvenance prov = NodeLinkProvenance.CreateForLink(srcId, dstId, rel, null, NodeLinkOrigin.Structural, 1.0);
+                NodeLink link = new NodeLink(srcId, dstId, rel, 1.0, null, prov);
+                if (AddTrustedLinkInternal(link)) wiredLinks.Add(link);
+            }
+
+            void LinkToTarget(Guid srcId, NodeTargetKind kind, Guid tgtId, NodeRelationType rel)
+            {
+                Node? targetNode = GetTrustedNodeForTarget(kind, tgtId);
+                if (targetNode != null) LinkIds(srcId, targetNode.GetNodeID(), rel);
+            }
+
+            switch (node.GetTargetKind())
+            {
+                case NodeTargetKind.Symbol:
+                    if (TrustedSymbolDictionary.TryGetValue(targetId, out SymbolBox? symbolBox))
+                    {
+                        Guid? senseId = symbolBox.GetSenseID();
+                        if (senseId.HasValue) LinkToTarget(nodeId, NodeTargetKind.Sense, senseId.Value, NodeRelationType.HasSense);
+                        foreach (Guid wordId in CopyIndexValues(WordsBySymbolIndex, targetId))
+                            LinkIds(GetNodeIdForTarget(NodeTargetKind.Word, wordId), nodeId, NodeRelationType.ContainsSymbol);
+                    }
+                    break;
+                case NodeTargetKind.Word:
+                    if (TrustedWordDictionary.TryGetValue(targetId, out WordBox? wordBox))
+                    {
+                        Guid? senseId = wordBox.GetSenseID();
+                        if (senseId.HasValue) LinkToTarget(nodeId, NodeTargetKind.Sense, senseId.Value, NodeRelationType.HasSense);
+                        Guid? usageId = wordBox.GetUsageID();
+                        if (usageId.HasValue) LinkToTarget(nodeId, NodeTargetKind.Usage, usageId.Value, NodeRelationType.HasUsage);
+                        foreach (Guid symbolId in wordBox.GetSymbols() ?? new List<Guid>())
+                            LinkToTarget(nodeId, NodeTargetKind.Symbol, symbolId, NodeRelationType.ContainsSymbol);
+                    }
+                    foreach (Guid sentenceId in CopyIndexValues(SentencesByWordIndex, targetId))
+                        LinkIds(GetNodeIdForTarget(NodeTargetKind.Sentence, sentenceId), nodeId, NodeRelationType.ContainsWord);
+                    break;
+                case NodeTargetKind.Sentence:
+                    if (TrustedSentenceDictionary.TryGetValue(targetId, out SentenceBox? sentenceBox))
+                    {
+                        Guid? senseId = sentenceBox.GetSenseID();
+                        if (senseId.HasValue) LinkToTarget(nodeId, NodeTargetKind.Sense, senseId.Value, NodeRelationType.HasSense);
+                        List<Guid> words = sentenceBox.GetWords() ?? new List<Guid>();
+                        foreach (Guid wordId in words) LinkToTarget(nodeId, NodeTargetKind.Word, wordId, NodeRelationType.ContainsWord);
+                        if (words.Count > 0)
+                        {
+                            LinkToTarget(nodeId, NodeTargetKind.Word, words[0], NodeRelationType.LeadingWord);
+                            LinkToTarget(nodeId, NodeTargetKind.Word, words[words.Count - 1], NodeRelationType.TrailingWord);
+                        }
+                        if (senseId.HasValue && TrustedSenseDictionary.TryGetValue(senseId.Value, out SenseBox? senseBox))
+                        {
+                            if (senseBox.AddSentenceFromCore(targetId))
+                                membershipRollbacks.Add(() => senseBox.RemoveSentenceFromCore(targetId));
+                            if (words.Count > 0)
+                            {
+                                Guid leading = words[0];
+                                Guid trailing = words[words.Count - 1];
+                                if (senseBox.AddLeadingWordFromCore(leading))
+                                    membershipRollbacks.Add(() => senseBox.RemoveLeadingWordFromCore(leading));
+                                if (senseBox.AddTrailingWordFromCore(trailing))
+                                    membershipRollbacks.Add(() => senseBox.RemoveTrailingWordFromCore(trailing));
+                            }
+                        }
+                        foreach (Guid wordId in words)
+                        {
+                            if (TrustedWordDictionary.TryGetValue(wordId, out WordBox? containedWord) &&
+                                containedWord.GetUsageID().HasValue &&
+                                TrustedUsageDictionary.TryGetValue(containedWord.GetUsageID()!.Value, out UsageBox? usageBox))
+                            {
+                                if (usageBox.AddSentenceFromCore(targetId))
+                                    membershipRollbacks.Add(() => usageBox.RemoveSentenceFromCore(targetId));
+                            }
+                        }
+                    }
+                    foreach (Guid groupId in CopyIndexValues(GroupsBySentenceIndex, targetId))
+                        LinkIds(GetNodeIdForTarget(NodeTargetKind.Group, groupId), nodeId, NodeRelationType.ContainsSentence);
+                    break;
+                case NodeTargetKind.Sense:
+                    foreach (Guid symbolId in CopyIndexValues(SymbolsBySenseIndex, targetId))
+                        LinkIds(GetNodeIdForTarget(NodeTargetKind.Symbol, symbolId), nodeId, NodeRelationType.HasSense);
+                    foreach (Guid wordId in CopyIndexValues(WordsBySenseIndex, targetId))
+                        LinkIds(GetNodeIdForTarget(NodeTargetKind.Word, wordId), nodeId, NodeRelationType.HasSense);
+                    foreach (Guid sentenceId in CopyIndexValues(SentencesBySenseIndex, targetId))
+                        LinkIds(GetNodeIdForTarget(NodeTargetKind.Sentence, sentenceId), nodeId, NodeRelationType.HasSense);
+                    break;
+                case NodeTargetKind.Usage:
+                    foreach (Guid wordId in CopyIndexValues(WordsByUsageIndex, targetId))
+                        LinkIds(GetNodeIdForTarget(NodeTargetKind.Word, wordId), nodeId, NodeRelationType.HasUsage);
+                    break;
+                case NodeTargetKind.Group:
+                    if (TrustedGroupDictionary.TryGetValue(targetId, out GroupBox? groupBox))
+                    {
+                        foreach (Guid sentenceId in groupBox.GetSentences() ?? new List<Guid>())
+                            LinkToTarget(nodeId, NodeTargetKind.Sentence, sentenceId, NodeRelationType.ContainsSentence);
+                    }
+                    foreach (Guid sourceId in CopyIndexValues(SourcesByGroupIndex, targetId))
+                        LinkIds(GetNodeIdForTarget(NodeTargetKind.Source, sourceId), nodeId, NodeRelationType.ContainsGroup);
+                    break;
+                case NodeTargetKind.Source:
+                    if (SourceDictionary.TryGetValue(targetId, out SourceBox? sourceBox))
+                    {
+                        foreach (Guid groupId in sourceBox.GetGroupingIDs() ?? new List<Guid>())
+                            LinkToTarget(nodeId, NodeTargetKind.Group, groupId, NodeRelationType.ContainsGroup);
+                    }
+                    break;
+            }
         }
 
         /// <summary>Updates confidence only when the assertion was created by the reasoning layer.</summary>
@@ -2731,6 +3403,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Builds an immutable Skills <see cref="Graph{TNode}"/> snapshot of trusted nodes and filtered confidence edges.</summary>
         public Graph<Guid> BuildSkillsGraphSnapshot(
             NodeRelationType? relationFilter = null,
             NodeLinkOrigin? originFilter = null,
@@ -2747,26 +3420,30 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>Builds an immutable typed snapshot of trusted nodes and active assertions.</summary>
+        /// <summary>Builds an immutable typed epoch snapshot of trusted nodes and active assertions.</summary>
         public TrustedKnowledgeGraphSnapshot BuildTrustedKnowledgeGraphSnapshot(DateTimeOffset? asOf = null)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
                 DateTimeOffset instant = asOf ?? DateTimeOffset.UtcNow;
-                List<KnowledgeNodeSnapshot> nodes = TrustedNodeByIdentityIndex.Values
-                    .Distinct()
-                    .Select(GetTrustedNode)
-                    .Where(node => node != null)
-                    .Cast<Node>()
-                    .Select(node => new KnowledgeNodeSnapshot(node.GetNodeID(), node.GetTargetKind(), node.GetTargetID(),
-                        node.GetLabel(), node.GetVerifiedReferences(), node.GetInvalidReferences()))
+                Dictionary<Guid, Node> nodeMap = new Dictionary<Guid, Node>();
+                List<KnowledgeNodeSnapshot> nodes = new List<KnowledgeNodeSnapshot>();
+                foreach (Guid nodeId in TrustedNodeByIdentityIndex.Values.Distinct())
+                {
+                    Node? node = GetTrustedNode(nodeId);
+                    if (node == null) continue;
+                    nodeMap[nodeId] = node;
+                    nodes.Add(new KnowledgeNodeSnapshot(node.GetNodeID(), node.GetTargetKind(), node.GetTargetID(),
+                        node.GetLabel(), node.GetVerifiedReferences(), node.GetInvalidReferences()));
+                }
+                nodes = nodes
                     .OrderBy(node => node.TargetKind).ThenBy(node => node.TargetId).ThenBy(node => node.Label, StringComparer.Ordinal)
                     .ToList();
                 List<NodeLink> links = TrustedLinkKeys.Where(link => link.Provenance.IsActiveAt(instant))
                     .OrderBy(link => link.Provenance.AssertionId).ThenBy(link => link.SourceNodeId).ThenBy(link => link.TargetNodeId)
                     .ToList();
-                return new TrustedKnowledgeGraphSnapshot(instant, nodes, links);
+                return new TrustedKnowledgeGraphSnapshot(_graphEpoch, instant, nodes, links, nodeMap);
             });
         }
 
@@ -2889,6 +3566,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Writes all trusted foundation partitions, nodes, presentations, layout settings, and links to a versioned binary disk checkpoint.</summary>
         public void StreamTrustedDictionariesToDisk(string directoryPath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
@@ -2924,7 +3602,7 @@ namespace OPEN_LRD
                 LRD_Core? staged = null;
                 try
                 {
-                    ValidateDiskStoreContents(incoming);
+                    DiskValidationProvenanceSummary validationSummary = ValidateDiskStoreContents(incoming);
                     if (!replaceExisting)
                     {
                         if (_legacyDiskStoreReadOnly)
@@ -3004,6 +3682,8 @@ namespace OPEN_LRD
                     staged.BuildPagedIndexesAndGraph(staged._diskStore);
                     if (preloadAllIntoMemory) staged.MaterializeDiskStore();
                     InstallTrustedStateFrom(staged);
+                    _lastDiskStoreValidationProvenanceSummary = validationSummary;
+                    _lastDiskStoreValidationError = null;
                 }
                 finally
                 {
@@ -3020,6 +3700,7 @@ namespace OPEN_LRD
 
         private void InstallTrustedStateFrom(LRD_Core staged)
         {
+            long nextEpoch = checked(_graphEpoch + 1);
             ClearAllDictionaries();
             CopyTrustedStateFrom(staged);
             _diskStore = staged._diskStore;
@@ -3029,11 +3710,13 @@ namespace OPEN_LRD
             _diskPagedReadOnly = staged._diskPagedReadOnly;
             _legacyDiskStoreReadOnly = staged._legacyDiskStoreReadOnly;
             _maxPagedObjects = staged._maxPagedObjects;
+            _graphEpoch = nextEpoch;
             _initialized = true;
         }
 
         private void InstallMergedTrustedStateFrom(LRD_Core staged)
         {
+            long nextEpoch = checked(_graphEpoch + 1);
             string? existingDiskStorePath = _diskStorePath;
             int existingPagedObjectLimit = _maxPagedObjects;
             _diskStore?.Dispose();
@@ -3121,6 +3804,7 @@ namespace OPEN_LRD
             _diskPagedReadOnly = false;
             _legacyDiskStoreReadOnly = false;
             _maxPagedObjects = existingPagedObjectLimit;
+            _graphEpoch = nextEpoch;
             _initialized = true;
         }
 
@@ -3174,6 +3858,7 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>Materializes a read-only disk-paged checkpoint into writable in-memory trusted registries.</summary>
         public void MaterializeDiskStore()
         {
             GraphSynchronization.Execute(() =>
@@ -3248,6 +3933,7 @@ namespace OPEN_LRD
             RecalculateAllNodePresentationsInternal();
         }
 
+        /// <summary>Closes and detaches the active disk store, optionally materializing paged records into memory first.</summary>
         public void CloseDiskStore(bool materialize = true)
         {
             GraphSynchronization.Execute(() =>
@@ -3274,6 +3960,7 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Flushes current trusted state to the attached disk-store checkpoint path.</summary>
         public void FlushTrustedDiskStore()
         {
             GraphSynchronization.Execute(() =>
@@ -3283,13 +3970,16 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Compacts and rewrites the attached trusted disk-store checkpoint.</summary>
         public void CompactTrustedDiskStore()
         {
             FlushTrustedDiskStore();
         }
 
+        /// <summary>Compacts and rewrites the attached disk-store checkpoint.</summary>
         public void CompactDiskStore() => CompactTrustedDiskStore();
 
+        /// <summary>Validates partition checksums, cross-partition referential integrity, structural links, and function dispatch provenance for the attached disk store.</summary>
         public void ValidateDiskStore()
         {
             GraphSynchronization.Execute(() =>
@@ -3318,10 +4008,13 @@ namespace OPEN_LRD
                 _lastDiskStoreValidationError, _lastDiskStoreValidationProvenanceSummary, _diskStore.GetPartitionDiagnostics()));
         }
 
+        /// <summary>Gets whether the core is currently operating in read-only disk-paged mode.</summary>
         public bool IsDiskPagedReadOnly => GraphSynchronization.Execute(() => _diskPagedReadOnly);
 
+        /// <summary>Gets whether the attached disk store is in legacy read-only format requiring upgrade before mutation.</summary>
         public bool IsLegacyDiskStoreReadOnly => GraphSynchronization.Execute(() => _legacyDiskStoreReadOnly);
 
+        /// <summary>Materializes and upgrades an attached legacy read-only disk store to the current checkpoint format version.</summary>
         public void UpgradeLegacyDiskStore()
         {
             GraphSynchronization.Execute(() =>
@@ -3525,6 +4218,11 @@ namespace OPEN_LRD
             int verifiedProvenanceCount = 0;
             int unverifiedProvenanceCount = 0;
             int tamperedProvenanceCount = 0;
+            int stagedNonDeterministicCount = 0;
+            List<Guid> verifiedIds = new List<Guid>();
+            List<Guid> unverifiedIds = new List<Guid>();
+            List<Guid> tamperedIds = new List<Guid>();
+            List<Guid> stagedNonDeterministicIds = new List<Guid>();
             foreach (FunctionBox box in functionBoxes.Values)
             {
                 try
@@ -3535,7 +4233,16 @@ namespace OPEN_LRD
                 {
                     throw new InvalidDataException("Function partition contains an incomplete or invalid trusted definition.", exception);
                 }
-                ClassifyFunctionProvenance(box, ref verifiedProvenanceCount, ref unverifiedProvenanceCount, ref tamperedProvenanceCount);
+                ClassifyFunctionProvenance(
+                    box,
+                    ref verifiedProvenanceCount,
+                    ref unverifiedProvenanceCount,
+                    ref tamperedProvenanceCount,
+                    ref stagedNonDeterministicCount,
+                    verifiedIds,
+                    unverifiedIds,
+                    tamperedIds,
+                    stagedNonDeterministicIds);
             }
             foreach (DiskRecord record in store.ReadAll(DiskPartition.Nodes))
             {
@@ -3692,15 +4399,40 @@ namespace OPEN_LRD
                     throw new InvalidDataException("Duplicate assertion IDs are allowed only on matching symmetric reverse links.");
                 }
             }
-            return new DiskValidationProvenanceSummary(verifiedProvenanceCount, unverifiedProvenanceCount, tamperedProvenanceCount);
+            return new DiskValidationProvenanceSummary(
+                verifiedProvenanceCount,
+                unverifiedProvenanceCount,
+                tamperedProvenanceCount,
+                stagedNonDeterministicCount,
+                verifiedIds.AsReadOnly(),
+                unverifiedIds.AsReadOnly(),
+                tamperedIds.AsReadOnly(),
+                stagedNonDeterministicIds.AsReadOnly());
         }
 
-        private static void ClassifyFunctionProvenance(FunctionBox box, ref int verified, ref int unverified, ref int tampered)
+        private static void ClassifyFunctionProvenance(
+            FunctionBox box,
+            ref int verified,
+            ref int unverified,
+            ref int tampered,
+            ref int stagedNonDeterministic,
+            List<Guid> verifiedIds,
+            List<Guid> unverifiedIds,
+            List<Guid> tamperedIds,
+            List<Guid> stagedNonDeterministicIds)
         {
+            Guid funcId = box.GetFunctionID();
             FunctionDispatchProvenance? provenance = box.DispatchProvenance;
             if (provenance == null)
             {
                 unverified++;
+                unverifiedIds.Add(funcId);
+                return;
+            }
+            if (!provenance.IsDeterministic)
+            {
+                stagedNonDeterministic++;
+                stagedNonDeterministicIds.Add(funcId);
                 return;
             }
             string expectedArgHash = MathFunctionDispatcher.ComputeArgumentSnapshotHash(box);
@@ -3714,10 +4446,19 @@ namespace OPEN_LRD
             if (hashMismatch)
             {
                 tampered++;
+                tamperedIds.Add(funcId);
                 return;
             }
-            if (box.IsResultDispatchVerified && provenance.IsDeterministic) verified++;
-            else unverified++;
+            if (box.IsResultDispatchVerified && provenance.IsDeterministic)
+            {
+                verified++;
+                verifiedIds.Add(funcId);
+            }
+            else
+            {
+                unverified++;
+                unverifiedIds.Add(funcId);
+            }
         }
 
         private static Dictionary<Guid, T> ReadDiskBoxes<T>(PartitionedBinaryStore store, DiskPartition partition,
@@ -4492,6 +5233,8 @@ namespace OPEN_LRD
         private void HandleNodeReferenceChange(Guid nodeId)
         {
             if (_diskPagedReadOnly) return;
+            if (TrustedNodeDictionary.ContainsKey(nodeId))
+                _graphEpoch = checked(_graphEpoch + 1);
             RecalculateAllNodePresentationsInternal();
         }
 
@@ -4545,6 +5288,7 @@ namespace OPEN_LRD
             TrustedNodeByTargetIndex.Add(targetKey, node.GetNodeID());
             TrustedNodeByIdentityIndex.Add(node.GetIdentityKey(), node.GetNodeID());
             TrustedSkillsGraph.AddNode(node.GetNodeID());
+            _graphEpoch = checked(_graphEpoch + 1);
             Guid nodeId = node.GetNodeID();
             node.SetReferenceCountsChangedHandler(() => HandleNodeReferenceChange(nodeId));
             EnsureNodeRepresentation(node, isTrusted: true);
@@ -4717,7 +5461,26 @@ namespace OPEN_LRD
         private bool AreProvenanceTargetsTrusted(NodeLinkProvenance provenance)
         {
             return (!provenance.SourceTargetId.HasValue || HasAnyTrustedTarget(provenance.SourceTargetId.Value)) &&
-                   (!provenance.EvidenceTargetId.HasValue || HasAnyTrustedTarget(provenance.EvidenceTargetId.Value));
+                   (!provenance.EvidenceTargetId.HasValue ||
+                    HasAnyTrustedTarget(provenance.EvidenceTargetId.Value) ||
+                    (provenance.Origin == NodeLinkOrigin.Reasoning && HasValidStagedNonDeterministicFunctionEvidence(provenance.EvidenceTargetId.Value)));
+        }
+
+        private bool HasValidStagedNonDeterministicFunctionEvidence(Guid targetId)
+        {
+            if (UntrustedFunctionDictionary.TryGetValue(targetId, out FunctionBox? stagedFunction) &&
+                stagedFunction.HasValidStagedNonDeterministicProvenance)
+            {
+                return true;
+            }
+            if (UntrustedNodeDictionary.TryGetValue(targetId, out Node? stagedNode) &&
+                stagedNode.GetTargetKind() == NodeTargetKind.Function &&
+                UntrustedFunctionDictionary.TryGetValue(stagedNode.GetTargetID(), out FunctionBox? targetFunction) &&
+                targetFunction.HasValidStagedNonDeterministicProvenance)
+            {
+                return true;
+            }
+            return false;
         }
 
         private static bool SameReasoningAssertion(NodeLink existing, NodeLink candidate)
@@ -5027,6 +5790,7 @@ namespace OPEN_LRD
                 addedGraphEdge = true;
                 addedIndexes = true;
                 AddTrustedLinkIndexes(link);
+                _graphEpoch = checked(_graphEpoch + 1);
                 return true;
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or
@@ -5126,6 +5890,7 @@ namespace OPEN_LRD
             AddTrustedLinkIndexes(replacement);
             TrustedLinkKeys.Remove(previous);
             TrustedLinkKeys.Add(replacement);
+            _graphEpoch = checked(_graphEpoch + 1);
             return true;
         }
 
@@ -5148,6 +5913,7 @@ namespace OPEN_LRD
             incoming.Remove(removed);
             if (outgoing.Count == 0) TrustedOutgoingLinks.Remove(identity.SourceNodeId);
             if (incoming.Count == 0) TrustedIncomingLinks.Remove(identity.TargetNodeId);
+            _graphEpoch = checked(_graphEpoch + 1);
             return true;
         }
 
@@ -5264,13 +6030,10 @@ namespace OPEN_LRD
             return graph;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbolChar"></param>
-
-        /// <param name="senseId"></param>
-        /// <returns></returns>
+        /// <summary>Returns an existing trusted symbol box with matching identity, or creates a new untrusted symbol box.</summary>
+        /// <param name="symbolChar">Symbol character.</param>
+        /// <param name="senseId">Sense identifier.</param>
+        /// <returns>The canonical trusted <see cref="SymbolBox"/> if registered, otherwise a new untrusted instance.</returns>
         public SymbolBox GetNewSymbolBox(char symbolChar, Guid senseId)
         {
             return GraphSynchronization.Execute(() =>
@@ -5289,14 +6052,12 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="symbols"></param>
-        /// <param name="senseId"></param>
-        /// <param name="usageId"></param>
-        /// <param name="partOfSpeech"></param>
-        /// <returns></returns>
+        /// <summary>Returns an existing trusted word box with matching identity, or creates a new untrusted word box.</summary>
+        /// <param name="symbols">Constituent symbol identifiers.</param>
+        /// <param name="senseId">Sense identifier.</param>
+        /// <param name="usageId">Usage identifier.</param>
+        /// <param name="partOfSpeech">Part of speech.</param>
+        /// <returns>The canonical trusted <see cref="WordBox"/> if registered, otherwise a new untrusted instance.</returns>
         public WordBox GetNewWordBox(List<Guid> symbols, Guid senseId, Guid usageId, PartOfSpeech partOfSpeech)
         {
             return GraphSynchronization.Execute(() =>
@@ -5313,12 +6074,10 @@ namespace OPEN_LRD
             });
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="words"></param>
-        /// <param name="senseId"></param>
-        /// <returns></returns>
+        /// <summary>Returns an existing trusted sentence box with matching identity, or creates a new untrusted sentence box.</summary>
+        /// <param name="words">Constituent word identifiers.</param>
+        /// <param name="senseId">Sense identifier.</param>
+        /// <returns>The canonical trusted <see cref="SentenceBox"/> if registered, otherwise a new untrusted instance.</returns>
         public SentenceBox GetNewSentenceBox(List<Guid> words, Guid senseId)
         {
             return GraphSynchronization.Execute(() =>

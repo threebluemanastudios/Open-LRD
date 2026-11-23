@@ -13,9 +13,7 @@ namespace OPEN_LRD.Foundations
         private bool _isTrusted;
         private bool _isReadOnly;
 
-        /// <summary>
-        /// 
-        /// </summary>
+        /// <summary>Initializes a new untrusted usage box with a generated identifier.</summary>
         public UsageBox()
         {
             UsageID = LRD_Core.Instance.GenerateUntrustedId(NodeTargetKind.Usage);
@@ -23,10 +21,8 @@ namespace OPEN_LRD.Foundations
             _sentenceSet = new HashSet<Guid>();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="usageId"></param>
+        /// <summary>Initializes a new untrusted usage box with an explicit identifier.</summary>
+        /// <param name="usageId">Unique usage identifier.</param>
         public UsageBox(Guid usageId)
             : this(usageId, allowRegisteredTrustedId: false)
         {
@@ -40,11 +36,9 @@ namespace OPEN_LRD.Foundations
             _sentenceSet = new HashSet<Guid>();
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="usageId"></param>
-        /// <param name="sentences"></param>
+        /// <summary>Initializes a new untrusted usage box with an explicit identifier and initial sentence memberships.</summary>
+        /// <param name="usageId">Unique usage identifier.</param>
+        /// <param name="sentences">Initial sentence identifiers.</param>
         public UsageBox(Guid usageId, List<Guid> sentences)
             : this(usageId, sentences, allowRegisteredTrustedId: false)
         {
@@ -60,40 +54,36 @@ namespace OPEN_LRD.Foundations
             _sentenceSet = new HashSet<Guid>(sentences);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
+        /// <summary>Returns the unique identifier of this usage box.</summary>
+        /// <returns>The usage box <see cref="Guid"/>.</returns>
         public Guid GetUsageID()
         {
             return GraphSynchronization.Execute(() => UsageID);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
+        /// <summary>Returns an isolated snapshot of sentence identifiers associated with this usage.</summary>
+        /// <returns>A copy of the sentence identifier list, or <see langword="null"/> if uninitialized.</returns>
         public List<Guid>? GetSentences()
         {
             return GraphSynchronization.Execute(() =>
                 _sentences == null ? null : new List<Guid>(_sentences));
         }
 
+        /// <summary>Returns the count of sentence memberships in this usage box.</summary>
         public int GetSentenceCount()
         {
             return GraphSynchronization.Execute(() => _sentences?.Count ?? 0);
         }
 
+        /// <summary>Returns whether the specified sentence identifier is a member of this usage box.</summary>
         public bool ContainsSentence(Guid sentenceId)
         {
             return GraphSynchronization.Execute(() => _sentenceSet.Contains(sentenceId));
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="sentenceId"></param>
-        /// <returns></returns>
+        /// <summary>Adds a sentence membership while this usage box is untrusted.</summary>
+        /// <param name="sentenceId">Sentence identifier to add.</param>
+        /// <returns><see langword="true"/> if added; <see langword="false"/> if already present.</returns>
         public bool AddSentence(Guid sentenceId)
         {
             ValidateIdentityId(sentenceId, nameof(sentenceId));
@@ -136,6 +126,16 @@ namespace OPEN_LRD.Foundations
         }
 
         internal void MarkTrusted() => GraphSynchronization.Execute(() => _isTrusted = true);
+
+        internal void RemoveSentenceFromCore(Guid sentenceId)
+        {
+            GraphSynchronization.Execute(() =>
+            {
+                if (_isReadOnly) throw new InvalidOperationException("Disk-paged boxes are read-only; materialize the disk store before mutation.");
+                _sentences?.Remove(sentenceId);
+                _sentenceSet.Remove(sentenceId);
+            });
+        }
 
         internal void MarkReadOnly() => GraphSynchronization.Execute(() => { _isTrusted = true; _isReadOnly = true; });
 
