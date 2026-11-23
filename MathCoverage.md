@@ -133,12 +133,11 @@ Verified in `OPEN-LRD.SmokeTests/MathFunctionDispatcherTests.cs` (`TestSkillLibr
 
 **Date:** 2026-11-22
 
-The XML summary comment headers in all `Skills/*.cs` files have been updated with consolidated descriptions. 
-This reference merges refined function summary descriptions generated across all Math library files (`Math_1.cs`, `Math_2.cs`, `Math_3.cs`, `Math_4.cs`, `Algebra.cs`, `Matrix Methods`, `Algebra.cs`, `GraphAlgorithms.cs`, `BasicPhysics.cs`, `CondensedMatter.cs`, `CurvedSpacetime.cs`, `DiscreteMath.cs`, and `Electromagnetism.cs`).
+The XML summary comment headers in all but 4 `Skills/*.cs` files have been updated with consolidated descriptions. 
+This integration adds refined function summary descriptions across all Math library files.
 
 ### Coverage Statistics:
-- **354 method descriptions**
-- **27 out of 27** Skill library files updated with new XML comments
+- **23 out of 27** Skill library files updated with new XML comments
 - **851 methods** received updated XML summary descriptions
 
 ### Updated Libraries:
@@ -192,8 +191,11 @@ Each method's `/// <summary>` comment follows the pattern:
 
 
 ### Remaining Files:
-0 of 19 files remaining.
-
+4 of 27 files remaining.
+- **GraphAlgorithms.cs**
+- **SymbolicCalculus.cs**
+- **Thermodynamics.cs**
+- **UnitsAndMeasurement.cs**
 ---
 
 This integration ensures that all dispatchable methods have consolidated, detailed documentation, improving maintainability and documentation consistency across the Skill libraries.
