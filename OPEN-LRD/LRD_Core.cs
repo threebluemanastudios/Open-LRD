@@ -800,20 +800,22 @@ namespace OPEN_LRD
         }
 
         /// <summary>Returns an immutable snapshot of all canonical and labeled trusted nodes wrapping a foundation target.</summary>
-        public IReadOnlyList<Node> GetTrustedNodesByTarget(NodeTargetKind kind, Guid targetId)
+        public IReadOnlyList<Node> GetTrustedNodesByTarget(NodeTargetKind kind, Guid targetId, int? limit = null, int offset = 0)
         {
             return GraphSynchronization.Execute<IReadOnlyList<Node>>(() =>
             {
                 EnsureCoreInitialized();
                 _ = NodeIdentityKey.Create(kind, targetId, null);
-                List<Node> nodes = TrustedNodeByIdentityIndex
+                ValidatePaging(limit, offset);
+                IEnumerable<Node> query = TrustedNodeByIdentityIndex
                     .Where(entry => entry.Key.TargetKind == kind && entry.Key.TargetId == targetId)
                     .OrderBy(entry => entry.Key.Label, StringComparer.Ordinal)
                     .Select(entry => GetTrustedNode(entry.Value))
                     .Where(node => node != null)
-                    .Cast<Node>()
-                    .ToList();
-                return nodes.AsReadOnly();
+                    .Cast<Node>();
+                if (offset > 0) query = query.Skip(offset);
+                if (limit.HasValue) query = query.Take(limit.Value);
+                return query.ToList().AsReadOnly();
             });
         }
 
@@ -3359,48 +3361,74 @@ namespace OPEN_LRD
             });
         }
 
+        /// <summary>Returns a deterministically ordered page of active outgoing links for a node.</summary>
         public List<NodeLink> GetOutgoingLinks(
             Guid nodeId,
             NodeRelationType? relationFilter = null,
             NodeLinkOrigin? originFilter = null,
             string? authorFilter = null,
             double? minimumConfidence = null,
-            DateTimeOffset? activeAt = null)
+            DateTimeOffset? activeAt = null,
+            int? limit = null,
+            int offset = 0)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
                 ValidateLinkQuery(relationFilter, originFilter, minimumConfidence);
+                ValidatePaging(limit, offset);
                 if (!TrustedOutgoingLinks.TryGetValue(nodeId, out List<NodeLink>? links))
                 {
                     return new List<NodeLink>();
                 }
-                string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
-                return links.Where(link => MatchesLinkQuery(link, relationFilter, originFilter,
-                    normalizedAuthor, minimumConfidence, activeAt ?? DateTimeOffset.UtcNow)).ToList();
+                return PageLinks(links, relationFilter, originFilter, authorFilter, minimumConfidence, activeAt, limit, offset);
             });
         }
 
+        /// <summary>Returns a deterministically ordered page of active incoming links for a node.</summary>
         public List<NodeLink> GetIncomingLinks(
             Guid nodeId,
             NodeRelationType? relationFilter = null,
             NodeLinkOrigin? originFilter = null,
             string? authorFilter = null,
             double? minimumConfidence = null,
-            DateTimeOffset? activeAt = null)
+            DateTimeOffset? activeAt = null,
+            int? limit = null,
+            int offset = 0)
         {
             return GraphSynchronization.Execute(() =>
             {
                 EnsureCoreInitialized();
                 ValidateLinkQuery(relationFilter, originFilter, minimumConfidence);
+                ValidatePaging(limit, offset);
                 if (!TrustedIncomingLinks.TryGetValue(nodeId, out List<NodeLink>? links))
                 {
                     return new List<NodeLink>();
                 }
-                string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
-                return links.Where(link => MatchesLinkQuery(link, relationFilter, originFilter,
-                    normalizedAuthor, minimumConfidence, activeAt ?? DateTimeOffset.UtcNow)).ToList();
+                return PageLinks(links, relationFilter, originFilter, authorFilter, minimumConfidence, activeAt, limit, offset);
             });
+        }
+
+        private List<NodeLink> PageLinks(
+            IEnumerable<NodeLink> links,
+            NodeRelationType? relationFilter,
+            NodeLinkOrigin? originFilter,
+            string? authorFilter,
+            double? minimumConfidence,
+            DateTimeOffset? activeAt,
+            int? limit,
+            int offset)
+        {
+            string? normalizedAuthor = NormalizeOptionalLinkText(authorFilter);
+            IEnumerable<NodeLink> query = links
+                .Where(link => MatchesLinkQuery(link, relationFilter, originFilter,
+                    normalizedAuthor, minimumConfidence, activeAt ?? DateTimeOffset.UtcNow))
+                .OrderBy(link => link.Provenance.AssertionId)
+                .ThenBy(link => link.SourceNodeId)
+                .ThenBy(link => link.TargetNodeId);
+            if (offset > 0) query = query.Skip(offset);
+            if (limit.HasValue) query = query.Take(limit.Value);
+            return query.ToList();
         }
 
         /// <summary>Builds an immutable Skills <see cref="Graph{TNode}"/> snapshot of trusted nodes and filtered confidence edges.</summary>
@@ -4613,6 +4641,9 @@ namespace OPEN_LRD
                     return false;
                 }
 
+                // Validate every link before mutating anything, so the removal loop cannot fail part-way.
+                if (links.Any(link => !CanRemoveTrustedLinkInternal(link))) return false;
+
                 int removed = 0;
                 for (; removed < links.Count; removed++)
                 {
@@ -4620,8 +4651,16 @@ namespace OPEN_LRD
                 }
                 if (removed != links.Count)
                 {
-                    for (int index = 0; index < removed; index++) AddTrustedLinkOneDirection(links[index]);
-                    RebuildTrustedSkillsGraph();
+                    // Targeted undo: restore exactly the links removed so far. Each restore re-adds its
+                    // graph edge, so no full rebuild is needed; a failed restore means the state is corrupt.
+                    for (int index = 0; index < removed; index++)
+                    {
+                        if (!AddTrustedLinkOneDirection(links[index]))
+                        {
+                            throw new InvalidOperationException(
+                                "Link removal rollback failed; the trusted link state could not be restored.");
+                        }
+                    }
                     return false;
                 }
                 RecalculateAllNodePresentationsInternal();
@@ -5920,21 +5959,20 @@ namespace OPEN_LRD
         private static bool ShouldStoreReverse(NodeRelationType relationType) =>
             relationType is NodeRelationType.Synonym or NodeRelationType.Antonym;
 
-        private void RebuildTrustedSkillsGraph()
+        /// <summary>Read-only mirror of the checks in <see cref="RemoveTrustedLinkInternal"/>; mutates nothing.</summary>
+        private bool CanRemoveTrustedLinkInternal(NodeLink identity)
         {
-            Graph<Guid> graph = new Graph<Guid>(true);
-            foreach (Guid nodeId in TrustedSkillsGraph.Nodes)
+            if (!TrustedLinkKeys.Contains(identity) ||
+                !TrustedOutgoingLinks.TryGetValue(identity.SourceNodeId, out List<NodeLink>? outgoing) ||
+                !TrustedIncomingLinks.TryGetValue(identity.TargetNodeId, out List<NodeLink>? incoming))
             {
-                graph.AddNode(nodeId);
+                return false;
             }
-            foreach (List<NodeLink> links in TrustedOutgoingLinks.Values)
-            {
-                foreach (NodeLink link in links)
-                {
-                    graph.AddEdge(link.SourceNodeId, link.TargetNodeId, link.Weight);
-                }
-            }
-            TrustedSkillsGraph = graph;
+            int linkIndex = outgoing.FindIndex(link => link.Equals(identity));
+            if (linkIndex < 0) return false;
+            NodeLink removed = outgoing[linkIndex];
+            return incoming.Contains(removed) &&
+                   TrustedSkillsGraph.ContainsEdge(removed.SourceNodeId, removed.TargetNodeId, removed.Weight);
         }
 
         private static void ValidateLinkQuery(

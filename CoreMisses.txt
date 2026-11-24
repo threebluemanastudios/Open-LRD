@@ -7,15 +7,21 @@ STATUS
 Still not fully/properly implemented. Substantially implemented (~85-90%), 
 but several checklist items are only partially complete.
 Progress 2026-11-23: concurrency stress tests and enforced scale-gate budgets
-added (gap 2 / remaining work items 2-3). Smoke suite: 232 passed, 0 failed by
-default; 233 passed, 0 failed with --scale (scale gate included).
+added (gap 2 / remaining work items 2-3). Documentation and thread-safety
+contracts (gap 1 / remaining item 1) and index hashing, link paging, and the
+rebuild-free rollback (gap 4 / remaining item 5) are also complete.
+Gap 3 (compact/upgrade failure paths and structural corruption) is complete.
+Smoke suite: 241 passed, 0 failed by default; 242 passed, 0 failed with --scale.
+Gap 5 (expression AST limits) is complete.
+Gap 6 (persistence read policy for provenance trailing bytes) is complete.
 
 
 CONFIRMED GAPS
 ------------------------------
 
-1. Documentation NOT done
-   - OPEN-LRD/Foundations/GraphSynchronization.cs:
+1. Documentation [DONE 2026-11-23]
+   - OPEN-LRD/Foundations/GraphSynchronization.cs (thread-safety contract, Task guard,
+     IsHeldByCurrentThread, and null checks are present):
 
 GraphSynchronization.cs uses a process-wide static Monitor lock (private static readonly object _syncRoot = new object();) to serialize synchronous operations across the assembly.
 
@@ -53,39 +59,87 @@ Explicit Null Checks: Prevents NullReferenceException inside the lock block if a
      OPEN_LRD_SCALE_BUDGET_MULTIPLIER scales the budgets. It also asserts exact
      node/link counts and that the checkpoint was written.
 
-3. Compact/upgrade failure paths not exercised.
-   - CompactTrustedDiskStore is simply FlushTrustedDiskStore
-     (OPEN-LRD/LRD_Core.cs:3973-3980); no compact test exists.
-   - UpgradeLegacyDiskStore has only a success-path test
-     (OPEN-LRD.SmokeTests/CoreDiskStreamingTests.cs:318-374); failed-upgrade
-     original-store preservation is untested.
-   - The comment at CoreDiskStreamingTests.cs:1019 claiming
-     "failed open/merge/compact/upgrade original store preservation" is misleading:
-     only failed create and failed merge are actually covered.
-   - Index (.lrdidx) and per-partition data-header corruption tests are missing;
-     only manifest magic/version rejection is tested (CoreDiskStreamingTests.cs:291-307).
+3. Compact/upgrade failure paths. [DONE 2026-11-23]
+   - Compaction: "Compaction rewrites the attached store" (CoreDiskStreamingTests.cs)
+     covers a round trip through OpenDiskStore, MaterializeDiskStore, an addition,
+     CompactTrustedDiskStore, and reopen. It also checks that no staging or backup
+     directories remain.
+   - Failed rewrites: "Failed store rewrites preserve the original v3 and legacy
+     stores" calls PartitionedBinaryStore.Create with a record source that fails
+     mid-write. Compaction and upgrade both finish through Create, so this is the
+     shared failure path. Both the v3 and the legacy directories must stay
+     byte-identical, leave no sibling directories, and still open with their
+     original contents (legacy still read-only).
+   - Limitation: an upgrade-specific failure cannot be injected through the public
+     API. Records are validated when a store attaches, and in-place corruption of an
+     attached store is not seen by its open readers, so a test seam would be needed
+     to fail UpgradeLegacyDiskStore itself.
+   - Index and data-header corruption: "Structural index and data-header corruption
+     is rejected" tampers with 11 structural fields (index magic, version, count,
+     entry key, entry offset, entry length; data magic, version, partition id; record
+     key and CRC). After each change the manifest hash is recomputed, so the
+     structural validators or lazy record reads must reject the store. The core state
+     must survive each rejection.
+   - The misleading comment in CoreDiskStreamingTests.cs (MalformedFoundationPayloads)
+     now describes only the duplicate-key coverage it actually tests.
 
-4. Data Partitions.
-   - Incremental SHA-256 is used for data partitions, but the index hash is still
-     computed by reopening and re-reading the index file after the count patch
-     (OPEN-LRD/Persistence/PartitionedBinaryStore.cs:284-296). Not fully incremental.
+4. Data Partitions. [DONE 2026-11-23]
+   - Index hashing is now incremental. WritePartition streams index entries to a
+     temporary body file, then writes the final index (header with the known count,
+     then body) through a hashing stream. The file is no longer reopened or re-read.
+     The on-disk format and manifest hash definition are unchanged. The temporary
+     file is always deleted (OPEN-LRD/Persistence/PartitionedBinaryStore.cs,
+     WritePartition). Tests: "Index partitions are hashed as written and reject
+     tampering" (CoreDiskStreamingTests.cs). The --scale checkpoint write time is
+     unchanged (~1.56s), so this is a structural change rather than a speedup.
    - Paging limit/offset is implemented for GetTrustedNodeIds/GetTrustedNodes,
-     GetAllTrustedLinks, GetTrustedLinksByProvenanceTarget, and FindTrustedNodes,
-     but NOT for GetOutgoingLinks, GetIncomingLinks, or GetTrustedNodesByTarget.
-   - One rollback path still performs a full RebuildTrustedSkillsGraph()
-     (OPEN-LRD/LRD_Core.cs:4621-4625); rebuild churn is reduced, not eliminated.
+     GetAllTrustedLinks, GetTrustedLinksByProvenanceTarget, FindTrustedNodes,
+     GetOutgoingLinks, GetIncomingLinks, and GetTrustedNodesByTarget. Outgoing and
+     incoming results are now deterministically ordered by (AssertionId, Source,
+     Target). Tests: "Paged link and by-target queries return deterministic pages"
+     (CoreNodeGraphTests.cs).
+   - Full RebuildTrustedSkillsGraph() has been removed from the rollback path.
+     Link removal now validates every link before mutating, using the new
+     Graph.ContainsEdge check, so the removal loop cannot fail part-way. The
+     targeted undo re-adds the removed links, and a failed restore throws instead
+     of silently rebuilding. Test: "Link removal keeps the skills graph synchronized"
+     (CoreNodeGraphTests.cs). The rollback branch itself is not reachable through
+     the public API, so it is not directly exercised.
 
-5. ExpressionParser.
-   - VariableExpression / CallExpression enforce identifier and argument-count
-     limits only (OPEN-LRD/Foundations/Expressions.cs:32-44, :180-211); they do not
-     enforce AST node/depth/literal limits.
-   - Math_3 / Math_4 have no direct limit validation; enforcement is transitive
-     through ExpressionParser/SymbolicCalculus.
+5. ExpressionParser. [DONE 2026-11-24]
+   - AST node, depth, identifier, literal, and argument limits are enforced on
+     every skill entry point that takes an Expression (Math_3, Math_4, Algebra,
+     SymbolicCalculus) via ExpressionParser.ValidateExpressionLimits. The parser
+     also enforces them at parse time. The earlier note that Math_3/Math_4 lack
+     direct validation was out of date: they reach the check through
+     SymbolicCalculus before any work.
+   - Probed: a balanced 3000-leaf tree (about 6000 nodes, depth 13) is rejected at
+     Math_3.Simplify, Math_3.Differentiate, Math_4.Evaluate, and Math_4.Gradient.
+   - Limits are checked when an Expression enters a skill entry point, not in the
+     record constructors. Constructors enforce only identifier length and argument
+     count. Constructor-time checks were rejected because SymbolicCalculus builds
+     intermediate trees that may legitimately exceed the node limit before
+     simplifying, and a constructor check would reject them.
+   - Tests: "Expression AST limits are exact at node, depth, and literal boundaries"
+     (FoundationHardeningTests.cs). Node-limit exactness is bracketed at 4095 (accepted)
+     and 4097 (rejected) because balanced trees cannot hit exactly 4096.
 
-6. PartitionedBinaryStore.
-   - Old-reader rejection of provenance-bearing trailing bytes is implemented in
-     behavior but not directly tested; FunctionBox trailing-byte acceptance is not
-     directly tested either (presentation records are).
+6. PartitionedBinaryStore. [DONE 2026-11-24]
+   - Read policy (decision 10.16, .plans/CoreRefinement.txt) is now explicit and tested.
+     The earlier wording "old-reader rejection" was inaccurate: nothing rejects
+     provenance-bearing bytes for legacy readers. Legacy (v1/v2) readers do not
+     interpret provenance at all. Links get synthesized legacy provenance, and
+     function records get none. Unknown bytes after the last recognized field are
+     ignored by v3 readers. A recognized but truncated block is rejected as
+     InvalidDataException.
+   - Tests: "Provenance-bearing link trailing bytes follow the v3 and legacy read
+     policy" and "Provenance-bearing FunctionBox trailing bytes follow the v3 and
+     legacy read policy" (CoreDiskStreamingTests.cs). The function test fails if the
+     legacy guard in DeserializeFunction is removed.
+   - Known edge, not changed: a function payload that ends right after its result
+     (the pre-provenance layout, which current writers never emit) would read a
+     nonzero unknown byte as a provenance flag. Fixing it needs framing or a format
+     decision, so it is left for a decision.
 
 7. Section 3 — Reinterpreted, not literally met.
    The original intent "expand the registry to discover and register all public
@@ -130,13 +184,13 @@ WHAT IS SOLID (verified in source and tests)
 
 RECOMMENDED REMAINING WORK (to make the plan truly complete)
 ------------------------------------------------------------
-1. Add thread-safety/mutability contracts (GraphSynchronization).
+1. [DONE] Add thread-safety/mutability contracts (GraphSynchronization).
 2. [DONE] Add GraphSynchronization concurrency stress tests: parallel readers, mutation
    bursts, and snapshot consumers.
 3. [DONE] Make the scale gate enforce pass/fail thresholds.
-4. Add failed-compact and failed-upgrade original-store-preservation tests; add
+4. [DONE, upgrade-specific failure not injectable; see gap 3] Add failed-compact and failed-upgrade original-store-preservation tests; add
    index/partition-header corruption tests.
-5. Finish incremental hashing for index partitions; extend paging to
+5. [DONE] Finish incremental hashing for index partitions; extend paging to
    outgoing/incoming/by-target queries; remove the remaining full rebuild rollback.
 
 

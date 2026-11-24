@@ -93,6 +93,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Returns whether an edge instance matching <paramref name="from"/>, <paramref name="to"/>, and <paramref name="weight"/> exists.</summary>
+        public bool ContainsEdge(TNode from, TNode to, double weight)
+        {
+            return edges.Exists(edge => EqualityComparer<TNode>.Default.Equals(edge.From, from) &&
+                EqualityComparer<TNode>.Default.Equals(edge.To, to) && edge.Weight.Equals(weight));
+        }
+
         /// <summary>Removes one matching edge instance and its reverse adjacency entry when undirected.</summary>
         public bool RemoveEdge(TNode from, TNode to, double weight)
         {

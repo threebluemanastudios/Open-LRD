@@ -35,6 +35,8 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Subgraph identity collisions do not partially promote", SubgraphIdentityCollisionsAreAtomic());
             Program.Run("Trusted graph membership and link lifecycle are hardened", TrustedMembershipAndLinkLifecycleAreHardened());
             Program.Run("Reasoning links support provenance and validity queries", ReasoningLinksSupportProvenanceAndTimeQueries());
+            Program.Run("Paged link and by-target queries return deterministic pages", PagedLinkAndTargetQueriesAreDeterministic());
+            Program.Run("Link removal keeps the skills graph synchronized", LinkRemovalKeepsSkillsGraphSynchronized());
             Program.Run("Conversation and function APIs return validated snapshots", ConversationAndFunctionApisAreHardened());
             Program.Run("Core assertion and checkpoint performance smoke baseline", CorePerformanceSmokeBaseline());
             if (runFullScaleGate)
@@ -1034,6 +1036,95 @@ namespace OPEN_LRD.SmokeTests
                     core.ResetCore();
                     if (Directory.Exists(directory)) Directory.Delete(directory, true);
                 }
+            };
+        }
+
+        private static Action PagedLinkAndTargetQueriesAreDeterministic()
+        {
+            return () =>
+            {
+                LexicalFixture fixture = BuildLexicalChain();
+                LRD_Core core = LRD_Core.Instance;
+                for (int i = 0; i < 5; i++)
+                {
+                    Program.Assert(core.AddTrustedLink(fixture.WordNodeId, fixture.SenseNodeId, NodeRelationType.Custom,
+                        0.3 + i * 0.1, $"page-{i}"), "Custom link should be added for paging.");
+                }
+
+                List<NodeLink> allOutgoing = core.GetOutgoingLinks(fixture.WordNodeId, NodeRelationType.Custom);
+                Program.Assert(allOutgoing.Count == 5, "Five custom outgoing links should be visible.");
+                List<NodeLink> pagedOutgoing = new List<NodeLink>();
+                for (int offset = 0; offset < 5; offset += 2)
+                {
+                    pagedOutgoing.AddRange(core.GetOutgoingLinks(fixture.WordNodeId, NodeRelationType.Custom, limit: 2, offset: offset));
+                }
+                Program.Assert(pagedOutgoing.SequenceEqual(allOutgoing),
+                    "Outgoing pages should concatenate to the full deterministic result.");
+
+                List<NodeLink> allIncoming = core.GetIncomingLinks(fixture.SenseNodeId, NodeRelationType.Custom);
+                Program.Assert(allIncoming.Count == 5, "Five custom incoming links should be visible.");
+                Program.Assert(core.GetIncomingLinks(fixture.SenseNodeId, NodeRelationType.Custom, limit: 2, offset: 3)
+                    .SequenceEqual(allIncoming.Skip(3).Take(2)), "Incoming pages should slice the full deterministic result.");
+                Program.Assert(core.GetIncomingLinks(fixture.SenseNodeId, NodeRelationType.Custom, offset: 99).Count == 0,
+                    "An offset past the end should return an empty page.");
+                Program.Assert(core.GetIncomingLinks(fixture.SenseNodeId, NodeRelationType.Custom, limit: 0).Count == 0,
+                    "A zero limit should return an empty page.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(() => core.GetOutgoingLinks(fixture.WordNodeId, offset: -1),
+                    "Negative outgoing offsets should be rejected.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(() => core.GetIncomingLinks(fixture.SenseNodeId, limit: -1),
+                    "Negative incoming limits should be rejected.");
+
+                for (int i = 0; i < 4; i++)
+                {
+                    Node labeled = new Node(NodeTargetKind.Word, fixture.WordId, $"alt-{i}");
+                    Program.Assert(core.SetUntrustedNode(labeled), "Labeled word node should stage.");
+                    Program.Assert(core.ConvertUntrustedNodeToTrusted(labeled.GetNodeID()), "Labeled word node should promote.");
+                }
+                IReadOnlyList<Node> allTargetNodes = core.GetTrustedNodesByTarget(NodeTargetKind.Word, fixture.WordId);
+                Program.Assert(allTargetNodes.Count == 5, "Canonical and labeled nodes should all be listed by target.");
+                Program.Assert(core.GetTrustedNodesByTarget(NodeTargetKind.Word, fixture.WordId, limit: 2, offset: 1)
+                        .Select(node => node.GetNodeID())
+                        .SequenceEqual(allTargetNodes.Skip(1).Take(2).Select(node => node.GetNodeID())),
+                    "By-target pages should slice the full deterministic result.");
+                Program.Assert(core.GetTrustedNodesByTarget(NodeTargetKind.Word, fixture.WordId, limit: 3, offset: 4).Count == 1,
+                    "The final by-target page should contain the remaining node.");
+                Program.AssertThrows<ArgumentOutOfRangeException>(
+                    () => core.GetTrustedNodesByTarget(NodeTargetKind.Word, fixture.WordId, limit: -1),
+                    "Negative by-target limits should be rejected.");
+            };
+        }
+
+        private static Action LinkRemovalKeepsSkillsGraphSynchronized()
+        {
+            return () =>
+            {
+                LexicalFixture fixture = BuildLexicalChain();
+                LRD_Core core = LRD_Core.Instance;
+                NodeLinkProvenance first = new NodeLinkProvenance(Guid.NewGuid(), NodeLinkOrigin.User,
+                    DateTimeOffset.UtcNow, "author-a", confidence: 0.6);
+                NodeLinkProvenance second = new NodeLinkProvenance(Guid.NewGuid(), NodeLinkOrigin.User,
+                    DateTimeOffset.UtcNow, "author-b", confidence: 0.6);
+                Program.Assert(core.AddTrustedLink(fixture.WordNodeId, fixture.SenseNodeId, NodeRelationType.Custom, 0.6, "edge-a", first),
+                    "First evidence-backed link should be added.");
+                Program.Assert(core.AddTrustedLink(fixture.WordNodeId, fixture.SenseNodeId, NodeRelationType.Custom, 0.6, "edge-b", second),
+                    "Second evidence-backed link should be added.");
+                Program.Assert(core.AddTrustedLink(fixture.WordNodeId, fixture.SymbolNodeId, NodeRelationType.Custom, 0.7, "edge-c"),
+                    "Unrelated link should be added.");
+                Program.Assert(core.BuildSkillsGraphSnapshot().EdgeCount == core.GetTrustedLinkCount(),
+                    "Skills graph edges should mirror trusted links before removal.");
+
+                Program.Assert(core.RemoveTrustedLink(first.AssertionId), "Assertion-based removal should succeed.");
+                Program.Assert(core.BuildSkillsGraphSnapshot().EdgeCount == core.GetTrustedLinkCount(),
+                    "Skills graph edges should mirror trusted links after assertion removal.");
+                Program.Assert(!core.RemoveTrustedLink(first.AssertionId), "Removing an already removed assertion should return false.");
+
+                Program.Assert(core.RemoveTrustedLink(fixture.WordNodeId, fixture.SymbolNodeId, NodeRelationType.Custom, "edge-c"),
+                    "Exact link removal should succeed.");
+                Program.Assert(core.BuildSkillsGraphSnapshot().EdgeCount == core.GetTrustedLinkCount(),
+                    "Skills graph edges should mirror trusted links after exact removal.");
+                List<NodeLink> remaining = core.GetOutgoingLinks(fixture.WordNodeId, NodeRelationType.Custom);
+                Program.Assert(remaining.Count == 1 && remaining[0].Provenance.AssertionId == second.AssertionId,
+                    "Only the second assertion should remain after removals.");
             };
         }
 

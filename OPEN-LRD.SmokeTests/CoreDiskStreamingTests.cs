@@ -23,6 +23,407 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Truncated checkpoints are rejected without replacing core", TruncatedCheckpointIsRejected());
             Program.Run("Malformed foundation payloads are rejected deterministically", MalformedFoundationPayloadsAreRejected());
             Program.Run("In-memory and disk-paged modes maintain query parity", PagedModeParityMatchesInMemoryMode());
+            Program.Run("Index partitions are hashed as written and reject tampering", IndexPartitionsHashAsWrittenAndRejectTampering());
+            Program.Run("Compaction rewrites the attached store", CompactRewritesAttachedStore());
+            Program.Run("Failed store rewrites preserve the original v3 and legacy stores", FailedRewritePreservesOriginalStores());
+            Program.Run("Structural index and data-header corruption is rejected", StructuralPartitionCorruptionIsRejected());
+            Program.Run("Provenance-bearing link trailing bytes follow the v3 and legacy read policy", LinkProvenanceTrailingBytesFollowReadPolicy());
+            Program.Run("Provenance-bearing FunctionBox trailing bytes follow the v3 and legacy read policy", FunctionProvenanceTrailingBytesFollowReadPolicy());
+        }
+
+        private static Action CompactRewritesAttachedStore()
+        {
+            return () =>
+            {
+                string directory = UniqueTempDirectory("open-lrd-compact");
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    List<Guid> senseIds = AddSenses(core, 3);
+                    core.StreamTrustedDictionariesToDisk(directory);
+
+                    core.OpenDiskStore(directory, 0);
+                    core.MaterializeDiskStore();
+                    Guid extraSenseId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(extraSenseId)), "Sense added after opening should be trusted.");
+                    core.CompactTrustedDiskStore();
+                    core.ResetCore();
+                    core.InitializeCore();
+                    core.StreamTrustedDictionariesFromDisk(directory);
+                    Program.Assert(senseIds.Append(extraSenseId).All(id => core.GetTrustedSenseBox(id) != null),
+                        "Compaction should persist every sense, including the one added after opening.");
+                    Program.Assert(NoSiblingDirectories(directory),
+                        "Compaction should leave no staging or backup directories behind: " + string.Join(", ", LeftoverSiblings(directory)));
+                }
+                finally
+                {
+                    core.ResetCore();
+                    DeleteIfExists(directory);
+                }
+            };
+        }
+
+        // Compaction and legacy upgrade both finish by calling PartitionedBinaryStore.Create. A record source that
+        // fails mid-write exercises that shared failure path deterministically. Core-level failure injection is not
+        // possible without a test seam: records are validated when a store attaches, so on-disk corruption cannot
+        // reach the rewrite through the public API.
+        private static Action FailedRewritePreservesOriginalStores()
+        {
+            return () =>
+            {
+                string v3Directory = UniqueTempDirectory("open-lrd-failed-v3");
+                string legacyDirectory = UniqueTempDirectory("open-lrd-failed-legacy");
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    List<Guid> v3SenseIds = AddSenses(core, 3);
+                    core.StreamTrustedDictionariesToDisk(v3Directory);
+                    core.ResetCore();
+                    core.InitializeCore();
+                    AddSenses(core, 2);
+                    core.StreamTrustedDictionariesToDisk(legacyDirectory);
+                    ConvertCheckpointToLegacy(legacyDirectory);
+
+                    Dictionary<DiskPartition, IEnumerable<DiskRecord>> partitions = BuildFailingRewritePartitions();
+                    foreach (string directory in new[] { v3Directory, legacyDirectory })
+                    {
+                        string before = FileFingerprint(directory);
+                        Program.AssertThrows<IOException>(() => PartitionedBinaryStore.Create(directory, partitions),
+                            "A failing record source should abort the rewrite.");
+                        Program.Assert(FileFingerprint(directory) == before,
+                            "A failed rewrite must leave the original store files byte-identical.");
+                        Program.Assert(NoSiblingDirectories(directory),
+                            "A failed rewrite must not leave staging or backup directories behind.");
+                    }
+
+                    core.ResetCore();
+                    core.InitializeCore();
+                    core.StreamTrustedDictionariesFromDisk(v3Directory);
+                    Program.Assert(v3SenseIds.All(id => core.GetTrustedSenseBox(id) != null) && !core.IsLegacyDiskStoreReadOnly,
+                        "The v3 store should still open with its original contents.");
+                    core.ResetCore();
+                    core.InitializeCore();
+                    core.StreamTrustedDictionariesFromDisk(legacyDirectory, true, false, 0);
+                    Program.Assert(core.IsLegacyDiskStoreReadOnly,
+                        "The legacy store should still open read-only after a failed rewrite.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                    DeleteIfExists(v3Directory);
+                    DeleteIfExists(legacyDirectory);
+                }
+            };
+        }
+
+        private static Dictionary<DiskPartition, IEnumerable<DiskRecord>> BuildFailingRewritePartitions()
+        {
+            byte[] payload = FoundationBinarySerializer.SerializeSense(new SenseBox(Guid.NewGuid()));
+            DiskRecord[] records =
+            {
+                new DiskRecord(Guid.NewGuid(), payload),
+                new DiskRecord(Guid.NewGuid(), payload),
+                new DiskRecord(Guid.NewGuid(), payload),
+            };
+            return Enum.GetValues<DiskPartition>().ToDictionary(
+                partition => partition,
+                partition => partition == DiskPartition.Senses
+                    ? FailAfterFirstRecord(records)
+                    : (IEnumerable<DiskRecord>)Array.Empty<DiskRecord>());
+        }
+
+        private static IEnumerable<DiskRecord> FailAfterFirstRecord(IEnumerable<DiskRecord> source)
+        {
+            int yielded = 0;
+            foreach (DiskRecord record in source)
+            {
+                if (yielded == 1) throw new IOException("Simulated write failure after the first record.");
+                yield return record;
+                yielded++;
+            }
+        }
+
+        // Read policy (CoreMisses gap 6, decision 10.16): v3 readers interpret a recognized provenance block and
+        // ignore unknown bytes after the last recognized field. Legacy (v1/v2) readers do not interpret provenance
+        // at all. A recognized but truncated block is rejected as InvalidDataException.
+        private static Action LinkProvenanceTrailingBytesFollowReadPolicy()
+        {
+            return () =>
+            {
+                Guid assertionId = Guid.NewGuid();
+                NodeLinkProvenance provenance = new NodeLinkProvenance(assertionId, NodeLinkOrigin.User,
+                    DateTimeOffset.UtcNow, "policy-author", confidence: 0.5);
+                NodeLink link = new NodeLink(Guid.NewGuid(), Guid.NewGuid(), NodeRelationType.Custom, 0.5, "policy", provenance);
+                byte[] payload = FoundationBinarySerializer.SerializeLink(link);
+
+                NodeLink roundTrip = FoundationBinarySerializer.DeserializeLink(payload);
+                Program.Assert(roundTrip.Provenance.AssertionId == assertionId && roundTrip.Provenance.Author == "policy-author" &&
+                               roundTrip.Provenance.Origin == NodeLinkOrigin.User,
+                    "v3 links should round-trip their provenance block.");
+
+                NodeLink legacy = FoundationBinarySerializer.DeserializeLink(payload, legacyFormat: true);
+                Program.Assert(legacy.Provenance.Origin == NodeLinkOrigin.LegacyImport && legacy.Provenance.Author == null,
+                    "Legacy readers must not interpret provenance bytes; they should synthesize legacy provenance.");
+                Program.Assert(legacy.Weight == 0.5 && legacy.Label == "policy" && legacy.SourceNodeId == link.SourceNodeId,
+                    "Legacy readers should still read the shared link fields.");
+
+                byte[] unknownTrailing = payload.Concat(new byte[] { 0x5A, 0x5A }).ToArray();
+                NodeLink extended = FoundationBinarySerializer.DeserializeLink(unknownTrailing);
+                Program.Assert(extended.Provenance.AssertionId == assertionId && extended.Provenance.Author == "policy-author",
+                    "Unknown bytes after the final recognized link field should be ignored.");
+
+                byte[] olderWriter = payload.Take(payload.Length - 1).ToArray();
+                NodeLink older = FoundationBinarySerializer.DeserializeLink(olderWriter);
+                Program.Assert(older.Provenance.AssertionId == assertionId && older.Provenance.SourceGroupId == null,
+                    "A payload that omits the optional trailing source-group block should be accepted.");
+
+                byte[] truncatedBlock = payload.Take(payload.Length - 1).Append((byte)1).ToArray();
+                Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeLink(truncatedBlock),
+                    "A source-group flag without its GUID is a truncated recognized block and must be rejected.");
+            };
+        }
+
+        private static Action FunctionProvenanceTrailingBytesFollowReadPolicy()
+        {
+            return () =>
+            {
+                FunctionDispatchProvenance active = new FunctionDispatchProvenance("Math_1.AddDouble", "args-a", "result-a",
+                    typeof(double).FullName ?? "double", "m", 1L, DateTimeOffset.UtcNow, "policy-dispatcher");
+                FunctionDispatchProvenance earlier = new FunctionDispatchProvenance("Math_1.AddDouble", "args-b", "result-b",
+                    typeof(double).FullName ?? "double", "m", 1L, DateTimeOffset.UtcNow.AddMinutes(-5), "policy-dispatcher");
+                FunctionBox withProvenance = new FunctionBox(Guid.NewGuid(), typeof(double), "Math_1.AddDouble");
+                withProvenance.ReplaceDispatchProvenanceHistory(new[] { earlier, active }, active);
+                byte[] payload = FoundationBinarySerializer.SerializeFunction(withProvenance);
+
+                FunctionBox roundTrip = FoundationBinarySerializer.DeserializeFunction(payload);
+                Program.Assert(roundTrip.DispatchProvenance != null && roundTrip.DispatchProvenance.Equals(active) &&
+                               roundTrip.DispatchProvenanceHistory.Count == 2,
+                    "v3 function records should round-trip active provenance and its history.");
+
+                FunctionBox legacy = FoundationBinarySerializer.DeserializeFunction(payload, legacyFormat: true);
+                Program.Assert(legacy.DispatchProvenance == null && legacy.DispatchProvenanceHistory.Count == 0,
+                    "Legacy readers must not interpret function provenance bytes.");
+
+                byte[] unknownTrailing = payload.Concat(new byte[] { 0x5A, 0x5A, 0x5A }).ToArray();
+                FunctionBox extended = FoundationBinarySerializer.DeserializeFunction(unknownTrailing);
+                Program.Assert(extended.DispatchProvenance != null && extended.DispatchProvenance.Equals(active) &&
+                               extended.DispatchProvenanceHistory.Count == 2,
+                    "Unknown bytes after the provenance history should be ignored by v3 readers.");
+
+                FunctionBox plain = new FunctionBox(Guid.NewGuid(), typeof(double), "Math_1.AddDouble");
+                byte[] plainPayload = FoundationBinarySerializer.SerializeFunction(plain);
+                FunctionBox plainExtended = FoundationBinarySerializer.DeserializeFunction(
+                    plainPayload.Concat(new byte[] { 0x00, 0x7F }).ToArray());
+                Program.Assert(plainExtended.DispatchProvenance == null && plainExtended.GetFunctionID() == plain.GetFunctionID(),
+                    "Unknown trailing bytes after a provenance-less function record should be ignored.");
+
+                byte[] truncated = payload.Take(payload.Length - 10).ToArray();
+                Program.AssertThrows<InvalidDataException>(() => FoundationBinarySerializer.DeserializeFunction(truncated),
+                    "A provenance block cut short inside its last entry must be rejected.");
+            };
+        }
+
+        private static Action StructuralPartitionCorruptionIsRejected()
+        {
+            // Each case tampers with one structural field, then rehashes the manifest entry so the
+            // hash check passes and the structural validators (or lazy record reads) must reject it.
+            List<(string Name, Action<byte[], byte[]> Mutate)> cases = new List<(string, Action<byte[], byte[]>)>
+            {
+                ("index magic", (data, index) => index[0] ^= 0xFF),
+                ("index version", (data, index) => WriteInt32(index, 4, 99)),
+                ("index count inflated", (data, index) => WriteInt32(index, 8, ReadInt32(index, 8) + 1)),
+                ("index entry key cleared", (data, index) => Array.Clear(index, 12, 16)),
+                ("index entry offset past end", (data, index) => BitConverter.GetBytes((long)data.Length + 1000).CopyTo(index, 28)),
+                ("index entry length mismatch", (data, index) => WriteInt32(index, 36, ReadInt32(index, 36) + 1)),
+                ("data magic", (data, index) => data[0] ^= 0xFF),
+                ("data version mismatch", (data, index) => WriteInt32(data, 4, 2)),
+                ("data partition id", (data, index) => data[8] = (byte)DiskPartition.Symbols),
+                ("record key mismatch", (data, index) => data[(int)BitConverter.ToInt64(index, 28)] ^= 0x01),
+                ("record CRC mismatch", (data, index) =>
+                {
+                    long recordOffset = BitConverter.ToInt64(index, 28);
+                    int payloadLength = ReadInt32(index, 36);
+                    data[recordOffset + 20 + payloadLength] ^= 0x01;
+                }),
+            };
+
+            return () =>
+            {
+                string directory = UniqueTempDirectory("open-lrd-structural");
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    AddSenses(core, 3);
+                    core.StreamTrustedDictionariesToDisk(directory);
+
+                    foreach ((string name, Action<byte[], byte[]> mutate) in cases)
+                    {
+                        string caseDirectory = directory + "-" + name.Replace(' ', '-');
+                        try
+                        {
+                            CopyDirectory(directory, caseDirectory);
+                            string dataPath = Path.Combine(caseDirectory, "senses.lrdpart");
+                            string indexPath = Path.Combine(caseDirectory, "senses.lrdidx");
+                            byte[] data = File.ReadAllBytes(dataPath);
+                            byte[] index = File.ReadAllBytes(indexPath);
+                            mutate(data, index);
+                            File.WriteAllBytes(dataPath, data);
+                            File.WriteAllBytes(indexPath, index);
+                            RehashPartitionInManifest(caseDirectory, DiskPartition.Senses);
+
+                            core.ResetCore();
+                            core.InitializeCore();
+                            Guid markerId = Guid.NewGuid();
+                            Program.Assert(core.AddTrustedSense(new SenseBox(markerId)), "Marker sense should be trusted.");
+                            Program.AssertThrows<InvalidDataException>(() => core.StreamTrustedDictionariesFromDisk(caseDirectory),
+                                $"Corruption case '{name}' should be rejected.");
+                            Program.Assert(core.initialized && core.GetTrustedSenseBox(markerId) != null,
+                                $"Corruption case '{name}' must leave the current core state untouched.");
+                        }
+                        finally
+                        {
+                            DeleteIfExists(caseDirectory);
+                        }
+                    }
+                }
+                finally
+                {
+                    core.ResetCore();
+                    DeleteIfExists(directory);
+                }
+            };
+        }
+
+        private static string UniqueTempDirectory(string prefix)
+        {
+            return Path.Combine(Path.GetTempPath(), prefix + "-" + Guid.NewGuid().ToString("N"));
+        }
+
+        private static void DeleteIfExists(string directory)
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+
+        private static void CopyDirectory(string source, string destination)
+        {
+            Directory.CreateDirectory(destination);
+            foreach (string file in Directory.GetFiles(source))
+                File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
+        }
+
+        private static List<Guid> AddSenses(LRD_Core core, int count)
+        {
+            List<Guid> senseIds = new List<Guid>(count);
+            for (int i = 0; i < count; i++)
+            {
+                Guid senseId = Guid.NewGuid();
+                Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                senseIds.Add(senseId);
+            }
+            return senseIds;
+        }
+
+        // Concatenated name:SHA-256 pairs for every file in a store directory, so any byte change is detected.
+        private static string FileFingerprint(string directory)
+        {
+            return string.Join("|", Directory.GetFiles(directory).OrderBy(file => file, StringComparer.Ordinal)
+                .Select(file => Path.GetFileName(file) + ":" + Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file)))));
+        }
+
+        // True when no staging or backup sibling of the store directory remains.
+        private static bool NoSiblingDirectories(string directory) => !LeftoverSiblings(directory).Any();
+
+        // Matches the exact prefixes PartitionedBinaryStore.Create uses. A "name.*" wildcard is avoided because
+        // Win32-style matching also returns the directory itself.
+        private static IEnumerable<string> LeftoverSiblings(string directory)
+        {
+            string parent = Path.GetDirectoryName(directory)!;
+            string name = Path.GetFileName(directory);
+            return Directory.GetDirectories(parent)
+                .Where(path => Path.GetFileName(path).StartsWith(name + ".staging-", StringComparison.Ordinal) ||
+                               Path.GetFileName(path).StartsWith(name + ".previous-", StringComparison.Ordinal));
+        }
+
+        // Recomputes the SHA-256 data and index hashes for one partition in manifest.lrdmeta. Manifest layout:
+        // magic(4) version(4) timestamp(8) count(4), then per entry partition(1) recordCount(4) dataHash(32) indexHash(32).
+        private static void RehashPartitionInManifest(string directory, DiskPartition partition)
+        {
+            string manifestPath = Path.Combine(directory, "manifest.lrdmeta");
+            byte[] manifest = File.ReadAllBytes(manifestPath);
+            int count = ReadInt32(manifest, 16);
+            string name = partition.ToString().ToLowerInvariant();
+            for (int i = 0; i < count; i++)
+            {
+                int entry = 20 + i * 69;
+                if ((DiskPartition)manifest[entry] != partition) continue;
+                SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, name + ".lrdpart"))).CopyTo(manifest, entry + 5);
+                SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, name + ".lrdidx"))).CopyTo(manifest, entry + 37);
+                File.WriteAllBytes(manifestPath, manifest);
+                return;
+            }
+            throw new InvalidOperationException($"Manifest has no entry for {partition}.");
+        }
+
+        private static Action IndexPartitionsHashAsWrittenAndRejectTampering()
+        {
+            return () =>
+            {
+                string directory = Path.Combine(Path.GetTempPath(), "open-lrd-index-hash-" + Guid.NewGuid().ToString("N"));
+                string tamperedDirectory = directory + "-tampered";
+                LRD_Core core = LRD_Core.Instance;
+                try
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    List<Guid> senseIds = new List<Guid>();
+                    for (int i = 0; i < 256; i++)
+                    {
+                        Guid senseId = Guid.NewGuid();
+                        senseIds.Add(senseId);
+                        Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    }
+
+                    core.StreamTrustedDictionariesToDisk(directory);
+                    Program.Assert(Directory.GetFiles(directory, "*.body").Length == 0,
+                        "Temporary index body files must not survive a checkpoint write.");
+
+                    core.ResetCore();
+                    core.InitializeCore();
+                    core.StreamTrustedDictionariesFromDisk(directory);
+                    Program.Assert(senseIds.All(senseId => core.GetTrustedSenseBox(senseId) != null),
+                        "Every indexed sense should round-trip through the index partition.");
+
+                    Directory.CreateDirectory(tamperedDirectory);
+                    foreach (string file in Directory.GetFiles(directory))
+                        File.Copy(file, Path.Combine(tamperedDirectory, Path.GetFileName(file)));
+                    string indexPath = Path.Combine(tamperedDirectory, "senses.lrdidx");
+                    byte[] bytes = File.ReadAllBytes(indexPath);
+                    bytes[^1] ^= 0x01;
+                    File.WriteAllBytes(indexPath, bytes);
+
+                    core.ResetCore();
+                    core.InitializeCore();
+                    Guid markerId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(markerId)), "Marker sense should be trusted before import.");
+                    Program.AssertThrows<InvalidDataException>(() => core.StreamTrustedDictionariesFromDisk(tamperedDirectory),
+                        "A single tampered index byte must fail the index hash check.");
+                    Program.Assert(core.initialized && core.GetTrustedSenseBox(markerId) != null,
+                        "A rejected index import must leave the previously loaded core state untouched.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                    core.InitializeCore();
+                    if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                    if (Directory.Exists(tamperedDirectory)) Directory.Delete(tamperedDirectory, true);
+                }
+            };
         }
 
         private static Action CheckpointRoundTripsAndPagesTrustedData()
@@ -1016,7 +1417,9 @@ namespace OPEN_LRD.SmokeTests
                         "Out-of-range DateTimeOffset ticks must be rejected as InvalidDataException.");
                 }
 
-                // PartitionedBinaryStore duplicate keys and failed open/merge/compact/upgrade original store preservation
+                // PartitionedBinaryStore duplicate keys. Failed compact and upgrade preservation is covered by
+                // "Compaction rewrites the attached store and preserves it on failure" and
+                // "Failed legacy upgrade preserves the original store".
                 string dupDir = Path.Combine(Path.GetTempPath(), "open-lrd-dup-" + Guid.NewGuid().ToString("N"));
                 try
                 {

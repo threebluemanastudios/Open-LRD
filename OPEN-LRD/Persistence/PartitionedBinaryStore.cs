@@ -236,63 +236,80 @@ namespace OPEN_LRD.Persistence
         {
             string dataPath = DataPath(directory, partition);
             string indexPath = IndexPath(directory, partition);
+            string bodyPath = indexPath + ".body";
             int count = 0;
             byte[] dataDigest;
-            HashSet<Guid> keys = new HashSet<Guid>();
-            using (FileStream data = new FileStream(dataPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.SequentialScan))
-            using (IncrementalHash dataHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
-            using (HashingWriteStream hashingData = new HashingWriteStream(data, dataHash))
-            using (BinaryWriter writer = new BinaryWriter(hashingData))
-            using (FileStream index = new FileStream(indexPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.SequentialScan))
-            using (IncrementalHash indexHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
-            using (HashingWriteStream hashingIndex = new HashingWriteStream(index, indexHash))
-            using (BinaryWriter indexWriter = new BinaryWriter(hashingIndex))
-            {
-                writer.Write(DataMagic);
-                writer.Write(CurrentFormatVersion);
-                writer.Write((byte)partition);
-                indexWriter.Write(IndexMagic);
-                indexWriter.Write(CurrentFormatVersion);
-                indexWriter.Write(0);
-                writer.Flush();
-                indexWriter.Flush();
-                foreach (DiskRecord record in records)
-                {
-                    if (count >= MaximumRecordsPerPartition)
-                        throw new InvalidDataException($"Partition {partition} exceeds the record-count limit.");
-                    if (record.Key == Guid.Empty || !keys.Add(record.Key))
-                        throw new InvalidDataException($"Partition {partition} contains an empty or duplicate key.");
-                    if (record.Payload == null || record.Payload.Length > MaximumRecordPayloadLength)
-                        throw new InvalidDataException($"Partition {partition} contains an invalid payload.");
-                    long recordOffset = data.Position;
-                    writer.Write(record.Key.ToByteArray());
-                    writer.Write(record.Payload.Length);
-                    writer.Write(record.Payload);
-                    writer.Write(Crc32(record.Payload));
-                    indexWriter.Write(record.Key.ToByteArray());
-                    indexWriter.Write(recordOffset);
-                    indexWriter.Write(record.Payload.Length);
-                    count++;
-                }
-                writer.Flush();
-                indexWriter.Flush();
-                data.Flush(true);
-                index.Flush(true);
-                dataDigest = dataHash.GetHashAndReset();
-            }
-
             byte[] indexDigest;
-            using (FileStream index = new FileStream(indexPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            HashSet<Guid> keys = new HashSet<Guid>();
+            try
             {
-                index.Position = 8;
-                index.Write(BitConverter.GetBytes(count));
-                index.Flush(true);
-                index.Position = 0;
-                using IncrementalHash finalIndexHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                byte[] buffer = new byte[65536];
-                int read;
-                while ((read = index.Read(buffer)) > 0) finalIndexHash.AppendData(buffer, 0, read);
-                indexDigest = finalIndexHash.GetHashAndReset();
+                // Pass 1: stream data records and index entries. The record count is unknown until the
+                // end, so index entries go to a temporary body file that follows the final header.
+                using (FileStream data = new FileStream(dataPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.SequentialScan))
+                using (IncrementalHash dataHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+                using (HashingWriteStream hashingData = new HashingWriteStream(data, dataHash))
+                using (BinaryWriter writer = new BinaryWriter(hashingData))
+                using (FileStream body = new FileStream(bodyPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.SequentialScan))
+                using (BinaryWriter bodyWriter = new BinaryWriter(body))
+                {
+                    writer.Write(DataMagic);
+                    writer.Write(CurrentFormatVersion);
+                    writer.Write((byte)partition);
+                    writer.Flush();
+                    foreach (DiskRecord record in records)
+                    {
+                        if (count >= MaximumRecordsPerPartition)
+                            throw new InvalidDataException($"Partition {partition} exceeds the record-count limit.");
+                        if (record.Key == Guid.Empty || !keys.Add(record.Key))
+                            throw new InvalidDataException($"Partition {partition} contains an empty or duplicate key.");
+                        if (record.Payload == null || record.Payload.Length > MaximumRecordPayloadLength)
+                            throw new InvalidDataException($"Partition {partition} contains an invalid payload.");
+                        long recordOffset = data.Position;
+                        writer.Write(record.Key.ToByteArray());
+                        writer.Write(record.Payload.Length);
+                        writer.Write(record.Payload);
+                        writer.Write(Crc32(record.Payload));
+                        bodyWriter.Write(record.Key.ToByteArray());
+                        bodyWriter.Write(recordOffset);
+                        bodyWriter.Write(record.Payload.Length);
+                        count++;
+                    }
+                    writer.Flush();
+                    bodyWriter.Flush();
+                    data.Flush(true);
+                    body.Flush(true);
+                    dataDigest = dataHash.GetHashAndReset();
+                }
+
+                // Pass 2: write the final index (header with the known count, then the body) and hash
+                // every byte as it is written. The file is never reopened or re-read.
+                using (FileStream index = new FileStream(indexPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.SequentialScan))
+                using (IncrementalHash indexHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+                using (HashingWriteStream hashingIndex = new HashingWriteStream(index, indexHash))
+                using (BinaryWriter indexWriter = new BinaryWriter(hashingIndex))
+                {
+                    indexWriter.Write(IndexMagic);
+                    indexWriter.Write(CurrentFormatVersion);
+                    indexWriter.Write(count);
+                    indexWriter.Flush();
+
+                    using (FileStream body = new FileStream(bodyPath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan))
+                    {
+                        byte[] buffer = new byte[65536];
+                        int read;
+                        while ((read = body.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            hashingIndex.Write(buffer, 0, read);
+                        }
+                    }
+                    hashingIndex.Flush();
+                    index.Flush(true);
+                    indexDigest = indexHash.GetHashAndReset();
+                }
+            }
+            finally
+            {
+                if (File.Exists(bodyPath)) File.Delete(bodyPath);
             }
             return new PartitionManifestEntry(count, dataDigest, indexDigest);
         }

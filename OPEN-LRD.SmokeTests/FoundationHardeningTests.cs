@@ -23,6 +23,7 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("SymbolBox distinguishes assigned NUL", SymbolCharacterState());
             Program.Run("Conversation ranges are atomic and overflow-safe", ConversationRangeSemantics());
             Program.Run("Expression AST and parser boundaries", ExpressionBoundaries());
+            Program.Run("Expression AST limits are exact at node, depth, and literal boundaries", ExpressionLimitsAreExactAtBoundaries());
             Program.Run("Repeated-element promotion and GetWordByGuid", RepeatedElementPromotionAndWordLookup());
             Program.Run("Trusted link weight updates keep assertion-key state consistent", TrustedLinkWeightUpdateConsistency());
             Program.Run("Extended function scalar checkpoint payloads round-trip", ExtendedFunctionScalarPersistence());
@@ -568,6 +569,102 @@ namespace OPEN_LRD.SmokeTests
             Program.Assert(restored.Variables.Count == 1 && equals(restored.Variables[0].Value) &&
                            restored.Result != null && equals(restored.Result.Value),
                 $"FunctionBox scalar value of type {valueType.Name} should round-trip.");
+        }
+
+        private static Action ExpressionLimitsAreExactAtBoundaries()
+        {
+            return () =>
+            {
+                // A chain of n negations over a leaf has n + 1 nodes and depth n + 1.
+                Expression DepthChain(int depth)
+                {
+                    Expression chain = new ConstantExpression(1.0);
+                    for (int i = 1; i < depth; i++) chain = new NegateExpression(chain);
+                    return chain;
+                }
+                // A balanced sum over 2^k leaves has 2^(k+1) - 1 nodes and depth k + 1.
+                Expression Balanced(int leafCount)
+                {
+                    List<Expression> level = Enumerable.Range(0, leafCount)
+                        .Select(i => (Expression)new VariableExpression("x")).ToList();
+                    while (level.Count > 1)
+                    {
+                        List<Expression> next = new List<Expression>();
+                        for (int i = 0; i + 1 < level.Count; i += 2)
+                            next.Add(new BinaryExpression(BinaryOperator.Add, level[i], level[i + 1]));
+                        if (level.Count % 2 == 1) next.Add(level[^1]);
+                        level = next;
+                    }
+                    return level[0];
+                }
+
+                Expression atDepth = DepthChain(ExpressionParser.MaximumAstDepth);
+                ExpressionParser.ValidateExpressionLimits(atDepth);
+                Program.AssertThrows<FormatException>(() => ExpressionParser.ValidateExpressionLimits(DepthChain(ExpressionParser.MaximumAstDepth + 1)),
+                    "A tree one level deeper than MaximumAstDepth must be rejected.");
+
+                int CountNodes(Expression root)
+                {
+                    int count = 0;
+                    Stack<Expression> pending = new Stack<Expression>();
+                    pending.Push(root);
+                    while (pending.Count > 0)
+                    {
+                        Expression current = pending.Pop();
+                        count++;
+                        switch (current)
+                        {
+                            case NegateExpression negate: pending.Push(negate.Operand); break;
+                            case BinaryExpression binary: pending.Push(binary.Left); pending.Push(binary.Right); break;
+                            case FunctionExpression function: pending.Push(function.Argument); break;
+                            case CallExpression call: foreach (Expression argument in call.Arguments) pending.Push(argument); break;
+                            case ConditionalExpression conditional:
+                                pending.Push(conditional.Condition); pending.Push(conditional.WhenTrue); pending.Push(conditional.WhenFalse); break;
+                        }
+                    }
+                    return count;
+                }
+
+                // Balanced binary trees over 2^k leaves have odd node counts, so an exact MaximumAstNodes (4096) tree
+                // is not constructible from this shape. Bracket the limit instead: 2048 leaves give 4095 nodes
+                // (accepted) and one extra leaf gives 4097 nodes (rejected).
+                Expression wideAccepted = Balanced(2048);
+                Program.Assert(CountNodes(wideAccepted) == ExpressionParser.MaximumAstNodes - 1,
+                    "Test tree should have MaximumAstNodes - 1 nodes.");
+                ExpressionParser.ValidateExpressionLimits(wideAccepted);
+                Expression wideRejected = Balanced(2049);
+                Program.Assert(CountNodes(wideRejected) == ExpressionParser.MaximumAstNodes + 1,
+                    "Test tree should have MaximumAstNodes + 1 nodes.");
+                Program.AssertThrows<FormatException>(() => ExpressionParser.ValidateExpressionLimits(wideRejected),
+                    "A tree above MaximumAstNodes must be rejected.");
+
+                string maxLiteral = "0." + new string('1', ExpressionParser.MaximumNumericLiteralLength - 2);
+                Program.Assert(ExpressionParser.Parse(maxLiteral) is ConstantExpression,
+                    "A numeric literal exactly at MaximumNumericLiteralLength should parse.");
+                Program.AssertThrows<FormatException>(() => ExpressionParser.Parse("0." + new string('1', ExpressionParser.MaximumNumericLiteralLength)),
+                    "A numeric literal one character over MaximumNumericLiteralLength must be rejected.");
+
+                string maxIdentifier = new string('x', ExpressionParser.MaximumIdentifierLength);
+                Program.Assert(new VariableExpression(maxIdentifier).Name.Length == ExpressionParser.MaximumIdentifierLength,
+                    "A variable identifier exactly at MaximumIdentifierLength should be accepted.");
+                Program.Assert(new CallExpression(maxIdentifier, new Expression[] { new ConstantExpression(1.0) }).FunctionName.Length ==
+                               ExpressionParser.MaximumIdentifierLength,
+                    "A call identifier exactly at MaximumIdentifierLength should be accepted.");
+                Program.AssertThrows<FormatException>(() => new CallExpression(maxIdentifier + "x", new Expression[] { new ConstantExpression(1.0) }),
+                    "A call identifier one character over MaximumIdentifierLength must be rejected.");
+
+                Expression[] maxArgs = Enumerable.Range(0, ExpressionParser.MaximumFunctionArguments)
+                    .Select(i => (Expression)new ConstantExpression(i)).ToArray();
+                Program.Assert(new CallExpression("min", maxArgs).Arguments.Count == ExpressionParser.MaximumFunctionArguments,
+                    "A call with exactly MaximumFunctionArguments arguments should be accepted.");
+
+                // Parser and manual-AST paths must agree on the same boundary.
+                string parsedAtDepth = new string('-', ExpressionParser.MaximumAstDepth - 1) + "1";
+                Program.Assert(ExpressionParser.Parse(parsedAtDepth) is NegateExpression,
+                    "Parser should accept a unary chain exactly at MaximumAstDepth.");
+                Program.AssertThrows<FormatException>(() => ExpressionParser.Parse(new string('-', ExpressionParser.MaximumAstDepth) + "1"),
+                    "Parser should reject a unary chain one level beyond MaximumAstDepth.");
+            };
         }
 
         private static Action ExpressionBoundaries()
