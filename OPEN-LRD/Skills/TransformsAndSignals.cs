@@ -40,6 +40,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the inverse Discrete Fourier Transform of spectrum.
+        /// </summary>
         public static double[] InverseDft(IReadOnlyList<Complex> spectrum)
         {
             ValidateComplexSequence(spectrum, nameof(spectrum), MaximumDftSize);
@@ -58,6 +61,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the Fast Fourier Transform of samples using an iterative radix-2 algorithm.
+        /// </summary>
+        /// <param name="samples">The complex samples. The count must be a power of two.</param>
+        /// <returns>The complex spectrum of the same length as samples.</returns>
+        /// <exception cref="ArgumentException">Thrown when the sample count is not a power of two.</exception>
         public static Complex[] Fft(IReadOnlyList<Complex> samples)
         {
             ValidateComplexSequence(samples, nameof(samples), MaximumFftSize);
@@ -74,6 +83,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the inverse Fast Fourier Transform of spectrum.
+        /// </summary>
         public static Complex[] InverseFft(IReadOnlyList<Complex> spectrum)
         {
             ValidateComplexSequence(spectrum, nameof(spectrum), MaximumFftSize);
@@ -91,7 +103,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Shifts zero-frequency bins of values.
+        /// Computes the FFT of a real-valued sequence, zero-padded to a power of two, returning the non-negative frequency bins.
         /// </summary>
         public static Complex[] RealFft(IReadOnlyList<double> samples)
         {
@@ -108,6 +120,13 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Rearranges FFT output so that the zero-frequency component is centered.
+        /// </summary>
+        /// <param name="values">The spectrum to shift. Must not be empty.</param>
+        /// <returns>A new array with the two halves of values swapped.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when values is empty.</exception>
         public static Complex[] FftShift(Complex[] values)
         {
             if (values == null)
@@ -127,6 +146,9 @@ namespace OPEN_LRD.Skills
             return shifted;
         }
 
+        /// <summary>
+        /// Computes the next power of two greater than or equal to value.
+        /// </summary>
         public static int NextPowerOfTwo(int value)
         {
             if (value <= 0)
@@ -145,6 +167,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the full linear convolution of signal and kernel by direct summation.
+        /// </summary>
+        /// <param name="signal">The input signal.</param>
+        /// <param name="kernel">The convolution kernel.</param>
+        /// <returns>The convolution with length signal.Length + kernel.Length - 1.</returns>
         public static double[] Convolve(double[] signal, double[] kernel)
         {
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
@@ -160,6 +188,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the full linear convolution of signal and kernel using the FFT.
+        /// </summary>
+        /// <param name="signal">The input signal.</param>
+        /// <param name="kernel">The convolution kernel.</param>
+        /// <returns>The convolution with length signal.Length + kernel.Length - 1.</returns>
         public static double[] ConvolveFft(double[] signal, double[] kernel)
         {
             ValidateRealSequence(signal, nameof(signal), MaximumFftSize);
@@ -191,6 +225,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes cross-correlation between first and second.
+        /// </summary>
         public static double[] CrossCorrelate(double[] first, double[] second)
         {
             ValidateRealSequence(first, nameof(first), int.MaxValue);
@@ -216,7 +253,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Applies a window of type to signal.
+        /// Computes the auto-correlation of signal by cross-correlating it with itself.
         /// </summary>
         public static double[] AutoCorrelate(double[] signal)
         {
@@ -224,6 +261,13 @@ namespace OPEN_LRD.Skills
             return CrossCorrelate(signal, signal);
         }
 
+        /// <summary>
+        /// Creates a tapering window of the specified length and type.
+        /// </summary>
+        /// <param name="length">The number of window samples. Must be positive.</param>
+        /// <param name="type">The window function to generate.</param>
+        /// <returns>The window coefficients.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when length is not positive or type is not defined.</exception>
         public static double[] CreateWindow(int length, WindowType type)
         {
             if (length <= 0)
@@ -254,6 +298,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Multiplies signal element-wise by a window of the specified type.
+        /// </summary>
+        /// <param name="signal">The input signal.</param>
+        /// <param name="type">The window function to apply.</param>
+        /// <returns>The windowed signal.</returns>
         public static double[] ApplyWindow(double[] signal, WindowType type)
         {
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
@@ -266,6 +316,13 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Applies a causal finite impulse response (FIR) filter to signal.
+        /// </summary>
+        /// <param name="signal">The input signal.</param>
+        /// <param name="filter">The filter whose coefficients are applied.</param>
+        /// <returns>The filtered signal, with the same length as signal.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when filter is null.</exception>
         public static double[] ApplyFirFilter(double[] signal, FirFilter filter)
         {
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
@@ -288,6 +345,13 @@ namespace OPEN_LRD.Skills
             return output;
         }
 
+        /// <summary>
+        /// Smooths signal with a causal moving average over the specified window size.
+        /// </summary>
+        /// <param name="signal">The input signal.</param>
+        /// <param name="windowSize">The number of samples averaged. Must be at least one.</param>
+        /// <returns>The smoothed signal, with the same length as signal.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when windowSize is less than one.</exception>
         public static double[] MovingAverageFilter(double[] signal, int windowSize)
         {
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
@@ -300,7 +364,7 @@ namespace OPEN_LRD.Skills
             return ApplyFirFilter(signal, new FirFilter(coefficients));
         }
         /// <summary>
-        /// Computes Fourier series coefficients for function using terms and samplesPerPeriod.
+        /// Applies a one-pole low-pass (exponential smoothing) filter with smoothing factor alpha to signal.
         /// </summary>
 
         public static double[] OnePoleLowPass(double[] signal, double alpha)
@@ -316,6 +380,13 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Applies a one-pole high-pass filter with smoothing factor alpha to signal.
+        /// </summary>
+        /// <param name="signal">The input signal.</param>
+        /// <param name="alpha">The filter coefficient in (0, 1].</param>
+        /// <returns>The high-pass filtered signal.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when alpha is outside (0, 1].</exception>
         public static double[] OnePoleHighPass(double[] signal, double alpha)
         {
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
@@ -329,6 +400,17 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Applies a second-order (biquad) IIR filter with the given numerator and denominator coefficients to signal.
+        /// </summary>
+        /// <param name="signal">The input signal.</param>
+        /// <param name="b0">The feedforward coefficient for the current sample.</param>
+        /// <param name="b1">The feedforward coefficient for the previous sample.</param>
+        /// <param name="b2">The feedforward coefficient for the sample two steps back.</param>
+        /// <param name="a1">The feedback coefficient for the previous output.</param>
+        /// <param name="a2">The feedback coefficient for the output two steps back.</param>
+        /// <returns>The filtered signal.</returns>
+        /// <exception cref="ArgumentException">Thrown when the denominator coefficients do not define a stable filter.</exception>
         public static double[] BiquadFilter(double[] signal, double b0, double b1, double b2, double a1, double a2)
         {
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
@@ -353,6 +435,15 @@ namespace OPEN_LRD.Skills
             return output;
         }
 
+        /// <summary>
+        /// Estimates the complex Fourier series coefficients of a periodic function over one period by sampling and DFT.
+        /// </summary>
+        /// <param name="function">The periodic function with period 2π.</param>
+        /// <param name="terms">The number of harmonics retained on each side of zero frequency.</param>
+        /// <param name="samplesPerPeriod">The number of samples taken over one period. Must exceed the retained frequency range.</param>
+        /// <returns>The coefficients for frequencies -terms through terms, in that order.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when function is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when terms or samplesPerPeriod are out of range.</exception>
         public static Complex[] FourierSeriesCoefficients(Func<double, double> function, int terms, int samplesPerPeriod)
         {
             if (function == null)
@@ -386,6 +477,15 @@ namespace OPEN_LRD.Skills
             return coefficients;
         }
 
+        /// <summary>
+        /// Reconstructs the value of a Fourier series at position x from its centered coefficients.
+        /// </summary>
+        /// <param name="coefficients">The coefficients for frequencies -terms through terms. The count must be odd.</param>
+        /// <param name="x">The position at which to evaluate the series.</param>
+        /// <param name="period">The positive period of the series.</param>
+        /// <returns>The real part of the reconstructed series value at x.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when coefficients is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the coefficient count is zero or even.</exception>
         public static double FourierSeriesReconstruct(IReadOnlyList<Complex> coefficients, double x, double period)
         {
             if (coefficients == null)
@@ -409,6 +509,11 @@ namespace OPEN_LRD.Skills
             return result.Real;
         }
 
+        /// <summary>
+        /// Performs an in-place iterative radix-2 FFT (or inverse FFT with 1/N scaling) on values, whose length must be a power of two.
+        /// </summary>
+        /// <param name="values">The array to transform in place.</param>
+        /// <param name="inverse">true to compute the inverse transform; false for the forward transform.</param>
         private static void TransformInPlace(Complex[] values, bool inverse)
         {
             int length = values.Length;
@@ -456,11 +561,24 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Determines whether a value is a positive power of two.
+        /// </summary>
+        /// <param name="value">The value to check.</param>
+        /// <returns>true if value is a positive power of two; otherwise false.</returns>
         private static bool IsPowerOfTwo(int value)
         {
             return value > 0 && (value & (value - 1)) == 0;
         }
 
+        /// <summary>
+        /// Validates that a real-valued sequence is non-null, non-empty, within the size limit, and contains only finite values.
+        /// </summary>
+        /// <param name="values">The sequence to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <param name="maximumLength">The maximum permitted length.</param>
+        /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is out of range or a value is not finite.</exception>
         private static void ValidateRealSequence(IReadOnlyList<double> values, string parameterName, int maximumLength)
         {
             if (values == null)
@@ -477,6 +595,14 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a real-valued array is non-null, non-empty, within the size limit, and contains only finite values.
+        /// </summary>
+        /// <param name="values">The array to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <param name="maximumLength">The maximum permitted length.</param>
+        /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is out of range or a value is not finite.</exception>
         private static void ValidateRealSequence(double[] values, string parameterName, int maximumLength)
         {
             if (values == null)
@@ -493,6 +619,14 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a complex sequence is non-null, non-empty, within the size limit, and contains only finite values.
+        /// </summary>
+        /// <param name="values">The sequence to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <param name="maximumLength">The maximum permitted length.</param>
+        /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is out of range or a component is not finite.</exception>
         private static void ValidateComplexSequence(IReadOnlyList<Complex> values, string parameterName, int maximumLength)
         {
             if (values == null)
@@ -512,6 +646,11 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a smoothing factor is finite and lies in (0, 1].
+        /// </summary>
+        /// <param name="alpha">The smoothing factor to validate.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when alpha is outside (0, 1].</exception>
         private static void ValidateAlpha(double alpha)
         {
             if (!double.IsFinite(alpha) || alpha <= 0.0 || alpha > 1.0)
@@ -520,6 +659,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Evaluates a function at value and verifies that the result is finite.
+        /// </summary>
+        /// <param name="function">The function to evaluate.</param>
+        /// <param name="value">The input value.</param>
+        /// <returns>The finite function result.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the function returns a non-finite value.</exception>
         private static double EvaluateFinite(Func<double, double> function, double value)
         {
             double result = function(value);
@@ -530,6 +676,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Ensures a value is finite (not NaN or infinity).
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not finite.</exception>
         private static void EnsureFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))
@@ -538,6 +690,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Ensures a value is finite and strictly positive.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not positive and finite.</exception>
         private static void EnsurePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0.0)

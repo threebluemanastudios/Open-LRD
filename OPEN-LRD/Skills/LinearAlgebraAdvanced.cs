@@ -28,6 +28,9 @@ namespace OPEN_LRD.Skills
     {
         private const double Tolerance = 1e-9;
 
+        /// <summary>
+        /// Determines whether a square matrix is symmetric within a relative tolerance.
+        /// </summary>
         public static bool IsSymmetric(double[,] matrix, double tolerance = Tolerance)
         {
             if (matrix is null)
@@ -114,6 +117,9 @@ namespace OPEN_LRD.Skills
             return new LuDecompositionResult(lower, upper, permutation, sign);
         }
 
+        /// <summary>
+        /// Computes QR decomposition of matrix.
+        /// </summary>
         public static QrDecompositionResult QrDecomposition(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -185,6 +191,9 @@ namespace OPEN_LRD.Skills
             return new QrDecompositionResult(q, r);
         }
 
+        /// <summary>
+        /// Attempts Cholesky decomposition of matrix, outputting lower-triangular lower factor.
+        /// </summary>
         public static bool TryCholeskyDecomposition(double[,] matrix, out double[,] lower)
         {
             EnsureSquare(matrix, nameof(matrix));
@@ -221,7 +230,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes eigendecomposition of symmetric matrix.
+        /// Computes the Cholesky factorization A = L L^T of a symmetric positive definite matrix.
         /// </summary>
         public static CholeskyDecompositionResult CholeskyDecomposition(double[,] matrix)
         {
@@ -232,6 +241,9 @@ namespace OPEN_LRD.Skills
             return new CholeskyDecompositionResult(lower);
         }
 
+        /// <summary>
+        /// Computes the eigenvalues and orthonormal eigenvectors of a symmetric matrix using Jacobi rotations, sorted by descending eigenvalue.
+        /// </summary>
         public static SymmetricEigenResult SymmetricEigenDecomposition(double[,] matrix)
         {
             EnsureSquare(matrix, nameof(matrix));
@@ -330,6 +342,9 @@ namespace OPEN_LRD.Skills
             return new SymmetricEigenResult(eigenvalues, eigenvectors);
         }
 
+        /// <summary>
+        /// Computes eigenvalues of matrix.
+        /// </summary>
         public static Complex[] Eigenvalues(double[,] matrix)
         {
             EnsureSquare(matrix, nameof(matrix));
@@ -356,6 +371,9 @@ namespace OPEN_LRD.Skills
             return roots;
         }
 
+        /// <summary>
+        /// Computes singular value decomposition of matrix.
+        /// </summary>
         public static SvdResult SingularValueDecomposition(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -371,6 +389,9 @@ namespace OPEN_LRD.Skills
             return new SvdResult(u, transposed.SingularValues, vt);
         }
 
+        /// <summary>
+        /// Computes the Moore-Penrose pseudoinverse of a matrix via singular value decomposition.
+        /// </summary>
         public static double[,] PseudoInverse(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -399,6 +420,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes a basis for the null space of a matrix, with one column per free variable.
+        /// </summary>
         public static double[,] NullSpace(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -438,6 +462,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes an orthonormal basis for the column space of a matrix from the left singular vectors with nonzero singular values.
+        /// </summary>
         public static double[,] ColumnSpace(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -462,6 +489,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Solves the overdetermined system matrix * x = rightHandSide in the least-squares sense using QR decomposition.
+        /// </summary>
         public static LeastSquaresResult LeastSquares(double[,] matrix, double[] rightHandSide)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -501,6 +531,9 @@ namespace OPEN_LRD.Skills
             return new LeastSquaresResult(solution, Math.Sqrt(residualSquared));
         }
 
+        /// <summary>
+        /// Computes the specified norm of a matrix (Frobenius, one, infinity, or two-norm).
+        /// </summary>
         public static double MatrixNorm(double[,] matrix, MatrixNormType type = MatrixNormType.Frobenius)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -560,6 +593,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Computes the condition number of matrix.
+        /// </summary>
         public static double ConditionNumber(double[,] matrix)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -577,6 +613,9 @@ namespace OPEN_LRD.Skills
             return largest / smallest;
         }
 
+        /// <summary>
+        /// Multiplies a matrix by a column vector.
+        /// </summary>
         public static double[] MatrixVectorMultiply(double[,] matrix, double[] vector)
         {
             EnsureMatrix(matrix, nameof(matrix));
@@ -603,6 +642,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the SVD of a matrix with at least as many rows as columns, using the eigendecomposition of its Gram matrix.
+        /// </summary>
         private static SvdResult ComputeTallSvd(double[,] matrix)
         {
             int rows = matrix.GetLength(0);
@@ -646,6 +688,9 @@ namespace OPEN_LRD.Skills
             return new SvdResult(u, singularValues, Algebra.MatrixTranspose(eigen.Eigenvectors));
         }
 
+        /// <summary>
+        /// Orthogonalizes a vector against an existing basis (two Gram-Schmidt passes) and normalizes it in place.
+        /// </summary>
         private static bool Orthonormalize(double[] vector, List<double[]> basis)
         {
             for (int pass = 0; pass < 2; pass++)
@@ -680,6 +725,9 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// Finds a unit vector orthogonal to the given basis by orthonormalizing standard basis vectors.
+        /// </summary>
         private static double[] FindOrthonormalBasisVector(int dimension, List<double[]> basis)
         {
             for (int index = 0; index < dimension; index++)
@@ -694,6 +742,9 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("Unable to complete the orthonormal basis.");
         }
 
+        /// <summary>
+        /// Solves an upper-triangular system by back substitution.
+        /// </summary>
         private static double[] SolveUpperTriangular(double[,] matrix, int size, double[] rightHandSide)
         {
             double[] result = new double[size];
@@ -713,6 +764,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Creates a copy of a matrix.
+        /// </summary>
         private static double[,] CloneMatrix(double[,] matrix)
         {
             int rows = matrix.GetLength(0);
@@ -728,6 +782,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Swaps two rows of a matrix in place.
+        /// </summary>
         private static void SwapRows(double[,] matrix, int first, int second)
         {
             int columns = matrix.GetLength(1);
@@ -739,6 +796,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a matrix is non-null and non-empty.
+        /// </summary>
         private static void EnsureMatrix(double[,] matrix, string parameterName)
         {
             if (matrix is null)
@@ -751,6 +811,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a matrix is non-null, non-empty, and square.
+        /// </summary>
         private static void EnsureSquare(double[,] matrix, string parameterName)
         {
             EnsureMatrix(matrix, parameterName);

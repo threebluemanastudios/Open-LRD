@@ -8,6 +8,7 @@ namespace OPEN_LRD.Skills
         where TNode : notnull
     {
         /// <summary>
+        /// Returns a text form of the edge showing the source node, target node, and weight.
         /// </summary>
         /// <returns>The result.</returns>
         public override string ToString()
@@ -25,6 +26,7 @@ namespace OPEN_LRD.Skills
         private readonly List<GraphEdge<TNode>> edges = new List<GraphEdge<TNode>>();
 
         /// <summary>
+        /// Creates a graph that is directed by default; pass false for an undirected graph.
         /// </summary>
         /// <param name="directed">The directed.</param>
         public Graph(bool directed = true)
@@ -39,14 +41,17 @@ namespace OPEN_LRD.Skills
         public int EdgeCount => edges.Count;
 
         /// <summary>
+        /// Gets a read-only snapshot of the nodes in insertion order.
         /// </summary>
         public IReadOnlyList<TNode> Nodes => new ReadOnlyCollection<TNode>(new List<TNode>(nodes));
 
         /// <summary>
+        /// Gets a read-only snapshot of the edges as added, without the implicit reverse entries of undirected graphs.
         /// </summary>
         public IReadOnlyList<GraphEdge<TNode>> Edges => new ReadOnlyCollection<GraphEdge<TNode>>(new List<GraphEdge<TNode>>(edges));
 
         /// <summary>
+        /// Adds a node to the graph if it is not already present. Throws if node is null.
         /// </summary>
         /// <param name="node">The node.</param>
         public void AddNode(TNode node)
@@ -65,7 +70,8 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the n-th Bell number B_n.
+        /// Adds an edge from one node to another with the given weight, adding missing nodes.
+        /// Undirected graphs also store the reverse edge. The weight must be finite.
         /// </summary>
         public void AddEdge(TNode from, TNode to, double weight = 1.0)
         {
@@ -140,7 +146,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes scalar weight from mass using standard gravitational acceleration.
+        /// Determines whether the specified node is present in the graph.
         /// </summary>
         /// <param name="node">The node.</param>
         /// <returns>The result.</returns>
@@ -154,6 +160,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Gets a read-only snapshot of the edges leaving the specified node. Throws if the node is not in the graph.
         /// </summary>
         /// <param name="node">The node.</param>
         /// <returns>The result.</returns>
@@ -167,6 +174,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Gets a read-only snapshot of the edges entering the specified node. Throws if the node is not in the graph.
         /// </summary>
         /// <param name="node">The node.</param>
         /// <returns>The result.</returns>
@@ -180,6 +188,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Gets the target nodes of the edges leaving the specified node. Throws if the node is not in the graph.
         /// </summary>
         /// <param name="node">The node.</param>
         /// <returns>The result.</returns>
@@ -201,6 +210,7 @@ namespace OPEN_LRD.Skills
         public IReadOnlyDictionary<TNode, TNode> Parents { get; }
 
         /// <summary>
+        /// Creates a traversal result from a visit order and a parent map.
         /// </summary>
         /// <param name="order">The order.</param>
         /// <param name="parents">The parents.</param>
@@ -218,6 +228,7 @@ namespace OPEN_LRD.Skills
         public bool HasNegativeCycle { get; }
 
         /// <summary>
+        /// Creates a shortest-path result from distance and predecessor maps and a negative-cycle flag.
         /// </summary>
         /// <param name="distances">The distances.</param>
         /// <param name="previous">The previous.</param>
@@ -231,6 +242,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Attempts to get the computed distance to the specified node; returns false if no distance was computed for it.
         /// </summary>
         /// <param name="node">The node.</param>
         /// <param name="distance">The distance.</param>
@@ -241,6 +253,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Attempts to rebuild the path from the start node to target by following predecessors; returns false if target is unreachable or the predecessor chain is cyclic.
         /// </summary>
         /// <param name="target">The target.</param>
         /// <param name="path">The path.</param>
@@ -281,6 +294,7 @@ namespace OPEN_LRD.Skills
         public bool HasNegativeCycle { get; }
 
         /// <summary>
+        /// Creates an all-pairs result by copying the distance matrix and recording the negative-cycle flag.
         /// </summary>
         /// <param name="distances">The distances.</param>
         /// <param name="hasNegativeCycle">The has negative cycle.</param>
@@ -294,6 +308,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Attempts to get the shortest distance from one node to another; returns false and sets the distance to positive infinity when no entry exists.
         /// </summary>
         /// <param name="from">The from.</param>
         /// <param name="to">The to.</param>
@@ -316,6 +331,7 @@ namespace OPEN_LRD.Skills
         public bool Success { get; }
         public IReadOnlyList<TNode> Order { get; }
         /// <summary>
+        /// Creates a topological sort result from the success flag and the node order.
         /// </summary>
         /// <param name="success">The success.</param>
         /// <param name="order">The order.</param>
@@ -331,6 +347,7 @@ namespace OPEN_LRD.Skills
         public IReadOnlyList<GraphEdge<TNode>> Edges { get; }
         public double TotalWeight { get; }
         /// <summary>
+        /// Creates a minimum spanning tree result from the selected edges and their total weight.
         /// </summary>
         /// <param name="edges">The edges.</param>
         /// <param name="totalWeight">The total weight.</param>
@@ -346,6 +363,7 @@ namespace OPEN_LRD.Skills
         public double MaximumFlow { get; }
         public IReadOnlyDictionary<(TNode From, TNode To), double> Flows { get; }
         /// <summary>
+        /// Creates a maximum flow result from the flow value and the per-edge flow map.
         /// </summary>
         /// <param name="maximumFlow">The maximum flow.</param>
         /// <param name="flows">The flows.</param>
@@ -362,6 +380,7 @@ namespace OPEN_LRD.Skills
         private const int MaximumFloydWarshallNodes = 512;
 
         /// <summary>
+        /// Performs a breadth-first traversal from start, returning the visit order and parent links.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="start">The start.</param>
@@ -394,6 +413,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Performs an iterative depth-first traversal from start, returning the visit order and parent links.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="start">The start.</param>
@@ -429,6 +449,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes single-source shortest path distances from start using Dijkstra's algorithm. Throws if any edge weight is negative.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="start">The start.</param>
@@ -477,6 +498,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes single-source shortest path distances from start using Bellman-Ford and reports whether a negative cycle is reachable.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="start">The start.</param>
@@ -538,6 +560,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes all-pairs shortest path distances with Floyd-Warshall. Throws if the graph has more than 512 nodes.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -609,6 +632,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes a topological ordering with Kahn's algorithm; Success is false when a cycle prevents ordering all nodes. Throws for undirected graphs.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -651,6 +675,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Determines whether the graph contains a cycle, using topological sorting for directed graphs and DFS for undirected graphs.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -693,6 +718,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Finds the weakly connected components of the graph, ignoring edge direction.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -730,6 +756,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Finds the strongly connected components with Kosaraju's algorithm. For undirected graphs, returns the connected components.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -803,6 +830,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes a minimum spanning tree with Kruskal's algorithm. Throws for directed graphs.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -845,6 +873,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the maximum flow from source to sink with Edmonds-Karp. Throws for negative capacities or when source and sink are the same node.
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="source">The source.</param>
@@ -951,6 +980,7 @@ namespace OPEN_LRD.Skills
             return new MaximumFlowResult<TNode>(maximumFlow, flows);
         }
 
+        /// <summary>Adds the given amount to the residual capacity of the edge from one node index to another.</summary>
         private static void AddResidualCapacity(Dictionary<int, Dictionary<int, double>> residual, int from, int to, double amount)
         {
             Dictionary<int, double> outgoing = residual[from];
@@ -1063,6 +1093,9 @@ namespace OPEN_LRD.Skills
             return new ReadOnlyDictionary<TNode, double>(result);
         }
 
+        /// <summary>Determines whether the graph is bipartite by treating edges as undirected and attempting a two-coloring.</summary>
+        /// <param name="graph">The graph.</param>
+        /// <returns>True if the graph is bipartite; otherwise, false.</returns>
         public static bool IsBipartite<TNode>(Graph<TNode> graph)
             where TNode : notnull
         {
@@ -1098,6 +1131,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Maps each node to its index in the graph's node list.</summary>
         private static Dictionary<TNode, int> BuildNodeIndices<TNode>(Graph<TNode> graph)
             where TNode : notnull
         {
@@ -1110,6 +1144,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Returns the nodes adjacent to a node via outgoing or incoming edges, ignoring edge direction.</summary>
         private static List<TNode> GetWeakNeighbors<TNode>(Graph<TNode> graph, TNode node)
             where TNode : notnull
         {
@@ -1125,6 +1160,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Throws if the graph is null.</summary>
         private static void EnsureGraph<TNode>(Graph<TNode> graph, string parameterName)
             where TNode : notnull
         {
@@ -1134,6 +1170,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Throws if the node is null or is not contained in the graph.</summary>
         private static void EnsureNode<TNode>(Graph<TNode> graph, TNode node, string parameterName)
             where TNode : notnull
         {
@@ -1149,6 +1186,7 @@ namespace OPEN_LRD.Skills
             private readonly int[] ranks;
 
             /// <summary>
+            /// Creates a structure with size singleton sets.
             /// </summary>
             /// <param name="size">The size.</param>
             public UnionFind(int size)
@@ -1162,6 +1200,7 @@ namespace OPEN_LRD.Skills
             }
 
             /// <summary>
+            /// Returns the representative of the set containing value, compressing the path along the way.
             /// </summary>
             /// <param name="value">The value.</param>
             /// <returns>The result.</returns>
@@ -1175,6 +1214,7 @@ namespace OPEN_LRD.Skills
             }
 
             /// <summary>
+            /// Merges the sets containing first and second; returns false if they are already in the same set.
             /// </summary>
             /// <param name="first">The first.</param>
             /// <param name="second">The second.</param>

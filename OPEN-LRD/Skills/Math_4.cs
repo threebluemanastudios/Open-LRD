@@ -23,7 +23,7 @@ namespace OPEN_LRD.Skills
     internal static class Math_4
     {
         /// <summary>
-        /// Numerically approximates the first partial derivative of a 3D scalar function at (x, y, z).
+        /// Computes the symbolic first partial derivative of an expression with respect to variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -34,7 +34,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the first partial derivative of a 3D scalar function at (x, y, z).
+        /// Parses expression and computes its symbolic first partial derivative with respect to variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -45,7 +45,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the gradient of a 3D scalar function at (x, y, z).
+        /// Computes the symbolic gradient of an expression: the array of first partial derivatives with respect to each variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variables">The variables.</param>
@@ -69,7 +69,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the gradient of a 3D scalar function at (x, y, z).
+        /// Parses expression and computes its symbolic gradient with respect to the given variables.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variables">The variables.</param>
@@ -80,7 +80,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the Laplacian (? f) of a 3D scalar function at (x, y, z).
+        /// Computes the symbolic Laplacian (sum of unmixed second partial derivatives) of an expression with respect to the given variables.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variables">The variables.</param>
@@ -99,7 +99,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the Laplacian (? f) of a 3D scalar function at (x, y, z).
+        /// Computes the symbolic Laplacian (sum of unmixed second partial derivatives) of an expression with respect to the given variables.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variables">The variables.</param>
@@ -110,6 +110,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the symbolic 2x2 Hessian matrix of second partial derivatives of an expression with respect to two variables.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="firstVariable">The first variable.</param>
@@ -150,6 +151,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the gradient of a 2D expression at the point (x, y) by symbolic differentiation and evaluation.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="xVariable">The x variable.</param>
@@ -170,6 +172,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the gradient of a 3D expression at the point (x, y, z) by symbolic differentiation and evaluation.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="xVariable">The x variable.</param>
@@ -194,7 +197,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the first partial derivative of a 3D scalar function at (x, y, z).
+        /// Numerically approximates the first partial derivative of a 2D scalar function at (x, y) with respect to variableIndex (0 for x, 1 for y).
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -263,7 +266,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the gradient of a 3D scalar function at (x, y, z).
+        /// Numerically approximates the gradient of a 2D scalar function at (x, y).
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -295,7 +298,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates an unmixed second partial derivative of a 3D scalar function at (x, y, z).
+        /// Numerically approximates an unmixed second partial derivative of a 2D scalar function at (x, y) with respect to variableIndex (0 for x, 1 for y).
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -356,7 +359,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the mixed second partial derivative (? f / (?x ?y)) of a 2D scalar function at (x, y).
+        /// Numerically approximates the mixed second partial derivative (partial^2 f / (partial x partial y)) of a 2D scalar function at (x, y).
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -378,6 +381,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Numerically approximates the 2x2 Hessian matrix of a 2D scalar function at (x, y) using second partial derivatives and the mixed partial.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -399,6 +403,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Numerically approximates the 3x3 Hessian matrix of a 3D scalar function at (x, y, z) using second partial derivatives and mixed partials.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -430,7 +435,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the directional derivative of a 3D scalar function at (x, y, z).
+        /// Numerically computes the directional derivative of a 2D scalar function at (x, y) along the direction (xDirection, yDirection).
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -474,7 +479,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the Laplacian (? f) of a 3D scalar function at (x, y, z).
+        /// Numerically approximates the Laplacian (sum of unmixed second partial derivatives) of a 2D scalar function at (x, y).
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -488,7 +493,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the Laplacian (? f) of a 3D scalar function at (x, y, z).
+        /// Numerically approximates the Laplacian (sum of unmixed second partial derivatives) of a 3D scalar function at (x, y, z).
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -504,7 +509,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the divergence (?   F) of a 3D vector field at (x, y, z).
+        /// Numerically approximates the divergence (div F) of a 2D vector field at (x, y).
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="x">The x.</param>
@@ -522,7 +527,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the divergence (?   F) of a 3D vector field at (x, y, z).
+        /// Numerically approximates the divergence (div F) of a 3D vector field at (x, y, z).
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="x">The x.</param>
@@ -542,7 +547,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the curl vector (?   F) of a 3D vector field at (x, y, z).
+        /// Numerically approximates the scalar curl (z-component of curl F) of a 2D vector field at (x, y).
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="x">The x.</param>
@@ -560,7 +565,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the curl vector (?   F) of a 3D vector field at (x, y, z).
+        /// Numerically approximates the curl vector (curl F) of a 3D vector field at (x, y, z).
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="x">The x.</param>
@@ -584,7 +589,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the Jacobian matrix/determinant for two 2D scalar component functions at (x, y).
+        /// Numerically computes the Jacobian determinant of the 2D map defined by two scalar component functions at (x, y).
         /// </summary>
         /// <param name="firstComponent">The first component.</param>
         /// <param name="secondComponent">The second component.</param>
@@ -607,7 +612,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the double integral of a 2D scalar function over a non-rectangular region bounded vertically by yLower(x) and yUpper(x) for x in [xLower, xUpper].
+        /// Numerically computes the double integral of a 2D scalar function over the rectangular region [xLower, xUpper] x [yLower, yUpper] using nested Simpson's rule.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="xLower">The x lower.</param>
@@ -661,7 +666,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the double integral in polar coordinates (r, ?) over [radiusLower, radiusUpper]   [angleLower, angleUpper], applying the r Jacobian area element.
+        /// Numerically computes the double integral in polar coordinates (r, theta) over [radiusLower, radiusUpper] x [angleLower, angleUpper], applying the r Jacobian area element.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="radiusLower">The radius lower.</param>
@@ -682,7 +687,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the triple integral of a 3D scalar function over the box domain [xLower, xUpper]   [yLower, yUpper]   [zLower, zUpper].
+        /// Numerically computes the triple integral of a 3D scalar function over the box domain [xLower, xUpper] x [yLower, yUpper] x [zLower, zUpper].
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="xLower">The x lower.</param>
@@ -711,7 +716,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the triple integral in cylindrical coordinates (r, ?, z), applying the r Jacobian volume element.
+        /// Numerically computes the triple integral in cylindrical coordinates (r, theta, z), applying the r Jacobian volume element.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="radiusLower">The radius lower.</param>
@@ -736,7 +741,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the triple integral in spherical coordinates (?, ?, ?), applying the ?  sin(?) Jacobian volume element.
+        /// Numerically computes the triple integral in spherical coordinates (rho, theta, phi), applying the rho^2 sin(phi) Jacobian volume element.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="rhoLower">The rho lower.</param>
@@ -768,7 +773,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the scalar line integral (? f(r(t)) ds) of a 3D scalar field along a ParametricCurve for parameter t in [lower, upper].
+        /// Computes the scalar line integral (integral of f(x(t), y(t)) ds) of a 2D scalar field along the parametric curve (x(t), y(t)) for t in [lower, upper].
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="xOfT">The x of t.</param>
@@ -800,7 +805,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the scalar line integral (? f(r(t)) ds) of a 3D scalar field along a ParametricCurve for parameter t in [lower, upper].
+        /// Computes the scalar line integral (integral of f(r(t)) ds) of a 3D scalar field along a ParametricCurve for parameter t in [lower, upper].
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="curve">The curve.</param>
@@ -827,7 +832,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the line integral (? F   dr) of a 3D vector field along a ParametricCurve for parameter t in [lower, upper].
+        /// Computes the line integral (integral of F . dr) of a 2D vector field along the parametric curve (x(t), y(t)) for t in [lower, upper].
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="xOfT">The x of t.</param>
@@ -860,7 +865,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the line integral (? F   dr) of a 3D vector field along a ParametricCurve for parameter t in [lower, upper].
+        /// Computes the line integral (integral of F . dr) of a 3D vector field along a ParametricCurve for parameter t in [lower, upper].
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="curve">The curve.</param>
@@ -888,7 +893,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the 2D normal flux line integral (? F   n ds) across the parametric curve (x(t), y(t)) for t in [lower, upper].
+        /// Computes the 2D normal flux line integral (integral of F . n ds) across the parametric curve (x(t), y(t)) for t in [lower, upper].
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="xOfT">The x of t.</param>
@@ -921,7 +926,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the surface area of a ParametricSurface over the parameter domain [uLower, uUpper]   [vLower, vUpper].
+        /// Numerically computes the surface area of a ParametricSurface over the parameter domain [uLower, uUpper] x [vLower, vUpper].
         /// </summary>
         /// <param name="surface">The surface.</param>
         /// <param name="uLower">The u lower.</param>
@@ -944,7 +949,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the surface area of the explicit graph z = f(x, y) over [xLower, xUpper]   [yLower, yUpper].
+        /// Numerically computes the surface area of the explicit graph z = f(x, y) over [xLower, xUpper] x [yLower, yUpper].
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="xLower">The x lower.</param>
@@ -976,7 +981,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the surface integral (? f(x, y, z) dS) of a 3D scalar function over a ParametricSurface on [uLower, uUpper]   [vLower, vUpper].
+        /// Numerically computes the surface integral (integral of f(x, y, z) dS) of a 3D scalar function over a ParametricSurface on [uLower, uUpper] x [vLower, vUpper].
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="surface">The surface.</param>
@@ -1012,7 +1017,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the surface flux integral (? F   dS) of a 3D vector field across a ParametricSurface on [uLower, uUpper]   [vLower, vUpper].
+        /// Numerically computes the surface flux integral (integral of F . dS) of a 3D vector field across a ParametricSurface on [uLower, uUpper] x [vLower, vUpper].
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="surface">The surface.</param>
@@ -1080,7 +1085,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the area (0.5 ? r(?)  d?) of a polar region bounded by r(?) for angle ? in [lower, upper].
+        /// Computes the area (one-half integral of r(theta)^2 d theta) of a polar region bounded by r(theta) for theta in [lower, upper].
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="lower">The lower.</param>
@@ -1101,7 +1106,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the center of mass (x?, ?) of a 2D planar lamina with areal density over [xLower, xUpper]   [yLower, yUpper].
+        /// Numerically computes the center of mass (x-bar, y-bar) of a 2D planar lamina with areal density over [xLower, xUpper] x [yLower, yUpper].
         /// </summary>
         /// <param name="density">The density.</param>
         /// <param name="xLower">The x lower.</param>
@@ -1127,7 +1132,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the moment of inertia (I_x = ? y  ?(x, y) dA) about the x-axis for a 2D lamina over [xLower, xUpper]   [yLower, yUpper].
+        /// Numerically computes the moment of inertia (I_x = integral of y^2 rho(x, y) dA) about the x-axis for a 2D lamina over [xLower, xUpper] x [yLower, yUpper].
         /// </summary>
         /// <param name="density">The density.</param>
         /// <param name="xLower">The x lower.</param>
@@ -1146,7 +1151,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the moment of inertia (I_y = ? x  ?(x, y) dA) about the y-axis for a 2D lamina over [xLower, xUpper]   [yLower, yUpper].
+        /// Numerically computes the moment of inertia (I_y = integral of x^2 rho(x, y) dA) about the y-axis for a 2D lamina over [xLower, xUpper] x [yLower, yUpper].
         /// </summary>
         /// <param name="density">The density.</param>
         /// <param name="xLower">The x lower.</param>
@@ -1165,7 +1170,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the mean value of a 2D scalar function over the rectangular domain [xLower, xUpper]   [yLower, yUpper].
+        /// Numerically computes the mean value of a 2D scalar function over the rectangular domain [xLower, xUpper] x [yLower, yUpper].
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="xLower">The x lower.</param>
@@ -1185,6 +1190,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the work done by a 3D force field along a ParametricCurve for parameter t in [lower, upper]; equivalent to the line integral of the field.
         /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="curve">The curve.</param>
@@ -1197,6 +1203,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Minimizes a 2D scalar function by fixed-step gradient descent starting at (x, y), stopping early when the update falls below tolerance; returns the final point.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -1241,6 +1248,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves the first-order ODE y' = derivative(x, y) from xStart to xEnd with the explicit Euler method using the given number of steps.
         /// </summary>
         /// <param name="derivative">The derivative.</param>
         /// <param name="xStart">The x start.</param>
@@ -1269,6 +1277,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves the first-order ODE y' = derivative(x, y) from xStart to xEnd with the improved Euler (Heun predictor-corrector) method using the given number of steps.
         /// </summary>
         /// <param name="derivative">The derivative.</param>
         /// <param name="xStart">The x start.</param>
@@ -1300,6 +1309,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves the first-order ODE y' = derivative(x, y) from xStart to xEnd with the classical fourth-order Runge-Kutta method using the given number of steps.
         /// </summary>
         /// <param name="derivative">The derivative.</param>
         /// <param name="xStart">The x start.</param>
@@ -1332,6 +1342,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves a system of first-order ODEs y' = derivative(t, y) from start to end with the classical fourth-order Runge-Kutta method, starting from the initial state vector.
         /// </summary>
         /// <param name="derivative">The derivative.</param>
         /// <param name="start">The start.</param>
@@ -1378,6 +1389,17 @@ namespace OPEN_LRD.Skills
             return new OdeSystemSolution(times, values);
         }
 
+        /// <summary>
+        /// Numerically approximates the mixed second partial derivative of a 3D scalar function at (x, y, z) with respect to the coordinates at firstIndex and secondIndex.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="x">The x.</param>
+        /// <param name="y">The y.</param>
+        /// <param name="z">The z.</param>
+        /// <param name="firstIndex">The first index.</param>
+        /// <param name="secondIndex">The second index.</param>
+        /// <param name="step">The step.</param>
+        /// <returns>The result.</returns>
         private static double MixedPartialDerivative(ScalarFunction3D function, double x, double y, double z, int firstIndex, int secondIndex, double step)
         {
             double[] coordinates = { x, y, z };
@@ -1396,6 +1418,12 @@ namespace OPEN_LRD.Skills
                 + Evaluate(-firstStep, -secondStep)) / (4.0 * firstStep * secondStep);
         }
 
+        /// <summary>
+        /// Numerically approximates the derivative of a ParametricCurve with respect to its parameter at t using a central difference.
+        /// </summary>
+        /// <param name="curve">The curve.</param>
+        /// <param name="t">The parameter value.</param>
+        /// <returns>The result.</returns>
         private static Vector3 CurveDerivative(ParametricCurve curve, double t)
         {
             double step = ResolveStep(0.0, t);
@@ -1407,6 +1435,13 @@ namespace OPEN_LRD.Skills
                 (forward.Z - backward.Z) / (2.0 * step));
         }
 
+        /// <summary>
+        /// Computes the cross product of the numerically estimated partial derivatives of a ParametricSurface with respect to u and v at (u, v).
+        /// </summary>
+        /// <param name="surface">The surface.</param>
+        /// <param name="u">The u.</param>
+        /// <param name="v">The v.</param>
+        /// <returns>The result.</returns>
         private static Vector3 SurfaceCross(ParametricSurface surface, double u, double v)
         {
             double uStep = ResolveStep(0.0, u);
@@ -1426,16 +1461,35 @@ namespace OPEN_LRD.Skills
             return Math_2.CalculateCrossProduct(uDerivative, vDerivative);
         }
 
+        /// <summary>
+        /// Returns the Euclidean length of value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         private static double Magnitude(Vector3 value)
         {
             return Math_2.CalculateVectorMagnitude(value);
         }
 
+        /// <summary>
+        /// Numerically integrates function over [lower, upper] using composite Simpson's rule with the given number of intervals.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="intervals">The intervals.</param>
+        /// <returns>The result.</returns>
         private static double Simpson(Func<double, double> function, double lower, double upper, int intervals)
         {
             return Math_3.NumericIntegral(function, lower, upper, intervals);
         }
 
+        /// <summary>
+        /// Returns step if it is positive; otherwise returns a finite-difference step scaled from the magnitude of coordinate.
+        /// </summary>
+        /// <param name="step">The step.</param>
+        /// <param name="coordinate">The coordinate.</param>
+        /// <returns>The result.</returns>
         private static double ResolveStep(double step, double coordinate)
         {
             if (step > 0.0)
@@ -1445,6 +1499,16 @@ namespace OPEN_LRD.Skills
             return Math.Max(1e-5, Math.Abs(coordinate) * 1e-5);
         }
 
+        /// <summary>
+        /// Validates the derivative delegate, step count, and interval endpoints shared by the single-equation ODE solvers.
+        /// </summary>
+        /// <param name="derivative">The derivative.</param>
+        /// <param name="steps">The steps.</param>
+        /// <param name="start">The start.</param>
+        /// <param name="end">The end.</param>
+        /// <exception cref="ArgumentNullException">Thrown when derivative is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when steps is less than one.</exception>
+        /// <exception cref="ArgumentException">Thrown when start or end is not finite.</exception>
         private static void ValidateOdeArguments(ScalarFunction2D derivative, int steps, double start, double end)
         {
             if (derivative == null)
@@ -1461,6 +1525,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Returns a new array equal to values plus scale times increment, computed element-wise.
+        /// </summary>
+        /// <param name="values">The values.</param>
+        /// <param name="increment">The increment.</param>
+        /// <param name="scale">The scale.</param>
+        /// <returns>The result.</returns>
         private static double[] AddScaled(double[] values, double[] increment, double scale)
         {
             double[] result = new double[values.Length];
@@ -1471,6 +1542,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Returns a new array containing a copy of the elements of values.
+        /// </summary>
+        /// <param name="values">The values.</param>
+        /// <returns>The result.</returns>
         private static double[] Copy(double[] values)
         {
             double[] result = new double[values.Length];

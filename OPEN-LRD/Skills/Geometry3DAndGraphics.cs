@@ -68,6 +68,9 @@ namespace OPEN_LRD.Skills
             return lower.AsReadOnly();
         }
 
+        /// <summary>
+        /// Determines whether point lies inside polygon.
+        /// </summary>
         public static bool IsPointInPolygon(Vector2 point, IReadOnlyList<Vector2> polygon)
         {
             EnsureFinite(point, nameof(point));
@@ -91,6 +94,9 @@ namespace OPEN_LRD.Skills
             return inside;
         }
 
+        /// <summary>
+        /// Tests or computes the intersection between segment ab and segment cd, outputting the intersection point.
+        /// </summary>
         public static bool SegmentIntersection(Vector2 a, Vector2 b, Vector2 c, Vector2 d, out Vector2 intersection)
         {
             EnsureFinite(a, nameof(a));
@@ -143,6 +149,9 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// Clips polygon to the axis-aligned bounds defined by clipMin and clipMax.
+        /// </summary>
         public static IReadOnlyList<Vector2> ClipPolygon(IReadOnlyList<Vector2> polygon, Vector2 clipMin, Vector2 clipMax)
         {
             List<Vector2> vertices = NormalizePolygon(polygon, nameof(polygon));
@@ -159,6 +168,9 @@ namespace OPEN_LRD.Skills
             return vertices.AsReadOnly();
         }
 
+        /// <summary>
+        /// Triangulates 2D polygon into non-overlapping triangles.
+        /// </summary>
         public static IReadOnlyList<Triangle2D> TriangulatePolygon(IReadOnlyList<Vector2> polygon)
         {
             List<Vector2> vertices = NormalizePolygon(polygon, nameof(polygon));
@@ -220,6 +232,9 @@ namespace OPEN_LRD.Skills
             return triangles.AsReadOnly();
         }
 
+        /// <summary>
+        /// Computes barycentric coordinates of 2D point relative to vertices a, b, and c.
+        /// </summary>
         public static BarycentricCoordinates BarycentricCoordinates(Vector2 point, Vector2 a, Vector2 b, Vector2 c)
         {
             EnsureFinite(point, nameof(point));
@@ -239,6 +254,9 @@ namespace OPEN_LRD.Skills
             return new BarycentricCoordinates(1.0 - secondWeight - thirdWeight, secondWeight, thirdWeight);
         }
 
+        /// <summary>
+        /// Determines whether 2D point lies inside triangle (a, b, c).
+        /// </summary>
         public static bool IsPointInTriangle(Vector2 point, Vector2 a, Vector2 b, Vector2 c)
         {
             BarycentricCoordinates weights = BarycentricCoordinates(point, a, b, c);
@@ -246,6 +264,9 @@ namespace OPEN_LRD.Skills
                 && weights.First <= 1.0 + Tolerance && weights.Second <= 1.0 + Tolerance && weights.Third <= 1.0 + Tolerance;
         }
 
+        /// <summary>
+        /// Computes the unit normal of triangle (a, b, c) using counter-clockwise winding.
+        /// </summary>
         public static Vector3 TriangleNormal(Vector3 a, Vector3 b, Vector3 c)
         {
             EnsureFinite(a, nameof(a));
@@ -254,6 +275,9 @@ namespace OPEN_LRD.Skills
             return Math_2.NormalizeVector(Math_2.CalculateCrossProduct(b - a, c - a));
         }
 
+        /// <summary>
+        /// Computes the area of triangle (a, b, c).
+        /// </summary>
         public static double TriangleArea(Vector3 a, Vector3 b, Vector3 c)
         {
             EnsureFinite(a, nameof(a));
@@ -262,6 +286,9 @@ namespace OPEN_LRD.Skills
             return 0.5 * Magnitude(Math_2.CalculateCrossProduct(b - a, c - a));
         }
 
+        /// <summary>
+        /// Computes barycentric coordinates of 3D point relative to the vertices of triangle.
+        /// </summary>
         public static BarycentricCoordinates BarycentricCoordinates(Vector3 point, Triangle triangle)
         {
             EnsureFinite(point, nameof(point));
@@ -286,6 +313,9 @@ namespace OPEN_LRD.Skills
             return new BarycentricCoordinates(1.0 - secondWeight - thirdWeight, secondWeight, thirdWeight);
         }
 
+        /// <summary>
+        /// Computes the intersection of ray with plane.
+        /// </summary>
         public static RayHit RayPlaneIntersection(Ray ray, Plane plane)
         {
             Vector3 direction = NormalizeDirection(ray.Direction);
@@ -313,6 +343,9 @@ namespace OPEN_LRD.Skills
             return new RayHit(true, distance, point, denominator < 0.0 ? normal : Scale(normal, -1.0));
         }
 
+        /// <summary>
+        /// Computes the intersection of ray with the sphere at center of given radius.
+        /// </summary>
         public static RayHit RaySphereIntersection(Ray ray, Vector3 center, double radius)
         {
             Vector3 direction = NormalizeDirection(ray.Direction);
@@ -341,6 +374,9 @@ namespace OPEN_LRD.Skills
             return new RayHit(true, distance, point, normal);
         }
 
+        /// <summary>
+        /// Computes the intersection of ray with triangle using the Moller-Trumbore algorithm.
+        /// </summary>
         public static RayHit RayTriangleIntersection(Ray ray, Triangle triangle)
         {
             Vector3 direction = NormalizeDirection(ray.Direction);
@@ -382,6 +418,9 @@ namespace OPEN_LRD.Skills
             return new RayHit(true, distance, ray.Origin + Scale(direction, distance), normal);
         }
 
+        /// <summary>
+        /// Computes the intersection of ray with axis-aligned box.
+        /// </summary>
         public static RayHit RayBoxIntersection(Ray ray, BoundingBox box)
         {
             Vector3 direction = NormalizeDirection(ray.Direction);
@@ -443,6 +482,9 @@ namespace OPEN_LRD.Skills
             return new RayHit(true, distance, ray.Origin + Scale(direction, distance), normal);
         }
 
+        /// <summary>
+        /// Computes an axis-aligned bounding box enclosing 3D points.
+        /// </summary>
         public static BoundingBox BoundingBoxFromPoints(IReadOnlyList<Vector3> points)
         {
             ValidatePoints(points, 1, nameof(points));
@@ -464,6 +506,9 @@ namespace OPEN_LRD.Skills
             return new BoundingBox(new Vector3(minX, minY, minZ), new Vector3(maxX, maxY, maxZ));
         }
 
+        /// <summary>
+        /// Evaluates Bezier curve point at parameter t using de Casteljau's algorithm.
+        /// </summary>
         public static Vector3 BezierPoint(IReadOnlyList<Vector3> controlPoints, double t)
         {
             ValidateCurve(controlPoints, t);
@@ -482,6 +527,9 @@ namespace OPEN_LRD.Skills
             return work[0];
         }
 
+        /// <summary>
+        /// Evaluates the first derivative of Bezier curve at parameter t.
+        /// </summary>
         public static Vector3 BezierDerivative(IReadOnlyList<Vector3> controlPoints, double t)
         {
             ValidateCurve(controlPoints, t);
@@ -498,6 +546,9 @@ namespace OPEN_LRD.Skills
             return BezierPoint(derivativeControls, t);
         }
 
+        /// <summary>
+        /// Evaluates the Catmull-Rom spline point between p1 and p2 at parameter t.
+        /// </summary>
         public static Vector3 CatmullRomPoint(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, double t)
         {
             EnsureFinite(p0, nameof(p0));
@@ -513,6 +564,9 @@ namespace OPEN_LRD.Skills
                 0.5);
         }
 
+        /// <summary>
+        /// Evaluates the Catmull-Rom spline tangent between p1 and p2 at parameter t.
+        /// </summary>
         public static Vector3 CatmullRomTangent(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, double t)
         {
             EnsureFinite(p0, nameof(p0));
@@ -526,6 +580,9 @@ namespace OPEN_LRD.Skills
             return Scale(Add(Add(p2 - p0, Scale(secondCoefficient, 2.0 * t)), Scale(thirdCoefficient, 3.0 * t2)), 0.5);
         }
 
+        /// <summary>
+        /// Builds a 4x4 homogeneous translation matrix.
+        /// </summary>
         public static double[,] TranslationMatrix(double x, double y, double z)
         {
             EnsureFinite(x, nameof(x));
@@ -538,6 +595,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Builds a 4x4 homogeneous rotation matrix about the X axis by radians.
+        /// </summary>
         public static double[,] RotationXMatrix(double radians)
         {
             EnsureFinite(radians, nameof(radians));
@@ -552,7 +612,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Transforms 3D direction vector by transformation matrix.
+        /// Builds a 4x4 homogeneous rotation matrix about the Y axis by radians.
         /// </summary>
         public static double[,] RotationYMatrix(double radians)
         {
@@ -567,6 +627,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Builds a 4x4 homogeneous rotation matrix about the Z axis by radians.
+        /// </summary>
         public static double[,] RotationZMatrix(double radians)
         {
             EnsureFinite(radians, nameof(radians));
@@ -580,6 +643,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Builds a 4x4 homogeneous non-uniform scale matrix.
+        /// </summary>
         public static double[,] ScaleMatrix(double x, double y, double z)
         {
             EnsureFinite(x, nameof(x));
@@ -592,6 +658,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Multiplies two 4x4 transform matrices.
+        /// </summary>
         public static double[,] MultiplyMatrices(double[,] left, double[,] right)
         {
             ValidateTransformMatrix(left, nameof(left));
@@ -599,6 +668,9 @@ namespace OPEN_LRD.Skills
             return Algebra.MatrixMultiply(left, right);
         }
 
+        /// <summary>
+        /// Transforms a point by a 4x4 homogeneous matrix, applying perspective division.
+        /// </summary>
         public static Vector3 TransformPoint(double[,] matrix, Vector3 point)
         {
             ValidateTransformMatrix(matrix, nameof(matrix));
@@ -614,6 +686,9 @@ namespace OPEN_LRD.Skills
             return new Vector3(x / w, y / w, z / w);
         }
 
+        /// <summary>
+        /// Transforms a direction vector by the upper-left 3x3 of a 4x4 matrix, ignoring translation.
+        /// </summary>
         public static Vector3 TransformDirection(double[,] matrix, Vector3 direction)
         {
             ValidateTransformMatrix(matrix, nameof(matrix));
@@ -624,6 +699,9 @@ namespace OPEN_LRD.Skills
                 matrix[2, 0] * direction.X + matrix[2, 1] * direction.Y + matrix[2, 2] * direction.Z);
         }
 
+        /// <summary>
+        /// Builds a 4x4 perspective projection matrix from field of view, aspect ratio, and clip planes.
+        /// </summary>
         public static double[,] PerspectiveProjection(double fieldOfViewRadians, double aspectRatio, double nearPlane, double farPlane)
         {
             EnsureFinite(fieldOfViewRadians, nameof(fieldOfViewRadians));
@@ -648,6 +726,9 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Builds a 4x4 view matrix looking from eye toward target with the given up vector.
+        /// </summary>
         public static double[,] LookAt(Vector3 eye, Vector3 target, Vector3 up)
         {
             EnsureFinite(eye, nameof(eye));
@@ -665,6 +746,9 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Validates polygon vertices and returns a copy with a duplicated closing vertex removed.
+        /// </summary>
         private static List<Vector2> NormalizePolygon(IReadOnlyList<Vector2> polygon, string parameterName)
         {
             ValidatePoints(polygon, 3, parameterName);
@@ -680,6 +764,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Clips a polygon against a single half-plane using the Sutherland-Hodgman method.
+        /// </summary>
         private static List<Vector2> ClipAgainstEdge(List<Vector2> input, Func<Vector2, bool> inside, Func<Vector2, Vector2, Vector2> intersection)
         {
             List<Vector2> output = new List<Vector2>();
@@ -710,6 +797,9 @@ namespace OPEN_LRD.Skills
             return RemoveConsecutiveDuplicates(output);
         }
 
+        /// <summary>
+        /// Removes consecutive duplicate points, including a duplicate closing point.
+        /// </summary>
         private static List<Vector2> RemoveConsecutiveDuplicates(List<Vector2> points)
         {
             List<Vector2> result = new List<Vector2>();
@@ -727,6 +817,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the intersection of segment first-second with the vertical line at x.
+        /// </summary>
         private static Vector2 IntersectVertical(Vector2 first, Vector2 second, double x)
         {
             double difference = second.X - first.X;
@@ -738,6 +831,9 @@ namespace OPEN_LRD.Skills
             return new Vector2(x, first.Y + t * (second.Y - first.Y));
         }
 
+        /// <summary>
+        /// Computes the intersection of segment first-second with the horizontal line at y.
+        /// </summary>
         private static Vector2 IntersectHorizontal(Vector2 first, Vector2 second, double y)
         {
             double difference = second.Y - first.Y;
@@ -749,6 +845,9 @@ namespace OPEN_LRD.Skills
             return new Vector2(first.X + t * (second.X - first.X), y);
         }
 
+        /// <summary>
+        /// Throws if any non-adjacent edges of the polygon intersect.
+        /// </summary>
         private static void EnsureSimplePolygon(List<Vector2> polygon)
         {
             int count = polygon.Count;
@@ -770,6 +869,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Computes the signed area of polygon; positive for counter-clockwise winding.
+        /// </summary>
         private static double PolygonSignedArea(List<Vector2> polygon)
         {
             double area = 0.0;
@@ -782,6 +884,9 @@ namespace OPEN_LRD.Skills
             return 0.5 * area;
         }
 
+        /// <summary>
+        /// Determines whether point lies inside triangle (a, b, c) given its orientation sign.
+        /// </summary>
         private static bool PointInTriangle(Vector2 point, Vector2 a, Vector2 b, Vector2 c, double orientation)
         {
             double first = orientation * Cross(b - a, point - a);
@@ -790,6 +895,9 @@ namespace OPEN_LRD.Skills
             return first >= -Tolerance && second >= -Tolerance && third >= -Tolerance;
         }
 
+        /// <summary>
+        /// Determines whether point lies on segment ab within tolerance.
+        /// </summary>
         private static bool PointOnSegment(Vector2 point, Vector2 a, Vector2 b)
         {
             Vector2 edge = b - a;
@@ -802,52 +910,82 @@ namespace OPEN_LRD.Skills
             return projection >= -Tolerance && projection <= Dot(edge, edge) + Tolerance;
         }
 
+        /// <summary>
+        /// Determines whether two 2D points are equal within tolerance.
+        /// </summary>
         private static bool SamePoint(Vector2 first, Vector2 second)
         {
             return Math.Abs(first.X - second.X) <= Tolerance && Math.Abs(first.Y - second.Y) <= Tolerance;
         }
 
+        /// <summary>
+        /// Compares two 2D points by X coordinate, then by Y coordinate.
+        /// </summary>
         private static int ComparePoints(Vector2 first, Vector2 second)
         {
             int xComparison = first.X.CompareTo(second.X);
             return xComparison != 0 ? xComparison : first.Y.CompareTo(second.Y);
         }
 
+        /// <summary>
+        /// Computes the scalar 2D cross product of two vectors.
+        /// </summary>
         private static double Cross(Vector2 first, Vector2 second)
         {
             return first.X * second.Y - first.Y * second.X;
         }
 
+        /// <summary>
+        /// Computes the Z component of the cross product of the XY projections of two vectors.
+        /// </summary>
         private static double Cross(Vector3 first, Vector3 second)
         {
             return first.X * second.Y - first.Y * second.X;
         }
 
+        /// <summary>
+        /// Computes the dot product of two 2D vectors.
+        /// </summary>
         private static double Dot(Vector2 first, Vector2 second)
         {
             return first.X * second.X + first.Y * second.Y;
         }
 
+        /// <summary>
+        /// Computes the dot product of two 3D vectors.
+        /// </summary>
         private static double Dot(Vector3 first, Vector3 second)
         {
             return first.X * second.X + first.Y * second.Y + first.Z * second.Z;
         }
 
+        /// <summary>
+        /// Computes the Euclidean length of a 2D vector.
+        /// </summary>
         private static double Magnitude(Vector2 value)
         {
             return Math.Sqrt(Dot(value, value));
         }
 
+        /// <summary>
+        /// Computes the Euclidean length of a 3D vector.
+        /// </summary>
         private static double Magnitude(Vector3 value)
         {
             return Math.Sqrt(Dot(value, value));
         }
 
+        /// <summary>
+        /// Validates and normalizes a ray direction.
+        /// </summary>
         private static Vector3 NormalizeDirection(Vector3 direction)
         {
             return Normalize(direction, nameof(direction));
         }
 
+        /// <summary>
+        /// Returns the vector scaled to unit length; throws if it is non-finite or near zero.
+        /// </summary>
         private static Vector3 Normalize(Vector3 value, string parameterName)
         {
             double magnitude = Magnitude(value);
@@ -858,16 +996,25 @@ namespace OPEN_LRD.Skills
             return Scale(value, 1.0 / magnitude);
         }
 
+        /// <summary>
+        /// Adds two 3D vectors component-wise.
+        /// </summary>
         private static Vector3 Add(Vector3 first, Vector3 second)
         {
             return new Vector3(first.X + second.X, first.Y + second.Y, first.Z + second.Z);
         }
 
+        /// <summary>
+        /// Multiplies a 3D vector by a scalar factor.
+        /// </summary>
         private static Vector3 Scale(Vector3 value, double factor)
         {
             return new Vector3(value.X * factor, value.Y * factor, value.Z * factor);
         }
 
+        /// <summary>
+        /// Returns the component of a vector along axis index 0 (X), 1 (Y), or 2 (Z).
+        /// </summary>
         private static double Component(Vector3 value, int axis)
         {
             return axis switch
@@ -879,6 +1026,9 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Returns the unit vector along axis index 0 (X), 1 (Y), or 2 (Z), scaled by sign.
+        /// </summary>
         private static Vector3 AxisVector(int axis, double sign)
         {
             return axis switch
@@ -890,11 +1040,17 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Returns a RayHit representing no intersection.
+        /// </summary>
         private static RayHit Miss()
         {
             return new RayHit(false, double.PositiveInfinity, default, default);
         }
 
+        /// <summary>
+        /// Validates that 2D points are non-null, meet the minimum count, and are finite; returns a copy.
+        /// </summary>
         private static List<Vector2> ValidatePoints(IReadOnlyList<Vector2> points, int minimumCount, string parameterName)
         {
             if (points == null)
@@ -914,6 +1070,9 @@ namespace OPEN_LRD.Skills
             return copy;
         }
 
+        /// <summary>
+        /// Validates that 3D points are non-null, meet the minimum count, and are finite.
+        /// </summary>
         private static void ValidatePoints(IReadOnlyList<Vector3> points, int minimumCount, string parameterName)
         {
             if (points == null)
@@ -930,12 +1089,18 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates Bezier control points and the curve parameter.
+        /// </summary>
         private static void ValidateCurve(IReadOnlyList<Vector3> controlPoints, double t)
         {
             ValidatePoints(controlPoints, 1, nameof(controlPoints));
             EnsureUnitParameter(t);
         }
 
+        /// <summary>
+        /// Throws if value is non-finite or outside the range [0, 1].
+        /// </summary>
         private static void EnsureUnitParameter(double value)
         {
             if (!double.IsFinite(value) || value < 0.0 || value > 1.0)
@@ -944,6 +1109,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a transform matrix is non-null, 4x4, and contains only finite values.
+        /// </summary>
         private static void ValidateTransformMatrix(double[,] matrix, string parameterName)
         {
             if (matrix == null)
@@ -963,6 +1131,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Returns a 4x4 identity matrix.
+        /// </summary>
         private static double[,] IdentityMatrix()
         {
             return new[,]
@@ -974,12 +1145,18 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Throws if either component of a 2D vector is non-finite.
+        /// </summary>
         private static void EnsureFinite(Vector2 value, string parameterName)
         {
             EnsureFinite(value.X, parameterName);
             EnsureFinite(value.Y, parameterName);
         }
 
+        /// <summary>
+        /// Throws if any component of a 3D vector is non-finite.
+        /// </summary>
         private static void EnsureFinite(Vector3 value, string parameterName)
         {
             EnsureFinite(value.X, parameterName);
@@ -987,6 +1164,9 @@ namespace OPEN_LRD.Skills
             EnsureFinite(value.Z, parameterName);
         }
 
+        /// <summary>
+        /// Throws if value is non-finite.
+        /// </summary>
         private static void EnsureFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))
@@ -995,6 +1175,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws if value is non-finite or not strictly positive.
+        /// </summary>
         private static void EnsurePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0.0)

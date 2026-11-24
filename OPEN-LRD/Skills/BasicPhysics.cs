@@ -14,7 +14,7 @@ namespace OPEN_LRD.Skills
     internal static class BasicPhysics
     {
         /// <summary>
-        /// Computes scalar force (F = m * a) from mass and scalar acceleration.
+        /// Computes force vector (F = m * a) from mass and acceleration vector.
         /// </summary>
         /// <param name="mass">The mass.</param>
         /// <param name="acceleration">The acceleration.</param>
@@ -62,7 +62,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes scalar acceleration (a = F / m) from force and mass.
+        /// Computes acceleration vector (a = F / m) from force vector and mass.
         /// </summary>
         /// <param name="force">The force.</param>
         /// <param name="mass">The mass.</param>
@@ -88,10 +88,10 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes scalar weight from mass using standard gravitational acceleration.
+        /// Computes weight force vector (W = m * g) from mass and the supplied gravity vector.
         /// </summary>
         /// <param name="mass">The mass.</param>
-        /// <param name="gravity)">The gravity).</param>
+        /// <param name="gravity">The gravity.</param>
         /// <returns>The result.</returns>
         public static Vector3 Weight(double mass, Vector3 gravity) => Force(mass, gravity);
 
@@ -120,7 +120,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes linear impulse (J = F * ?t) from constant force over elapsed time.
+        /// Computes linear impulse (J = F * dt) from constant force over elapsed time.
         /// </summary>
         /// <param name="force">The force.</param>
         /// <param name="time">The time.</param>
@@ -133,7 +133,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes distance traveled (d = v * t) at constant speed over time.
+        /// Computes distance as the Euclidean magnitude of a displacement vector.
         /// </summary>
         /// <param name="displacement">The displacement.</param>
         /// <returns>The result.</returns>
@@ -170,7 +170,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes translational kinetic energy (KE = 0.5 * m * v ) from mass and speed.
+        /// Computes translational kinetic energy (KE = 0.5 * m * v^2) from mass and speed.
         /// </summary>
         /// <param name="mass">The mass.</param>
         /// <param name="speed">The speed.</param>
@@ -198,7 +198,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes mechanical work (W = F   d) as the dot product of force and displacement.
+        /// Computes mechanical work (W = F . d) as the dot product of force and displacement.
         /// </summary>
         /// <param name="force">The force.</param>
         /// <param name="displacement">The displacement.</param>
@@ -211,7 +211,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes instantaneous mechanical power (P = F   v) from force and velocity.
+        /// Computes average mechanical power (P = W / t) from work done over elapsed time.
         /// </summary>
         /// <param name="work">The work.</param>
         /// <param name="time">The time.</param>
@@ -224,7 +224,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes instantaneous mechanical power (P = F   v) from force and velocity.
+        /// Computes instantaneous mechanical power (P = F . v) from force and velocity.
         /// </summary>
         /// <param name="force">The force.</param>
         /// <param name="velocity">The velocity.</param>
@@ -237,7 +237,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes torque vector (? = r   F) as the cross product of leverArm and force.
+        /// Computes torque vector (tau = r x F) as the cross product of leverArm and force.
         /// </summary>
         /// <param name="leverArm">The lever arm.</param>
         /// <param name="force">The force.</param>
@@ -250,7 +250,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes rotational power (P = ?   ?) from torque and angularVelocity.
+        /// Computes rotational power (P = tau . omega) from torque and angularVelocity.
         /// </summary>
         /// <param name="torque">The torque.</param>
         /// <param name="angularVelocity">The angular velocity.</param>
@@ -263,7 +263,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes 3D position (r(t) = r? + v?t + 0.5at ) under constant acceleration at time.
+        /// Computes 3D position (r(t) = r0 + v0 * t + 0.5 * a * t^2) under constant acceleration at time.
         /// </summary>
         /// <param name="initialPosition">The initial position.</param>
         /// <param name="initialVelocity">The initial velocity.</param>
@@ -280,7 +280,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes 3D velocity (v(t) = v? + at) under constant acceleration at time.
+        /// Computes 3D velocity (v(t) = v0 + a * t) under constant acceleration at time.
         /// </summary>
         /// <param name="initialVelocity">The initial velocity.</param>
         /// <param name="acceleration">The acceleration.</param>
@@ -313,7 +313,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes escape speed (v_e = ?(2GM / r)) from a celestial body of mass at radius.
+        /// Computes escape speed (v_e = sqrt(2GM / r)) from a celestial body of mass at radius.
         /// </summary>
         /// <param name="mass">The mass.</param>
         /// <param name="radius">The radius.</param>
@@ -326,7 +326,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular orbital speed (v_o = ?(GM / r)) around centralMass at orbital radius.
+        /// Computes circular orbital speed (v_o = sqrt(GM / r)) around centralMass at orbital radius.
         /// </summary>
         /// <param name="centralMass">The central mass.</param>
         /// <param name="radius">The radius.</param>
@@ -409,6 +409,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the flat-ground impact time and horizontal range of a projectile launched from launchHeight with the given vertical and horizontal speeds, under downward gravity magnitude gravity.
         /// </summary>
         /// <param name="launchHeight">The launch height.</param>
         /// <param name="verticalSpeed">The vertical speed.</param>
@@ -429,6 +430,13 @@ namespace OPEN_LRD.Skills
             return (time, range);
         }
 
+        /// <summary>
+        /// Finds the earliest non-negative time at which a projectile launched from the given height reaches flat ground (height zero) with a non-increasing vertical velocity.
+        /// </summary>
+        /// <param name="height">The launch height above the ground.</param>
+        /// <param name="verticalSpeed">The initial vertical velocity.</param>
+        /// <param name="verticalAcceleration">The constant vertical acceleration.</param>
+        /// <returns>The impact time, or null if no valid impact exists.</returns>
         private static double? FindFlatGroundImpactTime(double height, double verticalSpeed, double verticalAcceleration)
         {
             if (height == 0.0 && (verticalSpeed < 0.0 || (verticalSpeed == 0.0 && verticalAcceleration < 0.0)))
@@ -460,6 +468,12 @@ namespace OPEN_LRD.Skills
             return impact;
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if any component of the vector is not finite.
+        /// </summary>
+        /// <param name="vector">The vector to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when a component is NaN or infinite.</exception>
         private static void EnsureFinite(Vector3 vector, string name)
         {
             if (!double.IsFinite(vector.X) || !double.IsFinite(vector.Y) || !double.IsFinite(vector.Z))
@@ -468,6 +482,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN or infinite.</exception>
         private static void EnsureFinite(double value, string name)
         {
             if (!double.IsFinite(value))
@@ -476,6 +496,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite or not strictly positive.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN, infinite, or less than or equal to zero.</exception>
         private static void EnsurePositive(double value, string name)
         {
             EnsureFinite(value, name);
@@ -485,6 +511,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite or is negative.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN, infinite, or less than zero.</exception>
         private static void EnsureNonNegative(double value, string name)
         {
             EnsureFinite(value, name);

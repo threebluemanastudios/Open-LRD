@@ -272,7 +272,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Wraps an angle in radians into a canonical normalized range (single precision).
+        /// Wraps an angle in radians into the range [0, 2 pi) (double precision).
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -298,7 +298,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Wraps an angle in degrees into a canonical normalized range (single precision).
+        /// Wraps an angle in degrees into the range [0, 360) (double precision).
         /// </summary>
         /// <param name="degrees">The degrees.</param>
         /// <returns>The result.</returns>
@@ -323,7 +323,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the angular difference between two angles in radians (single precision).
+        /// Computes the angular difference between two angles in radians, wrapped to [0, 2 pi) (double precision).
         /// </summary>
         /// <param name="angleA">The angle a.</param>
         /// <param name="angleB">The angle b.</param>
@@ -345,7 +345,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the angular difference between two angles in degrees (single precision).
+        /// Computes the angular difference between two angles in degrees, wrapped to [0, 360) (double precision).
         /// </summary>
         /// <param name="angleA">The angle a.</param>
         /// <param name="angleB">The angle b.</param>
@@ -367,7 +367,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the hypotenuse length of a right triangle from two perpendicular legs (single precision).
+        /// Computes the hypotenuse length of a right triangle from two perpendicular legs (double precision).
         /// </summary>
         /// <param name="legA">The leg a.</param>
         /// <param name="legB">The leg b.</param>
@@ -391,7 +391,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the unknown leg length of a right triangle from the hypotenuse and one leg (single precision).
+        /// Computes the unknown leg length of a right triangle from the hypotenuse and one leg (double precision).
         /// </summary>
         /// <param name="hypotenuse">The hypotenuse.</param>
         /// <param name="knownLeg">The known leg.</param>
@@ -419,7 +419,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Determines whether three side lengths satisfy the Pythagorean theorem within the specified tolerance (single precision).
+        /// Determines whether three side lengths satisfy the Pythagorean theorem within the specified tolerance (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -449,7 +449,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the third interior angle of a triangle in radians from two known angles (single precision).
+        /// Computes the third interior angle of a triangle in radians from two known angles (double precision).
         /// </summary>
         /// <param name="angleA">The angle a.</param>
         /// <param name="angleB">The angle b.</param>
@@ -477,7 +477,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the third interior angle of a triangle in degrees from two known angles (single precision).
+        /// Computes the third interior angle of a triangle in degrees from two known angles (double precision).
         /// </summary>
         /// <param name="angleA">The angle a.</param>
         /// <param name="angleB">The angle b.</param>
@@ -505,7 +505,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes an unknown triangle side length in radians using the Law of Sines (single precision).
+        /// Computes an unknown triangle side length from a known side and two angles in radians using the Law of Sines (double precision).
         /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngle">The known angle.</param>
@@ -520,7 +520,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes an unknown triangle side length in radians using the Law of Sines (single precision).
+        /// Computes an unknown triangle side length from a known side and two angles in radians using the Law of Sines (single precision).
         /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngle">The known angle.</param>
@@ -532,7 +532,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes an unknown triangle side length in degrees using the Law of Sines (single precision).
+        /// Computes an unknown triangle side length from a known side and two angles in degrees using the Law of Sines (double precision).
         /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngleDegrees">The known angle degrees.</param>
@@ -556,6 +556,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in radians opposite targetSide from a known side, its opposite angle, and targetSide using the Law of Sines (double precision).
         /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngle">The known angle.</param>
@@ -571,6 +572,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in radians opposite targetSide from a known side, its opposite angle, and targetSide using the Law of Sines (single precision).
         /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngle">The known angle.</param>
@@ -582,6 +584,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in degrees opposite targetSide from a known side, its opposite angle in degrees, and targetSide using the Law of Sines (double precision).
         /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngleDegrees">The known angle degrees.</param>
@@ -593,6 +596,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in degrees opposite targetSide from a known side, its opposite angle in degrees, and targetSide using the Law of Sines (single precision).
         /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngleDegrees">The known angle degrees.</param>
@@ -604,7 +608,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes a triangle side length from two adjacent sides and their included angle in radians using the Law of Cosines (single precision).
+        /// Computes a triangle side length from two adjacent sides and their included angle in radians using the Law of Cosines (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -636,7 +640,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes a triangle side length from two adjacent sides and their included angle in degrees using the Law of Cosines (single precision).
+        /// Computes a triangle side length from two adjacent sides and their included angle in degrees using the Law of Cosines (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -660,7 +664,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes a triangle interior angle in radians from three side lengths using the Law of Cosines (single precision).
+        /// Computes a triangle interior angle in radians from three side lengths using the Law of Cosines (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -686,7 +690,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes a triangle interior angle in degrees from three side lengths using the Law of Cosines (single precision).
+        /// Computes a triangle interior angle in degrees from three side lengths using the Law of Cosines (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -710,7 +714,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes triangle area from two sides and their included angle in radians (0.5 * a * b * sin(?), single precision).
+        /// Computes triangle area from two sides and their included angle in radians (0.5 * a * b * sin(angle), double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -725,7 +729,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes triangle area from two sides and their included angle in radians (0.5 * a * b * sin(?), single precision).
+        /// Computes triangle area from two sides and their included angle in radians (0.5 * a * b * sin(angle), single precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -737,7 +741,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes triangle area from two sides and their included angle in degrees (single precision).
+        /// Computes triangle area from two sides and their included angle in degrees (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -761,7 +765,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes triangle area from base length and altitude (0.5 * base * height, single precision).
+        /// Computes triangle area from base length and altitude (0.5 * base * height, double precision).
         /// </summary>
         /// <param name="baseLength">The base length.</param>
         /// <param name="height">The height.</param>
@@ -785,7 +789,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes triangle area from three side lengths using Heron's formula (single precision).
+        /// Computes triangle area from three side lengths using Heron's formula (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -811,7 +815,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the perimeter (a + b + c) of a triangle (single precision).
+        /// Computes the perimeter (a + b + c) of a triangle (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -836,7 +840,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the circumcircle radius of a triangle from its three side lengths (single precision).
+        /// Computes the circumcircle radius of a triangle from its three side lengths (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -861,7 +865,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the inscribed circle radius of a triangle from its three side lengths (single precision).
+        /// Computes the inscribed circle radius of a triangle from its three side lengths (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -887,7 +891,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the area of an equilateral triangle from its side length ((?3 / 4) * side , single precision).
+        /// Computes the area of an equilateral triangle from its side length ((sqrt(3) / 4) * side^2, double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -898,7 +902,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the area of an equilateral triangle from its side length ((?3 / 4) * side , single precision).
+        /// Computes the area of an equilateral triangle from its side length ((sqrt(3) / 4) * side^2, single precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -908,7 +912,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the altitude of an equilateral triangle from its side length ((?3 / 2) * side, single precision).
+        /// Computes the altitude of an equilateral triangle from its side length ((sqrt(3) / 2) * side, double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -919,7 +923,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the altitude of an equilateral triangle from its side length ((?3 / 2) * side, single precision).
+        /// Computes the altitude of an equilateral triangle from its side length ((sqrt(3) / 2) * side, single precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -929,7 +933,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circle area (? * r , single precision).
+        /// Computes circle area (pi * r^2, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -940,7 +944,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circle area (? * r , single precision).
+        /// Computes circle area (pi * r^2, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -950,7 +954,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circle circumference (2 * ? * r, single precision).
+        /// Computes circle circumference (2 * pi * r, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -961,7 +965,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circle circumference (2 * ? * r, single precision).
+        /// Computes circle circumference (2 * pi * r, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -971,7 +975,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular arc length for a central angle in radians (r * ?, single precision).
+        /// Computes circular arc length for a central angle in radians (r * angle, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -984,7 +988,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular arc length for a central angle in radians (r * ?, single precision).
+        /// Computes circular arc length for a central angle in radians (r * angle, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -995,7 +999,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular arc length for a central angle in degrees (single precision).
+        /// Computes circular arc length for a central angle in degrees (double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleDegrees">The angle degrees.</param>
@@ -1017,7 +1021,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular sector area for a central angle in radians (0.5 * r  * ?, single precision).
+        /// Computes circular sector area for a central angle in radians (0.5 * r^2 * angle, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -1030,7 +1034,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular sector area for a central angle in radians (0.5 * r  * ?, single precision).
+        /// Computes circular sector area for a central angle in radians (0.5 * r^2 * angle, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -1041,7 +1045,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular sector area for a central angle in degrees (single precision).
+        /// Computes circular sector area for a central angle in degrees (double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleDegrees">The angle degrees.</param>
@@ -1063,7 +1067,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes chord length for a central angle in radians (2 * r * sin(? / 2), single precision).
+        /// Computes chord length for a central angle in radians (2 * r * sin(angle / 2), double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -1076,7 +1080,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes chord length for a central angle in radians (2 * r * sin(? / 2), single precision).
+        /// Computes chord length for a central angle in radians (2 * r * sin(angle / 2), single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -1087,7 +1091,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes chord length for a central angle in degrees (single precision).
+        /// Computes chord length for a central angle in degrees (double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleDegrees">The angle degrees.</param>
@@ -1109,7 +1113,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular segment area for a central angle in radians (single precision).
+        /// Computes circular segment area for a central angle in radians (double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -1133,7 +1137,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes circular segment area for a central angle in degrees (single precision).
+        /// Computes circular segment area for a central angle in degrees (double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="angleDegrees">The angle degrees.</param>
@@ -1155,7 +1159,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the area of a circular ring/annulus (? * (R  - r ), single precision).
+        /// Computes the area of a circular ring/annulus (pi * (R^2 - r^2), double precision).
         /// </summary>
         /// <param name="outerRadius">The outer radius.</param>
         /// <param name="innerRadius">The inner radius.</param>
@@ -1172,7 +1176,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the area of a circular ring/annulus (? * (R  - r ), single precision).
+        /// Computes the area of a circular ring/annulus (pi * (R^2 - r^2), single precision).
         /// </summary>
         /// <param name="outerRadius">The outer radius.</param>
         /// <param name="innerRadius">The inner radius.</param>
@@ -1183,7 +1187,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes rectangle area (length * width, single precision).
+        /// Computes rectangle area (length * width, double precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -1207,7 +1211,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes rectangle perimeter (2 * (length + width), single precision).
+        /// Computes rectangle perimeter (2 * (length + width), double precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -1231,7 +1235,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes rectangle diagonal length (?(length  + width ), single precision).
+        /// Computes rectangle diagonal length (sqrt(length^2 + width^2), double precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -1244,7 +1248,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes rectangle diagonal length (?(length  + width ), single precision).
+        /// Computes rectangle diagonal length (sqrt(length^2 + width^2), single precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -1255,7 +1259,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes square area (side , single precision).
+        /// Computes square area (side^2, double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -1266,7 +1270,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes square area (side , single precision).
+        /// Computes square area (side^2, single precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -1276,7 +1280,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes square perimeter (4 * side, single precision).
+        /// Computes square perimeter (4 * side, double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -1297,7 +1301,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes square diagonal length (side * ?2, double precision).
+        /// Computes square diagonal length (side * sqrt(2), double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -1308,7 +1312,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes square diagonal length (side * ?2, double precision).
+        /// Computes square diagonal length (side * sqrt(2), single precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -1318,6 +1322,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes parallelogram area (base * height, double precision).
         /// </summary>
         /// <param name="baseLength">The base length.</param>
         /// <param name="height">The height.</param>
@@ -1330,6 +1335,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes parallelogram area (base * height, single precision).
         /// </summary>
         /// <param name="baseLength">The base length.</param>
         /// <param name="height">The height.</param>
@@ -1340,6 +1346,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes parallelogram perimeter (2 * (a + b), double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -1352,6 +1359,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes parallelogram perimeter (2 * (a + b), single precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -1362,6 +1370,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes trapezoid area (0.5 * (baseA + baseB) * height, double precision).
         /// </summary>
         /// <param name="baseA">The base a.</param>
         /// <param name="baseB">The base b.</param>
@@ -1376,6 +1385,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes trapezoid area (0.5 * (baseA + baseB) * height, single precision).
         /// </summary>
         /// <param name="baseA">The base a.</param>
         /// <param name="baseB">The base b.</param>
@@ -1387,6 +1397,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes rhombus area (0.5 * diagonalA * diagonalB, double precision).
         /// </summary>
         /// <param name="diagonalA">The diagonal a.</param>
         /// <param name="diagonalB">The diagonal b.</param>
@@ -1399,6 +1410,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes rhombus area (0.5 * diagonalA * diagonalB, single precision).
         /// </summary>
         /// <param name="diagonalA">The diagonal a.</param>
         /// <param name="diagonalB">The diagonal b.</param>
@@ -1409,6 +1421,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes rhombus perimeter (4 * side, double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -1419,6 +1432,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes rhombus perimeter (4 * side, single precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -1428,6 +1442,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the area of a regular polygon from its number of sides and side length ((sides * side^2) / (4 * tan(pi / sides)), double precision).
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1440,6 +1455,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the area of a regular polygon from its number of sides and side length ((sides * side^2) / (4 * tan(pi / sides)), single precision).
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1450,6 +1466,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the perimeter of a regular polygon (sides * side, double precision).
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1462,6 +1479,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the perimeter of a regular polygon (sides * side, single precision).
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1472,6 +1490,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the apothem (inradius) of a regular polygon (side / (2 * tan(pi / sides)), double precision).
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1484,6 +1503,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the apothem (inradius) of a regular polygon (side / (2 * tan(pi / sides)), single precision).
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1494,6 +1514,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes ellipse area (pi * a * b, double precision).
         /// </summary>
         /// <param name="semiMajorAxis">The semi major axis.</param>
         /// <param name="semiMinorAxis">The semi minor axis.</param>
@@ -1506,6 +1527,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes ellipse area (pi * a * b, single precision).
         /// </summary>
         /// <param name="semiMajorAxis">The semi major axis.</param>
         /// <param name="semiMinorAxis">The semi minor axis.</param>
@@ -1516,6 +1538,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes an approximation of the ellipse perimeter using Ramanujan's second approximation (double precision).
         /// </summary>
         /// <param name="semiMajorAxis">The semi major axis.</param>
         /// <param name="semiMinorAxis">The semi minor axis.</param>
@@ -1528,6 +1551,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes an approximation of the ellipse perimeter using Ramanujan's second approximation (single precision).
         /// </summary>
         /// <param name="semiMajorAxis">The semi major axis.</param>
         /// <param name="semiMinorAxis">The semi minor axis.</param>
@@ -1538,6 +1562,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the area of a cyclic quadrilateral from its four side lengths using Brahmagupta's formula (double precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -1559,6 +1584,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the area of a cyclic quadrilateral from its four side lengths using Brahmagupta's formula (single precision).
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -1571,6 +1597,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the Euclidean distance between two points in 2D (double precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1585,6 +1612,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the Euclidean distance between two points in 2D (single precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1597,6 +1625,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the Euclidean distance between two points in 3D (double precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1614,6 +1643,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the Euclidean distance between two points in 3D (single precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1628,6 +1658,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the midpoint of two points in 2D (double precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1640,6 +1671,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the midpoint of two points in 2D (single precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1652,6 +1684,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the midpoint of two points in 3D (double precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1666,6 +1699,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the midpoint of two points in 3D (single precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1680,6 +1714,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the slope of the line through two points as (y2 - y1) / (x2 - x1) (double precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1696,6 +1731,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the slope of the line through two points as (y2 - y1) / (x2 - x1) (single precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1708,6 +1744,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the y-intercept of the line through two points (double precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1721,6 +1758,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the y-intercept of the line through two points (single precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1733,6 +1771,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the coefficients (A, B, C) of the line Ax + By + C = 0 through two distinct points (double precision).
         /// </summary>
         /// <param name="x1">The first x coordinate.</param>
         /// <param name="y1">The first y coordinate.</param>
@@ -1752,6 +1791,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the coefficients (A, B, C) of the line Ax + By + C = 0 through two distinct points (single-precision inputs widened to double precision).
         /// </summary>
         /// <param name="x1">The first x coordinate.</param>
         /// <param name="y1">The first y coordinate.</param>
@@ -1764,6 +1804,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the distance from point (x, y) to the line ax + by + c = 0 (double precision).
         /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -1781,6 +1822,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the distance from point (x, y) to the line ax + by + c = 0 (single precision).
         /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -1794,6 +1836,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the point at parameter t on the segment from (x1, y1) to (x2, y2), where t = 0 gives the first point and t = 1 the second (double precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1807,6 +1850,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the point at parameter t on the segment from (x1, y1) to (x2, y2), where t = 0 gives the first point and t = 1 the second (single precision).
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1820,6 +1864,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the acute angle in radians between two lines with the given slopes; returns pi / 2 when the lines are perpendicular (double precision).
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1835,6 +1880,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the acute angle in radians between two lines with the given slopes; returns pi / 2 when the lines are perpendicular (single precision).
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1845,6 +1891,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the acute angle in degrees between two lines with the given slopes (double precision).
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1855,6 +1902,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the acute angle in degrees between two lines with the given slopes (single precision).
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1865,6 +1913,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Determines whether two lines with the given slopes are parallel within the specified tolerance (double precision).
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1876,6 +1925,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Determines whether two lines with the given slopes are parallel within the specified tolerance (single precision).
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1887,6 +1937,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Determines whether two lines with the given slopes are perpendicular within the specified tolerance (double precision).
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1898,6 +1949,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Determines whether two lines with the given slopes are perpendicular within the specified tolerance (single precision).
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1909,6 +1961,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the area of a simple polygon from its ordered vertices using the shoelace formula (double precision).
         /// </summary>
         /// <param name="vertices">The vertices.</param>
         /// <returns>The result.</returns>
@@ -1929,6 +1982,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the perimeter of a polygon as the sum of distances between consecutive vertices, closing the loop (double precision).
         /// </summary>
         /// <param name="vertices">The vertices.</param>
         /// <returns>The result.</returns>
@@ -1949,6 +2003,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the centroid (center of area) of a simple polygon from its ordered vertices (double precision).
         /// </summary>
         /// <param name="vertices">The vertices.</param>
         /// <returns>The result.</returns>
@@ -1979,6 +2034,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Rotates a 2D point counterclockwise about the origin by an angle in radians.
         /// </summary>
         /// <param name="point">The point.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -1991,6 +2047,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Rotates a 2D point counterclockwise about the origin by an angle in degrees.
         /// </summary>
         /// <param name="point">The point.</param>
         /// <param name="angleDegrees">The angle degrees.</param>
@@ -2001,6 +2058,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Translates a 2D point by the given x and y offsets.
         /// </summary>
         /// <param name="point">The point.</param>
         /// <param name="deltaX">The delta x.</param>
@@ -2012,6 +2070,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Scales a 2D point's coordinates about the origin by the given factor.
         /// </summary>
         /// <param name="point">The point.</param>
         /// <param name="scale">The scale.</param>
@@ -2022,6 +2081,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the center and radius of the circle passing through three non-collinear points (double precision).
         /// </summary>
         /// <param name="point1">The first point.</param>
         /// <param name="point2">The second point.</param>
@@ -2045,6 +2105,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes sphere volume ((4 / 3) * pi * r^3, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2055,6 +2116,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes sphere volume ((4 / 3) * pi * r^3, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2064,6 +2126,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes sphere surface area (4 * pi * r^2, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2074,6 +2137,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes sphere surface area (4 * pi * r^2, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2083,6 +2147,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes hemisphere volume ((2 / 3) * pi * r^3, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2093,6 +2158,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes hemisphere volume ((2 / 3) * pi * r^3, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2102,6 +2168,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the total surface area of a hemisphere, including its flat base (3 * pi * r^2, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2112,6 +2179,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the total surface area of a hemisphere, including its flat base (3 * pi * r^2, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2121,6 +2189,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cube volume (side^3, double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2131,6 +2200,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cube volume (side^3, single precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2140,6 +2210,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cube surface area (6 * side^2, double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2150,6 +2221,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cube surface area (6 * side^2, single precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2159,6 +2231,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cube space diagonal (sqrt(3) * side, double precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2169,6 +2242,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cube space diagonal (sqrt(3) * side, single precision).
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2178,6 +2252,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cuboid volume (length * width * height, double precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2192,6 +2267,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cuboid volume (length * width * height, single precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2203,6 +2279,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cuboid surface area (2 * (lw + lh + wh), double precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2217,6 +2294,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cuboid surface area (2 * (lw + lh + wh), single precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2228,6 +2306,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cuboid space diagonal (sqrt(length^2 + width^2 + height^2), double precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2242,6 +2321,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cuboid space diagonal (sqrt(length^2 + width^2 + height^2), single precision).
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2253,6 +2333,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cylinder volume (pi * r^2 * h, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2265,6 +2346,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cylinder volume (pi * r^2 * h, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2275,6 +2357,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cylinder lateral (side) surface area (2 * pi * r * h, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2287,6 +2370,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cylinder lateral (side) surface area (2 * pi * r * h, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2297,6 +2381,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cylinder total surface area including both circular caps (2 * pi * r * (r + h), double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2309,6 +2394,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cylinder total surface area including both circular caps (2 * pi * r * (r + h), single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2319,6 +2405,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cone volume ((1 / 3) * pi * r^2 * h, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2331,6 +2418,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cone volume ((1 / 3) * pi * r^2 * h, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2341,6 +2429,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cone slant height (sqrt(r^2 + h^2), double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2353,6 +2442,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cone slant height (sqrt(r^2 + h^2), single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2363,6 +2453,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cone lateral (side) surface area (pi * r * slant height, double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2374,6 +2465,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cone lateral (side) surface area (pi * r * slant height, single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2384,6 +2476,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cone total surface area including the base (pi * r * (r + slant height), double precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2395,6 +2488,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes cone total surface area including the base (pi * r * (r + slant height), single precision).
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2405,6 +2499,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes square pyramid volume ((1 / 3) * baseSide^2 * height, double precision).
         /// </summary>
         /// <param name="baseSide">The base side.</param>
         /// <param name="height">The height.</param>
@@ -2417,6 +2512,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes square pyramid volume ((1 / 3) * baseSide^2 * height, single precision).
         /// </summary>
         /// <param name="baseSide">The base side.</param>
         /// <param name="height">The height.</param>
@@ -2427,6 +2523,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes square pyramid total surface area including the base (baseSide^2 + 2 * baseSide * slant height, double precision).
         /// </summary>
         /// <param name="baseSide">The base side.</param>
         /// <param name="height">The height.</param>
@@ -2440,6 +2537,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes square pyramid total surface area including the base (baseSide^2 + 2 * baseSide * slant height, single precision).
         /// </summary>
         /// <param name="baseSide">The base side.</param>
         /// <param name="height">The height.</param>
@@ -2450,6 +2548,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes torus volume (2 * pi^2 * majorRadius * minorRadius^2, double precision).
         /// </summary>
         /// <param name="majorRadius">The major radius.</param>
         /// <param name="minorRadius">The minor radius.</param>
@@ -2462,6 +2561,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes torus volume (2 * pi^2 * majorRadius * minorRadius^2, single precision).
         /// </summary>
         /// <param name="majorRadius">The major radius.</param>
         /// <param name="minorRadius">The minor radius.</param>
@@ -2472,6 +2572,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes torus surface area (4 * pi^2 * majorRadius * minorRadius, double precision).
         /// </summary>
         /// <param name="majorRadius">The major radius.</param>
         /// <param name="minorRadius">The minor radius.</param>
@@ -2484,6 +2585,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes torus surface area (4 * pi^2 * majorRadius * minorRadius, single precision).
         /// </summary>
         /// <param name="majorRadius">The major radius.</param>
         /// <param name="minorRadius">The minor radius.</param>
@@ -2494,6 +2596,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the distance from point (x, y, z) to the plane ax + by + cz + d = 0 (double precision).
         /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -2513,6 +2616,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the distance from point (x, y, z) to the plane ax + by + cz + d = 0 (single precision).
         /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -2528,6 +2632,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the magnitude (length) of a 2D vector (double precision).
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
@@ -2537,6 +2642,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the magnitude (length) of a 3D vector (double precision).
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
@@ -2546,6 +2652,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the component-wise sum of two 2D vectors.
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2556,6 +2663,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the component-wise sum of two 3D vectors.
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2566,6 +2674,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the component-wise difference (vectorA - vectorB) of two 2D vectors.
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2576,6 +2685,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the component-wise difference (vectorA - vectorB) of two 3D vectors.
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2586,6 +2696,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Scales a 2D vector by the given factor.
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <param name="scale">The scale.</param>
@@ -2596,6 +2707,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Scales a 3D vector by the given factor.
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <param name="scale">The scale.</param>
@@ -2606,6 +2718,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the dot product of two 2D vectors (double precision).
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2616,6 +2729,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the dot product of two 3D vectors (double precision).
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2626,6 +2740,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the cross product of two 3D vectors.
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2639,6 +2754,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns a unit-length 2D vector with the same direction; throws if the vector is zero.
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
@@ -2653,6 +2769,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns a unit-length 3D vector with the same direction; throws if the vector is zero.
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
@@ -2667,6 +2784,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in radians between two 2D vectors (double precision).
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2684,6 +2802,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in radians between two 3D vectors (double precision).
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2701,6 +2820,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in degrees between two 2D vectors (double precision).
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2711,6 +2831,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in degrees between two 3D vectors (double precision).
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2721,6 +2842,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the projection of a 2D vector onto another vector; throws if the target is zero.
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <param name="onto">The onto.</param>
@@ -2736,6 +2858,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the projection of a 3D vector onto another vector; throws if the target is zero.
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <param name="onto">The onto.</param>
@@ -2751,6 +2874,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the Euclidean distance between two 2D vectors treated as points (double precision).
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2761,6 +2885,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the Euclidean distance between two 3D vectors treated as points (double precision).
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2770,16 +2895,19 @@ namespace OPEN_LRD.Skills
             return CalculateDistance3D(vectorA.X, vectorA.Y, vectorA.Z, vectorB.X, vectorB.Y, vectorB.Z);
         }
 
+        /// <summary>Converts an angle from degrees to radians.</summary>
         private static double DegreesToRadians(double degrees)
         {
             return degrees * (Math.PI / 180.0);
         }
 
+        /// <summary>Converts an angle from radians to degrees.</summary>
         private static double RadiansToDegrees(double radians)
         {
             return radians * (180.0 / Math.PI);
         }
 
+        /// <summary>Throws if the value is not strictly positive.</summary>
         private static void EnsurePositive(double value, string parameterName)
         {
             if (value <= 0.0)
@@ -2788,6 +2916,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Throws if the value is negative.</summary>
         private static void EnsureNonNegative(double value, string parameterName)
         {
             if (value < 0.0)
@@ -2796,6 +2925,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Throws if the value lies outside the closed interval [-1, 1].</summary>
         private static void EnsureUnitCircle(double value, string parameterName)
         {
             if (value < -1.0 || value > 1.0)
@@ -2804,6 +2934,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Clamps a value to [-1, 1], tolerating small floating-point overshoot; throws if it lies further outside the interval.</summary>
         private static double ClampUnitCircle(double value, string parameterName)
         {
             if (value < -1.0 - 1e-12 || value > 1.0 + 1e-12)
@@ -2821,6 +2952,7 @@ namespace OPEN_LRD.Skills
             return value;
         }
 
+        /// <summary>Throws if the angle is not strictly between 0 and pi radians.</summary>
         private static void EnsureAngle(double radians)
         {
             if (radians <= 0.0 || radians >= Math.PI)
@@ -2829,6 +2961,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Throws if the angle is not strictly between 0 and 180 degrees.</summary>
         private static void EnsureAngleDegrees(double degrees)
         {
             if (degrees <= 0.0 || degrees >= 180.0)
@@ -2837,6 +2970,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Throws if the angle is outside the range [0, 2 pi] radians.</summary>
         private static void EnsureAngleRange(double radians)
         {
             if (radians < 0.0 || radians > (2.0 * Math.PI))
@@ -2845,6 +2979,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Validates that all three sides are positive and satisfy the triangle inequality.</summary>
         private static void EnsureTriangleInequality(double sideA, double sideB, double sideC)
         {
             EnsurePositive(sideA, nameof(sideA));
@@ -2856,6 +2991,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Throws if the number of sides is less than three.</summary>
         private static void EnsurePolygonSides(int sides)
         {
             if (sides < 3)

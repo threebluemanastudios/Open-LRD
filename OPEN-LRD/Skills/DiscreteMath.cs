@@ -149,7 +149,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes gcd(a, b) and B zout coefficients x, y satisfying a*x + b*y = gcd(a, b) for BigInteger inputs.
+        /// Computes gcd(a, b) and Bezout coefficients x, y satisfying a*x + b*y = gcd(a, b) for BigInteger inputs.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -165,7 +165,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes gcd(a, b) and B zout coefficients x, y satisfying a*x + b*y = gcd(a, b) for BigInteger inputs.
+        /// Computes gcd(a, b) and Bezout coefficients x, y satisfying a*x + b*y = gcd(a, b) for BigInteger inputs.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -189,7 +189,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Solves the linear congruence a*x ? b (mod modulus).
+        /// Solves the linear congruence a*x = b (mod modulus).
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -450,7 +450,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes Euler's totient function ?(value), counting positive integers up to value coprime to it.
+        /// Computes Euler's totient function phi(value), counting positive integers up to value coprime to it.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -469,7 +469,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the number of positive divisors d(value) (or ??(value)) of value.
+        /// Computes the number of positive divisors d(value) of value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -484,7 +484,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the sum of positive divisors ??(value) of value.
+        /// Computes the sum of positive divisors sigma(value) of value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -506,7 +506,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates the M bius function ?(value).
+        /// Evaluates the Mobius function mu(value).
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -523,7 +523,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates the Liouville function ?(value).
+        /// Evaluates the Liouville function lambda(value).
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -538,6 +538,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves a system of congruences x = remainders[i] (mod moduli[i]) and returns the combined solution, or Exists = false when none exists.
         /// </summary>
         /// <param name="remainders">The remainders.</param>
         /// <param name="moduli">The moduli.</param>
@@ -549,6 +550,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Attempts to solve the congruence system; returns false when no solution exists or the combined solution and modulus do not fit in a long.
         /// </summary>
         /// <param name="remainders">The remainders.</param>
         /// <param name="moduli">The moduli.</param>
@@ -879,6 +881,9 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Deterministically tests whether a 64-bit integer is prime using trial division and Miller-Rabin with fixed witnesses.
+        /// </summary>
         private static bool IsPrime64(long value)
         {
             if (value < 2)
@@ -934,6 +939,9 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>
+        /// Performs a single Miller-Rabin round for value with the given witness, returning false if value is proven composite.
+        /// </summary>
         private static bool MillerRabinRound(BigInteger value, BigInteger oddPart, int powersOfTwo, BigInteger witness)
         {
             BigInteger result = BigInteger.ModPow(witness, oddPart, value);
@@ -952,6 +960,9 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>
+        /// Generates a uniformly distributed random BigInteger in the range [0, maximumInclusive] by rejection sampling.
+        /// </summary>
         private static BigInteger RandomBelow(BigInteger maximumInclusive, Random random)
         {
             byte[] bytes = new byte[maximumInclusive.ToByteArray(isUnsigned: true, isBigEndian: false).Length];
@@ -966,6 +977,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Recursively appends the prime factors of value to factors, using Pollard's rho to split composites.
+        /// </summary>
         private static void FactorRecursive(BigInteger value, List<BigInteger> factors)
         {
             if (value == BigInteger.One)
@@ -982,6 +996,9 @@ namespace OPEN_LRD.Skills
             FactorRecursive(value / divisor, factors);
         }
 
+        /// <summary>
+        /// Searches for a non-trivial factor of value using Pollard's rho algorithm.
+        /// </summary>
         private static BigInteger PollardRho(BigInteger value)
         {
             if (value.IsEven)
@@ -1012,6 +1029,9 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("Pollard rho failed to find a factor within the configured iteration bound.");
         }
 
+        /// <summary>
+        /// Computes gcd(a, b) and Bezout coefficients x, y via the iterative extended Euclidean algorithm.
+        /// </summary>
         private static BigInteger ExtendedGcdBig(BigInteger a, BigInteger b, out BigInteger x, out BigInteger y)
         {
             BigInteger oldR = BigInteger.Abs(a);
@@ -1032,12 +1052,18 @@ namespace OPEN_LRD.Skills
             return oldR;
         }
 
+        /// <summary>
+        /// Computes the remainder of value divided by modulus, normalized to the range [0, modulus).
+        /// </summary>
         private static BigInteger PositiveMod(BigInteger value, BigInteger modulus)
         {
             BigInteger result = value % modulus;
             return result.Sign < 0 ? result + modulus : result;
         }
 
+        /// <summary>
+        /// Throws ArgumentOutOfRangeException if modulus is not positive.
+        /// </summary>
         private static void ValidateModulus(long modulus)
         {
             if (modulus <= 0)
@@ -1046,6 +1072,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws ArgumentOutOfRangeException if modulus is not positive.
+        /// </summary>
         private static void ValidateModulus(BigInteger modulus)
         {
             if (modulus <= BigInteger.Zero)
@@ -1054,6 +1083,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws ArgumentOutOfRangeException if n or k is negative, k exceeds n, or n exceeds 10000.
+        /// </summary>
         private static void ValidateCombinatoricsIndices(int n, int k)
         {
             ValidateNonNegative(n, nameof(n));
@@ -1068,6 +1100,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws ArgumentOutOfRangeException if value is negative.
+        /// </summary>
         private static void ValidateNonNegative(int value, string parameterName)
         {
             if (value < 0)
@@ -1076,6 +1111,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws ArgumentOutOfRangeException if radix is outside the range [2, 36].
+        /// </summary>
         private static void ValidateRadix(int radix)
         {
             if (radix < 2 || radix > 36)

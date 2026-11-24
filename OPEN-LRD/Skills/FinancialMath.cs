@@ -50,6 +50,9 @@ namespace OPEN_LRD.Skills
             return principal * Math.Pow(1.0 + annualRate / periodsPerYear, periodsPerYear * years);
         }
 
+        /// <summary>
+        /// Computes continuously compounded value or interest for principal at annualRate over years.
+        /// </summary>
         public static double ContinuousCompoundInterest(double principal, double annualRate, double years)
         {
             ValidateNonNegativeFinite(principal, nameof(principal));
@@ -58,6 +61,9 @@ namespace OPEN_LRD.Skills
             return principal * Math.Exp(annualRate * years);
         }
 
+        /// <summary>
+        /// Computes the effective annual interest rate from nominalRate and compounding frequency.
+        /// </summary>
         public static double EffectiveAnnualRate(double nominalRate, CompoundingFrequency frequency)
         {
             EnsureFinite(nominalRate, nameof(nominalRate));
@@ -73,6 +79,9 @@ namespace OPEN_LRD.Skills
             return Math.Pow(1.0 + nominalRate / periodsPerYear, periodsPerYear) - 1.0;
         }
 
+        /// <summary>
+        /// Computes the present value of futureValue discounted at rate over periods.
+        /// </summary>
         public static double PresentValue(double futureValue, double rate, double periods)
         {
             ValidateNonNegativeFinite(futureValue, nameof(futureValue));
@@ -82,7 +91,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the future value of an annuity with payment per period at rate across periods.
+        /// Computes the future value of a single present amount compounded at rate over periods.
         /// </summary>
         public static double FutureValue(double presentValue, double rate, double periods)
         {
@@ -92,7 +101,7 @@ namespace OPEN_LRD.Skills
             return presentValue * Math.Pow(1.0 + rate, periods);
         }
         /// <summary>
-        /// Computes the periodic payment required to amortize principal at rate over periods.
+        /// Computes the present value of an annuity paying payment per period at rate over periods.
         /// </summary>
 
         public static double AnnuityPresentValue(double payment, double rate, int periods)
@@ -105,6 +114,9 @@ namespace OPEN_LRD.Skills
                 : payment * (1.0 - Math.Pow(1.0 + rate, -periods)) / rate;
         }
 
+        /// <summary>
+        /// Computes the future value of an annuity paying payment per period at rate over periods.
+        /// </summary>
         public static double AnnuityFutureValue(double payment, double rate, int periods)
         {
             ValidateNonNegativeFinite(payment, nameof(payment));
@@ -115,6 +127,9 @@ namespace OPEN_LRD.Skills
                 : payment * (Math.Pow(1.0 + rate, periods) - 1.0) / rate;
         }
 
+        /// <summary>
+        /// Computes the periodic payment required to amortize principal at rate over periods.
+        /// </summary>
         public static double LoanPayment(double principal, double rate, int periods)
         {
             ValidateNonNegativeFinite(principal, nameof(principal));
@@ -131,6 +146,9 @@ namespace OPEN_LRD.Skills
             return principal * rate * growth / (growth - 1.0);
         }
 
+        /// <summary>
+        /// Builds the period-by-period amortization schedule for a loan of principal at rate over periods.
+        /// </summary>
         public static IReadOnlyList<AmortizationEntry> AmortizationSchedule(double principal, double rate, int periods)
         {
             ValidateNonNegativeFinite(principal, nameof(principal));
@@ -153,6 +171,9 @@ namespace OPEN_LRD.Skills
             return schedule.AsReadOnly();
         }
 
+        /// <summary>
+        /// Computes the net present value of cashFlows discounted at discountRate.
+        /// </summary>
         public static double NetPresentValue(IReadOnlyList<CashFlow> cashFlows, double discountRate)
         {
             ValidateCashFlows(cashFlows);
@@ -165,6 +186,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the internal rate of return of cashFlows by bracketed bisection and reports whether it converged.
+        /// </summary>
         public static InvestmentResult InternalRateOfReturn(IReadOnlyList<CashFlow> cashFlows, double tolerance = 1e-9, int maxIterations = 200)
         {
             ValidateCashFlows(cashFlows);
@@ -224,6 +248,9 @@ namespace OPEN_LRD.Skills
             return new InvestmentResult(finalNpv, midpoint, Math.Abs(finalNpv) <= tolerance * (1.0 + Math.Abs(zeroRateNpv)));
         }
 
+        /// <summary>
+        /// Computes the payback period required to recover initial outlay from cashFlows.
+        /// </summary>
         public static double PaybackPeriod(IReadOnlyList<CashFlow> cashFlows)
         {
             ValidateCashFlows(cashFlows);
@@ -246,6 +273,9 @@ namespace OPEN_LRD.Skills
             return double.PositiveInfinity;
         }
 
+        /// <summary>
+        /// Computes the ratio of present inflows to present outflows of cashFlows at discountRate.
+        /// </summary>
         public static double ProfitabilityIndex(IReadOnlyList<CashFlow> cashFlows, double discountRate)
         {
             ValidateCashFlows(cashFlows);
@@ -272,7 +302,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes sum-of-the-years'-digits depreciation from cost, salvageValue, and life.
+        /// Computes a depreciation schedule for cost, salvageValue, and life using the selected method.
         /// </summary>
         public static double[] DepreciationSchedule(double cost, double salvageValue, int life, DepreciationMethod method)
         {
@@ -290,6 +320,9 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Computes an annual straight-line depreciation schedule for cost, salvageValue, and life.
+        /// </summary>
         public static double[] StraightLineDepreciation(double cost, double salvageValue, int life)
         {
             ValidateDepreciation(cost, salvageValue, life);
@@ -300,6 +333,9 @@ namespace OPEN_LRD.Skills
             return schedule;
         }
 
+        /// <summary>
+        /// Computes an annual declining-balance depreciation schedule for cost, salvageValue, and life, absorbing any remainder in the final year.
+        /// </summary>
         public static double[] DecliningBalanceDepreciation(double cost, double salvageValue, int life)
         {
             ValidateDepreciation(cost, salvageValue, life);
@@ -319,6 +355,9 @@ namespace OPEN_LRD.Skills
             return schedule;
         }
 
+        /// <summary>
+        /// Computes an annual sum-of-years-digits depreciation schedule for cost, salvageValue, and life.
+        /// </summary>
         public static double[] SumOfYearsDigitsDepreciation(double cost, double salvageValue, int life)
         {
             ValidateDepreciation(cost, salvageValue, life);
@@ -333,6 +372,9 @@ namespace OPEN_LRD.Skills
             return schedule;
         }
 
+        /// <summary>
+        /// Computes the price of a bond from its face value, coupon rate, and yield.
+        /// </summary>
         public static double BondPrice(double faceValue, double couponRate, double yield, int years, int paymentsPerYear)
         {
             ValidateBond(faceValue, couponRate, yield, years, paymentsPerYear);
@@ -348,6 +390,9 @@ namespace OPEN_LRD.Skills
             return price;
         }
 
+        /// <summary>
+        /// Computes the yield of a bond priced at price by bracketed root search.
+        /// </summary>
         public static double BondYield(double faceValue, double couponRate, double price, int years, int paymentsPerYear)
         {
             ValidateNonNegativeFinite(faceValue, nameof(faceValue));
@@ -393,21 +438,33 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("Bond yield did not converge.");
         }
 
+        /// <summary>
+        /// Computes the Macaulay duration of a bond.
+        /// </summary>
         public static double MacaulayDuration(double faceValue, double couponRate, double yield, int years, int paymentsPerYear)
         {
             return CalculateBondMetrics(faceValue, couponRate, yield, years, paymentsPerYear).MacaulayDuration;
         }
 
+        /// <summary>
+        /// Computes the modified duration of a bond.
+        /// </summary>
         public static double ModifiedDuration(double faceValue, double couponRate, double yield, int years, int paymentsPerYear)
         {
             return CalculateBondMetrics(faceValue, couponRate, yield, years, paymentsPerYear).ModifiedDuration;
         }
 
+        /// <summary>
+        /// Computes the convexity of a bond.
+        /// </summary>
         public static double Convexity(double faceValue, double couponRate, double yield, int years, int paymentsPerYear)
         {
             return CalculateBondMetrics(faceValue, couponRate, yield, years, paymentsPerYear).Convexity;
         }
 
+        /// <summary>
+        /// Computes bond price, Macaulay duration, modified duration, and convexity in a single pass.
+        /// </summary>
         public static BondResult CalculateBondMetrics(double faceValue, double couponRate, double yield, int years, int paymentsPerYear)
         {
             ValidateBond(faceValue, couponRate, yield, years, paymentsPerYear);
@@ -433,6 +490,9 @@ namespace OPEN_LRD.Skills
             return new BondResult(price, yield, macaulay, modified, convexity);
         }
 
+        /// <summary>
+        /// Validates that cash flows are non-null, non-empty, finite, and time-ordered.
+        /// </summary>
         private static void ValidateCashFlows(IReadOnlyList<CashFlow> cashFlows)
         {
             if (cashFlows == null)
@@ -456,6 +516,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates bond face value, coupon rate, yield, and term arguments.
+        /// </summary>
         private static void ValidateBond(double faceValue, double couponRate, double yield, int years, int paymentsPerYear)
         {
             ValidateNonNegativeFinite(faceValue, nameof(faceValue));
@@ -472,6 +535,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates years and paymentsPerYear, and that their product does not overflow.
+        /// </summary>
         private static void ValidateYearsAndFrequency(int years, int paymentsPerYear)
         {
             ValidatePeriods(years);
@@ -482,6 +548,9 @@ namespace OPEN_LRD.Skills
             _ = checked(years * paymentsPerYear);
         }
 
+        /// <summary>
+        /// Returns the number of compounding periods per year for a discrete frequency.
+        /// </summary>
         private static int PeriodsPerYear(CompoundingFrequency frequency)
         {
             return frequency switch
@@ -496,6 +565,9 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Validates cost, salvageValue, and life arguments for depreciation calculations.
+        /// </summary>
         private static void ValidateDepreciation(double cost, double salvageValue, int life)
         {
             ValidateNonNegativeFinite(cost, nameof(cost));
@@ -507,6 +579,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Sums the first count elements of values.
+        /// </summary>
         private static double CalculateDepreciationSum(double[] values, int count)
         {
             double sum = 0.0;
@@ -517,11 +592,17 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Sums the first count elements of values.
+        /// </summary>
         private static double Sum(double[] values, int count)
         {
             return CalculateDepreciationSum(values, count);
         }
 
+        /// <summary>
+        /// Validates that rate is finite and greater than -100%.
+        /// </summary>
         private static void ValidateRate(double rate, string parameterName)
         {
             if (!double.IsFinite(rate) || rate <= -1.0)
@@ -530,6 +611,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that the period count is at least one.
+        /// </summary>
         private static void ValidatePeriods(int periods)
         {
             if (periods < 1)
@@ -538,6 +622,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that value is finite and non-negative.
+        /// </summary>
         private static void ValidateNonNegativeFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value < 0.0)
@@ -546,6 +633,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that value is finite and positive.
+        /// </summary>
         private static void ValidatePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0.0)
@@ -554,6 +644,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that value is finite.
+        /// </summary>
         private static void EnsureFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))
@@ -562,6 +655,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that maxIterations is at least one.
+        /// </summary>
         private static void ValidateIterations(int maxIterations)
         {
             if (maxIterations < 1)

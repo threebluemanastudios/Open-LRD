@@ -14,7 +14,7 @@ namespace OPEN_LRD.Skills
             return DateTime.IsLeapYear(year);
         }
         /// <summary>
-        /// Computes the day number of date within its year.
+        /// Returns the number of days in the given month of the given year.
         /// </summary>
 
         public static int DaysInMonth(int year, int month)
@@ -22,22 +22,34 @@ namespace OPEN_LRD.Skills
             return DateTime.DaysInMonth(year, month);
         }
 
+        /// <summary>
+        /// Returns the one-based day of the year for date.
+        /// </summary>
         public static int DayOfYear(DateOnly date)
         {
             return date.DayOfYear;
         }
 
+        /// <summary>
+        /// Returns the ISO 8601 week-numbering year and week number for date.
+        /// </summary>
         public static (int WeekYear, int WeekNumber) IsoWeek(DateOnly date)
         {
             DateTime value = date.ToDateTime(TimeOnly.MinValue);
             return (ISOWeek.GetYear(value), ISOWeek.GetWeekOfYear(value));
         }
 
+        /// <summary>
+        /// Returns the number of calendar days from start to end (negative if end is earlier than start).
+        /// </summary>
         public static int DaysBetween(DateOnly start, DateOnly end)
         {
             return end.DayNumber - start.DayNumber;
         }
 
+        /// <summary>
+        /// Adds businessDays weekdays to date, skipping weekends and any dates in holidays. Negative values move backward.
+        /// </summary>
         public static DateOnly AddBusinessDays(DateOnly date, int businessDays, IReadOnlySet<DateOnly>? holidays = null)
         {
             int remaining = businessDays;
@@ -53,6 +65,9 @@ namespace OPEN_LRD.Skills
             return date;
         }
 
+        /// <summary>
+        /// Counts business days between start and end, excluding weekends and holidays. Returns a negative count if end is earlier than start.
+        /// </summary>
         public static int BusinessDaysBetween(DateOnly start, DateOnly end, IReadOnlySet<DateOnly>? holidays = null)
         {
             int dayDifference = end.DayNumber - start.DayNumber;
@@ -79,7 +94,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Converts instant to Unix epoch seconds.
+        /// Computes the age in whole years on asOfDate for a person born on birthDate. Throws if asOfDate is earlier than birthDate.
         /// </summary>
         public static int Age(DateOnly birthDate, DateOnly asOfDate)
         {
@@ -96,16 +111,25 @@ namespace OPEN_LRD.Skills
             return age;
         }
 
+        /// <summary>
+        /// Converts instant to Unix epoch seconds.
+        /// </summary>
         public static long ToUnixTimeSeconds(DateTimeOffset instant)
         {
             return instant.ToUnixTimeSeconds();
         }
 
+        /// <summary>
+        /// Converts Unix epoch seconds to a DateTimeOffset.
+        /// </summary>
         public static DateTimeOffset FromUnixTimeSeconds(long seconds)
         {
             return DateTimeOffset.FromUnixTimeSeconds(seconds);
         }
 
+        /// <summary>
+        /// Converts instant to the time zone targetZone. Throws ArgumentNullException if targetZone is null.
+        /// </summary>
         public static DateTimeOffset ConvertTime(DateTimeOffset instant, TimeZoneInfo targetZone)
         {
             if (targetZone == null)
@@ -115,6 +139,9 @@ namespace OPEN_LRD.Skills
             return TimeZoneInfo.ConvertTime(instant, targetZone);
         }
 
+        /// <summary>
+        /// Returns the time elapsed from start to end. If crossesMidnight is true, an end earlier than start is treated as the next day.
+        /// </summary>
         public static TimeSpan ElapsedTime(TimeOnly start, TimeOnly end, bool crossesMidnight = false)
         {
             if (end >= start)
@@ -128,6 +155,9 @@ namespace OPEN_LRD.Skills
             return end.ToTimeSpan() + TimeSpan.FromDays(1) - start.ToTimeSpan();
         }
 
+        /// <summary>
+        /// Attempts to parse text as a date using the exact format with the invariant culture. Returns false if parsing fails.
+        /// </summary>
         public static bool TryParseDateExact(string text, string format, out DateOnly date)
         {
             if (text == null)
@@ -141,6 +171,9 @@ namespace OPEN_LRD.Skills
             return DateOnly.TryParseExact(text, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
         }
 
+        /// <summary>
+        /// Formats date using the given format string with the invariant culture.
+        /// </summary>
         public static string FormatDate(DateOnly date, string format)
         {
             if (format == null)
@@ -150,6 +183,9 @@ namespace OPEN_LRD.Skills
             return date.ToString(format, CultureInfo.InvariantCulture);
         }
 
+        /// <summary>
+        /// Determines whether date is a weekday that is not in holidays.
+        /// </summary>
         private static bool IsBusinessDay(DateOnly date, IReadOnlySet<DateOnly>? holidays)
         {
             return date.DayOfWeek != DayOfWeek.Saturday

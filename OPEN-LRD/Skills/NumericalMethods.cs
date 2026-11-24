@@ -25,6 +25,9 @@ namespace OPEN_LRD.Skills
         private readonly double[] y;
         private readonly double[] secondDerivatives;
 
+        /// <summary>
+        /// Constructs a cubic spline interpolant through xValues and yValues using the given boundary condition.
+        /// </summary>
         internal CubicSpline(double[] xValues, double[] yValues, SplineBoundary boundary, double? firstDerivative, double? lastDerivative)
         {
             NumericalMethods.ValidateInterpolationData(xValues, yValues, 2);
@@ -93,6 +96,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Evaluates the spline interpolant at value.
+        /// </summary>
         public double Evaluate(double value)
         {
             (int lower, int upper, double width, double a, double b) = FindInterval(value);
@@ -101,6 +107,9 @@ namespace OPEN_LRD.Skills
             return a * y[lower] + b * y[upper] + curvature;
         }
 
+        /// <summary>
+        /// Evaluates the first derivative of the spline interpolant at value.
+        /// </summary>
         public double Derivative(double value)
         {
             (int lower, int upper, double width, double a, double b) = FindInterval(value);
@@ -109,12 +118,18 @@ namespace OPEN_LRD.Skills
                     + (3.0 * b * b - 1.0) * secondDerivatives[upper]) * width / 6.0;
         }
 
+        /// <summary>
+        /// Evaluates the second derivative of the spline interpolant at value.
+        /// </summary>
         public double SecondDerivative(double value)
         {
             (int lower, int upper, double _, double a, double b) = FindInterval(value);
             return a * secondDerivatives[lower] + b * secondDerivatives[upper];
         }
 
+        /// <summary>
+        /// Locates the knot interval containing value and returns its bounds, width, and normalized weights.
+        /// </summary>
         private (int Lower, int Upper, double Width, double A, double B) FindInterval(double value)
         {
             if (!double.IsFinite(value))
@@ -170,6 +185,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Evaluates Newton divided-difference interpolation over x and y at value.
+        /// </summary>
         public static double NewtonDividedDifference(double[] x, double[] y, double value)
         {
             ValidateInterpolationData(x, y, 2);
@@ -183,6 +201,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Builds a reusable Newton divided-difference interpolating function over x and y.
+        /// </summary>
         public static Func<double, double> BuildNewtonInterpolator(double[] x, double[] y)
         {
             ValidateInterpolationData(x, y, 2);
@@ -200,12 +221,15 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>
+        /// Builds a reusable cubic spline interpolant over x and y using the given boundary condition.
+        /// </summary>
         public static CubicSpline BuildCubicSpline(double[] x, double[] y, SplineBoundary boundary, double? firstDerivative = null, double? lastDerivative = null)
         {
             return new CubicSpline(x, y, boundary, firstDerivative, lastDerivative);
         }
         /// <summary>
-        /// Evaluates monotonic PCHIP interpolation over x and y at value.
+        /// Evaluates a cubic spline interpolant over x and y at value using the given boundary condition.
         /// </summary>
 
         public static double CubicSplineInterpolate(double[] x, double[] y, double value, SplineBoundary boundary, double? firstDerivative = null, double? lastDerivative = null)
@@ -213,6 +237,9 @@ namespace OPEN_LRD.Skills
             return BuildCubicSpline(x, y, boundary, firstDerivative, lastDerivative).Evaluate(value);
         }
 
+        /// <summary>
+        /// Evaluates shape-preserving piecewise cubic Hermite (PCHIP) interpolation over x and y at value.
+        /// </summary>
         public static double PchipInterpolate(double[] x, double[] y, double value)
         {
             ValidateInterpolationData(x, y, 2);
@@ -262,6 +289,9 @@ namespace OPEN_LRD.Skills
                 + (t3 - t2) * h * derivatives[interval + 1];
         }
 
+        /// <summary>
+        /// Fits a least-squares polynomial of the given degree to x and y.
+        /// </summary>
         public static CurveFitResult PolynomialLeastSquares(double[] x, double[] y, int degree)
         {
             ValidateFitData(x, y, 1);
@@ -283,6 +313,9 @@ namespace OPEN_LRD.Skills
             return BuildCurveFitResult(x, y, coefficients, value => EvaluatePolynomial(coefficients, value));
         }
 
+        /// <summary>
+        /// Fits an exponential curve to x and y.
+        /// </summary>
         public static CurveFitResult ExponentialFit(double[] x, double[] y)
         {
             ValidatePositiveFitData(x, y, nameof(y));
@@ -296,6 +329,9 @@ namespace OPEN_LRD.Skills
             return BuildCurveFitResult(x, y, coefficients, value => coefficients[0] * Math.Exp(coefficients[1] * value));
         }
 
+        /// <summary>
+        /// Fits a power curve y = a * x^b to x and y via linear regression on log-transformed data.
+        /// </summary>
         public static CurveFitResult PowerFit(double[] x, double[] y)
         {
             ValidatePositiveFitData(x, y, nameof(y));
@@ -315,6 +351,9 @@ namespace OPEN_LRD.Skills
             return BuildCurveFitResult(x, y, coefficients, value => coefficients[0] * Math.Pow(value, coefficients[1]));
         }
 
+        /// <summary>
+        /// Fits a logarithmic curve to x and y.
+        /// </summary>
         public static CurveFitResult LogarithmicFit(double[] x, double[] y)
         {
             ValidateFitData(x, y, 2);
@@ -332,6 +371,9 @@ namespace OPEN_LRD.Skills
             return BuildCurveFitResult(x, y, coefficients, value => coefficients[0] + coefficients[1] * Math.Log(value));
         }
 
+        /// <summary>
+        /// Finds a root of function by the secant method starting from two initial guesses.
+        /// </summary>
         public static RootFindingResult Secant(Func<double, double> function, double firstGuess, double secondGuess, double tolerance = DefaultTolerance, int maxIterations = 100)
         {
             ValidateFunction(function);
@@ -373,6 +415,9 @@ namespace OPEN_LRD.Skills
             return new RootFindingResult(secondGuess, Math.Abs(secondValue), maxIterations, false);
         }
 
+        /// <summary>
+        /// Finds a root of function within the bracket [lower, upper] by the false position (regula falsi) method.
+        /// </summary>
         public static RootFindingResult FalsePosition(Func<double, double> function, double lower, double upper, double tolerance = DefaultTolerance, int maxIterations = 100)
         {
             ValidateBracket(function, lower, upper, tolerance, maxIterations, out double lowerValue, out double upperValue);
@@ -408,6 +453,9 @@ namespace OPEN_LRD.Skills
             return new RootFindingResult(root, Math.Abs(value), maxIterations, false);
         }
 
+        /// <summary>
+        /// Finds a fixed point of iteration by repeatedly applying it from initialGuess.
+        /// </summary>
         public static RootFindingResult FixedPoint(Func<double, double> iteration, double initialGuess, double tolerance = DefaultTolerance, int maxIterations = 100)
         {
             ValidateFunction(iteration);
@@ -427,6 +475,9 @@ namespace OPEN_LRD.Skills
             return new RootFindingResult(current, Math.Abs(EvaluateFinite(iteration, current) - current), maxIterations, false);
         }
 
+        /// <summary>
+        /// Finds a root of function within the bracket [lower, upper] using Brent's method.
+        /// </summary>
         public static RootFindingResult Brent(Func<double, double> function, double lower, double upper, double tolerance = DefaultTolerance, int maxIterations = 100)
         {
             ValidateBracket(function, lower, upper, tolerance, maxIterations, out double lowerValue, out double upperValue);
@@ -493,6 +544,9 @@ namespace OPEN_LRD.Skills
             return new RootFindingResult(root, Math.Abs(value), maxIterations, false);
         }
 
+        /// <summary>
+        /// Solves a nonlinear system function(x) = 0 by damped Newton iteration using the supplied Jacobian.
+        /// </summary>
         public static SystemRootFindingResult NewtonSystem(Func<double[], double[]> function, Func<double[], double[,]> jacobian, double[] initialGuess, double tolerance = DefaultTolerance, int maxIterations = 100)
         {
             ValidateFunction(function);
@@ -552,6 +606,9 @@ namespace OPEN_LRD.Skills
             return new SystemRootFindingResult(current, Norm(EvaluateSystem(function, current, current.Length)), maxIterations, false);
         }
 
+        /// <summary>
+        /// Numerically integrates function over [lower, upper] using Romberg extrapolation of the trapezoid rule.
+        /// </summary>
         public static IntegrationResult Romberg(Func<double, double> function, double lower, double upper, double tolerance = DefaultTolerance, int maxLevels = 20)
         {
             ValidateQuadrature(function, lower, upper);
@@ -601,6 +658,9 @@ namespace OPEN_LRD.Skills
             return new IntegrationResult(previous[maxLevels - 1], error, evaluations);
         }
 
+        /// <summary>
+        /// Numerically integrates function over [lower, upper] using recursively refined adaptive Simpson's rule.
+        /// </summary>
         public static IntegrationResult AdaptiveSimpson(Func<double, double> function, double lower, double upper, double tolerance = DefaultTolerance, int maxDepth = 20)
         {
             ValidateQuadrature(function, lower, upper);
@@ -628,6 +688,9 @@ namespace OPEN_LRD.Skills
             return new IntegrationResult(value, error, evaluations);
         }
 
+        /// <summary>
+        /// Numerically integrates function over [lower, upper] using order-point Gauss-Legendre quadrature.
+        /// </summary>
         public static IntegrationResult GaussLegendre(Func<double, double> function, double lower, double upper, int order)
         {
             ValidateQuadrature(function, lower, upper);
@@ -677,6 +740,9 @@ namespace OPEN_LRD.Skills
             return new IntegrationResult(sum * halfWidth, 0.0, evaluations);
         }
 
+        /// <summary>
+        /// Estimates the integral of function over [lower, upper] with samples via random.
+        /// </summary>
         public static IntegrationResult MonteCarloIntegral(Func<double, double> function, double lower, double upper, int samples, Random random)
         {
             ValidateQuadrature(function, lower, upper);
@@ -706,6 +772,9 @@ namespace OPEN_LRD.Skills
             return new IntegrationResult(width * mean, error, samples);
         }
 
+        /// <summary>
+        /// Solves matrix * x = rightHandSide iteratively using the Jacobi method from initialGuess.
+        /// </summary>
         public static IterativeSolverResult Jacobi(double[,] matrix, double[] rightHandSide, double[] initialGuess, double tolerance = DefaultTolerance, int maxIterations = 1000)
         {
             ValidateLinearSystem(matrix, rightHandSide, initialGuess, tolerance, maxIterations);
@@ -741,6 +810,9 @@ namespace OPEN_LRD.Skills
             return new IterativeSolverResult(current, ResidualNorm(matrix, current, rightHandSide), maxIterations, false);
         }
 
+        /// <summary>
+        /// Solves matrix * x = rightHandSide iteratively using the Gauss-Seidel method from initialGuess.
+        /// </summary>
         public static IterativeSolverResult GaussSeidel(double[,] matrix, double[] rightHandSide, double[] initialGuess, double tolerance = DefaultTolerance, int maxIterations = 1000)
         {
             ValidateLinearSystem(matrix, rightHandSide, initialGuess, tolerance, maxIterations);
@@ -774,6 +846,9 @@ namespace OPEN_LRD.Skills
             return new IterativeSolverResult(current, ResidualNorm(matrix, current, rightHandSide), maxIterations, false);
         }
 
+        /// <summary>
+        /// Solves a symmetric matrix * x = rightHandSide iteratively using the conjugate gradient method from initialGuess.
+        /// </summary>
         public static IterativeSolverResult ConjugateGradient(double[,] matrix, double[] rightHandSide, double[] initialGuess, double tolerance = DefaultTolerance, int maxIterations = 1000)
         {
             ValidateLinearSystem(matrix, rightHandSide, initialGuess, tolerance, maxIterations);
@@ -815,6 +890,9 @@ namespace OPEN_LRD.Skills
             return new IterativeSolverResult(solution, ResidualNorm(matrix, solution, rightHandSide), maxIterations, false);
         }
 
+        /// <summary>
+        /// Solves a scalar ODE dy/dt = derivative(t, y) from start to end using adaptive Runge-Kutta 4(5).
+        /// </summary>
         public static OdeSolution RungeKutta45(Func<double, double, double> derivative, double start, double end, double initialValue, double tolerance = 1e-6)
         {
             ValidateFunction(derivative);
@@ -828,11 +906,17 @@ namespace OPEN_LRD.Skills
             return new OdeSolution(system.X, result);
         }
 
+        /// <summary>
+        /// Solves a scalar ODE dy/dt = derivative(t, y) from start to end using the Dormand-Prince method.
+        /// </summary>
         public static OdeSolution DormandPrince(Func<double, double, double> derivative, double start, double end, double initialValue, double tolerance = 1e-6)
         {
             return RungeKutta45(derivative, start, end, initialValue, tolerance);
         }
 
+        /// <summary>
+        /// Solves a system of ODEs dy/dt = derivative(t, y) from start to end using adaptive Runge-Kutta 4(5).
+        /// </summary>
         public static OdeSystemSolution RungeKutta45System(
             Func<double, double[], double[]> derivative,
             double start,
@@ -896,6 +980,9 @@ namespace OPEN_LRD.Skills
             return new OdeSystemSolution(times.ToArray(), values.ToArray());
         }
 
+        /// <summary>
+        /// Improves an estimate by Richardson extrapolation over halving step sizes up to the given number of levels.
+        /// </summary>
         public static double RichardsonExtrapolation(Func<double, double> estimate, double step, int levels)
         {
             ValidateFunction(estimate);
@@ -919,6 +1006,9 @@ namespace OPEN_LRD.Skills
             return row[0];
         }
 
+        /// <summary>
+        /// Accelerates convergence of three successive sequence terms using Aitken's delta-squared process.
+        /// </summary>
         public static double AitkenDeltaSquared(double first, double second, double third)
         {
             EnsureFinite(first, nameof(first));
@@ -932,6 +1022,9 @@ namespace OPEN_LRD.Skills
             return first - ((second - first) * (second - first) / denominator);
         }
 
+        /// <summary>
+        /// Validates interpolation data: non-null, equal-length, finite, strictly increasing x-values, and at least minimumCount points.
+        /// </summary>
         internal static void ValidateInterpolationData(double[] x, double[] y, int minimumCount)
         {
             if (x == null)
@@ -957,6 +1050,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Computes the Newton divided-difference coefficients for the nodes x and values y.
+        /// </summary>
         private static double[] DividedDifferences(double[] x, double[] y)
         {
             double[] coefficients = (double[])y.Clone();
@@ -970,6 +1066,9 @@ namespace OPEN_LRD.Skills
             return coefficients;
         }
 
+        /// <summary>
+        /// Computes a shape-preserving three-point endpoint slope for PCHIP interpolation.
+        /// </summary>
         private static double EndpointSlope(double firstWidth, double secondWidth, double firstSlope, double secondSlope)
         {
             double slope = ((2.0 * firstWidth + secondWidth) * firstSlope - firstWidth * secondSlope) / (firstWidth + secondWidth);
@@ -984,6 +1083,9 @@ namespace OPEN_LRD.Skills
             return slope;
         }
 
+        /// <summary>
+        /// Returns the index of the interval in x that contains value, clamped to the first and last intervals.
+        /// </summary>
         private static int FindInterval(double[] x, double value)
         {
             if (value <= x[0])
@@ -1011,6 +1113,9 @@ namespace OPEN_LRD.Skills
             return low;
         }
 
+        /// <summary>
+        /// Builds a curve fit result, computing R-squared and root-mean-squared error for the predictor over x and y.
+        /// </summary>
         private static CurveFitResult BuildCurveFitResult(double[] x, double[] y, double[] coefficients, Func<double, double> predictor)
         {
             double mean = 0.0;
@@ -1031,6 +1136,9 @@ namespace OPEN_LRD.Skills
             return new CurveFitResult(coefficients, rSquared, Math.Sqrt(residual / y.Length));
         }
 
+        /// <summary>
+        /// Evaluates a polynomial with ascending-order coefficients at value using Horner's method.
+        /// </summary>
         private static double EvaluatePolynomial(double[] coefficients, double value)
         {
             double result = 0.0;
@@ -1041,6 +1149,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Validates fit data and requires every y-value to be positive.
+        /// </summary>
         private static void ValidatePositiveFitData(double[] x, double[] y, string yName)
         {
             ValidateFitData(x, y, 2);
@@ -1053,6 +1164,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that x and y are non-null, of equal length, contain at least minimumCount points, and are finite.
+        /// </summary>
         private static void ValidateFitData(double[] x, double[] y, int minimumCount)
         {
             if (x == null)
@@ -1071,6 +1185,9 @@ namespace OPEN_LRD.Skills
             EnsureFinite(y, nameof(y));
         }
 
+        /// <summary>
+        /// Validates that function is not null.
+        /// </summary>
         private static void ValidateFunction(Delegate function)
         {
             if (function == null)
@@ -1079,6 +1196,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that tolerance is positive and finite and that maxIterations is at least one.
+        /// </summary>
         private static void ValidateRootOptions(double tolerance, int maxIterations)
         {
             EnsurePositiveFinite(tolerance, nameof(tolerance));
@@ -1088,6 +1208,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates a root-finding bracket and evaluates the function at both endpoints, requiring opposite signs.
+        /// </summary>
         private static void ValidateBracket(Func<double, double> function, double lower, double upper, double tolerance, int maxIterations, out double lowerValue, out double upperValue)
         {
             ValidateFunction(function);
@@ -1106,6 +1229,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates quadrature arguments: a non-null function, finite bounds, and upper not less than lower.
+        /// </summary>
         private static void ValidateQuadrature(Func<double, double> function, double lower, double upper)
         {
             ValidateFunction(function);
@@ -1117,6 +1243,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Recursively refines an adaptive Simpson estimate over [lower, upper] until the error tolerance or depth limit is met.
+        /// </summary>
         private static (double Value, double Error) AdaptiveSimpsonRecursive(
             Func<double, double> evaluate,
             double lower,
@@ -1146,11 +1275,17 @@ namespace OPEN_LRD.Skills
             return (leftValue + rightValue, leftError + rightError);
         }
 
+        /// <summary>
+        /// Applies Simpson's rule to a single segment [lower, upper] given its end and midpoint function values.
+        /// </summary>
         private static double SimpsonSegment(double lower, double upper, double first, double middle, double last)
         {
             return (upper - lower) * (first + 4.0 * middle + last) / 6.0;
         }
 
+        /// <summary>
+        /// Evaluates the Legendre polynomial of the given order and its derivative at value.
+        /// </summary>
         private static (double Value, double Derivative) LegendrePolynomial(int order, double value)
         {
             double previous = 1.0;
@@ -1169,6 +1304,9 @@ namespace OPEN_LRD.Skills
             return (current, derivative);
         }
 
+        /// <summary>
+        /// Validates a linear system: non-null square matrix, matching vector lengths, root options, and finite values.
+        /// </summary>
         private static void ValidateLinearSystem(double[,] matrix, double[] rightHandSide, double[] initialGuess, double tolerance, int maxIterations)
         {
             if (matrix == null)
@@ -1194,16 +1332,25 @@ namespace OPEN_LRD.Skills
             EnsureFinite(initialGuess, nameof(initialGuess));
         }
 
+        /// <summary>
+        /// Computes the Euclidean norm of matrix * solution - rightHandSide.
+        /// </summary>
         private static double ResidualNorm(double[,] matrix, double[] solution, double[] rightHandSide)
         {
             return Norm(VectorSubtract(Multiply(matrix, solution), rightHandSide));
         }
 
+        /// <summary>
+        /// Multiplies matrix by vector.
+        /// </summary>
         private static double[] Multiply(double[,] matrix, double[] vector)
         {
             return LinearAlgebraAdvanced.MatrixVectorMultiply(matrix, vector);
         }
 
+        /// <summary>
+        /// Computes the element-wise difference first - second.
+        /// </summary>
         private static double[] VectorSubtract(double[] first, double[] second)
         {
             double[] result = new double[first.Length];
@@ -1214,6 +1361,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the dot product of first and second.
+        /// </summary>
         private static double Dot(double[] first, double[] second)
         {
             double sum = 0.0;
@@ -1224,11 +1374,17 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Computes the Euclidean norm of vector.
+        /// </summary>
         private static double Norm(double[] vector)
         {
             return Math.Sqrt(Dot(vector, vector));
         }
 
+        /// <summary>
+        /// Performs one Dormand-Prince step, returning the fifth-order state and its error estimate against the fourth-order state.
+        /// </summary>
         private static (double[] FifthOrder, double[] Error) DormandPrinceStep(
             Func<double, double[], double[]> derivative,
             double time,
@@ -1247,6 +1403,9 @@ namespace OPEN_LRD.Skills
             return (fifth, VectorSubtract(fifth, fourth));
         }
 
+        /// <summary>
+        /// Returns state plus step times the weighted sum of the supplied derivative terms.
+        /// </summary>
         private static double[] Combine(double[] state, double step, params (double Coefficient, double[] Derivative)[] terms)
         {
             double[] result = (double[])state.Clone();
@@ -1262,6 +1421,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Evaluates an ODE derivative at time and state, validating the result length and finiteness.
+        /// </summary>
         private static double[] EvaluateSystem(Func<double, double[], double[]> function, double time, double[] state, int expectedLength)
         {
             EnsureFinite(time, nameof(time));
@@ -1274,6 +1436,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Evaluates a system function at point, validating the result length and finiteness.
+        /// </summary>
         private static double[] EvaluateSystem(Func<double[], double[]> function, double[] point, int expectedLength)
         {
             double[] result = function((double[])point.Clone());
@@ -1285,6 +1450,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Evaluates function at value and throws if the result is not finite.
+        /// </summary>
         private static double EvaluateFinite(Func<double, double> function, double value)
         {
             double result = function(value);
@@ -1295,6 +1463,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Validates that value is finite.
+        /// </summary>
         private static void EnsureFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))
@@ -1303,6 +1474,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that every element of values is finite.
+        /// </summary>
         private static void EnsureFinite(double[] values, string parameterName)
         {
             foreach (double value in values)
@@ -1311,6 +1485,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that every element of values is finite.
+        /// </summary>
         private static void EnsureFinite(double[,] values, string parameterName)
         {
             for (int row = 0; row < values.GetLength(0); row++)
@@ -1322,6 +1499,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that value is finite and strictly positive.
+        /// </summary>
         private static void EnsurePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0.0)

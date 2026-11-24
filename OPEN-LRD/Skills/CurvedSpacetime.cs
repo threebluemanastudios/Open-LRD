@@ -16,6 +16,7 @@ namespace OPEN_LRD.Skills
         private const int Dimension = 4;
 
         /// <summary>
+        /// Returns the flat Minkowski spacetime metric diag(-1, 1, 1, 1), validating the supplied four coordinates.
         /// </summary>
         /// <param name="coordinates">The coordinates.</param>
         /// <returns>The result.</returns>
@@ -32,6 +33,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the Schwarzschild metric components diag(-f, 1/f, r^2, r^2 sin^2(theta)) with f = 1 - 2M / r, requiring r &gt; 2M and sin(theta) nonzero.
         /// </summary>
         /// <param name="massLength">The mass length.</param>
         /// <param name="coordinates">The coordinates.</param>
@@ -61,7 +63,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the Schwarzschild radius (r_s = 2GM / c ) corresponding to massKg.
+        /// Computes the Schwarzschild radius (r_s = 2GM / c^2) corresponding to massKg.
         /// </summary>
         /// <param name="massKg">The mass kg.</param>
         /// <returns>The result.</returns>
@@ -73,7 +75,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the geometrized mass length (M = GM / c ) corresponding to massKg.
+        /// Computes the geometrized mass length (M = GM / c^2) corresponding to massKg.
         /// </summary>
         /// <param name="massKg">The mass kg.</param>
         /// <returns>The result.</returns>
@@ -85,7 +87,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the spacetime interval (ds  = g_{??} dx^? dx^?) for displacement at point under metric.
+        /// Computes the spacetime interval (ds^2 = g_{mu nu} dx^mu dx^nu) for displacement at point under metric.
         /// </summary>
         /// <param name="metric">The metric.</param>
         /// <param name="point">The point.</param>
@@ -112,6 +114,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the Christoffel symbols of the second kind (Gamma^a_{bc}) at coordinates for metric, using central finite differences of the metric with step finiteDifferenceStep.
         /// </summary>
         /// <param name="metric">The metric.</param>
         /// <param name="coordinates">The coordinates.</param>
@@ -264,7 +267,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the gravitational redshift factor between emitterRadius and observerRadius in Schwarzschild spacetime.
+        /// Computes the gravitational redshift z = sqrt(f_observer / f_emitter) - 1 between emitterRadius and observerRadius in Schwarzschild spacetime, where f = 1 - 2M / r.
         /// </summary>
         /// <param name="massLength">The mass length.</param>
         /// <param name="emitterRadius">The emitter radius.</param>
@@ -293,6 +296,11 @@ namespace OPEN_LRD.Skills
             return 48.0 * massLength * massLength / Math.Pow(radius, 6.0);
         }
 
+        /// <summary>
+        /// Validates that the metric has the correct shape and symmetry and is invertible, returning it unchanged.
+        /// </summary>
+        /// <param name="metric">The metric tensor to validate.</param>
+        /// <returns>The validated metric tensor.</returns>
         private static double[,] ValidateMetric(double[,] metric)
         {
             double[,] validated = ValidateMetricShape(metric);
@@ -300,6 +308,12 @@ namespace OPEN_LRD.Skills
             return validated;
         }
 
+        /// <summary>
+        /// Validates that the metric is a non-null 4x4 matrix with finite, symmetric entries, returning it unchanged.
+        /// </summary>
+        /// <param name="metric">The metric tensor to validate.</param>
+        /// <returns>The validated metric tensor.</returns>
+        /// <exception cref="ArgumentException">Thrown when the metric is not 4x4 or is not symmetric.</exception>
         private static double[,] ValidateMetricShape(double[,] metric)
         {
             if (metric == null || metric.GetLength(0) != Dimension || metric.GetLength(1) != Dimension)
@@ -320,6 +334,12 @@ namespace OPEN_LRD.Skills
             return metric;
         }
 
+        /// <summary>
+        /// Validates that the coordinate or tangent array is non-null, has four finite components.
+        /// </summary>
+        /// <param name="coordinates">The coordinates or tangent components to validate.</param>
+        /// <exception cref="ArgumentNullException">Thrown when the array is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the array does not have exactly four components.</exception>
         private static void ValidateCoordinates(double[] coordinates)
         {
             if (coordinates == null)
@@ -336,6 +356,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that the radius is positive and finite and lies strictly outside the Schwarzschild horizon (2M).
+        /// </summary>
+        /// <param name="radius">The radius to validate.</param>
+        /// <param name="massLength">The mass length, where the horizon sits at twice this value.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the radius is invalid or lies at or inside the horizon.</exception>
         private static void EnsureGreaterThanHorizon(double radius, double massLength, string name)
         {
             EnsurePositive(radius, name);
@@ -345,6 +372,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Returns the value unchanged if it is finite; otherwise throws an <see cref="InvalidOperationException"/>.
+        /// </summary>
+        /// <param name="value">The computed result to check.</param>
+        /// <param name="name">The name of the result, used in the exception message.</param>
+        /// <returns>The original value.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the value is NaN or infinite.</exception>
         private static double EnsureFinite(double value, string name)
         {
             if (!double.IsFinite(value))
@@ -354,6 +388,12 @@ namespace OPEN_LRD.Skills
             return value;
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite or not strictly positive.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN, infinite, or less than or equal to zero.</exception>
         private static void EnsurePositive(double value, string name)
         {
             if (!double.IsFinite(value) || value <= 0.0)

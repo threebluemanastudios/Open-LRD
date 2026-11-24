@@ -72,6 +72,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the remainder of dividing the first integer by the second integer (a % b).
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -148,6 +149,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the remainder of dividing the first double-precision value by the second (a % b).
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -221,6 +223,7 @@ namespace OPEN_LRD.Skills
             return a / b;
         }
         /// <summary>
+        /// Computes the remainder of dividing the first single-precision value by the second (a % b).
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -248,7 +251,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the standard deviation of a sequence of single-precision values.
+        /// Computes the population standard deviation of a sequence of single-precision values.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -262,7 +265,7 @@ namespace OPEN_LRD.Skills
         }
         
         /// <summary>
-        /// Computes the variance of a sequence of single-precision values.
+        /// Computes the population variance of a sequence of single-precision values.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -282,7 +285,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the standard score (z-score) of a value relative to the sample distribution.
+        /// Computes the standard score (z-score) of a value relative to the mean and population standard deviation of the dataset.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="numbers">The numbers.</param>
@@ -303,7 +306,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the percentile rank or percentile value for the dataset.
+        /// Computes the percentile rank of a value: the percentage of dataset values strictly less than it.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="numbers">The numbers.</param>
@@ -460,7 +463,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the kurtosis measuring tail weight of the data distribution.
+        /// Computes the excess kurtosis, measuring tail weight of the data distribution.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -485,7 +488,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the sample or population covariance between two paired series.
+        /// Computes the population covariance between two paired series.
         /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -702,7 +705,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the mean absolute deviation around the central tendency.
+        /// Computes the mean absolute deviation of values around their arithmetic mean.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -798,7 +801,7 @@ namespace OPEN_LRD.Skills
         }   
 
         /// <summary>
-        /// Computes the coefficient of determination (R ) for predicted versus actual values.
+        /// Computes the coefficient of determination (R^2) for predicted versus actual values.
         /// </summary>
         /// <param name="actual">The actual.</param>
         /// <param name="predicted">The predicted.</param>
@@ -821,7 +824,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the predictor-adjusted coefficient of determination (Adjusted R ).
+        /// Computes the predictor-adjusted coefficient of determination (Adjusted R^2).
         /// </summary>
         /// <param name="actual">The actual.</param>
         /// <param name="predicted">The predicted.</param>
@@ -907,6 +910,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the difference between two fractions (fraction1 - fraction2).
         /// </summary>
         /// <param name="fraction1">The fraction1.</param>
         /// <param name="fraction2">The fraction2.</param>
@@ -945,7 +949,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Constructs and reduces a fraction to lowest terms from integer numerator and denominator.
+        /// Returns a new fraction equal to the specified fraction, reduced to lowest terms.
         /// </summary>
         /// <param name="fraction">The fraction.</param>
         /// <returns>The result.</returns>
@@ -1017,7 +1021,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the greatest common divisor of two BigInteger values.
+        /// Computes the greatest common divisor of two integers. Throws if the result is outside the Int32 range.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -1393,7 +1397,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the square (value ) of an integer.
+        /// Computes the square (value^2) of an integer.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1403,6 +1407,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the square (value^2) of a double-precision floating-point number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1412,6 +1417,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the square (value^2) of a single-precision floating-point number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1421,6 +1427,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the square root of an integer as a double-precision value. Throws if the value is negative.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1434,6 +1441,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the square root of a double-precision floating-point number. Throws if the value is negative.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1447,6 +1455,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the square root of a single-precision floating-point number. Throws if the value is negative.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1460,6 +1469,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the cube root of an integer as a double-precision value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1469,6 +1479,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the cube root of a double-precision floating-point number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1478,6 +1489,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the cube root of a single-precision floating-point number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1487,6 +1499,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Raises a double-precision value to a double-precision exponent.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="exponent">The exponent.</param>
@@ -1497,6 +1510,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Raises a single-precision value to a single-precision exponent.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="exponent">The exponent.</param>
@@ -1507,6 +1521,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the integer unchanged, since the floor of an integer is the integer itself.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1516,6 +1531,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the largest integer less than or equal to a double-precision value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1525,6 +1541,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the largest integer less than or equal to a single-precision value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1534,6 +1551,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the integer unchanged, since the ceiling of an integer is the integer itself.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1543,6 +1561,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the smallest integer greater than or equal to a double-precision value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1552,6 +1571,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the smallest integer greater than or equal to a single-precision value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1561,6 +1581,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the integer unchanged, since rounding an integer has no effect.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1570,6 +1591,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Rounds a double-precision value to the nearest integer, with midpoints rounded away from zero.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1579,6 +1601,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Rounds a double-precision value to the specified number of decimal digits, with midpoints rounded away from zero.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="digits">The digits.</param>
@@ -1589,6 +1612,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Rounds a single-precision value to the nearest integer, with midpoints rounded away from zero.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1598,6 +1622,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Rounds a single-precision value to the specified number of decimal digits, with midpoints rounded away from zero.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="digits">The digits.</param>
@@ -1608,6 +1633,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the integer unchanged, since truncating an integer has no effect.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1617,6 +1643,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Truncates a double-precision value toward zero, removing its fractional part.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1626,6 +1653,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Truncates a single-precision value toward zero, removing its fractional part.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1635,6 +1663,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the sign of an integer: -1 if negative, 0 if zero, or 1 if positive.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1644,6 +1673,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the sign of a double-precision value: -1 if negative, 0 if zero, or 1 if positive.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1653,6 +1683,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the sign of a single-precision value: -1 if negative, 0 if zero, or 1 if positive.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1662,6 +1693,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the natural logarithm of a double-precision value. Throws if the value is not positive.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1675,6 +1707,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the natural logarithm of a single-precision value. Throws if the value is not positive.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1688,6 +1721,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the base-10 logarithm of a double-precision value. Throws if the value is not positive.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1701,6 +1735,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the base-10 logarithm of a single-precision value. Throws if the value is not positive.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1714,6 +1749,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the logarithm of a double-precision value in the specified base. Throws if the value is not positive or the base is not positive and not one.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="baseValue">The base value.</param>
@@ -1732,6 +1768,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the logarithm of a single-precision value in the specified base. Throws if the value is not positive or the base is not positive and not one.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="baseValue">The base value.</param>
@@ -1750,6 +1787,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes e raised to the power of a double-precision value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1759,6 +1797,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes e raised to the power of a single-precision value.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1768,6 +1807,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the sine of a double-precision angle in radians.
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1777,6 +1817,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the cosine of a double-precision angle in radians.
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1786,6 +1827,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the tangent of a double-precision angle in radians.
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1795,6 +1837,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the sine of a single-precision angle in radians.
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1804,6 +1847,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the cosine of a single-precision angle in radians.
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1813,6 +1857,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the tangent of a single-precision angle in radians.
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1822,6 +1867,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in radians from the positive x-axis to the point (x, y), using the signs of both arguments to select the quadrant.
         /// </summary>
         /// <param name="y">The y.</param>
         /// <param name="x">The x.</param>
@@ -1832,6 +1878,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the angle in radians from the positive x-axis to the point (x, y), using the signs of both arguments to select the quadrant (single precision).
         /// </summary>
         /// <param name="y">The y.</param>
         /// <param name="x">The x.</param>
@@ -1842,6 +1889,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Converts a double-precision angle from degrees to radians.
         /// </summary>
         /// <param name="degrees">The degrees.</param>
         /// <returns>The result.</returns>
@@ -1851,6 +1899,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Converts a single-precision angle from degrees to radians.
         /// </summary>
         /// <param name="degrees">The degrees.</param>
         /// <returns>The result.</returns>
@@ -1860,6 +1909,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Converts a double-precision angle from radians to degrees.
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1869,6 +1919,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Converts a single-precision angle from radians to degrees.
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1878,6 +1929,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the smallest integer in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -1899,6 +1951,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the smallest double-precision value in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -1920,6 +1973,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the smallest single-precision value in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -1941,6 +1995,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the largest integer in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -1962,6 +2017,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the largest double-precision value in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -1983,6 +2039,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the largest single-precision value in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2004,6 +2061,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the sum of all integers in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2022,6 +2080,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the sum of all double-precision values in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2040,6 +2099,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the sum of all single-precision values in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2058,6 +2118,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the product of all integers in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2076,6 +2137,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the product of all double-precision values in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2094,6 +2156,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the product of all single-precision values in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2112,6 +2175,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the running (cumulative) sums of the integers in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2132,6 +2196,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the running (cumulative) sums of the double-precision values in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2152,6 +2217,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the running (cumulative) sums of the single-precision values in the specified list.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2172,6 +2238,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the simple moving averages of values over a sliding window of the specified size.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <param name="windowSize">The window size.</param>
@@ -2200,6 +2267,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the simple moving averages of values over a sliding window of the specified size (delegates to CalculateMovingAverage).
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <param name="windowSize">The window size.</param>
@@ -2210,6 +2278,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the median absolute deviation: the median of the absolute deviations from the median.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2229,6 +2298,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the trimmed mean by removing the specified percentage of values from each end of the sorted data before averaging.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <param name="trimPercentage">The trim percentage.</param>
@@ -2255,6 +2325,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the mean absolute error (MAE) between actual and predicted values.
         /// </summary>
         /// <param name="actual">The actual.</param>
         /// <param name="predicted">The predicted.</param>
@@ -2274,6 +2345,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the sample variance of a sequence of single-precision values, dividing by n - 1 (Bessel's correction).
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2293,6 +2365,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the sample standard deviation (square root of the sample variance) of a sequence of single-precision values.
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2302,6 +2375,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the least common multiple of two integers. Returns zero if either integer is zero.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -2321,7 +2395,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Determines whether a 64-bit integer value is prime.
+        /// Determines whether a 32-bit integer value is prime.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2350,6 +2424,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Determines whether an integer is even.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2359,6 +2434,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Determines whether an integer is odd.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2368,6 +2444,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Determines whether an integer is a perfect square. Negative values return false.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2382,6 +2459,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the factorial (n!) of a non-negative integer. Throws if the number is greater than 20.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2404,6 +2482,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the number of combinations of r items chosen from n items (nCr), where order does not matter.
         /// </summary>
         /// <param name="n">The n.</param>
         /// <param name="r">The r.</param>
@@ -2431,6 +2510,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the number of permutations of r items chosen from n items (nPr), where order matters.
         /// </summary>
         /// <param name="n">The n.</param>
         /// <param name="r">The r.</param>
@@ -2454,6 +2534,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the prime factorization of an integer as a list of prime factors, including repeated factors.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2481,6 +2562,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the sum of the decimal digits of an integer, ignoring its sign.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2497,6 +2579,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Reverses the decimal digits of an integer, preserving its sign.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2521,6 +2604,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes an integer raised to a non-negative integer power.
         /// </summary>
         /// <param name="baseValue">The base value.</param>
         /// <param name="exponent">The exponent.</param>
@@ -2540,6 +2624,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes value as a percentage of total, (value / total) * 100. Throws if total is zero.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="total">The total.</param>
@@ -2554,6 +2639,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the percentage change from oldValue to newValue, relative to the absolute value of oldValue. Throws if oldValue is zero.
         /// </summary>
         /// <param name="oldValue">The old value.</param>
         /// <param name="newValue">The new value.</param>
@@ -2568,6 +2654,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Increases a value by the specified percentage.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="percentage">The percentage.</param>
@@ -2578,6 +2665,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Decreases a value by the specified percentage.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="percentage">The percentage.</param>
@@ -2588,6 +2676,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Compares two fractions, returning a negative value, zero, or a positive value if the first is less than, equal to, or greater than the second.
         /// </summary>
         /// <param name="fraction1">The fraction1.</param>
         /// <param name="fraction2">The fraction2.</param>
@@ -2600,6 +2689,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the least common denominator of two integers. Returns zero if either integer is zero.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -2614,6 +2704,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Converts a fraction to a string in mixed-number form (for example, 2 1/3). Returns a whole-number string when there is no remainder, or a proper-fraction string when the whole part is zero.
         /// </summary>
         /// <param name="fraction">The fraction.</param>
         /// <returns>The result.</returns>

@@ -21,6 +21,9 @@ namespace OPEN_LRD.Skills
         private const int MaximumSteps = 100000;
         private const int MaximumSnapshots = 10000;
 
+        /// <summary>
+        /// Constructs a Newtonian gravitational pair potential and its radial derivative.
+        /// </summary>
         public static PairPotential GravitationalPairPotential()
         {
             return new PairPotential(
@@ -29,6 +32,9 @@ namespace OPEN_LRD.Skills
                 (radius, first, second) => PhysicalConstants.GravitationalConstant.ValueSI * first.Mass * second.Mass / (radius * radius));
         }
 
+        /// <summary>
+        /// Constructs a Coulomb pair potential and its radial derivative.
+        /// </summary>
         public static PairPotential CoulombPairPotential()
         {
             return new PairPotential(
@@ -60,7 +66,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes interparticle force at separation under potential.
+        /// Computes the pair potential energy between first and second at separation under potential.
         /// </summary>
         public static double PairPotentialEnergy(ParticleState first, ParticleState second, double separation, PairPotential potential)
         {
@@ -72,7 +78,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes total potential energy for particles under potential with softening.
+        /// Computes the radial derivative (dU/dr) of the pair potential at separation under potential.
         /// </summary>
         public static double PairForce(double separation, PairPotential potential)
         {
@@ -80,6 +86,9 @@ namespace OPEN_LRD.Skills
             return PairForce(unit, unit, separation, potential);
         }
 
+        /// <summary>
+        /// Computes interparticle force at separation under potential.
+        /// </summary>
         public static double PairForce(ParticleState first, ParticleState second, double separation, PairPotential potential)
         {
             ValidatePotential(potential);
@@ -89,7 +98,7 @@ namespace OPEN_LRD.Skills
             return EnsureFinite(potential.RadialDerivative(separation, first, second), nameof(potential));
         }
         /// <summary>
-        /// Computes accelerations for particles under potential with softening.
+        /// Computes the total pairwise potential energy of particles under potential with softening.
         /// </summary>
 
         public static double TotalPotentialEnergy(IReadOnlyList<ParticleState> particles, PairPotential potential, double softening)
@@ -109,6 +118,9 @@ namespace OPEN_LRD.Skills
             return EnsureFinite(total, nameof(particles));
         }
 
+        /// <summary>
+        /// Computes the acceleration of each particle from pairwise forces derived from potential with softening.
+        /// </summary>
         public static Vector3[] Accelerations(IReadOnlyList<ParticleState> particles, PairPotential potential, double softening)
         {
             ValidateParticles(particles, nameof(particles));
@@ -137,6 +149,9 @@ namespace OPEN_LRD.Skills
             return accelerations;
         }
 
+        /// <summary>
+        /// Computes the gravitational acceleration of each particle, using softened forces when softening is nonzero.
+        /// </summary>
         public static Vector3[] GravitationalAccelerations(IReadOnlyList<ParticleState> particles, double softening = 0.0)
         {
             ValidateParticles(particles, nameof(particles));
@@ -165,6 +180,9 @@ namespace OPEN_LRD.Skills
             return accelerations;
         }
 
+        /// <summary>
+        /// Computes the Coulomb acceleration of each particle, using softened forces when softening is nonzero.
+        /// </summary>
         public static Vector3[] CoulombAccelerations(IReadOnlyList<ParticleState> particles, double softening = 0.0)
         {
             ValidateParticles(particles, nameof(particles));
@@ -193,6 +211,9 @@ namespace OPEN_LRD.Skills
             return accelerations;
         }
 
+        /// <summary>
+        /// Advances particles by timeStep under potential and softening via Velocity Verlet.
+        /// </summary>
         public static ParticleState[] VelocityVerletStep(IReadOnlyList<ParticleState> particles, PairPotential potential, double timeStep, double softening)
         {
             ValidateParticles(particles, nameof(particles));
@@ -219,6 +240,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Runs a Velocity Verlet simulation for a fixed number of steps, recording snapshots at the output interval.
+        /// </summary>
         public static ManyBodySimulationResult Simulate(
             IReadOnlyList<ParticleState> initialState,
             PairPotential potential,
@@ -264,6 +288,9 @@ namespace OPEN_LRD.Skills
 
         private static double CoulombCoefficient => 1.0 / (4.0 * Math.PI * PhysicalConstants.VacuumPermittivity.ValueSI);
 
+        /// <summary>
+        /// Computes the softened central force on the first body from the separation vector, scaled by coupling and both factors.
+        /// </summary>
         private static Vector3 SoftenedCentralForce(Vector3 separation, double firstFactor, double secondFactor, double softening, double coupling)
         {
             double radiusSquared = Math_2.CalculateDotProduct(separation, separation) + softening * softening;
@@ -275,6 +302,9 @@ namespace OPEN_LRD.Skills
             return Math_2.ScaleVector(separation, coefficient);
         }
 
+        /// <summary>
+        /// Computes the Lennard-Jones potential energy at radius for the given epsilon and sigma.
+        /// </summary>
         private static double LennardJonesEnergy(double radius, double epsilon, double sigma)
         {
             EnsurePositive(radius, nameof(radius));
@@ -282,6 +312,9 @@ namespace OPEN_LRD.Skills
             return 4.0 * epsilon * (ratio6 * ratio6 - ratio6);
         }
 
+        /// <summary>
+        /// Computes the radial derivative of the Lennard-Jones potential at radius for the given epsilon and sigma.
+        /// </summary>
         private static double LennardJonesDerivative(double radius, double epsilon, double sigma)
         {
             EnsurePositive(radius, nameof(radius));
@@ -289,6 +322,9 @@ namespace OPEN_LRD.Skills
             return 24.0 * epsilon * (ratio6 - 2.0 * ratio6 * ratio6) / radius;
         }
 
+        /// <summary>
+        /// Computes the softened distance between two positions, sqrt(|r|^2 + softening^2). Throws if the result is not positive.
+        /// </summary>
         private static double EffectiveSeparation(Vector3 first, Vector3 second, double softening)
         {
             Vector3 difference = second - first;
@@ -301,6 +337,9 @@ namespace OPEN_LRD.Skills
             return EnsurePositive(radius, nameof(softening));
         }
 
+        /// <summary>
+        /// Creates a snapshot of the given particles at time, recording kinetic plus potential energy as the total energy.
+        /// </summary>
         private static ManyBodySnapshot CreateSnapshot(double time, ParticleState[] particles, PairPotential potential, double softening)
         {
             double kinetic = 0.0;
@@ -313,6 +352,9 @@ namespace OPEN_LRD.Skills
             return new ManyBodySnapshot(time, Array.AsReadOnly((ParticleState[])particles.Clone()), energy);
         }
 
+        /// <summary>
+        /// Returns a shallow copy of the particle states in a new array.
+        /// </summary>
         private static ParticleState[] CopyParticles(IReadOnlyList<ParticleState> particles)
         {
             ParticleState[] copy = new ParticleState[particles.Count];
@@ -323,6 +365,9 @@ namespace OPEN_LRD.Skills
             return copy;
         }
 
+        /// <summary>
+        /// Validates that the potential is non-null and has a name and both energy delegates.
+        /// </summary>
         private static void ValidatePotential(PairPotential potential)
         {
             if (potential == null)
@@ -335,6 +380,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that the particle collection is non-null, within the particle limit, and contains only valid particles.
+        /// </summary>
         private static void ValidateParticles(IReadOnlyList<ParticleState> particles, string name)
         {
             if (particles == null)
@@ -351,6 +399,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a particle is non-null, has positive mass, and has finite charge, position, and velocity.
+        /// </summary>
         private static void ValidateParticle(ParticleState particle, string name)
         {
             if (particle == null)
@@ -363,6 +414,9 @@ namespace OPEN_LRD.Skills
             EnsureFinite(particle.Velocity, nameof(particle.Velocity));
         }
 
+        /// <summary>
+        /// Returns value if it is positive and finite; otherwise throws ArgumentOutOfRangeException.
+        /// </summary>
         private static double EnsurePositive(double value, string name)
         {
             if (!double.IsFinite(value) || value <= 0.0)
@@ -372,6 +426,9 @@ namespace OPEN_LRD.Skills
             return value;
         }
 
+        /// <summary>
+        /// Throws ArgumentOutOfRangeException if value is negative or not finite.
+        /// </summary>
         private static void EnsureNonNegative(double value, string name)
         {
             if (!double.IsFinite(value) || value < 0.0)
@@ -380,6 +437,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Returns value if it is finite; otherwise throws InvalidOperationException.
+        /// </summary>
         private static double EnsureFinite(double value, string name)
         {
             if (!double.IsFinite(value))
@@ -389,6 +449,9 @@ namespace OPEN_LRD.Skills
             return value;
         }
 
+        /// <summary>
+        /// Throws ArgumentOutOfRangeException if any component of vector is not finite.
+        /// </summary>
         private static void EnsureFinite(Vector3 vector, string name)
         {
             if (!double.IsFinite(vector.X) || !double.IsFinite(vector.Y) || !double.IsFinite(vector.Z))

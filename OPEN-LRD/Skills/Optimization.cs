@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 namespace OPEN_LRD.Skills
 {
+    /// <summary>
+    /// Result of an iterative optimization run.
+    /// </summary>
+    /// <param name="Point">The best point found.</param>
+    /// <param name="Value">The objective value at <paramref name="Point"/>.</param>
+    /// <param name="GradientNorm">The norm of the (approximate) gradient at <paramref name="Point"/>.</param>
+    /// <param name="Iterations">The number of iterations performed.</param>
+    /// <param name="Converged">Whether the run met its convergence criteria.</param>
     internal sealed record OptimizationResult(
         double[] Point,
         double Value,
@@ -10,14 +18,40 @@ namespace OPEN_LRD.Skills
         int Iterations,
         bool Converged);
 
+    /// <summary>
+    /// Result of a linear programming solve.
+    /// </summary>
+    /// <param name="ObjectiveValue">The optimal objective value, or 0 when no solution was found.</param>
+    /// <param name="Variables">The values of the decision variables, or empty when no solution was found.</param>
+    /// <param name="Feasible">Whether a feasible solution was found.</param>
     internal sealed record LinearProgrammingResult(double ObjectiveValue, double[] Variables, bool Feasible);
 
+    /// <summary>
+    /// Result of an assignment problem solve.
+    /// </summary>
+    /// <param name="Assignment">For each row, the index of the assigned column, or -1 if unassigned.</param>
+    /// <param name="TotalCost">The sum of the costs of the assigned cells.</param>
     internal sealed record AssignmentResult(int[] Assignment, double TotalCost);
 
+    /// <summary>
+    /// Numerical optimization routines for univariate and multivariate problems.
+    /// </summary>
     internal static class Optimization
     {
+        /// <summary>
+        /// The maximum number of step halvings performed in a single line search.
+        /// </summary>
         private const int MaxLineSearchSteps = 60;
 
+        /// <summary>
+        /// Finds the minimum of a unimodal function on an interval using golden-section search.
+        /// </summary>
+        /// <param name="function">The function to minimize.</param>
+        /// <param name="lower">The lower bound of the search interval.</param>
+        /// <param name="upper">The upper bound of the search interval. Must exceed <paramref name="lower"/>.</param>
+        /// <param name="tolerance">The relative tolerance on the interval width.</param>
+        /// <param name="maxIterations">The maximum number of iterations.</param>
+        /// <returns>The approximate location of the minimum.</returns>
         public static double GoldenSectionSearch(Func<double, double> function, double lower, double upper, double tolerance = 1e-9, int maxIterations = 200)
         {
             ValidateInterval(function, lower, upper, tolerance, maxIterations);
@@ -48,6 +82,15 @@ namespace OPEN_LRD.Skills
             return lower + (upper - lower) * 0.5;
         }
 
+        /// <summary>
+        /// Finds the minimum of a univariate function on an interval using Brent's method.
+        /// </summary>
+        /// <param name="function">The function to minimize.</param>
+        /// <param name="lower">The lower bound of the search interval.</param>
+        /// <param name="upper">The upper bound of the search interval. Must exceed <paramref name="lower"/>.</param>
+        /// <param name="tolerance">The relative tolerance on the location of the minimum.</param>
+        /// <param name="maxIterations">The maximum number of iterations.</param>
+        /// <returns>The approximate location of the minimum.</returns>
         public static double BrentMinimize(Func<double, double> function, double lower, double upper, double tolerance = 1e-9, int maxIterations = 200)
         {
             ValidateInterval(function, lower, upper, tolerance, maxIterations);
@@ -149,6 +192,16 @@ namespace OPEN_LRD.Skills
             return x;
         }
 
+        /// <summary>
+        /// Minimizes a multivariate function using gradient descent with backtracking line search.
+        /// </summary>
+        /// <param name="function">The objective function to minimize.</param>
+        /// <param name="gradient">Returns the gradient of the objective at a given point.</param>
+        /// <param name="initialGuess">The starting point. Must be non-empty and finite.</param>
+        /// <param name="learningRate">The initial step size. Must be positive and finite.</param>
+        /// <param name="tolerance">The gradient norm below which the run is considered converged.</param>
+        /// <param name="maxIterations">The maximum number of iterations.</param>
+        /// <returns>The optimization result.</returns>
         public static OptimizationResult GradientDescent(
             Func<double[], double> function,
             Func<double[], double[]> gradient,
@@ -197,6 +250,15 @@ namespace OPEN_LRD.Skills
             return new OptimizationResult(point, value, Norm(gradientValue), maxIterations, false);
         }
 
+        /// <summary>
+        /// Minimizes a multivariate function using the BFGS quasi-Newton method with backtracking line search.
+        /// </summary>
+        /// <param name="function">The objective function to minimize.</param>
+        /// <param name="gradient">Returns the gradient of the objective at a given point.</param>
+        /// <param name="initialGuess">The starting point. Must be non-empty and finite.</param>
+        /// <param name="tolerance">The gradient norm below which the run is considered converged.</param>
+        /// <param name="maxIterations">The maximum number of iterations.</param>
+        /// <returns>The optimization result.</returns>
         public static OptimizationResult Bfgs(
             Func<double[], double> function,
             Func<double[], double[]> gradient,
@@ -248,6 +310,15 @@ namespace OPEN_LRD.Skills
             return new OptimizationResult(point, value, Norm(gradientValue), maxIterations, false);
         }
 
+        /// <summary>
+        /// Minimizes a multivariate function using the nonlinear conjugate gradient method (Polak-Ribiere) with backtracking line search.
+        /// </summary>
+        /// <param name="function">The objective function to minimize.</param>
+        /// <param name="gradient">Returns the gradient of the objective at a given point.</param>
+        /// <param name="initialGuess">The starting point. Must be non-empty and finite.</param>
+        /// <param name="tolerance">The gradient norm below which the run is considered converged.</param>
+        /// <param name="maxIterations">The maximum number of iterations.</param>
+        /// <returns>The optimization result.</returns>
         public static OptimizationResult ConjugateGradient(
             Func<double[], double> function,
             Func<double[], double[]> gradient,
@@ -287,6 +358,14 @@ namespace OPEN_LRD.Skills
             return new OptimizationResult(point, value, Norm(gradientValue), maxIterations, false);
         }
 
+        /// <summary>
+        /// Minimizes a derivative-free multivariate function using the Nelder-Mead simplex method.
+        /// </summary>
+        /// <param name="function">The objective function to minimize.</param>
+        /// <param name="initialGuess">The starting point. Must be non-empty and finite.</param>
+        /// <param name="tolerance">The simplex size and value spread below which the run is considered converged.</param>
+        /// <param name="maxIterations">The maximum number of iterations.</param>
+        /// <returns>The optimization result.</returns>
         public static OptimizationResult NelderMead(Func<double[], double> function, double[] initialGuess, double tolerance = 1e-9, int maxIterations = 1000)
         {
             ValidateOptimizer(function, initialGuess, tolerance, maxIterations);
@@ -435,6 +514,18 @@ namespace OPEN_LRD.Skills
             return new OptimizationResult(best, bestValue, ApproximateGradientNorm(function, best), maxIterations, false);
         }
 
+        /// <summary>
+        /// Minimizes a multivariate function subject to box constraints using projected gradient descent.
+        /// </summary>
+        /// <param name="function">The objective function to minimize.</param>
+        /// <param name="gradient">Returns the gradient of the objective at a given point.</param>
+        /// <param name="initialGuess">The starting point. Projected onto the bounds before use.</param>
+        /// <param name="lowerBounds">The lower bound of each variable. Must match the dimension of <paramref name="initialGuess"/>.</param>
+        /// <param name="upperBounds">The upper bound of each variable. Must match the dimension of <paramref name="initialGuess"/>.</param>
+        /// <param name="learningRate">The initial step size. Must be positive and finite.</param>
+        /// <param name="tolerance">The projected gradient norm below which the run is considered converged.</param>
+        /// <param name="maxIterations">The maximum number of iterations.</param>
+        /// <returns>The optimization result.</returns>
         public static OptimizationResult ProjectedGradient(
             Func<double[], double> function,
             Func<double[], double[]> gradient,
@@ -488,6 +579,16 @@ namespace OPEN_LRD.Skills
             return new OptimizationResult(point, value, Norm(EvaluateGradient(gradient, point)), maxIterations, false);
         }
 
+        /// <summary>
+        /// Minimizes an objective subject to equality constraints by adding a quadratic penalty term and minimizing with gradient descent.
+        /// </summary>
+        /// <param name="objective">The objective function to minimize.</param>
+        /// <param name="equalityConstraints">Returns the equality constraint residuals at a given point; all should be zero when satisfied.</param>
+        /// <param name="initialGuess">The starting point. Must be non-empty and finite.</param>
+        /// <param name="penaltyWeight">The weight of the squared constraint residuals. Must be positive and finite.</param>
+        /// <param name="tolerance">The gradient norm below which the run is considered converged.</param>
+        /// <param name="maxIterations">The maximum number of iterations.</param>
+        /// <returns>The optimization result, with the value taken from the unpenalized objective.</returns>
         public static OptimizationResult PenaltyMethod(
             Func<double[], double> objective,
             Func<double[], double[]> equalityConstraints,
@@ -544,6 +645,9 @@ namespace OPEN_LRD.Skills
             return new OptimizationResult(point, EvaluateFinite(objective, point), Norm(NumericalGradient(Penalized, point)), maxIterations, false);
         }
 
+        /// <summary>
+        /// Solves linear program defined by constraintMatrix, rightHandSide, and objective via simplex.
+        /// </summary>
         public static LinearProgrammingResult Simplex(double[,] constraintMatrix, double[] rightHandSide, double[] objective)
         {
             ValidateLinearProgram(constraintMatrix, rightHandSide, objective);
@@ -557,12 +661,20 @@ namespace OPEN_LRD.Skills
             return SolveLinearProgram(constraintMatrix, rightHandSide, objective, false);
         }
 
+        /// <summary>
+        /// Solves linear program defined by constraintMatrix, rightHandSide, and objective via two-phase simplex.
+        /// </summary>
         public static LinearProgrammingResult TwoPhaseSimplex(double[,] constraintMatrix, double[] rightHandSide, double[] objective)
         {
             ValidateLinearProgram(constraintMatrix, rightHandSide, objective);
             return SolveLinearProgram(constraintMatrix, rightHandSide, objective, true);
         }
 
+        /// <summary>
+        /// Solves the rectangular assignment problem of minimum total cost using the Hungarian algorithm.
+        /// </summary>
+        /// <param name="costMatrix">The cost of assigning each row to each column. Must be non-empty and finite.</param>
+        /// <returns>The row-to-column assignment and its total cost.</returns>
         public static AssignmentResult HungarianAssignment(double[,] costMatrix)
         {
             if (costMatrix == null)
@@ -610,6 +722,14 @@ namespace OPEN_LRD.Skills
             return new AssignmentResult(assignment, total);
         }
 
+        /// <summary>
+        /// Solves a linear program in standard form using a dense tableau, optionally with an artificial-variable phase one.
+        /// </summary>
+        /// <param name="input">The constraint matrix.</param>
+        /// <param name="inputRhs">The right-hand side vector.</param>
+        /// <param name="objective">The objective coefficients to maximize.</param>
+        /// <param name="allowNegativeRhs">Whether negative right-hand sides are permitted and handled by phase one.</param>
+        /// <returns>The solution, or an infeasible result if none exists.</returns>
         private static LinearProgrammingResult SolveLinearProgram(double[,] input, double[] inputRhs, double[] objective, bool allowNegativeRhs)
         {
             int rows = input.GetLength(0);
@@ -733,6 +853,16 @@ namespace OPEN_LRD.Skills
             return new LinearProgrammingResult(tableau[0, rhsColumn], solution, true);
         }
 
+        /// <summary>
+        /// Runs simplex pivots on the tableau until no allowed column has a negative reduced cost.
+        /// </summary>
+        /// <param name="tableau">The tableau, modified in place.</param>
+        /// <param name="basis">The basic column for each constraint row, updated in place.</param>
+        /// <param name="rows">The number of constraint rows.</param>
+        /// <param name="columns">The number of variable columns.</param>
+        /// <param name="allowed">Which columns may enter the basis.</param>
+        /// <param name="iterations">The number of pivots performed.</param>
+        /// <returns>True if an optimal tableau was reached; false if unbounded or the iteration limit was hit.</returns>
         private static bool OptimizeTableau(double[,] tableau, int[] basis, int rows, int columns, bool[] allowed, out int iterations)
         {
             int rhs = columns;
@@ -776,6 +906,13 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>
+        /// Eliminates basic variables from the objective row so that their reduced costs are zero.
+        /// </summary>
+        /// <param name="tableau">The tableau, modified in place.</param>
+        /// <param name="basis">The basic column for each constraint row.</param>
+        /// <param name="rows">The number of constraint rows.</param>
+        /// <param name="columns">The number of variable columns.</param>
         private static void CanonicalizeObjective(double[,] tableau, int[] basis, int rows, int columns)
         {
             for (int row = 0; row < rows; row++)
@@ -792,6 +929,14 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Performs a single pivot operation on the tableau and records the entering column as basic.
+        /// </summary>
+        /// <param name="tableau">The tableau, modified in place.</param>
+        /// <param name="basis">The basic column for each constraint row, updated in place.</param>
+        /// <param name="pivotRow">The tableau row of the pivot, including the objective row offset.</param>
+        /// <param name="pivotColumn">The column of the pivot.</param>
+        /// <param name="columns">The number of variable columns, excluding the right-hand side.</param>
         private static void Pivot(double[,] tableau, int[] basis, int pivotRow, int pivotColumn, int columns)
         {
             double pivot = tableau[pivotRow, pivotColumn];
@@ -818,6 +963,14 @@ namespace OPEN_LRD.Skills
             basis[pivotRow - 1] = pivotColumn;
         }
 
+        /// <summary>
+        /// Builds a new tableau and basis that omit the constraint rows flagged as redundant.
+        /// </summary>
+        /// <param name="tableau">The source tableau.</param>
+        /// <param name="basis">The basic column for each constraint row.</param>
+        /// <param name="redundant">Which constraint rows to remove.</param>
+        /// <param name="columns">The number of variable columns, excluding the right-hand side.</param>
+        /// <returns>The reduced tableau, its basis, and the number of remaining constraint rows.</returns>
         private static (double[,] Tableau, int[] Basis, int Rows) RemoveRedundantRows(double[,] tableau, int[] basis, bool[] redundant, int columns)
         {
             int rows = basis.Length;
@@ -849,6 +1002,11 @@ namespace OPEN_LRD.Skills
             return (reduced, newBasis, kept);
         }
 
+        /// <summary>
+        /// Core Hungarian (Kuhn-Munkres) algorithm for matrices with no more rows than columns.
+        /// </summary>
+        /// <param name="costs">The cost matrix, with rows not exceeding columns.</param>
+        /// <returns>For each row, the index of its assigned column.</returns>
         private static int[] HungarianRowsAtMostColumns(double[,] costs)
         {
             int rows = costs.GetLength(0);
@@ -924,6 +1082,12 @@ namespace OPEN_LRD.Skills
             return assignment;
         }
 
+        /// <summary>
+        /// Validates that the linear program inputs are non-null, dimensionally consistent, and finite.
+        /// </summary>
+        /// <param name="matrix">The constraint matrix.</param>
+        /// <param name="rhs">The right-hand side vector.</param>
+        /// <param name="objective">The objective coefficients.</param>
         private static void ValidateLinearProgram(double[,] matrix, double[] rhs, double[] objective)
         {
             if (matrix == null)
@@ -948,6 +1112,13 @@ namespace OPEN_LRD.Skills
             EnsureFinite(objective, nameof(objective));
         }
 
+        /// <summary>
+        /// Validates the common arguments shared by the multivariate optimizers.
+        /// </summary>
+        /// <param name="function">The objective function.</param>
+        /// <param name="initial">The initial point.</param>
+        /// <param name="tolerance">The convergence tolerance. Must be positive and finite.</param>
+        /// <param name="maxIterations">The iteration limit. Must be at least 1.</param>
         private static void ValidateOptimizer(Func<double[], double> function, double[] initial, double tolerance, int maxIterations)
         {
             ValidateFunction(function);
@@ -967,6 +1138,14 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates the arguments shared by the univariate search routines.
+        /// </summary>
+        /// <param name="function">The function to minimize.</param>
+        /// <param name="lower">The lower bound of the interval.</param>
+        /// <param name="upper">The upper bound of the interval. Must exceed <paramref name="lower"/>.</param>
+        /// <param name="tolerance">The convergence tolerance. Must be positive and finite.</param>
+        /// <param name="maxIterations">The iteration limit. Must be at least 1.</param>
         private static void ValidateInterval(Func<double, double> function, double lower, double upper, double tolerance, int maxIterations)
         {
             ValidateFunction(function);
@@ -983,6 +1162,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that the lower and upper bound vectors are non-null, match the dimension, and are ordered.
+        /// </summary>
+        /// <param name="dimension">The expected length of each bound vector.</param>
+        /// <param name="lower">The lower bounds.</param>
+        /// <param name="upper">The upper bounds.</param>
         private static void ValidateBounds(int dimension, double[] lower, double[] upper)
         {
             if (lower == null)
@@ -1008,6 +1193,10 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a delegate argument is not null.
+        /// </summary>
+        /// <param name="function">The delegate to check.</param>
         private static void ValidateFunction(Delegate function)
         {
             if (function == null)
@@ -1016,6 +1205,17 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Finds a step along a descent direction that satisfies the Armijo sufficient-decrease condition by halving the step.
+        /// </summary>
+        /// <param name="function">The objective function.</param>
+        /// <param name="point">The current point.</param>
+        /// <param name="value">The objective value at <paramref name="point"/>.</param>
+        /// <param name="gradient">The gradient at <paramref name="point"/>.</param>
+        /// <param name="direction">The search direction.</param>
+        /// <param name="candidate">The accepted point, or <paramref name="point"/> if none was accepted.</param>
+        /// <param name="candidateValue">The objective value at <paramref name="candidate"/>.</param>
+        /// <returns>True if a step was accepted; otherwise false.</returns>
         private static bool TryBacktracking(
             Func<double[], double> function,
             double[] point,
@@ -1042,6 +1242,12 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>
+        /// Evaluates a user-supplied gradient at a copy of the point and validates the result.
+        /// </summary>
+        /// <param name="gradient">The gradient function.</param>
+        /// <param name="point">The point at which to evaluate the gradient.</param>
+        /// <returns>The gradient vector.</returns>
         private static double[] EvaluateGradient(Func<double[], double[]> gradient, double[] point)
         {
             double[] result = gradient((double[])point.Clone());
@@ -1053,6 +1259,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Approximates the gradient of a function using central finite differences.
+        /// </summary>
+        /// <param name="function">The function to differentiate.</param>
+        /// <param name="point">The point at which to approximate the gradient.</param>
+        /// <returns>The approximate gradient vector.</returns>
         private static double[] NumericalGradient(Func<double[], double> function, double[] point)
         {
             double[] result = new double[point.Length];
@@ -1068,11 +1280,24 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Approximates the norm of the gradient of a function using central finite differences.
+        /// </summary>
+        /// <param name="function">The function to differentiate.</param>
+        /// <param name="point">The point at which to approximate the gradient norm.</param>
+        /// <returns>The approximate gradient norm.</returns>
         private static double ApproximateGradientNorm(Func<double[], double> function, double[] point)
         {
             return Norm(NumericalGradient(function, point));
         }
 
+        /// <summary>
+        /// Evaluates a multivariate function at a copy of the point and checks that the result is finite.
+        /// </summary>
+        /// <param name="function">The function to evaluate.</param>
+        /// <param name="point">The point at which to evaluate the function.</param>
+        /// <returns>The finite function value.</returns>
+        /// <exception cref="InvalidOperationException">The function returned a non-finite value.</exception>
         private static double EvaluateFinite(Func<double[], double> function, double[] point)
         {
             double value = function((double[])point.Clone());
@@ -1083,6 +1308,13 @@ namespace OPEN_LRD.Skills
             return value;
         }
 
+        /// <summary>
+        /// Evaluates a univariate function and checks that the result is finite.
+        /// </summary>
+        /// <param name="function">The function to evaluate.</param>
+        /// <param name="value">The point at which to evaluate the function.</param>
+        /// <returns>The finite function value.</returns>
+        /// <exception cref="InvalidOperationException">The function returned a non-finite value.</exception>
         private static double EvaluateFinite(Func<double, double> function, double value)
         {
             double result = function(value);
@@ -1093,6 +1325,14 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Applies the BFGS rank-two update to an inverse Hessian approximation.
+        /// </summary>
+        /// <param name="inverse">The current inverse Hessian approximation.</param>
+        /// <param name="s">The displacement between successive points.</param>
+        /// <param name="y">The change in gradient between successive points.</param>
+        /// <param name="rho">The reciprocal of the curvature <c>s·y</c>.</param>
+        /// <returns>The updated inverse Hessian approximation.</returns>
         private static double[,] BfgsUpdate(double[,] inverse, double[] s, double[] y, double rho)
         {
             int size = s.Length;
@@ -1109,6 +1349,13 @@ namespace OPEN_LRD.Skills
             return Add(Multiply(Multiply(left, inverse), right), OuterProduct(s, s, rho));
         }
 
+        /// <summary>
+        /// Computes the scaled outer product of two vectors.
+        /// </summary>
+        /// <param name="first">The row vector.</param>
+        /// <param name="second">The column vector.</param>
+        /// <param name="scale">The scalar multiplier.</param>
+        /// <returns>The matrix <c>scale * first * secondᵀ</c>.</returns>
         private static double[,] OuterProduct(double[] first, double[] second, double scale)
         {
             double[,] result = new double[first.Length, second.Length];
@@ -1122,6 +1369,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Creates a square identity matrix.
+        /// </summary>
+        /// <param name="size">The number of rows and columns.</param>
+        /// <returns>The identity matrix.</returns>
         private static double[,] Identity(int size)
         {
             double[,] result = new double[size, size];
@@ -1132,11 +1384,23 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Multiplies two matrices.
+        /// </summary>
+        /// <param name="first">The left-hand matrix.</param>
+        /// <param name="second">The right-hand matrix.</param>
+        /// <returns>The product matrix.</returns>
         private static double[,] Multiply(double[,] first, double[,] second)
         {
             return Algebra.MatrixMultiply(first, second);
         }
 
+        /// <summary>
+        /// Adds two matrices of the same shape element by element.
+        /// </summary>
+        /// <param name="first">The first matrix.</param>
+        /// <param name="second">The second matrix.</param>
+        /// <returns>The sum matrix.</returns>
         private static double[,] Add(double[,] first, double[,] second)
         {
             double[,] result = new double[first.GetLength(0), first.GetLength(1)];
@@ -1150,11 +1414,24 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Multiplies a matrix by a column vector.
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <param name="vector">The vector.</param>
+        /// <returns>The product vector.</returns>
         private static double[] Multiply(double[,] matrix, double[] vector)
         {
             return LinearAlgebraAdvanced.MatrixVectorMultiply(matrix, vector);
         }
 
+        /// <summary>
+        /// Clamps each component of a point to its lower and upper bounds, modifying the point in place.
+        /// </summary>
+        /// <param name="point">The point to project.</param>
+        /// <param name="lower">The lower bounds.</param>
+        /// <param name="upper">The upper bounds.</param>
+        /// <returns>The projected point (the same array as <paramref name="point"/>).</returns>
         private static double[] Project(double[] point, double[] lower, double[] upper)
         {
             for (int index = 0; index < point.Length; index++)
@@ -1164,6 +1441,13 @@ namespace OPEN_LRD.Skills
             return point;
         }
 
+        /// <summary>
+        /// Computes <c>first + scale * second</c> element by element.
+        /// </summary>
+        /// <param name="first">The base vector.</param>
+        /// <param name="second">The vector to scale and add.</param>
+        /// <param name="scale">The scalar multiplier applied to <paramref name="second"/>.</param>
+        /// <returns>The resulting vector.</returns>
         private static double[] AddScaled(double[] first, double[] second, double scale)
         {
             double[] result = new double[first.Length];
@@ -1174,6 +1458,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the element-wise difference of two vectors.
+        /// </summary>
+        /// <param name="first">The minuend.</param>
+        /// <param name="second">The subtrahend.</param>
+        /// <returns>The difference vector.</returns>
         private static double[] Subtract(double[] first, double[] second)
         {
             double[] result = new double[first.Length];
@@ -1184,6 +1474,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Negates each element of a vector.
+        /// </summary>
+        /// <param name="values">The vector to negate.</param>
+        /// <returns>The negated vector.</returns>
         private static double[] Negate(double[] values)
         {
             double[] result = new double[values.Length];
@@ -1194,6 +1489,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the dot product of two vectors.
+        /// </summary>
+        /// <param name="first">The first vector.</param>
+        /// <param name="second">The second vector.</param>
+        /// <returns>The dot product.</returns>
         private static double Dot(double[] first, double[] second)
         {
             double result = 0.0;
@@ -1204,11 +1505,21 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the Euclidean norm of a vector.
+        /// </summary>
+        /// <param name="values">The vector.</param>
+        /// <returns>The Euclidean norm.</returns>
         private static double Norm(double[] values)
         {
             return Math.Sqrt(Dot(values, values));
         }
 
+        /// <summary>
+        /// Draws a sample from the standard normal distribution using the Box-Muller transform.
+        /// </summary>
+        /// <param name="random">The random number generator.</param>
+        /// <returns>A sample from N(0, 1).</returns>
         private static double StandardNormal(Random random)
         {
             double first = Math.Max(random.NextDouble(), double.Epsilon);
@@ -1216,6 +1527,11 @@ namespace OPEN_LRD.Skills
             return Math.Sqrt(-2.0 * Math.Log(first)) * Math.Cos(2.0 * Math.PI * second);
         }
 
+        /// <summary>
+        /// Sorts simplex vertices in ascending order of their function values using selection sort.
+        /// </summary>
+        /// <param name="simplex">The simplex vertices, reordered in place.</param>
+        /// <param name="values">The function value at each vertex, reordered in place.</param>
         private static void SortSimplex(double[][] simplex, double[] values)
         {
             for (int first = 0; first < values.Length - 1; first++)
@@ -1236,6 +1552,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws if a scalar value is not finite.
+        /// </summary>
+        /// <param name="value">The value to check.</param>
+        /// <param name="parameterName">The name of the parameter reported in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">The value is NaN or infinite.</exception>
         private static void EnsureFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))
@@ -1244,6 +1566,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws if any element of a vector is not finite.
+        /// </summary>
+        /// <param name="values">The vector to check.</param>
+        /// <param name="parameterName">The name of the parameter reported in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">An element is NaN or infinite.</exception>
         private static void EnsureFinite(double[] values, string parameterName)
         {
             foreach (double value in values)
@@ -1252,6 +1580,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws if any element of a matrix is not finite.
+        /// </summary>
+        /// <param name="values">The matrix to check.</param>
+        /// <param name="parameterName">The name of the parameter reported in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">An element is NaN or infinite.</exception>
         private static void EnsureFinite(double[,] values, string parameterName)
         {
             for (int row = 0; row < values.GetLength(0); row++)
@@ -1263,6 +1597,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws if a scalar value is not finite or is not strictly positive.
+        /// </summary>
+        /// <param name="value">The value to check.</param>
+        /// <param name="parameterName">The name of the parameter reported in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">The value is NaN, infinite, or not positive.</exception>
         private static void EnsurePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0.0)

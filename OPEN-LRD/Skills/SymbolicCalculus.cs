@@ -7,12 +7,18 @@ namespace OPEN_LRD.Skills
 {
     internal static class SymbolicCalculus
     {
+        /// <summary>Name of the placeholder variable used during substitution-based integration.</summary>
         private const string SubstitutionVariable = "__u";
+        /// <summary>Maximum number of simplification passes applied before returning the current expression.</summary>
         private const int MaxSimplifyPasses = 24;
+        /// <summary>Maximum recursion depth permitted when attempting symbolic integration.</summary>
         private const int MaxIntegrationDepth = 10;
+        /// <summary>Largest integer exponent for which a polynomial power is expanded.</summary>
         private const int MaxPolynomialPower = 20;
+        /// <summary>Numerical tolerance used when testing whether values are integers or effectively zero.</summary>
         private const double Tolerance = 1e-9;
 
+        /// <summary>Simplifies an expression by repeatedly applying simplification rules until it stops changing or the pass limit is reached.</summary>
         internal static Expression Simplify(Expression expression)
         {
             if (expression == null)
@@ -34,6 +40,7 @@ namespace OPEN_LRD.Skills
             return current;
         }
 
+        /// <summary>Applies a single bottom-up pass of simplification rules to an expression tree.</summary>
         private static Expression SimplifyOnce(Expression expression)
         {
             switch (expression)
@@ -111,6 +118,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Applies simplification rules to a binary operation whose operands have already been simplified.</summary>
         private static Expression SimplifyBinary(BinaryOperator op, Expression left, Expression right)
         {
             bool leftConstant = TryGetConstant(left, out double leftValue);
@@ -371,6 +379,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Splits an expression into a numeric coefficient and the remaining term so that like terms can be combined.</summary>
         private static bool TryGetCoefficientAndTerm(Expression expression, out double coefficient, out Expression term)
         {
             if (expression is ConstantExpression constant)
@@ -411,6 +420,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Builds coefficient multiplied by term, omitting a unit coefficient and returning zero for a zero coefficient.</summary>
         private static Expression CreateTerm(double coefficient, Expression term)
         {
             if (coefficient == 0.0)
@@ -428,6 +438,7 @@ namespace OPEN_LRD.Skills
             return ExpressionBuilder.Multiply(ExpressionBuilder.Constant(coefficient), term);
         }
 
+        /// <summary>Determines whether an expression is a numeric constant and returns its value if so.</summary>
         private static bool TryGetConstant(Expression expression, out double value)
         {
             if (expression is ConstantExpression constant)
@@ -439,6 +450,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Evaluates a comparison or logical operator on two numeric values, producing 1 for true and 0 for false.</summary>
         private static bool TryEvaluateBooleanOperator(BinaryOperator op, double left, double right, out double result)
         {
             result = op switch
@@ -456,16 +468,19 @@ namespace OPEN_LRD.Skills
             return !double.IsNaN(result);
         }
 
+        /// <summary>Determines whether an expression is the constant zero.</summary>
         private static bool IsZero(Expression expression)
         {
             return expression is ConstantExpression constant && constant.Value == 0.0;
         }
 
+        /// <summary>Determines whether an expression is the constant one.</summary>
         private static bool IsOne(Expression expression)
         {
             return expression is ConstantExpression constant && constant.Value == 1.0;
         }
 
+        /// <summary>Attempts to reduce a unary function applied to an argument using an identity such as ln(exp(x)) = x.</summary>
         private static bool TryGetFunctionIdentity(FunctionKind function, Expression argument, out Expression? result)
         {
             result = null;
@@ -506,6 +521,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Determines whether an expression has the form base^x or exp(base^x) for the given base and returns the exponent.</summary>
         private static bool IsBasePower(Expression expression, double baseValue, out Expression? exponent)
         {
             exponent = null;
@@ -526,6 +542,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Attempts to reduce a named function call using an identity, such as min or max applied to identical arguments.</summary>
         private static bool TryGetCallIdentity(string functionName, IReadOnlyList<Expression> arguments, out Expression? result)
         {
             result = null;
@@ -562,6 +579,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Simplifies each argument of a function call.</summary>
         private static Expression[] SimplifyCallArguments(CallExpression call)
         {
             Expression[] arguments = new Expression[call.Arguments.Count];
@@ -572,6 +590,7 @@ namespace OPEN_LRD.Skills
             return arguments;
         }
 
+        /// <summary>Determines whether every argument is a numeric constant and returns their values if so.</summary>
         private static bool TryGetConstantArguments(IReadOnlyList<Expression> arguments, out double[] values)
         {
             values = new double[arguments.Count];
@@ -585,6 +604,7 @@ namespace OPEN_LRD.Skills
             return values.Length > 0;
         }
 
+        /// <summary>Numerically evaluates a named function call with constant arguments, returning false if the call is unknown, has the wrong arity, or yields a non-finite result.</summary>
         private static bool TryEvaluateCall(string functionName, IReadOnlyList<double> arguments, out double result)
         {
             result = 0.0;
@@ -765,6 +785,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Evaluates a named function call with the given arguments and throws if it cannot be evaluated.</summary>
         private static double EvaluateCallStrict(string functionName, IReadOnlyList<double> arguments)
         {
             if (!TryEvaluateCall(functionName, arguments, out double result))
@@ -774,6 +795,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Evaluates a built-in unary function at the given argument and throws if the argument is outside its domain.</summary>
         private static double EvaluateFunctionStrict(FunctionKind function, double argument)
         {
             if (!TryEvaluateFunction(function, argument, out double result))
@@ -783,12 +805,14 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Stores a candidate result and reports whether it is finite.</summary>
         private static bool TrySetResult(double candidate, out double result)
         {
             result = candidate;
             return double.IsFinite(candidate);
         }
 
+        /// <summary>Converts a double to a 32-bit integer if it is finite, whole, and within range.</summary>
         private static bool TryGetInt32(double value, out int result)
         {
             result = 0;
@@ -800,6 +824,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Converts a double to a 64-bit integer if it is finite, whole, and within range.</summary>
         private static bool TryGetInt64(double value, out long result)
         {
             result = 0;
@@ -811,6 +836,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Numerically evaluates a built-in unary function at a constant value, returning false if the value is outside the function's domain.</summary>
         private static bool TryEvaluateFunction(FunctionKind function, double value, out double result)
         {
             switch (function)
@@ -1050,6 +1076,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Computes the symbolic derivative of an expression with respect to a variable and simplifies the result.</summary>
         internal static Expression Differentiate(Expression expression, string variable)
         {
             if (expression == null)
@@ -1065,6 +1092,7 @@ namespace OPEN_LRD.Skills
             return Simplify(DifferentiateOnce(expression, variable.Trim()));
         }
 
+        /// <summary>Computes the nth symbolic derivative of an expression with respect to a variable.</summary>
         internal static Expression Differentiate(Expression expression, string variable, int order)
         {
             if (order < 1)
@@ -1079,6 +1107,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Applies the differentiation rules once to an expression tree without simplifying the result.</summary>
         private static Expression DifferentiateOnce(Expression expression, string variable)
         {
             switch (expression)
@@ -1491,6 +1520,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Returns zero when a function argument does not depend on the variable; otherwise throws because the function cannot be differentiated symbolically.</summary>
         private static Expression RequireDifferentiable(Expression original, Expression argument, string variable)
         {
             if (!DependsOn(argument, variable))
@@ -1500,6 +1530,7 @@ namespace OPEN_LRD.Skills
             throw new NotSupportedException($"Function '{original}' is not symbolically differentiable with respect to '{variable}'.");
         }
 
+        /// <summary>Determines whether a binary operator is a comparison or logical operator.</summary>
         private static bool IsBooleanOperator(BinaryOperator op)
         {
             return op is BinaryOperator.LessThan
@@ -1512,6 +1543,7 @@ namespace OPEN_LRD.Skills
                 or BinaryOperator.Or;
         }
 
+        /// <summary>Attempts to find a symbolic antiderivative of an expression with respect to a variable.</summary>
         internal static bool TryIntegrate(Expression expression, string variable, out Expression? result)
         {
             if (expression == null)
@@ -1523,6 +1555,7 @@ namespace OPEN_LRD.Skills
             return TryIntegrateInternal(expression, variable.Trim(), 0, out result);
         }
 
+        /// <summary>Recursively attempts to integrate an expression, tracking depth to prevent unbounded recursion.</summary>
         private static bool TryIntegrateInternal(Expression expression, string variable, int depth, out Expression? result)
         {
             result = null;
@@ -1638,6 +1671,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Attempts to integrate a named function call such as log, nthroot, lerp, sum, avg, or mean.</summary>
         private static bool TryIntegrateCall(CallExpression call, string variable, int depth, out Expression? result)
         {
             result = null;
@@ -1706,6 +1740,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Attempts to integrate a product by factoring out constants, then trying substitution, rational integration, and integration by parts.</summary>
         private static bool TryIntegrateProduct(Expression integrand, string variable, int depth, out Expression? result)
         {
             result = null;
@@ -1757,6 +1792,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Attempts to integrate a quotient using constant numerator or denominator rules, logarithmic derivative forms, rational integration, and substitution.</summary>
         private static bool TryIntegrateQuotient(Expression integrand, string variable, int depth, out Expression? result)
         {
             result = null;
@@ -1815,6 +1851,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Attempts to integrate a power using the power rule, the exponential rule, substitution, or rational integration.</summary>
         private static bool TryIntegratePower(Expression integrand, string variable, int depth, out Expression? result)
         {
             result = null;
@@ -1872,6 +1909,7 @@ namespace OPEN_LRD.Skills
             return TryIntegrateRational(integrand, variable, out result);
         }
 
+        /// <summary>Produces the antiderivative of a built-in function of a linear argument, scaled by the coefficient of the argument.</summary>
         private static bool TryIntegrateFunction(
             FunctionKind function,
             Expression argument,
@@ -2166,6 +2204,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Attempts integration by substitution by replacing a candidate subexpression with a placeholder variable.</summary>
         private static bool TrySubstitution(Expression integrand, string variable, int depth, out Expression? result)
         {
             result = null;
@@ -2204,6 +2243,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Attempts integration by parts on a product, choosing which factor to differentiate by priority.</summary>
         private static bool TryIntegrationByParts(Expression integrand, string variable, int depth, out Expression? result)
         {
             result = null;
@@ -2265,6 +2305,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Ranks a factor for selection as the part to differentiate in integration by parts; higher values are preferred.</summary>
         private static int PartsPriority(Expression expression, string variable)
         {
             if (expression is FunctionExpression function)
@@ -2307,6 +2348,7 @@ namespace OPEN_LRD.Skills
             return 0;
         }
 
+        /// <summary>Collects the factors of a nested multiplication into a list.</summary>
         private static void FlattenProduct(Expression expression, List<Expression> factors)
         {
             if (expression is BinaryExpression { Operator: BinaryOperator.Multiply } product)
@@ -2318,6 +2360,7 @@ namespace OPEN_LRD.Skills
             factors.Add(expression);
         }
 
+        /// <summary>Multiplies a list of factors together, returning one if the list is empty.</summary>
         private static Expression ProductOf(List<Expression> factors)
         {
             if (factors.Count == 0)
@@ -2332,6 +2375,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Collects the variable-dependent subexpressions of an expression as candidates for substitution.</summary>
         private static void CollectCandidates(Expression expression, string variable, List<Expression> candidates)
         {
             switch (expression)
@@ -2383,6 +2427,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Determines whether a list already contains an expression structurally equal to the target.</summary>
         private static bool ContainsEquivalent(List<Expression> expressions, Expression target)
         {
             foreach (Expression expression in expressions)
@@ -2395,6 +2440,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Returns a copy of an expression with every occurrence of a target subexpression replaced.</summary>
         private static Expression ReplaceExpression(Expression expression, Expression target, Expression replacement)
         {
             if (expression.Equals(target))
@@ -2433,6 +2479,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Determines whether an expression depends on the given variable.</summary>
         internal static bool DependsOn(Expression expression, string variable)
         {
             if (expression == null)
@@ -2448,6 +2495,7 @@ namespace OPEN_LRD.Skills
             return DependsOnInternal(expression, normalizedVariable);
         }
 
+        /// <summary>Recursively determines whether an expression contains the normalized variable name.</summary>
         private static bool DependsOnInternal(Expression expression, string normalizedVariable)
         {
             switch (expression)
@@ -2480,6 +2528,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Determines whether an argument is linear in the variable and returns its coefficient and constant term.</summary>
         private static bool TryGetLinearArgument(Expression argument, string variable, out double coefficient, out double constant)
         {
             coefficient = 0.0;
@@ -2497,6 +2546,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Attempts to express an expression as a polynomial in the given variable, returning its coefficients in ascending order of power.</summary>
         internal static bool TryGetPolynomial(Expression expression, string variable, out double[] coefficients)
         {
             if (expression == null)
@@ -2508,6 +2558,7 @@ namespace OPEN_LRD.Skills
             return TryGetPolynomialInternal(expression, variable.Trim(), out coefficients);
         }
 
+        /// <summary>Recursively converts an expression into polynomial coefficients for the given variable.</summary>
         private static bool TryGetPolynomialInternal(Expression expression, string variable, out double[] coefficients)
         {
             switch (expression)
@@ -2581,6 +2632,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Recursively converts an expression into a rational function, returning its numerator and denominator polynomials.</summary>
         private static bool TryGetRational(Expression expression, string variable, out double[] numerator, out double[] denominator)
         {
             switch (expression)
@@ -2679,6 +2731,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Integrates a rational function using polynomial division and partial fraction decomposition.</summary>
         private static bool TryIntegrateRational(Expression integrand, string variable, out Expression? result)
         {
             result = null;
@@ -2720,21 +2773,27 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Represents a polynomial factor of a rational function's denominator together with its multiplicity.</summary>
         private sealed class RationalFactor
         {
+            /// <summary>Initializes a new factor with the given polynomial and multiplicity.</summary>
             internal RationalFactor(double[] polynomial, int multiplicity)
             {
                 Polynomial = polynomial;
                 Multiplicity = multiplicity;
             }
 
+            /// <summary>Coefficients of the factor polynomial in ascending order of power.</summary>
             internal double[] Polynomial { get; }
 
+            /// <summary>Number of times the factor appears in the denominator.</summary>
             internal int Multiplicity { get; }
         }
 
+        /// <summary>Represents one unknown term in a partial fraction decomposition.</summary>
         private sealed class PartialFractionTerm
         {
+            /// <summary>Initializes a new partial fraction term for the given factor and power.</summary>
             internal PartialFractionTerm(RationalFactor factor, int power, bool isQuadratic, int coefficientIndex, int constantIndex)
             {
                 Factor = factor;
@@ -2744,23 +2803,30 @@ namespace OPEN_LRD.Skills
                 ConstantIndex = constantIndex;
             }
 
+            /// <summary>Factor to which the term belongs.</summary>
             internal RationalFactor Factor { get; }
 
+            /// <summary>Power of the factor that the term represents.</summary>
             internal int Power { get; }
 
+            /// <summary>Whether the term has a linear numerator over a quadratic factor rather than a constant numerator.</summary>
             internal bool IsQuadratic { get; }
 
+            /// <summary>Index of the unknown coefficient for this term in the linear system.</summary>
             internal int CoefficientIndex { get; }
 
+            /// <summary>Index of the unknown constant coefficient for a quadratic term, or -1 for linear terms.</summary>
             internal int ConstantIndex { get; }
         }
 
+        /// <summary>Factors a polynomial over the reals into linear and quadratic factors with multiplicities where possible.</summary>
         private static bool TryFactorPolynomial(double[] polynomial, out List<RationalFactor> factors)
         {
             factors = new List<RationalFactor>();
             return TryFactorPolynomialRecursive(TrimPolynomial(polynomial), factors);
         }
 
+        /// <summary>Recursively factors a polynomial by extracting rational roots and quadratic factors.</summary>
         private static bool TryFactorPolynomialRecursive(double[] polynomial, List<RationalFactor> factors)
         {
             polynomial = TrimPolynomial(polynomial);
@@ -2816,6 +2882,7 @@ namespace OPEN_LRD.Skills
             return TryFactorPolynomialRecursive(quotient, factors);
         }
 
+        /// <summary>Searches for a rational root of an integer-coefficient polynomial using the rational root theorem.</summary>
         private static bool TryFindRationalRoot(double[] polynomial, out double root)
         {
             root = 0.0;
@@ -2859,6 +2926,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Returns the positive divisors of a positive integer, or an empty list for non-positive input.</summary>
         private static List<long> GetDivisors(long value)
         {
             List<long> divisors = new List<long>();
@@ -2880,6 +2948,7 @@ namespace OPEN_LRD.Skills
             return divisors;
         }
 
+        /// <summary>Decomposes a proper rational function into partial fractions by solving a linear system, then integrates each term.</summary>
         private static bool TryPartialFractions(
             double[] numerator,
             double[] denominator,
@@ -3001,6 +3070,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Integrates a partial fraction term whose denominator is a linear factor raised to a power.</summary>
         private static Expression IntegrateLinearFactor(double[] factor, int power, double coefficient, string variable)
         {
             double a = factor[1];
@@ -3025,6 +3095,7 @@ namespace OPEN_LRD.Skills
                 ExpressionBuilder.Power(linear, ExpressionBuilder.Constant(1.0 - power)));
         }
 
+        /// <summary>Integrates a partial fraction term whose denominator is an irreducible quadratic factor raised to a power.</summary>
         private static bool TryIntegrateQuadraticFactor(
             double[] factor,
             int power,
@@ -3080,6 +3151,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Builds the integral of 1 over (x^2 + bx + c) raised to a power, scaled for the leading coefficient.</summary>
         private static Expression BuildQuadraticReciprocalIntegral(double a, double b, double c, int power, string variable)
         {
             double q = (c / a) - ((b * b) / (4.0 * a * a));
@@ -3092,6 +3164,7 @@ namespace OPEN_LRD.Skills
                 raw);
         }
 
+        /// <summary>Recursively builds the reduction formula for the integral of 1 over (u^2 + q) raised to a power.</summary>
         private static Expression BuildQuadraticReciprocalRaw(double q, int power, Expression u)
         {
             double rootQ = Math.Sqrt(q);
@@ -3117,6 +3190,7 @@ namespace OPEN_LRD.Skills
             return ExpressionBuilder.Add(firstTerm, secondTerm);
         }
 
+        /// <summary>Solves a square linear system using Gaussian elimination with partial pivoting.</summary>
         private static bool SolveLinearSystem(double[,] matrix, double[] rightHandSide, out double[] solution)
         {
             int size = rightHandSide.Length;
@@ -3179,6 +3253,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Integrates a polynomial term by term with respect to the variable.</summary>
         private static Expression IntegratePolynomial(double[] coefficients, string variable)
         {
             coefficients = TrimPolynomial(coefficients);
@@ -3199,6 +3274,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Divides one polynomial by another and returns the quotient and remainder.</summary>
         private static bool PolynomialDivide(double[] dividend, double[] divisor, out double[] quotient, out double[] remainder)
         {
             dividend = TrimPolynomial(dividend);
@@ -3236,6 +3312,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Divides a polynomial by the linear factor (x - root) and reports whether the remainder is effectively zero.</summary>
         private static bool PolynomialDivideByLinear(double[] polynomial, double root, out double[] quotient)
         {
             polynomial = TrimPolynomial(polynomial);
@@ -3257,11 +3334,13 @@ namespace OPEN_LRD.Skills
             return Math.Abs(remainder) < 1e-7;
         }
 
+        /// <summary>Evaluates a polynomial at the given value.</summary>
         private static double PolynomialEvaluate(double[] coefficients, double value)
         {
             return Algebra.PolynomialEvaluate(coefficients, value);
         }
 
+        /// <summary>Adds two polynomials.</summary>
         private static double[] PolynomialAdd(double[] left, double[] right)
         {
             int length = Math.Max(left.Length, right.Length);
@@ -3275,6 +3354,7 @@ namespace OPEN_LRD.Skills
             return TrimPolynomial(result);
         }
 
+        /// <summary>Subtracts one polynomial from another.</summary>
         private static double[] PolynomialSubtract(double[] left, double[] right)
         {
             int length = Math.Max(left.Length, right.Length);
@@ -3288,6 +3368,7 @@ namespace OPEN_LRD.Skills
             return TrimPolynomial(result);
         }
 
+        /// <summary>Multiplies two polynomials.</summary>
         private static double[] PolynomialMultiply(double[] left, double[] right)
         {
             double[] result = new double[left.Length + right.Length - 1];
@@ -3301,6 +3382,7 @@ namespace OPEN_LRD.Skills
             return TrimPolynomial(result);
         }
 
+        /// <summary>Multiplies every coefficient of a polynomial by a scalar.</summary>
         private static double[] PolynomialScale(double[] polynomial, double scale)
         {
             double[] result = new double[polynomial.Length];
@@ -3311,6 +3393,7 @@ namespace OPEN_LRD.Skills
             return TrimPolynomial(result);
         }
 
+        /// <summary>Raises a polynomial to a non-negative integer power.</summary>
         private static double[] PolynomialPower(double[] polynomial, int power)
         {
             double[] result = new[] { 1.0 };
@@ -3321,6 +3404,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Removes trailing near-zero high-order coefficients, keeping at least one coefficient.</summary>
         private static double[] TrimPolynomial(double[] coefficients)
         {
             if (coefficients.Length == 0)
@@ -3341,11 +3425,13 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Determines whether a polynomial is effectively zero.</summary>
         private static bool IsZeroPolynomial(double[] polynomial)
         {
             return polynomial.Length == 1 && Math.Abs(polynomial[0]) < 1e-12;
         }
 
+        /// <summary>Evaluates an expression numerically, substituting a value for the named variable.</summary>
         internal static double Evaluate(Expression expression, string variable, double value)
         {
             if (expression == null)
@@ -3372,6 +3458,7 @@ namespace OPEN_LRD.Skills
             });
         }
 
+        /// <summary>Evaluates an expression numerically using the supplied variable values.</summary>
         internal static double Evaluate(Expression expression, IReadOnlyDictionary<string, double> variables)
         {
             if (expression == null)
@@ -3400,6 +3487,7 @@ namespace OPEN_LRD.Skills
             });
         }
 
+        /// <summary>Recursively evaluates an expression using a resolver that supplies variable values.</summary>
         private static double EvaluateInternal(Expression expression, Func<string, double> resolve)
         {
             switch (expression)

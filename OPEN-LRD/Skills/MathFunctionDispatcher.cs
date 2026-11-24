@@ -18,6 +18,10 @@ namespace OPEN_LRD.Skills
         public string ProvidedUnitTitle { get; }
         public string RequiredUnitTitle { get; }
 
+        /// <summary>Initializes a new instance describing a value that must be converted to the required unit before dispatch.</summary>
+        /// <param name="valueName">The name of the value that requires conversion.</param>
+        /// <param name="providedUnitTitle">The unit the value is currently expressed in.</param>
+        /// <param name="requiredUnitTitle">The unit required by the selected function.</param>
         public UnitConversionRequiredException(string valueName, string providedUnitTitle, string requiredUnitTitle)
             : base($"'{valueName}' is in '{providedUnitTitle}', but the selected function requires '{requiredUnitTitle}'. Convert the value before dispatching.")
         {
@@ -101,6 +105,10 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Determines whether a function key, optionally combined with its method attributes, is deterministic.</summary>
+        /// <param name="functionKey">The function key to check. Surrounding whitespace is ignored.</param>
+        /// <param name="method">The backing method whose <see cref="FunctionCapabilityAttribute"/> may mark it non-deterministic.</param>
+        /// <returns>true if the function is deterministic; otherwise false.</returns>
         internal static bool IsDeterministicFunctionKey(string? functionKey, MethodInfo? method = null)
         {
             if (string.IsNullOrWhiteSpace(functionKey)) return false;
@@ -137,6 +145,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Validates that a FunctionBox's stored result matches the selected function signature and was produced by verified, deterministic dispatch.</summary>
+        /// <param name="functionBox">The function box to validate.</param>
+        /// <exception cref="ArgumentException">Thrown when the stored result does not match dispatch, lacks verified provenance, or comes from a non-deterministic function.</exception>
         internal static void ValidateDefinition(FunctionBox functionBox)
         {
             ArgumentNullException.ThrowIfNull(functionBox);
@@ -175,6 +186,10 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Compares a stored result with a freshly dispatched result, using tolerance for floating-point values.</summary>
+        /// <param name="stored">The result previously stored on the function box.</param>
+        /// <param name="dispatched">The result produced by dispatching the current definition.</param>
+        /// <returns>true if the results are equivalent; otherwise false.</returns>
         private static bool ResultsEquivalent(FunctionResult stored, FunctionResult dispatched)
         {
             if (stored.DataType != dispatched.DataType ||
@@ -200,6 +215,9 @@ namespace OPEN_LRD.Skills
             return Equals(stored.Value, dispatched.Value);
         }
 
+        /// <summary>Computes a SHA-256 hash of the resolved function key, definition revision, and argument snapshot of a FunctionBox.</summary>
+        /// <param name="functionBox">The function box whose argument snapshot is hashed.</param>
+        /// <returns>The hexadecimal hash string.</returns>
         internal static string ComputeArgumentSnapshotHash(FunctionBox functionBox)
         {
             ArgumentNullException.ThrowIfNull(functionBox);
@@ -208,12 +226,20 @@ namespace OPEN_LRD.Skills
             return ComputeArgumentSnapshotHash(descriptor.Key, snapshot.DefinitionRevision, snapshot.Variables);
         }
 
+        /// <summary>Computes a SHA-256 hash of a function result's declared type and value.</summary>
+        /// <param name="result">The result to hash.</param>
+        /// <returns>The hexadecimal hash string.</returns>
         internal static string ComputeResultHash(FunctionResult result)
         {
             ArgumentNullException.ThrowIfNull(result);
             return ComputeHash(SerializeDispatchPayload(writer => WriteHashValue(writer, result.Value, result.DataType)));
         }
 
+        /// <summary>Computes a SHA-256 hash over the function key, definition revision, and each variable's name, type, unit, and value.</summary>
+        /// <param name="functionKey">The resolved function key.</param>
+        /// <param name="definitionRevision">The definition revision of the function box.</param>
+        /// <param name="variables">The variables supplied to the function.</param>
+        /// <returns>The hexadecimal hash string.</returns>
         private static string ComputeArgumentSnapshotHash(string functionKey, long definitionRevision, IReadOnlyList<FunctionVariable> variables)
         {
             return ComputeHash(SerializeDispatchPayload(writer =>
@@ -231,6 +257,11 @@ namespace OPEN_LRD.Skills
             }));
         }
 
+        /// <summary>Creates provenance metadata recording the function, argument and result hashes, units, revision, and timestamp of a dispatch.</summary>
+        /// <param name="descriptor">The descriptor of the function that was dispatched.</param>
+        /// <param name="snapshot">The dispatch snapshot the call was made from.</param>
+        /// <param name="result">The result produced by the dispatch.</param>
+        /// <returns>The dispatch provenance record.</returns>
         private static FunctionDispatchProvenance CreateDispatchProvenance(FunctionDescriptor descriptor, FunctionDispatchSnapshot snapshot, FunctionResult result)
         {
             return new FunctionDispatchProvenance(
@@ -246,6 +277,9 @@ namespace OPEN_LRD.Skills
                 ArgumentSnapshotSummary: FunctionBox.BuildArgumentSnapshotSummary(snapshot.Variables));
         }
 
+        /// <summary>Serializes a payload into a byte array using a UTF-8 binary writer.</summary>
+        /// <param name="write">The action that writes the payload.</param>
+        /// <returns>The serialized bytes.</returns>
         private static byte[] SerializeDispatchPayload(Action<BinaryWriter> write)
         {
             using MemoryStream stream = new MemoryStream();
@@ -253,8 +287,15 @@ namespace OPEN_LRD.Skills
             return stream.ToArray();
         }
 
+        /// <summary>Computes the uppercase hexadecimal SHA-256 digest of a payload.</summary>
+        /// <param name="payload">The bytes to hash.</param>
+        /// <returns>The hexadecimal hash string.</returns>
         private static string ComputeHash(byte[] payload) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(payload));
 
+        /// <summary>Writes the declared type and a type-tagged encoding of a value to a hash payload.</summary>
+        /// <param name="writer">The binary writer receiving the payload.</param>
+        /// <param name="value">The value to encode. May be null.</param>
+        /// <param name="declaredType">The declared type of the value.</param>
         private static void WriteHashValue(BinaryWriter writer, object? value, Type declaredType)
         {
             writer.Write(declaredType.AssemblyQualifiedName ?? declaredType.FullName ?? declaredType.Name);
@@ -368,6 +409,15 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException($"Function '{functionKey}' did not return a value of type '{typeof(T).FullName}'.");
         }
 
+        /// <summary>Selects the single registered overload matching the function key, argument types and units, and expected result type.</summary>
+        /// <param name="functionKey">The function key or name to resolve. May be null or whitespace to search all functions.</param>
+        /// <param name="variables">The variables supplied to the function.</param>
+        /// <param name="expectedResultType">The expected result type.</param>
+        /// <param name="expectedResultUnitTitle">The expected result unit title, or null if unconstrained.</param>
+        /// <returns>The descriptor of the selected function.</returns>
+        /// <exception cref="KeyNotFoundException">Thrown when no registered function has the given key or name.</exception>
+        /// <exception cref="ArgumentException">Thrown when no overload matches or the units do not match.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when multiple overloads match equally.</exception>
         private static FunctionDescriptor SelectFunction(
             string? functionKey,
             IReadOnlyList<FunctionVariable> variables,
@@ -445,6 +495,11 @@ namespace OPEN_LRD.Skills
             throw new ArgumentException("The supplied units do not match any registered overload.");
         }
 
+        /// <summary>Determines whether a function's parameter count, parameter types, and return type match the supplied variables and expected result.</summary>
+        /// <param name="function">The candidate function.</param>
+        /// <param name="variables">The variables supplied to the function.</param>
+        /// <param name="expectedResultType">The expected result type.</param>
+        /// <returns>true if the signature matches; otherwise false.</returns>
         private static bool SignatureMatches(FunctionDescriptor function, IReadOnlyList<FunctionVariable> variables, Type expectedResultType)
         {
             Type expectedValueType = Nullable.GetUnderlyingType(expectedResultType) ?? expectedResultType;
@@ -465,6 +520,10 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Checks whether a value is compatible with a declared type, allowing null for nullable or reference types.</summary>
+        /// <param name="value">The value to check. May be null.</param>
+        /// <param name="declaredType">The declared type.</param>
+        /// <returns>true if the value is compatible with the declared type; otherwise false.</returns>
         private static bool ValueMatchesDeclaredType(object? value, Type declaredType)
         {
             if (value == null)
@@ -475,6 +534,12 @@ namespace OPEN_LRD.Skills
             return declaredType.IsInstanceOfType(value) || (nullableType != null && nullableType.IsInstanceOfType(value));
         }
 
+        /// <summary>Validates that the input and output units of the supplied variables and expected result satisfy a function's unit metadata.</summary>
+        /// <param name="function">The candidate function.</param>
+        /// <param name="variables">The variables supplied to the function.</param>
+        /// <param name="expectedResultUnitTitle">The expected result unit title, or null if unconstrained.</param>
+        /// <exception cref="ArgumentException">Thrown when units are missing, unknown, or incompatible.</exception>
+        /// <exception cref="UnitConversionRequiredException">Thrown when units share a dimension but require conversion.</exception>
         private static void ValidateUnits(
             FunctionDescriptor function,
             IReadOnlyList<FunctionVariable> variables,
@@ -520,6 +585,13 @@ namespace OPEN_LRD.Skills
             ValidateUnit("result", expectedResultUnitTitle, function.OutputUnit);
         }
 
+        /// <summary>Validates that a provided unit is the same as, or dimensionally compatible with, a required unit.</summary>
+        /// <param name="valueName">The name of the value being checked, used in exception messages.</param>
+        /// <param name="providedUnitTitle">The unit the value is expressed in.</param>
+        /// <param name="requiredUnitTitle">The unit required by the function.</param>
+        /// <exception cref="ArgumentException">Thrown when the provided unit is unknown or dimensionally incompatible.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the required unit is not in the unit catalog.</exception>
+        /// <exception cref="UnitConversionRequiredException">Thrown when the units share a dimension but differ in symbol.</exception>
         private static void ValidateUnit(string valueName, string providedUnitTitle, string requiredUnitTitle)
         {
             if (!UnitCatalog.TryFindUnit(providedUnitTitle, out Unit providedUnit))
@@ -541,6 +613,11 @@ namespace OPEN_LRD.Skills
             throw new ArgumentException($"Unit '{providedUnitTitle}' for '{valueName}' is incompatible with required unit '{requiredUnitTitle}'.");
         }
 
+        /// <summary>Invokes a selected function with the supplied variable values and wraps the return value in a result.</summary>
+        /// <param name="function">The descriptor of the function to invoke.</param>
+        /// <param name="variables">The variables whose values are passed as arguments.</param>
+        /// <returns>The function result, tagged with the declared return type and output unit.</returns>
+        /// <exception cref="Exception">Rethrows any exception raised by the invoked function, preserving its stack trace.</exception>
         private static FunctionResult Invoke(FunctionDescriptor function, IReadOnlyList<FunctionVariable> variables)
         {
             object?[] arguments = variables.Select(variable => variable.Value).ToArray();
@@ -559,6 +636,11 @@ namespace OPEN_LRD.Skills
             return new FunctionResult(value, function.ReturnType, resultUnitTitle);
         }
 
+        /// <summary>Determines whether a scalar math function with the given name or key and argument count can be resolved for expression evaluation.</summary>
+        /// <param name="nameOrKey">The function name or key.</param>
+        /// <param name="argumentCount">The number of arguments in the call.</param>
+        /// <param name="canonicalName">When this method returns true, the registry key of the preferred matching function; otherwise an empty string.</param>
+        /// <returns>true if a matching scalar function exists; otherwise false.</returns>
         internal static bool CanResolveScalarExpressionCall(string nameOrKey, int argumentCount, out string canonicalName)
         {
             canonicalName = string.Empty;
@@ -593,6 +675,11 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Invokes a scalar math function for expression evaluation and returns its numeric result.</summary>
+        /// <param name="nameOrKey">The function name or key.</param>
+        /// <param name="arguments">The numeric arguments of the call.</param>
+        /// <returns>The finite numeric result.</returns>
+        /// <exception cref="ArgumentException">Thrown when no registered scalar function accepts the arguments.</exception>
         internal static double InvokeScalarExpressionCall(string nameOrKey, IReadOnlyList<double> arguments)
         {
             if (!TryInvokeScalarExpressionCall(nameOrKey, arguments, out double result))
@@ -602,6 +689,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Attempts to invoke the best-matching scalar math function for expression evaluation.</summary>
+        /// <param name="nameOrKey">The function name or key.</param>
+        /// <param name="arguments">The numeric arguments of the call.</param>
+        /// <param name="result">When this method returns true, the finite numeric result; otherwise 0.0.</param>
+        /// <returns>true if a function was invoked and produced a finite numeric result; otherwise false.</returns>
         internal static bool TryInvokeScalarExpressionCall(string nameOrKey, IReadOnlyList<double> arguments, out double result)
         {
             result = 0.0;
@@ -673,12 +765,19 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Determines whether a function's key or name matches a request, ignoring case.</summary>
+        /// <param name="function">The candidate function.</param>
+        /// <param name="request">The requested key or name.</param>
+        /// <returns>true if the key or name matches; otherwise false.</returns>
         private static bool MatchesScalarName(FunctionDescriptor function, string request)
         {
             return string.Equals(function.Key, request, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(function.Name, request, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>Computes a preference score for scalar overloads, favoring double, then int, long, BigInteger, float, and other types.</summary>
+        /// <param name="parameterTypes">The parameter types of the overload.</param>
+        /// <returns>The summed preference score; lower values are preferred.</returns>
         private static int GetScalarPreferenceScore(IReadOnlyList<Type> parameterTypes)
         {
             int score = 0;
@@ -694,6 +793,12 @@ namespace OPEN_LRD.Skills
             return score;
         }
 
+        /// <summary>Converts double arguments to the parameter types of a scalar overload, rejecting non-finite or lossy conversions.</summary>
+        /// <param name="parameterTypes">The parameter types of the overload.</param>
+        /// <param name="arguments">The numeric arguments to convert.</param>
+        /// <param name="converted">When this method returns true, the converted arguments.</param>
+        /// <param name="score">When this method returns true, the conversion penalty score; lower is better.</param>
+        /// <returns>true if all arguments convert successfully; otherwise false.</returns>
         private static bool TryConvertScalarArguments(
             IReadOnlyList<Type> parameterTypes,
             IReadOnlyList<double> arguments,
@@ -778,6 +883,8 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Builds the registry of public static numeric methods across the dispatch skill types that are eligible for scalar expression calls.</summary>
+        /// <returns>A read-only list of scalar function descriptors.</returns>
         private static IReadOnlyList<FunctionDescriptor> BuildScalarFunctionRegistry()
         {
             List<FunctionDescriptor> functions = new List<FunctionDescriptor>();
@@ -819,6 +926,9 @@ namespace OPEN_LRD.Skills
             return functions.AsReadOnly();
         }
 
+        /// <summary>Determines whether a type is one of the numeric types supported for scalar expression calls.</summary>
+        /// <param name="type">The type to check.</param>
+        /// <returns>true if the type is a supported scalar numeric type; otherwise false.</returns>
         private static bool IsScalarNumericType(Type type)
         {
             return type == typeof(double)
@@ -829,6 +939,8 @@ namespace OPEN_LRD.Skills
                 || type == typeof(BigInteger);
         }
 
+        /// <summary>Builds the registry of public static methods across the dispatch skill types, excluding unsupported signatures, and attaches unit metadata.</summary>
+        /// <returns>A read-only list of function descriptors.</returns>
         private static IReadOnlyList<FunctionDescriptor> BuildFunctionRegistry()
         {
             List<FunctionDescriptor> functions = new List<FunctionDescriptor>();
@@ -954,6 +1066,12 @@ namespace OPEN_LRD.Skills
             return functions.AsReadOnly();
         }
 
+        /// <summary>Attaches input and output unit metadata to a registered function, given input units as an ordered list.</summary>
+        /// <param name="functions">The function registry being built.</param>
+        /// <param name="key">The registry key of the function.</param>
+        /// <param name="parameterTypes">The parameter types identifying the overload.</param>
+        /// <param name="inputUnits">The input unit titles, in parameter order.</param>
+        /// <param name="outputUnit">The output unit title, or null if none applies.</param>
         private static void AddUnits(List<FunctionDescriptor> functions, string key, Type[] parameterTypes,
             IReadOnlyList<string> inputUnits, string? outputUnit)
         {
@@ -962,12 +1080,22 @@ namespace OPEN_LRD.Skills
             AddUnitMetadata(functions, key, parameterTypes, units, outputUnit);
         }
 
+        /// <summary>Determines whether a type can be used in a dispatchable signature.</summary>
+        /// <param name="type">The type to check.</param>
+        /// <returns>true if the type is a supported dispatch type; otherwise false.</returns>
         private static bool IsSupportedDispatchType(Type type)
         {
             return type == typeof(double[]) || type == typeof(int[]) ||
                    (!type.IsArray && DispatchValueTypes.Contains(type));
         }
 
+        /// <summary>Replaces the unit metadata of a registered function identified by key and parameter types.</summary>
+        /// <param name="functions">The function registry being built.</param>
+        /// <param name="key">The registry key of the function.</param>
+        /// <param name="parameterTypes">The parameter types identifying the overload.</param>
+        /// <param name="inputUnits">The input unit titles keyed by parameter index.</param>
+        /// <param name="outputUnit">The output unit title, or null if none applies.</param>
+        /// <exception cref="InvalidOperationException">Thrown when no registered function matches the key and parameter types.</exception>
         private static void AddUnitMetadata(
             List<FunctionDescriptor> functions,
             string key,
@@ -985,6 +1113,10 @@ namespace OPEN_LRD.Skills
             functions[index] = functions[index] with { InputUnits = inputUnits, OutputUnit = outputUnit };
         }
 
+        /// <summary>Creates an exception describing that a function key or signature matches multiple registered functions.</summary>
+        /// <param name="functionKey">The requested function key, or null if the request was by signature.</param>
+        /// <param name="candidates">The matching candidate functions.</param>
+        /// <returns>The exception to throw.</returns>
         private static InvalidOperationException CreateAmbiguousFunctionException(string? functionKey, IReadOnlyList<FunctionDescriptor> candidates)
         {
             string names = string.Join(", ", candidates.Select(candidate => candidate.Key).Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal));
@@ -992,6 +1124,9 @@ namespace OPEN_LRD.Skills
             return new InvalidOperationException($"{request} matches multiple math functions: {names}.");
         }
 
+        /// <summary>Trims an optional text value, converting null, empty, or whitespace-only input to null.</summary>
+        /// <param name="value">The text to normalize.</param>
+        /// <returns>The trimmed text, or null if it is empty or whitespace.</returns>
         private static string? NormalizeOptionalText(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();

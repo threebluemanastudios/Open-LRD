@@ -63,7 +63,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the order-th symbolic derivative of an expression string with respect to variable.
+        /// Computes the first symbolic derivative of an expression with respect to variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -74,7 +74,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the order-th symbolic derivative of an expression string with respect to variable.
+        /// Parses expression and computes its first symbolic derivative with respect to variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -109,7 +109,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the order-th symbolic derivative with respect to variable and formats it as a string.
+        /// Computes the first symbolic derivative with respect to variable and formats it as a string.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -193,7 +193,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates an Expression numerically using the provided variable-to-value mapping.
+        /// Evaluates an Expression numerically by substituting value for variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -205,7 +205,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates an Expression numerically using the provided variable-to-value mapping.
+        /// Parses expression and evaluates it numerically by substituting value for variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -301,7 +301,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically approximates the order-th derivative of function at point with step size step.
+        /// Numerically approximates the first derivative of function at point using Richardson-extrapolated central differences with step size step.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="point">The point.</param>
@@ -381,7 +381,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically integrates function over [lower, upper] using the specified number of subintervals.
+        /// Numerically integrates function over [lower, upper] using composite Simpson's rule with the specified number of subintervals (rounded up to an even count).
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="lower">The lower.</param>
@@ -524,7 +524,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates the limit of an expression string as variable approaches +? or -?.
+        /// Evaluates the limit of an expression string as variable approaches +infinity or -infinity.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -597,7 +597,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates the limit of an expression string as variable approaches +? or -?.
+        /// Evaluates the limit of an expression string as variable approaches +infinity or -infinity.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -794,7 +794,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes a Riemann sum approximation (left, right, or midpoint) over [lower, upper].
+        /// Computes a Riemann sum approximation (left, right, midpoint, or trapezoid) over [lower, upper].
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="lower">The lower.</param>
@@ -839,7 +839,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the arc length of a ParametricCurve for parameter t in [lower, upper].
+        /// Computes the arc length of the graph of expression with respect to variable over [lower, upper].
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -858,7 +858,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the arc length of a ParametricCurve for parameter t in [lower, upper].
+        /// Computes the arc length of the graph of expression with respect to variable over [lower, upper].
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -987,7 +987,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the mean value of a 2D scalar function over the rectangular domain [xLower, xUpper]   [yLower, yUpper].
+        /// Numerically computes the average value of expression with respect to variable over [lower, upper], i.e. the definite integral divided by (upper - lower).
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1004,7 +1004,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Numerically computes the mean value of a 2D scalar function over the rectangular domain [xLower, xUpper]   [yLower, yUpper].
+        /// Parses expression and numerically computes its average value with respect to variable over [lower, upper].
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1037,7 +1037,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Finds a root of an expression string with respect to variable using Newton-Raphson iteration.
+        /// Finds a root of function near initialGuess using Newton-Raphson iteration with a numerical derivative.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="initialGuess">The initial guess.</param>
@@ -1050,7 +1050,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Finds a root of an expression string with respect to variable using Newton-Raphson iteration.
+        /// Finds a root of function near initialGuess using Newton-Raphson iteration with the supplied derivative.
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="derivative">The derivative.</param>
@@ -1274,6 +1274,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Finds the critical points of expression with respect to variable on [lower, upper] by locating sign-change zeros of its first derivative.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1289,6 +1290,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Parses expression and finds its critical points on [lower, upper] (zeros of the first derivative).
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1302,6 +1304,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Finds the inflection points of expression with respect to variable on [lower, upper] by locating sign-change zeros of its second derivative.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1317,6 +1320,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Parses expression and finds its inflection points on [lower, upper] (zeros of the second derivative).
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1330,6 +1334,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Classifies the critical point at point as a minimum, maximum, or inflection, using the second derivative and falling back to a finite-difference comparison.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1363,6 +1368,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Parses expression and classifies the critical point at point as a minimum, maximum, or inflection.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1373,6 +1379,15 @@ namespace OPEN_LRD.Skills
             return ClassifyCriticalPoint(Parse(expression), variable, point);
         }
 
+        /// <summary>
+        /// Approximates the integral of function over [lower, upper] using adaptive Simpson's rule, subdividing up to depth levels.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="depth">The depth.</param>
+        /// <returns>The result.</returns>
         private static double AdaptiveSimpson(Func<double, double> function, double lower, double upper, double tolerance, int depth)
         {
             double middle = 0.5 * (lower + upper);
@@ -1380,6 +1395,16 @@ namespace OPEN_LRD.Skills
             return AdaptiveSimpsonRecursive(function, lower, upper, tolerance, depth, whole);
         }
 
+        /// <summary>
+        /// Recursively refines an adaptive Simpson estimate over [lower, upper] by splitting the interval until the error is within tolerance or depth is exhausted.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="tolerance">The tolerance.</param>
+        /// <param name="depth">The depth.</param>
+        /// <param name="estimate">The estimate.</param>
+        /// <returns>The result.</returns>
         private static double AdaptiveSimpsonRecursive(Func<double, double> function, double lower, double upper, double tolerance, int depth, double estimate)
         {
             double middle = 0.5 * (lower + upper);
@@ -1396,11 +1421,26 @@ namespace OPEN_LRD.Skills
                 + AdaptiveSimpsonRecursive(function, middle, upper, tolerance * 0.5, depth - 1, right);
         }
 
+        /// <summary>
+        /// Computes a single Simpson's rule estimate of the integral of function over [lower, upper] using the supplied midpoint.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="lower">The lower.</param>
+        /// <param name="upper">The upper.</param>
+        /// <param name="middle">The middle.</param>
+        /// <returns>The result.</returns>
         private static double SimpsonSegment(Func<double, double> function, double lower, double upper, double middle)
         {
             return (upper - lower) / 6.0 * (function(lower) + 4.0 * function(middle) + function(upper));
         }
 
+        /// <summary>
+        /// Estimates the one-sided limit of function as x approaches approach from the left or right by sampling progressively closer points.
+        /// </summary>
+        /// <param name="function">The function.</param>
+        /// <param name="approach">The approach.</param>
+        /// <param name="left">True to approach from the left; false to approach from the right.</param>
+        /// <returns>The result.</returns>
         private static double NumericOneSidedLimit(Func<double, double> function, double approach, bool left)
         {
             double scale = Math.Max(1.0, Math.Abs(approach));
@@ -1451,6 +1491,14 @@ namespace OPEN_LRD.Skills
             return grew ? Math.Sign(last) * double.PositiveInfinity : last;
         }
 
+        /// <summary>
+        /// Attempts to evaluate the limit of expression as variable approaches approach by repeatedly applying L'Hopital's rule to indeterminate quotients, returning true on success.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="approach">The approach.</param>
+        /// <param name="result">The result.</param>
+        /// <returns>True if the limit was determined; otherwise false.</returns>
         private static bool TryLHopital(Expression expression, string variable, double approach, out double result)
         {
             result = double.NaN;
@@ -1494,6 +1542,14 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>
+        /// Attempts to evaluate the limit of a polynomial or rational expression as variable approaches +infinity or -infinity by comparing degrees and leading coefficients, returning true on success.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="positive">True for +infinity; false for -infinity.</param>
+        /// <param name="result">The result.</param>
+        /// <returns>True if the limit was determined; otherwise false.</returns>
         private static bool TryPolynomialInfinityLimit(Expression expression, string variable, bool positive, out double result)
         {
             result = double.NaN;
@@ -1552,6 +1608,11 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>
+        /// Returns the index of the highest coefficient whose magnitude exceeds the default tolerance, or -1 if all coefficients are effectively zero.
+        /// </summary>
+        /// <param name="coefficients">The coefficients.</param>
+        /// <returns>The result.</returns>
         private static int GetPolynomialDegree(double[] coefficients)
         {
             for (int index = coefficients.Length - 1; index >= 0; index--)
@@ -1564,6 +1625,14 @@ namespace OPEN_LRD.Skills
             return -1;
         }
 
+        /// <summary>
+        /// Attempts to evaluate expression at value, returning true only if the result is finite.
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="result">The result.</param>
+        /// <returns>True if evaluation succeeded with a finite result; otherwise false.</returns>
         private static bool TryEvaluateAt(Expression expression, string variable, double value, out double result)
         {
             try
@@ -1583,6 +1652,14 @@ namespace OPEN_LRD.Skills
             return double.IsFinite(result);
         }
 
+        /// <summary>
+        /// Attempts to evaluate expression at value, returning true if the result is not NaN (infinite results are accepted).
+        /// </summary>
+        /// <param name="expression">The expression.</param>
+        /// <param name="variable">The variable.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="result">The result.</param>
+        /// <returns>True if evaluation succeeded with a non-NaN result; otherwise false.</returns>
         private static bool TryEvaluateAny(Expression expression, string variable, double value, out double result)
         {
             try
@@ -1602,11 +1679,21 @@ namespace OPEN_LRD.Skills
             return !double.IsNaN(result);
         }
 
+        /// <summary>
+        /// Determines whether value is within the default tolerance of zero.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the absolute value is at most the default tolerance; otherwise false.</returns>
         private static bool IsNearlyZero(double value)
         {
             return Math.Abs(value) <= DefaultTolerance;
         }
 
+        /// <summary>
+        /// Computes value! as a double; returns 1 for values less than 2.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The result.</returns>
         private static double Factorial(int value)
         {
             double result = 1.0;
@@ -1617,6 +1704,12 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Adds candidate to values unless an existing entry is within tolerance of it.
+        /// </summary>
+        /// <param name="values">The values.</param>
+        /// <param name="candidate">The candidate.</param>
+        /// <param name="tolerance">The tolerance.</param>
         private static void AddDistinct(List<double> values, double candidate, double tolerance)
         {
             foreach (double existing in values)

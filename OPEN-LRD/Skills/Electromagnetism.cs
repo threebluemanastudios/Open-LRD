@@ -114,7 +114,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes electrostatic energy (U = 0.5 * C * V ) stored in a capacitor from capacitance and voltage.
+        /// Computes electrostatic energy (U = 0.5 * C * V^2) stored in a capacitor from capacitance and voltage.
         /// </summary>
         /// <param name="capacitance">The capacitance.</param>
         /// <param name="voltage">The voltage.</param>
@@ -127,7 +127,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the transient capacitor voltage (V(t)) in an RC circuit at time transitioning from initialVoltage toward finalVoltage with time constant ? = R * C.
+        /// Computes the transient capacitor voltage (V(t)) in an RC circuit at time transitioning from initialVoltage toward finalVoltage with time constant tau = R * C.
         /// </summary>
         /// <param name="initialVoltage">The initial voltage.</param>
         /// <param name="finalVoltage">The final voltage.</param>
@@ -146,7 +146,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the Lorentz force vector (F = q * (E + v   B)) acting on a moving charge in electricField and magneticField.
+        /// Computes the Lorentz force vector (F = q * (E + v x B)) acting on a moving charge in electricField and magneticField.
         /// </summary>
         /// <param name="charge">The charge.</param>
         /// <param name="electricField">The electric field.</param>
@@ -164,7 +164,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the magnetic force vector (F = I * (L   B)) on a current-carrying conductor segment in magneticField.
+        /// Computes the magnetic force vector (F = I * (L x B)) on a current-carrying conductor segment in magneticField.
         /// </summary>
         /// <param name="current">The current.</param>
         /// <param name="wireDirection">The wire direction.</param>
@@ -179,7 +179,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the magnetic flux density magnitude (B = ?? * I / (2 * ? * r)) at radial distance from an infinitely long straight wire carrying current.
+        /// Computes the magnetic flux density magnitude (B = mu0 * I / (2 * pi * r)) at radial distance from an infinitely long straight wire carrying current.
         /// </summary>
         /// <param name="current">The current.</param>
         /// <param name="distance">The distance.</param>
@@ -192,7 +192,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the total equivalent resistance (R_eq = ? R_i) of resistors connected in series.
+        /// Computes the total equivalent resistance (R_eq = sum R_i) of resistors connected in series.
         /// </summary>
         /// <param name="resistances">The resistances.</param>
         /// <returns>The result.</returns>
@@ -208,7 +208,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the total equivalent resistance (1 / R_eq = ? (1 / R_i)) of resistors connected in parallel.
+        /// Computes the total equivalent resistance (1 / R_eq = sum (1 / R_i)) of resistors connected in parallel.
         /// </summary>
         /// <param name="resistances">The resistances.</param>
         /// <returns>The result.</returns>
@@ -228,7 +228,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the total equivalent capacitance (C_eq = ? C_i) of capacitors connected in parallel.
+        /// Computes the total equivalent capacitance (C_eq = sum C_i) of capacitors connected in parallel.
         /// </summary>
         /// <param name="capacitances">The capacitances.</param>
         /// <returns>The result.</returns>
@@ -244,7 +244,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the total equivalent capacitance (1 / C_eq = ? (1 / C_i)) of capacitors connected in series.
+        /// Computes the total equivalent capacitance (1 / C_eq = sum (1 / C_i)) of capacitors connected in series.
         /// </summary>
         /// <param name="capacitances">The capacitances.</param>
         /// <returns>The result.</returns>
@@ -263,6 +263,13 @@ namespace OPEN_LRD.Skills
             return 1.0 / reciprocalSum;
         }
 
+        /// <summary>
+        /// Validates that the component array is non-null, non-empty, and contains only finite non-negative values.
+        /// </summary>
+        /// <param name="components">The components to validate.</param>
+        /// <param name="name">The parameter name used in exceptions.</param>
+        /// <exception cref="ArgumentNullException">Thrown when the array is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the array is empty.</exception>
         private static void ValidateComponents(double[] components, string name)
         {
             if (components == null)
@@ -279,6 +286,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite or not strictly positive.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN, infinite, or less than or equal to zero.</exception>
         private static void EnsurePositive(double value, string name)
         {
             if (!double.IsFinite(value) || value <= 0.0)
@@ -287,6 +300,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite or is negative.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN, infinite, or less than zero.</exception>
         private static void EnsureNonNegative(double value, string name)
         {
             if (!double.IsFinite(value) || value < 0.0)
@@ -295,6 +314,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN or infinite.</exception>
         private static void EnsureFinite(double value, string name)
         {
             if (!double.IsFinite(value))
@@ -303,6 +328,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if any component of the vector is not finite.
+        /// </summary>
+        /// <param name="vector">The vector to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when a component is NaN or infinite.</exception>
         private static void EnsureFinite(Vector3 vector, string name)
         {
             if (!double.IsFinite(vector.X) || !double.IsFinite(vector.Y) || !double.IsFinite(vector.Z))

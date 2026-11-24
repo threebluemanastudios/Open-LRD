@@ -56,6 +56,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes joint Shannon entropy from jointProbabilities.
+        /// </summary>
         public static double JointEntropy(double[,] jointProbabilities)
         {
             ValidateJointDistribution(jointProbabilities, nameof(jointProbabilities));
@@ -70,6 +73,9 @@ namespace OPEN_LRD.Skills
             return entropy;
         }
 
+        /// <summary>
+        /// Computes conditional entropy from jointProbabilities.
+        /// </summary>
         public static double ConditionalEntropy(double[,] jointProbabilities)
         {
             ValidateJointDistribution(jointProbabilities, nameof(jointProbabilities));
@@ -86,6 +92,9 @@ namespace OPEN_LRD.Skills
             return Math.Max(0.0, JointEntropy(jointProbabilities) - Entropy(rowMarginals));
         }
 
+        /// <summary>
+        /// Computes mutual information from jointProbabilities.
+        /// </summary>
         public static double MutualInformation(double[,] jointProbabilities)
         {
             ValidateJointDistribution(jointProbabilities, nameof(jointProbabilities));
@@ -116,6 +125,9 @@ namespace OPEN_LRD.Skills
             return Math.Max(0.0, result);
         }
 
+        /// <summary>
+        /// Computes Kullback-Leibler divergence between first and second distributions.
+        /// </summary>
         public static double KlDivergence(double[] first, double[] second)
         {
             ValidateProbabilityVector(first, nameof(first));
@@ -137,6 +149,9 @@ namespace OPEN_LRD.Skills
             return Math.Max(0.0, result);
         }
 
+        /// <summary>
+        /// Computes Jensen-Shannon divergence between first and second distributions.
+        /// </summary>
         public static double JensenShannonDivergence(double[] first, double[] second)
         {
             ValidateProbabilityVector(first, nameof(first));
@@ -150,6 +165,12 @@ namespace OPEN_LRD.Skills
             return 0.5 * KlDivergence(first, midpoint) + 0.5 * KlDivergence(second, midpoint);
         }
 
+        /// <summary>
+        /// Computes cross-entropy in bits between actual and predicted probability distributions.
+        /// </summary>
+        /// <param name="actual">The true probability distribution.</param>
+        /// <param name="predicted">The predicted probability distribution.</param>
+        /// <returns>The cross-entropy value in bits.</returns>
         public static double CrossEntropy(double[] actual, double[] predicted)
         {
             ValidateProbabilityVector(actual, nameof(actual));
@@ -166,6 +187,9 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Evaluates the logistic sigmoid function at value.
+        /// </summary>
         public static double Sigmoid(double value)
         {
             EnsureFinite(value, nameof(value));
@@ -178,6 +202,11 @@ namespace OPEN_LRD.Skills
             return negativeExponential / (1.0 + negativeExponential);
         }
 
+        /// <summary>
+        /// Applies the logistic sigmoid function element-wise to values.
+        /// </summary>
+        /// <param name="values">The input vector.</param>
+        /// <returns>A new vector containing the sigmoid of each input element.</returns>
         public static double[] Sigmoid(double[] values)
         {
             EnsureVector(values, nameof(values));
@@ -189,6 +218,11 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the numerically stable softmax of values.
+        /// </summary>
+        /// <param name="values">The input vector of logits.</param>
+        /// <returns>A probability vector that sums to one.</returns>
         public static double[] Softmax(double[] values)
         {
             EnsureVector(values, nameof(values));
@@ -211,7 +245,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
         /// <summary>
-        /// Computes mean absolute error between actual and predicted arrays.
+        /// Computes the rectified linear unit max(0, value) of value.
         /// </summary>
 
         public static double Relu(double value)
@@ -220,6 +254,12 @@ namespace OPEN_LRD.Skills
             return Math.Max(0.0, value);
         }
 
+        /// <summary>
+        /// Evaluates the leaky rectified linear unit of value, scaling negative inputs by alpha.
+        /// </summary>
+        /// <param name="value">The input value.</param>
+        /// <param name="alpha">The slope applied to negative inputs. Must be finite and non-negative.</param>
+        /// <returns>value if non-negative; otherwise alpha * value.</returns>
         public static double LeakyRelu(double value, double alpha)
         {
             EnsureFinite(value, nameof(value));
@@ -230,12 +270,22 @@ namespace OPEN_LRD.Skills
             return value >= 0.0 ? value : alpha * value;
         }
 
+        /// <summary>
+        /// Evaluates the hyperbolic tangent of value.
+        /// </summary>
+        /// <param name="value">The input value.</param>
+        /// <returns>The hyperbolic tangent of value.</returns>
         public static double Tanh(double value)
         {
             EnsureFinite(value, nameof(value));
             return Math.Tanh(value);
         }
 
+        /// <summary>
+        /// Evaluates the Gaussian Error Linear Unit (GELU) of value using the tanh approximation.
+        /// </summary>
+        /// <param name="value">The input value.</param>
+        /// <returns>The GELU activation of value.</returns>
         public static double Gelu(double value)
         {
             EnsureFinite(value, nameof(value));
@@ -243,13 +293,18 @@ namespace OPEN_LRD.Skills
             return 0.5 * value * (1.0 + Math.Tanh(scale * (value + 0.044715 * value * value * value)));
         }
 
+        /// <summary>
+        /// Evaluates the softplus function log(1 + exp(value)) in a numerically stable form.
+        /// </summary>
+        /// <param name="value">The input value.</param>
+        /// <returns>The softplus of value.</returns>
         public static double Softplus(double value)
         {
             EnsureFinite(value, nameof(value));
             return Math.Max(value, 0.0) + Math.Log(1.0 + Math.Exp(-Math.Abs(value)));
         }
         /// <summary>
-        /// Builds a confusion matrix from actual and predicted labels for positiveLabel.
+        /// Computes mean squared error between actual and predicted arrays.
         /// </summary>
 
         public static double MeanSquaredError(double[] actual, double[] predicted)
@@ -264,6 +319,12 @@ namespace OPEN_LRD.Skills
             return sum / actual.Length;
         }
 
+        /// <summary>
+        /// Computes mean absolute error between actual and predicted arrays.
+        /// </summary>
+        /// <param name="actual">The true values.</param>
+        /// <param name="predicted">The predicted values.</param>
+        /// <returns>The mean of the absolute differences.</returns>
         public static double MeanAbsoluteError(double[] actual, double[] predicted)
         {
             EnsureSameNonEmptyLength(actual, predicted, nameof(actual), nameof(predicted));
@@ -275,6 +336,12 @@ namespace OPEN_LRD.Skills
             return sum / actual.Length;
         }
 
+        /// <summary>
+        /// Computes binary cross-entropy for a single probability prediction, with the prediction clamped away from 0 and 1.
+        /// </summary>
+        /// <param name="actual">The true label probability in [0, 1].</param>
+        /// <param name="predicted">The predicted probability in [0, 1].</param>
+        /// <returns>The binary cross-entropy loss.</returns>
         public static double BinaryCrossEntropy(double actual, double predicted)
         {
             EnsureProbability(actual, nameof(actual));
@@ -283,6 +350,12 @@ namespace OPEN_LRD.Skills
             return -(actual * Math.Log(bounded) + (1.0 - actual) * Math.Log(1.0 - bounded));
         }
 
+        /// <summary>
+        /// Computes categorical cross-entropy in nats between actual and predicted probability distributions.
+        /// </summary>
+        /// <param name="actual">The true probability distribution (typically one-hot).</param>
+        /// <param name="predicted">The predicted probability distribution.</param>
+        /// <returns>The categorical cross-entropy loss in nats.</returns>
         public static double CategoricalCrossEntropy(double[] actual, double[] predicted)
         {
             ValidateProbabilityVector(actual, nameof(actual));
@@ -299,6 +372,13 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Computes the hinge loss max(0, margin - actual * predicted).
+        /// </summary>
+        /// <param name="margin">The positive margin.</param>
+        /// <param name="actual">The true label, which must be -1 or +1.</param>
+        /// <param name="predicted">The predicted score.</param>
+        /// <returns>The hinge loss value.</returns>
         public static double HingeLoss(double margin, double actual, double predicted)
         {
             EnsurePositiveFinite(margin, nameof(margin));
@@ -311,6 +391,13 @@ namespace OPEN_LRD.Skills
             return Math.Max(0.0, margin - actual * predicted);
         }
 
+        /// <summary>
+        /// Builds a binary confusion matrix from actual and predicted labels.
+        /// </summary>
+        /// <param name="actual">The true labels.</param>
+        /// <param name="predicted">The predicted labels.</param>
+        /// <param name="positiveLabel">The label treated as the positive class.</param>
+        /// <returns>The confusion matrix counts.</returns>
         public static ConfusionMatrix BuildConfusionMatrix(int[] actual, int[] predicted, int positiveLabel)
         {
             EnsureSameNonEmptyLength(actual, predicted, nameof(actual), nameof(predicted));
@@ -342,6 +429,13 @@ namespace OPEN_LRD.Skills
             return new ConfusionMatrix(truePositive, trueNegative, falsePositive, falseNegative);
         }
 
+        /// <summary>
+        /// Calculates accuracy, precision, recall, F1, specificity, and balanced accuracy for a binary classification.
+        /// </summary>
+        /// <param name="actual">The true labels.</param>
+        /// <param name="predicted">The predicted labels.</param>
+        /// <param name="positiveLabel">The label treated as the positive class.</param>
+        /// <returns>The computed classification metrics. Ratios with a zero denominator are reported as zero.</returns>
         public static ClassificationMetrics CalculateClassificationMetrics(int[] actual, int[] predicted, int positiveLabel)
         {
             ConfusionMatrix matrix = BuildConfusionMatrix(actual, predicted, positiveLabel);
@@ -353,6 +447,12 @@ namespace OPEN_LRD.Skills
             return new ClassificationMetrics(accuracy, precision, recall, f1, specificity, 0.5 * (recall + specificity));
         }
 
+        /// <summary>
+        /// Computes the area under the ROC curve using the Mann-Whitney rank statistic. Tied scores receive average ranks.
+        /// </summary>
+        /// <param name="scores">The predicted scores for each sample.</param>
+        /// <param name="labels">The binary labels (0 or 1) for each sample.</param>
+        /// <returns>The ROC AUC in [0, 1].</returns>
         public static double RocAuc(double[] scores, int[] labels)
         {
             EnsureSameNonEmptyLength(scores, labels, nameof(scores), nameof(labels));
@@ -398,6 +498,14 @@ namespace OPEN_LRD.Skills
             return (positiveRankSum - positives * (positives + 1.0) * 0.5) / (positives * (double)negatives);
         }
 
+        /// <summary>
+        /// Computes the distance between two vectors using the specified metric.
+        /// </summary>
+        /// <param name="first">The first vector.</param>
+        /// <param name="second">The second vector.</param>
+        /// <param name="metric">The distance metric to apply.</param>
+        /// <param name="p">The order used by the Minkowski metric. Must be positive and finite. Ignored for other metrics.</param>
+        /// <returns>The distance between first and second.</returns>
         public static double Distance(double[] first, double[] second, DistanceMetric metric, double p = 2.0)
         {
             EnsureSameNonEmptyLength(first, second, nameof(first), nameof(second));
@@ -432,6 +540,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Computes the cosine similarity between two vectors.
+        /// </summary>
+        /// <param name="first">The first vector. Must not be a zero vector.</param>
+        /// <param name="second">The second vector. Must not be a zero vector.</param>
+        /// <returns>The cosine similarity in [-1, 1].</returns>
+        /// <exception cref="InvalidOperationException">Thrown when either vector is a zero vector.</exception>
         public static double CosineSimilarity(double[] first, double[] second)
         {
             EnsureSameNonEmptyLength(first, second, nameof(first), nameof(second));
@@ -460,6 +575,13 @@ namespace OPEN_LRD.Skills
             return Math.Clamp(dot / Math.Sqrt(firstNorm * secondNorm), -1.0, 1.0);
         }
 
+        /// <summary>
+        /// Computes the Jaccard similarity coefficient between two sets.
+        /// </summary>
+        /// <typeparam name="T">The element type of the sets.</typeparam>
+        /// <param name="first">The first set.</param>
+        /// <param name="second">The second set.</param>
+        /// <returns>The size of the intersection divided by the size of the union, or 1.0 when both sets are empty.</returns>
         public static double JaccardSimilarity<T>(IReadOnlySet<T> first, IReadOnlySet<T> second)
             where T : notnull
         {
@@ -487,6 +609,11 @@ namespace OPEN_LRD.Skills
             return (double)intersection / union;
         }
 
+        /// <summary>
+        /// Standardizes each column of data to zero mean and unit population standard deviation.
+        /// </summary>
+        /// <param name="data">The data matrix with samples in rows and features in columns.</param>
+        /// <returns>The standardized data along with the per-column mean and scale. Constant columns use a scale of one.</returns>
         public static StandardizationResult Standardize(double[,] data)
         {
             ValidateDataMatrix(data, minimumRows: 1);
@@ -524,7 +651,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Runs k-means clustering on data into clusters within maxIterations using seed.
+        /// Computes principal component analysis of data: mean, top component directions, explained variance, and transformed samples.
         /// </summary>
         public static PcaResult Pca(double[,] data, int components)
         {
@@ -604,6 +731,14 @@ namespace OPEN_LRD.Skills
             return new PcaResult(mean, directions, explained, ratios, transformed);
         }
 
+        /// <summary>
+        /// Partitions data into clusters using Lloyd's algorithm with k-means++ initialization.
+        /// </summary>
+        /// <param name="data">The data matrix with samples in rows and features in columns.</param>
+        /// <param name="clusters">The number of clusters. Must be in [1, sample count].</param>
+        /// <param name="maxIterations">The maximum number of iterations. Must be at least one.</param>
+        /// <param name="seed">The seed for the random number generator used during initialization.</param>
+        /// <returns>The final centroids, cluster assignments, inertia, and iteration count.</returns>
         public static KMeansResult KMeans(double[,] data, int clusters, int maxIterations, int seed)
         {
             ValidateDataMatrix(data, minimumRows: 1);
@@ -674,6 +809,13 @@ namespace OPEN_LRD.Skills
             return new KMeansResult(centroids, assignments, inertia, iterations);
         }
 
+        /// <summary>
+        /// Computes the Lp distance between two vectors using scaling to avoid overflow and underflow.
+        /// </summary>
+        /// <param name="first">The first vector.</param>
+        /// <param name="second">The second vector.</param>
+        /// <param name="p">The order of the norm.</param>
+        /// <returns>The Lp distance between first and second.</returns>
         private static double StablePDistance(double[] first, double[] second, double p)
         {
             double maximum = 0.0;
@@ -697,6 +839,13 @@ namespace OPEN_LRD.Skills
             return maximum * Math.Pow(sum, 1.0 / p);
         }
 
+        /// <summary>
+        /// Selects initial k-means centroids using the k-means++ seeding strategy.
+        /// </summary>
+        /// <param name="data">The data matrix with samples in rows and features in columns.</param>
+        /// <param name="clusters">The number of centroids to select.</param>
+        /// <param name="random">The random number generator used for sampling.</param>
+        /// <returns>A matrix of initial centroids with one row per cluster.</returns>
         private static double[,] InitializeKMeansPlusPlus(double[,] data, int clusters, Random random)
         {
             int samples = data.GetLength(0);
@@ -752,6 +901,13 @@ namespace OPEN_LRD.Skills
             return centroids;
         }
 
+        /// <summary>
+        /// Assigns each sample to its nearest centroid by squared Euclidean distance.
+        /// </summary>
+        /// <param name="data">The data matrix with samples in rows and features in columns.</param>
+        /// <param name="centroids">The current centroids.</param>
+        /// <param name="assignments">The current cluster assignments, updated in place.</param>
+        /// <returns>true if any assignment changed; otherwise false.</returns>
         private static bool AssignClusters(double[,] data, double[,] centroids, int[] assignments)
         {
             bool changed = false;
@@ -777,6 +933,14 @@ namespace OPEN_LRD.Skills
             return changed;
         }
 
+        /// <summary>
+        /// Finds the sample farthest from its assigned centroid, ignoring samples in single-member clusters.
+        /// </summary>
+        /// <param name="data">The data matrix with samples in rows and features in columns.</param>
+        /// <param name="centroids">The current centroids.</param>
+        /// <param name="assignments">The current cluster assignments.</param>
+        /// <param name="counts">The number of samples in each cluster.</param>
+        /// <returns>The index of the farthest eligible sample, or zero if none is eligible.</returns>
         private static int FarthestSample(double[,] data, double[,] centroids, int[] assignments, int[] counts)
         {
             int bestSample = 0;
@@ -797,6 +961,14 @@ namespace OPEN_LRD.Skills
             return bestSample;
         }
 
+        /// <summary>
+        /// Computes the squared Euclidean distance between a data row and a centroid.
+        /// </summary>
+        /// <param name="data">The data matrix.</param>
+        /// <param name="row">The index of the sample row.</param>
+        /// <param name="centroids">The centroid matrix.</param>
+        /// <param name="cluster">The index of the centroid row.</param>
+        /// <returns>The squared Euclidean distance.</returns>
         private static double SquaredDistance(double[,] data, int row, double[,] centroids, int cluster)
         {
             double sum = 0.0;
@@ -808,6 +980,13 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Copies a data sample into a centroid row.
+        /// </summary>
+        /// <param name="data">The data matrix.</param>
+        /// <param name="sample">The index of the sample row to copy.</param>
+        /// <param name="centroids">The centroid matrix to write into.</param>
+        /// <param name="cluster">The index of the centroid row to overwrite.</param>
         private static void CopySample(double[,] data, int sample, double[,] centroids, int cluster)
         {
             for (int column = 0; column < data.GetLength(1); column++)
@@ -816,6 +995,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a vector contains finite probabilities in [0, 1] that sum to one.
+        /// </summary>
+        /// <param name="probabilities">The vector to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <exception cref="ArgumentException">Thrown when the values do not sum to one.</exception>
         private static void ValidateProbabilityVector(double[] probabilities, string parameterName)
         {
             EnsureVector(probabilities, parameterName);
@@ -831,6 +1016,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a matrix is a non-empty joint probability distribution whose entries sum to one.
+        /// </summary>
+        /// <param name="probabilities">The joint distribution matrix to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <exception cref="ArgumentNullException">Thrown when the matrix is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the matrix is empty or its entries do not sum to one.</exception>
         private static void ValidateJointDistribution(double[,] probabilities, string parameterName)
         {
             if (probabilities == null)
@@ -853,6 +1045,11 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Ensures a vector is non-null, non-empty, and contains only finite values.
+        /// </summary>
+        /// <param name="values">The vector to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
         private static void EnsureVector(double[] values, string parameterName)
         {
             if (values == null)
@@ -869,6 +1066,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Ensures two vectors have the same length.
+        /// </summary>
+        /// <param name="first">The first vector.</param>
+        /// <param name="second">The second vector.</param>
+        /// <param name="secondName">The name of the second parameter used in exception messages.</param>
+        /// <exception cref="ArgumentException">Thrown when the lengths differ.</exception>
         private static void EnsureSameLength(double[] first, double[] second, string secondName)
         {
             if (first.Length != second.Length)
@@ -877,6 +1081,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Ensures two real-valued vectors are valid vectors with equal lengths.
+        /// </summary>
+        /// <param name="first">The first vector.</param>
+        /// <param name="second">The second vector.</param>
+        /// <param name="firstName">The name of the first parameter used in exception messages.</param>
+        /// <param name="secondName">The name of the second parameter used in exception messages.</param>
         private static void EnsureSameNonEmptyLength(double[] first, double[] second, string firstName, string secondName)
         {
             EnsureVector(first, firstName);
@@ -884,6 +1095,15 @@ namespace OPEN_LRD.Skills
             EnsureSameLength(first, second, secondName);
         }
 
+        /// <summary>
+        /// Ensures two integer arrays are non-null and have equal non-zero lengths.
+        /// </summary>
+        /// <param name="first">The first array.</param>
+        /// <param name="second">The second array.</param>
+        /// <param name="firstName">The name of the first parameter used in exception messages.</param>
+        /// <param name="secondName">The name of the second parameter used in exception messages.</param>
+        /// <exception cref="ArgumentNullException">Thrown when either array is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the arrays are empty or have different lengths.</exception>
         private static void EnsureSameNonEmptyLength(int[] first, int[] second, string firstName, string secondName)
         {
             if (first == null)
@@ -900,6 +1120,15 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Ensures a score vector and a label array are valid and have equal non-zero lengths.
+        /// </summary>
+        /// <param name="scores">The score vector.</param>
+        /// <param name="labels">The label array.</param>
+        /// <param name="scoresName">The name of the scores parameter used in exception messages.</param>
+        /// <param name="labelsName">The name of the labels parameter used in exception messages.</param>
+        /// <exception cref="ArgumentNullException">Thrown when labels is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the arrays are empty or have different lengths.</exception>
         private static void EnsureSameNonEmptyLength(double[] scores, int[] labels, string scoresName, string labelsName)
         {
             EnsureVector(scores, scoresName);
@@ -913,6 +1142,13 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that a data matrix is non-null, has enough rows and at least one column, and contains only finite values.
+        /// </summary>
+        /// <param name="data">The data matrix to validate.</param>
+        /// <param name="minimumRows">The minimum required number of rows.</param>
+        /// <exception cref="ArgumentNullException">Thrown when data is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the matrix has too few rows or no columns.</exception>
         private static void ValidateDataMatrix(double[,] data, int minimumRows)
         {
             if (data == null)
@@ -932,6 +1168,11 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Builds the set of indices at which a vector has a non-zero value.
+        /// </summary>
+        /// <param name="vector">The input vector.</param>
+        /// <returns>A set of indices where the vector is non-zero.</returns>
         private static HashSet<int> ToPresenceSet(double[] vector)
         {
             HashSet<int> result = new HashSet<int>();
@@ -945,11 +1186,23 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>
+        /// Divides two integers as a ratio, returning zero when the denominator is zero.
+        /// </summary>
+        /// <param name="numerator">The numerator.</param>
+        /// <param name="denominator">The denominator.</param>
+        /// <returns>The ratio, or 0.0 if denominator is zero.</returns>
         private static double SafeRatio(int numerator, int denominator)
         {
             return denominator == 0 ? 0.0 : (double)numerator / denominator;
         }
 
+        /// <summary>
+        /// Ensures a value is a finite probability in [0, 1].
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not a probability.</exception>
         private static void EnsureProbability(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value < 0.0 || value > 1.0)
@@ -958,6 +1211,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Ensures a value is finite and strictly positive.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not positive and finite.</exception>
         private static void EnsurePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0.0)
@@ -966,6 +1225,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Ensures a value is finite (not NaN or infinity).
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="parameterName">The parameter name used in exception messages.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not finite.</exception>
         private static void EnsureFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))

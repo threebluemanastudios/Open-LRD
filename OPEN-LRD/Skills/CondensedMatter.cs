@@ -6,7 +6,7 @@ namespace OPEN_LRD.Skills
     internal static class CondensedMatter
     {
         /// <summary>
-        /// Computes unit cell mass density (? = massPerCell / cellVolume) from cell mass and volume.
+        /// Computes unit cell mass density (rho = massPerCell / cellVolume) from cell mass and volume.
         /// </summary>
         /// <param name="massPerCell">The mass per cell.</param>
         /// <param name="cellVolume">The cell volume.</param>
@@ -35,7 +35,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the Bragg diffraction angle (?) in radians for given wavelength, interplanarSpacing, and diffraction order.
+        /// Computes the Bragg diffraction angle (theta) in radians for given wavelength, interplanarSpacing, and diffraction order.
         /// </summary>
         /// <param name="wavelength">The wavelength.</param>
         /// <param name="interplanarSpacing">The interplanar spacing.</param>
@@ -58,7 +58,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the reciprocal lattice vector G_{hkl} for Miller indices (h, k, l) from direct lattice basis vectors first, second, and third.
+        /// Computes the first reciprocal-lattice basis vector b1 = 2 pi (second x third) / V from direct-lattice basis vectors first, second, and third, where V = first . (second x third).
         /// </summary>
         /// <param name="first">The first.</param>
         /// <param name="second">The second.</param>
@@ -79,6 +79,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes all three reciprocal-lattice basis vectors (b1, b2, b3) from direct-lattice basis vectors first, second, and third, each scaled by 2 pi / V where V = first . (second x third).
         /// </summary>
         /// <param name="first">The first direct-lattice vector.</param>
         /// <param name="second">The second direct-lattice vector.</param>
@@ -135,7 +136,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the 1D tight-binding group velocity (v_g(k) = (1 / ?) (dE/dk)) at waveNumber k.
+        /// Computes the 1D tight-binding group velocity (v_g(k) = (1 / hbar) (dE/dk)) at waveNumber k.
         /// </summary>
         /// <param name="hoppingEnergy">The hopping energy.</param>
         /// <param name="latticeConstant">The lattice constant.</param>
@@ -151,7 +152,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the acoustic phonon angular frequency ?(k) of a 1D monatomic chain at waveNumber k.
+        /// Computes the acoustic phonon angular frequency omega(k) of a 1D monatomic chain at waveNumber k.
         /// </summary>
         /// <param name="mass">The mass.</param>
         /// <param name="springConstant">The spring constant.</param>
@@ -224,6 +225,12 @@ namespace OPEN_LRD.Skills
             return LinearAlgebraAdvanced.SymmetricEigenDecomposition(hamiltonian);
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite or not strictly positive.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN, infinite, or less than or equal to zero.</exception>
         private static void EnsurePositive(double value, string name)
         {
             if (!double.IsFinite(value) || value <= 0.0)
@@ -232,6 +239,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if the value is not finite.
+        /// </summary>
+        /// <param name="value">The value to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is NaN or infinite.</exception>
         private static void EnsureFinite(double value, string name)
         {
             if (!double.IsFinite(value))
@@ -240,6 +253,12 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> if any component of the vector is not finite.
+        /// </summary>
+        /// <param name="vector">The vector to validate.</param>
+        /// <param name="name">The parameter name used in the exception.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when a component is NaN or infinite.</exception>
         private static void EnsureFinite(Vector3 vector, string name)
         {
             if (!double.IsFinite(vector.X) || !double.IsFinite(vector.Y) || !double.IsFinite(vector.Z))

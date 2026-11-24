@@ -17,6 +17,7 @@ namespace OPEN_LRD.Skills
     internal readonly record struct Interval(double Lower, double Upper, bool LowerClosed, bool UpperClosed)
     {
         /// <summary>
+        /// Formats the interval in interval notation, with brackets for closed ends and parentheses for open ends (infinite ends are always open).
         /// </summary>
         /// <returns>The result.</returns>
         public override string ToString()
@@ -51,10 +52,12 @@ namespace OPEN_LRD.Skills
     internal readonly record struct Quaternion(double W, double X, double Y, double Z)
     {
         /// <summary>
+        /// Gets the multiplicative identity quaternion (1 + 0i + 0j + 0k).
         /// </summary>
         public static Quaternion Identity => new Quaternion(1.0, 0.0, 0.0, 0.0);
 
         /// <summary>
+        /// Formats the quaternion as "w + xi + yj + zk" using invariant culture number formatting.
         /// </summary>
         /// <returns>The result.</returns>
         public override string ToString()
@@ -76,7 +79,7 @@ namespace OPEN_LRD.Skills
         private const int MaxExpansionPower = 32;
 
         /// <summary>
-        /// Normalizes a polynomial coefficient array by trimming trailing near-zero or leading zero terms into a canonical representation.
+        /// Normalizes a polynomial coefficient array by removing near-zero highest-degree (trailing array) terms, always keeping at least one coefficient.
         /// </summary>
         /// <param name="coefficients">The coefficients.</param>
         /// <returns>The result.</returns>
@@ -127,7 +130,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates the polynomial at a Complex number value (typically via Horner's method).
+        /// Evaluates the polynomial at a real value using Horner's method.
         /// </summary>
         /// <param name="coefficients">The coefficients.</param>
         /// <param name="value">The value.</param>
@@ -147,7 +150,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates the polynomial at a Complex number value (typically via Horner's method).
+        /// Evaluates the polynomial at a complex value using Horner's method.
         /// </summary>
         /// <param name="coefficients">The coefficients.</param>
         /// <param name="value">The value.</param>
@@ -616,7 +619,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the quadratic discriminant (? = b  - 4ac) for ax  + bx + c = 0.
+        /// Computes the quadratic discriminant (b^2 - 4ac) for ax^2 + bx + c = 0.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -643,6 +646,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the vertex (x, y) of the parabola y = ax^2 + bx + c.
         /// </summary>
         /// <param name="a">The quadratic coefficient.</param>
         /// <param name="b">The linear coefficient.</param>
@@ -655,7 +659,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Solves ax  + bx + c = 0 for real roots using the quadratic formula.
+        /// Solves ax^2 + bx + c = 0 for real roots using the quadratic formula.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -684,7 +688,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Solves ax  + bx + c = 0 over the complex numbers, including conjugate pairs when discriminant is negative.
+        /// Solves ax^2 + bx + c = 0 over the complex numbers, including conjugate pairs when discriminant is negative.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -844,7 +848,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Simplifies a square root ?radicand by extracting the largest square factor.
+        /// Simplifies sqrt(radicand) by extracting the largest square factor, returning outside and inside such that sqrt(radicand) = outside * sqrt(inside).
         /// </summary>
         /// <param name="radicand">The radicand.</param>
         /// <returns>The result.</returns>
@@ -906,6 +910,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Creates a size-by-size identity matrix.
         /// </summary>
         /// <param name="size">The size.</param>
         /// <returns>The result.</returns>
@@ -924,6 +929,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the transpose of a matrix.
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <returns>The result.</returns>
@@ -944,6 +950,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the element-wise sum of two matrices of identical shape.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -965,6 +972,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the element-wise difference left - right of two matrices of identical shape.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -986,6 +994,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns a copy of the matrix with every element multiplied by scale.
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <param name="scale">The scale.</param>
@@ -1007,6 +1016,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the matrix product left * right.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1040,6 +1050,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Raises a square matrix to a non-negative integer power using repeated squaring.
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <param name="exponent">The exponent.</param>
@@ -1144,6 +1155,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Computes the inverse of a square matrix using Gauss-Jordan elimination with partial pivoting; throws if the matrix is singular.
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <returns>The result.</returns>
@@ -1250,6 +1262,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Reduces a matrix to reduced row echelon form using Gauss-Jordan elimination with partial pivoting.
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <returns>The result.</returns>
@@ -1388,6 +1401,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves matrix * x = rightHandSide for x; throws if the system has no unique solution.
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <param name="rightHandSide">The right hand side.</param>
@@ -1402,6 +1416,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the sum of two complex numbers.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1412,6 +1427,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the difference of two complex numbers (left - right).
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1422,6 +1438,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the product of two complex numbers.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1432,6 +1449,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Divides two complex numbers (left / right); throws if the divisor is zero.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1446,6 +1464,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the additive inverse (-value) of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1455,6 +1474,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the complex conjugate of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1464,6 +1484,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the modulus (absolute value) of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1473,6 +1494,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the argument (phase angle in radians) of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1482,6 +1504,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Raises a complex value to a complex exponent.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="exponent">The exponent.</param>
@@ -1492,6 +1515,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the principal square root of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1501,6 +1525,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns e raised to the power of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1510,6 +1535,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the principal natural logarithm of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1519,6 +1545,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the complex sine of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1528,6 +1555,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the complex cosine of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1537,6 +1565,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the complex tangent of a complex number.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1546,6 +1575,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Constructs a complex number from its modulus and argument (in radians).
         /// </summary>
         /// <param name="modulus">The modulus.</param>
         /// <param name="argument">The argument.</param>
@@ -1556,6 +1586,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Converts a complex number to its modulus and argument (in radians).
         /// </summary>
         /// <param name="value">The complex value.</param>
         /// <returns>The modulus and argument.</returns>
@@ -1565,6 +1596,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the degree-th roots of unity as complex numbers.
         /// </summary>
         /// <param name="degree">The degree.</param>
         /// <returns>The result.</returns>
@@ -1583,6 +1615,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the component-wise sum of two quaternions.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1593,6 +1626,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the component-wise difference left - right of two quaternions.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1603,6 +1637,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the component-wise negation of a quaternion.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1612,6 +1647,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns a quaternion with every component multiplied by scale.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="scale">The scale.</param>
@@ -1622,6 +1658,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the Hamilton product left * right of two quaternions.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1636,6 +1673,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the conjugate of a quaternion (vector part negated).
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1645,6 +1683,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the squared norm (W^2 + X^2 + Y^2 + Z^2) of a quaternion.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1654,6 +1693,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the norm (magnitude) of a quaternion.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1663,6 +1703,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the unit quaternion with the same direction as value; throws if the norm is zero.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1677,6 +1718,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the multiplicative inverse of a quaternion (conjugate divided by squared norm); throws if the norm is zero.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1691,6 +1733,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Returns the four-component dot product of two quaternions.
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1701,6 +1744,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Constructs a unit quaternion for a rotation of angleRadians about the given axis (the axis is normalized; throws if it is zero).
         /// </summary>
         /// <param name="axis">The axis.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -1722,6 +1766,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Constructs a unit quaternion for a rotation of angleRadians about the axis (x, y, z).
         /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -1734,6 +1779,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Extracts the rotation axis and angle (in radians) from a quaternion after normalizing it; the axis defaults to (1, 0, 0) when the angle is zero.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="axis">The axis.</param>
@@ -1753,6 +1799,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Rotates a 3D vector by the unit-normalized quaternion rotation.
         /// </summary>
         /// <param name="rotation">The rotation.</param>
         /// <param name="vector">The vector.</param>
@@ -1770,6 +1817,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Linearly interpolates between two normalized quaternions and renormalizes the result; amount must be in [0, 1].
         /// </summary>
         /// <param name="start">The start.</param>
         /// <param name="end">The end.</param>
@@ -1789,6 +1837,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Spherically interpolates between two normalized quaternions along the shortest arc; amount must be in [0, 1].
         /// </summary>
         /// <param name="start">The start.</param>
         /// <param name="end">The end.</param>
@@ -1823,6 +1872,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves the linear inequality coefficient * x + constant (relation) 0 and returns the solution set as intervals.
         /// </summary>
         /// <param name="coefficient">The coefficient.</param>
         /// <param name="constant">The constant.</param>
@@ -1834,6 +1884,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves the quadratic inequality ax^2 + bx + c (relation) 0 and returns the solution set as intervals.
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -1846,6 +1897,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Solves the polynomial inequality defined by coefficients (relation) 0 and returns the merged solution intervals.
         /// </summary>
         /// <param name="coefficients">The coefficients.</param>
         /// <param name="relation">The relation.</param>
@@ -1926,6 +1978,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Expands products and non-negative integer powers in an expression into a sum of terms.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <returns>The result.</returns>
@@ -1942,6 +1995,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Parses expression and expands it into a sum of terms.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <returns>The result.</returns>
@@ -1951,6 +2005,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Parses and expands expression, returning the expanded form as a string.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <returns>The result.</returns>
@@ -1960,6 +2015,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Replaces every occurrence of variable in expression with the replacement expression and simplifies the result.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1990,6 +2046,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Replaces every occurrence of variable in expression with the constant value and simplifies the result.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2001,6 +2058,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Parses expression and substitutes the constant value for variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2012,6 +2070,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Collects the terms of an expression that is a polynomial in variable into a simplified sum; throws if it is not polynomial in variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2026,6 +2085,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Factors a polynomial expression in variable into its rational-root and remaining polynomial factors; throws if it is not polynomial in variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2053,6 +2113,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Parses expression and factors it as a polynomial in variable.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2063,6 +2124,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
+        /// Parses expression, factors it as a polynomial in variable, and returns the result as a string.
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2072,6 +2134,7 @@ namespace OPEN_LRD.Skills
             return Factor(expression, variable).ToString();
         }
 
+        /// <summary>Recursively expands an expression, distributing products and non-negative integer powers over sums; throws if nesting exceeds the maximum depth.</summary>
         private static Expression ExpandInternal(Expression expression, int depth)
         {
             if (depth > MaxExpansionDepth)
@@ -2123,6 +2186,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Multiplies two expressions, distributing the product over any top-level addition or subtraction in either operand.</summary>
         private static Expression Distribute(Expression left, Expression right, int depth)
         {
             if (depth > MaxExpansionDepth)
@@ -2156,6 +2220,7 @@ namespace OPEN_LRD.Skills
             return ExpressionBuilder.Multiply(left, right);
         }
 
+        /// <summary>Expands an expression raised to a non-negative integer power using repeated squaring; throws if the exponent exceeds the maximum.</summary>
         private static Expression ExpandPower(Expression operand, int exponent, int depth)
         {
             if (exponent > MaxExpansionPower)
@@ -2180,6 +2245,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Determines whether an expression is a constant non-negative integer within the expansion limit, and returns its value if so.</summary>
         private static bool TryGetNonNegativeInteger(Expression expression, out int value)
         {
             if (expression is ConstantExpression constant
@@ -2194,6 +2260,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Recursively replaces every occurrence of a variable with the given replacement expression.</summary>
         private static Expression SubstituteInternal(Expression expression, string variable, Expression replacement)
         {
             switch (expression)
@@ -2230,6 +2297,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Tests whether a value lies beyond the tolerance on the side of zero indicated by the inequality relation.</summary>
         private static bool MatchesOpenInequality(double value, InequalityRelation relation)
         {
             return relation switch
@@ -2242,11 +2310,13 @@ namespace OPEN_LRD.Skills
             };
         }
 
+        /// <summary>Returns whether the inequality relation includes equality (less-than-or-equal or greater-than-or-equal).</summary>
         private static bool AllowsEquality(InequalityRelation relation)
         {
             return relation == InequalityRelation.LessThanOrEqual || relation == InequalityRelation.GreaterThanOrEqual;
         }
 
+        /// <summary>Determines whether a value lies within any of the given intervals, respecting open and closed endpoints within tolerance.</summary>
         private static bool IsCovered(List<Interval> intervals, double value)
         {
             foreach (Interval interval in intervals)
@@ -2263,6 +2333,7 @@ namespace OPEN_LRD.Skills
             return false;
         }
 
+        /// <summary>Sorts intervals by lower bound and merges overlapping or touching intervals into disjoint intervals.</summary>
         private static Interval[] MergeIntervals(List<Interval> intervals)
         {
             intervals.Sort((left, right) => left.Lower.CompareTo(right.Lower));
@@ -2302,6 +2373,7 @@ namespace OPEN_LRD.Skills
             return merged.ToArray();
         }
 
+        /// <summary>Finds all complex roots of a polynomial using Durand-Kerner (Weierstrass) iteration.</summary>
         private static Complex[] DurandKerner(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -2354,11 +2426,13 @@ namespace OPEN_LRD.Skills
             return roots;
         }
 
+        /// <summary>Returns whether a polynomial is effectively zero, i.e. a single coefficient within tolerance of zero.</summary>
         private static bool IsZeroPolynomial(double[] polynomial)
         {
             return polynomial.Length == 1 && Math.Abs(polynomial[0]) <= Tolerance;
         }
 
+        /// <summary>Returns the polynomial divided by its leading coefficient so that the result is monic.</summary>
         private static double[] MonicPolynomial(double[] coefficients)
         {
             double[] polynomial = NormalizePolynomial(coefficients);
@@ -2379,6 +2453,7 @@ namespace OPEN_LRD.Skills
             return NormalizePolynomial(result);
         }
 
+        /// <summary>Returns whether every coefficient of a polynomial is within a small tolerance of an integer.</summary>
         private static bool HasIntegerCoefficients(double[] polynomial)
         {
             foreach (double coefficient in polynomial)
@@ -2391,6 +2466,7 @@ namespace OPEN_LRD.Skills
             return true;
         }
 
+        /// <summary>Returns all positive divisors of a value; returns an empty list for non-positive values.</summary>
         private static List<long> GetDivisors(long value)
         {
             List<long> divisors = new List<long>();
@@ -2412,6 +2488,7 @@ namespace OPEN_LRD.Skills
             return divisors;
         }
 
+        /// <summary>Adds a candidate root to the list unless an approximately equal root is already present.</summary>
         private static void AddDistinctRoot(List<double> roots, double candidate, double tolerance = 1e-9)
         {
             foreach (double root in roots)
@@ -2424,16 +2501,19 @@ namespace OPEN_LRD.Skills
             roots.Add(candidate);
         }
 
+        /// <summary>Returns the component-wise sum of two vectors.</summary>
         private static Vector3 Add(Vector3 left, Vector3 right)
         {
             return new Vector3(left.X + right.X, left.Y + right.Y, left.Z + right.Z);
         }
 
+        /// <summary>Returns a vector multiplied by a scalar.</summary>
         private static Vector3 Scale(Vector3 value, double scale)
         {
             return new Vector3(value.X * scale, value.Y * scale, value.Z * scale);
         }
 
+        /// <summary>Returns the cross product of two 3D vectors.</summary>
         private static Vector3 Cross(Vector3 left, Vector3 right)
         {
             return new Vector3(
@@ -2442,6 +2522,7 @@ namespace OPEN_LRD.Skills
                 left.X * right.Y - left.Y * right.X);
         }
 
+        /// <summary>Throws if the matrix is null or has zero rows or columns.</summary>
         private static void EnsureMatrix(double[,] matrix, string parameterName)
         {
             if (matrix == null)
@@ -2454,6 +2535,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Throws if the matrix is not a non-empty square matrix.</summary>
         private static void EnsureSquare(double[,] matrix, string parameterName)
         {
             EnsureMatrix(matrix, parameterName);
@@ -2463,6 +2545,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Throws if either matrix is invalid or the two matrices differ in dimensions.</summary>
         private static void EnsureSameShape(double[,] left, double[,] right)
         {
             EnsureMatrix(left, nameof(left));
@@ -2473,6 +2556,7 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Returns a copy of a matrix.</summary>
         private static double[,] CloneMatrix(double[,] matrix)
         {
             int rows = matrix.GetLength(0);
@@ -2482,6 +2566,7 @@ namespace OPEN_LRD.Skills
             return result;
         }
 
+        /// <summary>Swaps two rows of a matrix in place.</summary>
         private static void SwapRows(double[,] matrix, int firstRow, int secondRow)
         {
             int columns = matrix.GetLength(1);

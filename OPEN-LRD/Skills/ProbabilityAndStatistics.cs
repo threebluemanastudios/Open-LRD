@@ -67,7 +67,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Evaluates the log-gamma function at value.
+        /// Evaluates the complementary error function at value.
         /// </summary>
         public static double Erfc(double value)
         {
@@ -75,6 +75,9 @@ namespace OPEN_LRD.Skills
             return value >= 0.0 ? ErfcPositive(value) : 2.0 - ErfcPositive(-value);
         }
 
+        /// <summary>
+        /// Evaluates the natural logarithm of the gamma function at value.
+        /// </summary>
         public static double LogGamma(double value)
         {
             EnsureFinite(value, nameof(value));
@@ -97,6 +100,9 @@ namespace OPEN_LRD.Skills
             return LogSqrtTwoPi + ((shifted + 0.5) * Math.Log(t)) - t + Math.Log(sum);
         }
 
+        /// <summary>
+        /// Evaluates the regularized lower incomplete gamma function P(a, x).
+        /// </summary>
         public static double RegularizedGammaP(double a, double x)
         {
             ValidateGammaArguments(a, x);
@@ -125,6 +131,9 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("Regularized gamma series did not converge.");
         }
 
+        /// <summary>
+        /// Evaluates the regularized upper incomplete gamma function Q(a, x).
+        /// </summary>
         public static double RegularizedGammaQ(double a, double x)
         {
             ValidateGammaArguments(a, x);
@@ -139,6 +148,9 @@ namespace OPEN_LRD.Skills
             return ClampProbability(GammaContinuedFractionQ(a, x));
         }
 
+        /// <summary>
+        /// Evaluates the incomplete beta function with parameters a and b at x.
+        /// </summary>
         public static double IncompleteBeta(double a, double b, double x)
         {
             ValidateBetaArguments(a, b, x);
@@ -149,6 +161,9 @@ namespace OPEN_LRD.Skills
             return Math.Exp(LogBeta(a, b)) * RegularizedIncompleteBeta(a, b, x);
         }
 
+        /// <summary>
+        /// Evaluates the regularized incomplete beta function I(x; a, b).
+        /// </summary>
         public static double RegularizedIncompleteBeta(double a, double b, double x)
         {
             ValidateBetaArguments(a, b, x);
@@ -168,7 +183,7 @@ namespace OPEN_LRD.Skills
             return ClampProbability(1.0 - (front * BetaContinuedFraction(b, a, 1.0 - x) / b));
         }
         /// <summary>
-        /// Evaluates normal quantile at probability with mean and standardDeviation.
+        /// Evaluates the normal probability density at x with mean and standardDeviation.
         /// </summary>
 
         public static double NormalPdf(double x, double mean, double standardDeviation)
@@ -180,6 +195,9 @@ namespace OPEN_LRD.Skills
             return Math.Exp(-0.5 * z * z) / (standardDeviation * SqrtTwoPi);
         }
 
+        /// <summary>
+        /// Evaluates the normal cumulative distribution at x with mean and standardDeviation.
+        /// </summary>
         public static double NormalCdf(double x, double mean, double standardDeviation)
         {
             EnsureFinite(x, nameof(x));
@@ -192,7 +210,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes a normal confidence interval from sampleMean, standardDeviation, sampleSize, and confidenceLevel.
+        /// Evaluates the normal quantile (inverse CDF) at probability with mean and standardDeviation.
         /// </summary>
         public static double NormalQuantile(double probability, double mean, double standardDeviation)
         {
@@ -210,6 +228,9 @@ namespace OPEN_LRD.Skills
             return mean + (standardDeviation * StandardNormalQuantile(probability));
         }
 
+        /// <summary>
+        /// Draws a normally distributed sample with mean and standardDeviation using the Box-Muller transform.
+        /// </summary>
         public static double NormalSample(Random random, double mean, double standardDeviation)
         {
             EnsureRandom(random);
@@ -221,6 +242,9 @@ namespace OPEN_LRD.Skills
             return mean + (standardDeviation * standardNormal);
         }
 
+        /// <summary>
+        /// Computes a z-based confidence interval for the mean with known standardDeviation at confidenceLevel.
+        /// </summary>
         public static ConfidenceInterval NormalConfidenceInterval(double sampleMean, double standardDeviation, int sampleSize, double confidenceLevel)
         {
             EnsureFinite(sampleMean, nameof(sampleMean));
@@ -232,6 +256,9 @@ namespace OPEN_LRD.Skills
             return new ConfidenceInterval(sampleMean, sampleMean - margin, sampleMean + margin, confidenceLevel);
         }
 
+        /// <summary>
+        /// Evaluates the binomial probability mass of exactly successes out of trials at probability.
+        /// </summary>
         public static double BinomialPmf(int successes, int trials, double probability)
         {
             ValidateBinomial(successes, trials, probability);
@@ -249,7 +276,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Samples a Poisson count using random at rate.
+        /// Evaluates the binomial CDF: the probability of at most successes out of trials at probability.
         /// </summary>
         public static double BinomialCdf(int successes, int trials, double probability)
         {
@@ -265,6 +292,9 @@ namespace OPEN_LRD.Skills
             return RegularizedIncompleteBeta(trials - successes, successes + 1.0, 1.0 - probability);
         }
 
+        /// <summary>
+        /// Draws a binomial sample: the number of successes in trials Bernoulli trials at probability.
+        /// </summary>
         public static int BinomialSample(Random random, int trials, double probability)
         {
             EnsureRandom(random);
@@ -280,6 +310,9 @@ namespace OPEN_LRD.Skills
             return successes;
         }
 
+        /// <summary>
+        /// Evaluates the Poisson probability mass at count with rate.
+        /// </summary>
         public static double PoissonPmf(int count, double rate)
         {
             EnsurePositiveFinite(rate, nameof(rate));
@@ -290,12 +323,18 @@ namespace OPEN_LRD.Skills
             return Math.Exp((count * Math.Log(rate)) - rate - LogGamma(count + 1.0));
         }
 
+        /// <summary>
+        /// Evaluates the Poisson CDF: the probability of at most count events at rate.
+        /// </summary>
         public static double PoissonCdf(int count, double rate)
         {
             EnsurePositiveFinite(rate, nameof(rate));
             return count < 0 ? 0.0 : RegularizedGammaQ(count + 1.0, rate);
         }
 
+        /// <summary>
+        /// Draws a Poisson sample with rate, using multiplication for small rates and transformed rejection for larger rates.
+        /// </summary>
         public static int PoissonSample(Random random, double rate)
         {
             EnsureRandom(random);
@@ -341,6 +380,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Evaluates the exponential probability density at x with rate.
+        /// </summary>
         public static double ExponentialPdf(double x, double rate)
         {
             EnsureFinite(x, nameof(x));
@@ -348,6 +390,9 @@ namespace OPEN_LRD.Skills
             return x < 0.0 ? 0.0 : rate * Math.Exp(-rate * x);
         }
 
+        /// <summary>
+        /// Evaluates the exponential cumulative distribution at x with rate.
+        /// </summary>
         public static double ExponentialCdf(double x, double rate)
         {
             EnsureFinite(x, nameof(x));
@@ -355,6 +400,9 @@ namespace OPEN_LRD.Skills
             return x <= 0.0 ? 0.0 : -ExpMinusOne(-rate * x);
         }
 
+        /// <summary>
+        /// Evaluates the exponential quantile (inverse CDF) at probability with rate.
+        /// </summary>
         public static double ExponentialQuantile(double probability, double rate)
         {
             EnsureProbability(probability, nameof(probability));
@@ -362,6 +410,9 @@ namespace OPEN_LRD.Skills
             return probability == 1.0 ? double.PositiveInfinity : -LogOnePlus(-probability) / rate;
         }
 
+        /// <summary>
+        /// Draws an exponentially distributed sample with rate using inverse transform sampling.
+        /// </summary>
         public static double ExponentialSample(Random random, double rate)
         {
             EnsureRandom(random);
@@ -369,6 +420,9 @@ namespace OPEN_LRD.Skills
             return -LogOnePlus(-random.NextDouble()) / rate;
         }
 
+        /// <summary>
+        /// Evaluates the continuous uniform probability density at x over [lower, upper].
+        /// </summary>
         public static double UniformPdf(double x, double lower, double upper)
         {
             EnsureFinite(x, nameof(x));
@@ -376,6 +430,9 @@ namespace OPEN_LRD.Skills
             return x < lower || x > upper ? 0.0 : 1.0 / (upper - lower);
         }
 
+        /// <summary>
+        /// Evaluates the continuous uniform cumulative distribution at x over [lower, upper].
+        /// </summary>
         public static double UniformCdf(double x, double lower, double upper)
         {
             EnsureFinite(x, nameof(x));
@@ -383,6 +440,9 @@ namespace OPEN_LRD.Skills
             return x <= lower ? 0.0 : x >= upper ? 1.0 : (x - lower) / (upper - lower);
         }
 
+        /// <summary>
+        /// Evaluates the beta probability density at x with alpha and beta.
+        /// </summary>
         public static double BetaPdf(double x, double alpha, double beta)
         {
             EnsurePositiveFinite(alpha, nameof(alpha));
@@ -405,7 +465,7 @@ namespace OPEN_LRD.Skills
                 - LogBeta(alpha, beta));
         }
         /// <summary>
-        /// Evaluates chi-squared PDF at x with degreesOfFreedom.
+        /// Evaluates the beta CDF at x with alpha and beta via the regularized incomplete beta function.
         /// </summary>
 
         public static double BetaCdf(double x, double alpha, double beta)
@@ -416,7 +476,7 @@ namespace OPEN_LRD.Skills
             return x <= 0.0 ? 0.0 : x >= 1.0 ? 1.0 : RegularizedIncompleteBeta(alpha, beta, x);
         }
         /// <summary>
-        /// Evaluates F-distribution PDF at x with numeratorDegreesOfFreedom and denominatorDegreesOfFreedom.
+        /// Evaluates the gamma PDF at x with shape and rate.
         /// </summary>
 
         public static double GammaPdf(double x, double shape, double rate)
@@ -438,7 +498,7 @@ namespace OPEN_LRD.Skills
                 - LogGamma(shape));
         }
         /// <summary>
-        /// Evaluates F-distribution CDF at x with numeratorDegreesOfFreedom and denominatorDegreesOfFreedom.
+        /// Evaluates the gamma CDF at x with shape and rate via the regularized lower incomplete gamma function.
         /// </summary>
 
         public static double GammaCdf(double x, double shape, double rate)
@@ -453,7 +513,7 @@ namespace OPEN_LRD.Skills
             return x > double.MaxValue / rate ? 1.0 : RegularizedGammaP(shape, rate * x);
         }
         /// <summary>
-        /// Computes a confidence interval for the mean of sample at confidenceLevel.
+        /// Evaluates the Student t PDF at x with degreesOfFreedom.
         /// </summary>
 
         public static double StudentTPdf(double x, double degreesOfFreedom)
@@ -466,6 +526,9 @@ namespace OPEN_LRD.Skills
                 - ((degreesOfFreedom + 1.0) / 2.0) * LogOnePlus(x * x / degreesOfFreedom));
         }
 
+        /// <summary>
+        /// Evaluates the Student t cumulative distribution at x with degreesOfFreedom.
+        /// </summary>
         public static double StudentTCdf(double x, double degreesOfFreedom)
         {
             if (double.IsNaN(x))
@@ -488,6 +551,9 @@ namespace OPEN_LRD.Skills
             return x >= 0.0 ? 1.0 - (0.5 * beta) : 0.5 * beta;
         }
 
+        /// <summary>
+        /// Evaluates the chi-square probability density at x with degreesOfFreedom.
+        /// </summary>
         public static double ChiSquarePdf(double x, double degreesOfFreedom)
         {
             EnsurePositiveFinite(degreesOfFreedom, nameof(degreesOfFreedom));
@@ -495,6 +561,9 @@ namespace OPEN_LRD.Skills
             return x < 0.0 ? 0.0 : GammaPdf(x, degreesOfFreedom / 2.0, 0.5);
         }
 
+        /// <summary>
+        /// Evaluates the chi-square cumulative distribution at x with degreesOfFreedom via the regularized lower incomplete gamma function.
+        /// </summary>
         public static double ChiSquareCdf(double x, double degreesOfFreedom)
         {
             EnsurePositiveFinite(degreesOfFreedom, nameof(degreesOfFreedom));
@@ -502,6 +571,9 @@ namespace OPEN_LRD.Skills
             return x <= 0.0 ? 0.0 : RegularizedGammaP(degreesOfFreedom / 2.0, x / 2.0);
         }
 
+        /// <summary>
+        /// Evaluates the F distribution probability density at x with the numerator and denominator degrees of freedom.
+        /// </summary>
         public static double FPdf(double x, double numeratorDegreesOfFreedom, double denominatorDegreesOfFreedom)
         {
             EnsurePositiveFinite(numeratorDegreesOfFreedom, nameof(numeratorDegreesOfFreedom));
@@ -524,6 +596,9 @@ namespace OPEN_LRD.Skills
             return Math.Exp(logValue);
         }
 
+        /// <summary>
+        /// Evaluates the F distribution cumulative distribution at x via the regularized incomplete beta function.
+        /// </summary>
         public static double FCdf(double x, double numeratorDegreesOfFreedom, double denominatorDegreesOfFreedom)
         {
             EnsurePositiveFinite(numeratorDegreesOfFreedom, nameof(numeratorDegreesOfFreedom));
@@ -539,7 +614,7 @@ namespace OPEN_LRD.Skills
             return RegularizedIncompleteBeta(d1 / 2.0, d2 / 2.0, transformed);
         }
         /// <summary>
-        /// Performs a proportion z-test for successes out of trials against nullProportion with tail.
+        /// Computes a t-based confidence interval for the mean of sample at confidenceLevel.
         /// </summary>
 
         public static ConfidenceInterval MeanConfidenceInterval(double[] sample, double confidenceLevel)
@@ -552,6 +627,9 @@ namespace OPEN_LRD.Skills
             return new ConfidenceInterval(mean, mean - critical * standardError, mean + critical * standardError, confidenceLevel);
         }
 
+        /// <summary>
+        /// Computes a Wilson score confidence interval for the proportion of successes out of trials at confidenceLevel.
+        /// </summary>
         public static ConfidenceInterval ProportionConfidenceInterval(int successes, int trials, double confidenceLevel)
         {
             if (trials < 1)
@@ -569,6 +647,9 @@ namespace OPEN_LRD.Skills
             return new ConfidenceInterval(proportion, Math.Max(0.0, center - margin), Math.Min(1.0, center + margin), confidenceLevel);
         }
 
+        /// <summary>
+        /// Computes a Welch t-based confidence interval for the difference in means of first and second at confidenceLevel.
+        /// </summary>
         public static ConfidenceInterval DifferenceInMeansConfidenceInterval(double[] first, double[] second, double confidenceLevel)
         {
             EnsureSample(first, 2, nameof(first));
@@ -586,6 +667,9 @@ namespace OPEN_LRD.Skills
             return new ConfidenceInterval(estimate, estimate - critical * standardError, estimate + critical * standardError, confidenceLevel);
         }
 
+        /// <summary>
+        /// Performs a one-sample z-test of sampleMean against nullMean with a known populationStandardDeviation and tail.
+        /// </summary>
         public static HypothesisTestResult OneSampleZTest(double sampleMean, double populationStandardDeviation, int sampleSize, double nullMean, TailType tail)
         {
             EnsureFinite(sampleMean, nameof(sampleMean));
@@ -596,6 +680,9 @@ namespace OPEN_LRD.Skills
             return BuildTest("One-sample z-test", statistic, double.PositiveInfinity, value => NormalCdf(value, 0.0, 1.0), tail);
         }
 
+        /// <summary>
+        /// Performs a one-sample t-test of sample against nullMean with tail.
+        /// </summary>
         public static HypothesisTestResult OneSampleTTest(double[] sample, double nullMean, TailType tail)
         {
             EnsureSample(sample, 2, nameof(sample));
@@ -605,6 +692,9 @@ namespace OPEN_LRD.Skills
             return BuildTest("One-sample t-test", statistic, degrees, value => StudentTCdf(value, degrees), tail);
         }
 
+        /// <summary>
+        /// Performs a paired t-test on the differences between before and after measurements with tail.
+        /// </summary>
         public static HypothesisTestResult PairedTTest(double[] before, double[] after, TailType tail)
         {
             EnsureSameLength(before, after, nameof(before), nameof(after), 2);
@@ -616,6 +706,9 @@ namespace OPEN_LRD.Skills
             return OneSampleTTest(differences, 0.0, tail) with { Name = "Paired t-test" };
         }
 
+        /// <summary>
+        /// Performs a two-sample t-test comparing the means of first and second, pooled when equalVariances is true and Welch's otherwise, with tail.
+        /// </summary>
         public static HypothesisTestResult TwoSampleTTest(double[] first, double[] second, bool equalVariances, TailType tail)
         {
             EnsureSample(first, 2, nameof(first));
@@ -643,7 +736,7 @@ namespace OPEN_LRD.Skills
             return BuildTest("Two-sample t-test", statistic, degrees, value => StudentTCdf(value, degrees), tail);
         }
         /// <summary>
-        /// Performs a one-way ANOVA across the supplied sample groups.
+        /// Performs a proportion z-test for successes out of trials against nullProportion with tail.
         /// </summary>
 
         public static HypothesisTestResult ProportionZTest(int successes, int trials, double nullProportion, TailType tail)
@@ -659,6 +752,9 @@ namespace OPEN_LRD.Skills
             return BuildTest("Proportion z-test", statistic, double.PositiveInfinity, value => NormalCdf(value, 0.0, 1.0), tail);
         }
 
+        /// <summary>
+        /// Performs a chi-square goodness-of-fit test of observed counts against expectedProportions.
+        /// </summary>
         public static HypothesisTestResult ChiSquareGoodnessOfFit(int[] observed, double[] expectedProportions)
         {
             if (observed == null)
@@ -702,6 +798,9 @@ namespace OPEN_LRD.Skills
             return new HypothesisTestResult("Chi-square goodness-of-fit", statistic, pValue, critical, degrees, pValue < 0.05);
         }
 
+        /// <summary>
+        /// Performs a chi-square test of independence on a contingency table of counts.
+        /// </summary>
         public static HypothesisTestResult ChiSquareIndependence(int[,] counts)
         {
             if (counts == null)
@@ -753,6 +852,9 @@ namespace OPEN_LRD.Skills
             return new HypothesisTestResult("Chi-square independence", statistic, pValue, ChiSquareQuantile(0.95, degrees), degrees, pValue < 0.05);
         }
 
+        /// <summary>
+        /// Performs a one-way ANOVA across the supplied groups.
+        /// </summary>
         public static AnovaResult OneWayAnova(params double[][] groups)
         {
             if (groups == null)
@@ -799,6 +901,9 @@ namespace OPEN_LRD.Skills
             return new AnovaResult(betweenVariance, withinVariance, statistic, pValue, pValue < 0.05);
         }
 
+        /// <summary>
+        /// Computes the posterior probability from prior, likelihood, and marginalLikelihood using Bayes' theorem.
+        /// </summary>
         public static double BayesTheorem(double prior, double likelihood, double marginalLikelihood)
         {
             EnsureProbability(prior, nameof(prior));
@@ -812,6 +917,9 @@ namespace OPEN_LRD.Skills
             return Math.Clamp(posterior, 0.0, 1.0);
         }
 
+        /// <summary>
+        /// Computes the posterior Beta alpha and beta parameters after observing successes and failures with a Beta prior.
+        /// </summary>
         public static (double Alpha, double Beta) BetaBinomialPosterior(int successes, int failures, double priorAlpha, double priorBeta)
         {
             if (successes < 0 || failures < 0)
@@ -823,6 +931,9 @@ namespace OPEN_LRD.Skills
             return (priorAlpha + successes, priorBeta + failures);
         }
 
+        /// <summary>
+        /// Computes the posterior mean and variance of a normal mean given a normal prior and known observationVariance.
+        /// </summary>
         public static (double Mean, double Variance) NormalNormalPosterior(double priorMean, double priorVariance, double[] observations, double observationVariance)
         {
             EnsureFinite(priorMean, nameof(priorMean));
@@ -834,6 +945,9 @@ namespace OPEN_LRD.Skills
             return (mean, 1.0 / precision);
         }
 
+        /// <summary>
+        /// Computes the posterior Gamma shape and rate after observing totalCount events over exposure with a Gamma prior.
+        /// </summary>
         public static (double Shape, double Rate) GammaPoissonPosterior(int totalCount, double exposure, double priorShape, double priorRate)
         {
             if (totalCount < 0)
@@ -846,6 +960,9 @@ namespace OPEN_LRD.Skills
             return (priorShape + totalCount, priorRate + exposure);
         }
 
+        /// <summary>
+        /// Fits a simple linear regression of y on x by ordinary least squares.
+        /// </summary>
         public static RegressionResult SimpleLinearRegression(double[] x, double[] y)
         {
             EnsureSameLength(x, y, nameof(x), nameof(y), 3);
@@ -873,6 +990,9 @@ namespace OPEN_LRD.Skills
             return BuildRegressionResult(design, y, new[] { intercept, slope });
         }
 
+        /// <summary>
+        /// Fits a multiple linear regression of response on designMatrix by least squares.
+        /// </summary>
         public static RegressionResult MultipleLinearRegression(double[,] designMatrix, double[] response)
         {
             if (designMatrix == null)
@@ -891,6 +1011,9 @@ namespace OPEN_LRD.Skills
             return BuildRegressionResult(designMatrix, response, leastSquares.Solution);
         }
 
+        /// <summary>
+        /// Fits a logistic regression of binary labels on designMatrix using damped Newton iterations scaled by learningRate.
+        /// </summary>
         public static RegressionResult LogisticRegression(double[,] designMatrix, int[] labels, double learningRate, int maxIterations)
         {
             if (designMatrix == null)
@@ -1008,6 +1131,9 @@ namespace OPEN_LRD.Skills
             return new RegressionResult(coefficients, pseudoRSquared, adjusted, standardError, covariance);
         }
 
+        /// <summary>
+        /// Builds regression statistics (R-squared, adjusted R-squared, standard error, and covariance) for fitted coefficients.
+        /// </summary>
         private static RegressionResult BuildRegressionResult(double[,] design, double[] response, double[] coefficients)
         {
             int rows = design.GetLength(0);
@@ -1043,6 +1169,9 @@ namespace OPEN_LRD.Skills
             return new RegressionResult(coefficients, rSquared, adjusted, Math.Sqrt(residualVariance), covarianceBase);
         }
 
+        /// <summary>
+        /// Builds a hypothesis test result from a statistic, its cumulative distribution function, and the requested tail.
+        /// </summary>
         private static HypothesisTestResult BuildTest(
             string name,
             double statistic,
@@ -1070,6 +1199,9 @@ namespace OPEN_LRD.Skills
             return new HypothesisTestResult(name, statistic, pValue, critical, degreesOfFreedom, pValue < significance);
         }
 
+        /// <summary>
+        /// Evaluates the Student t quantile (inverse CDF) at probability with degreesOfFreedom.
+        /// </summary>
         private static double StudentTQuantile(double probability, double degreesOfFreedom)
         {
             EnsureProbability(probability, nameof(probability));
@@ -1085,11 +1217,17 @@ namespace OPEN_LRD.Skills
             return Quantile(probability, value => StudentTCdf(value, degreesOfFreedom));
         }
 
+        /// <summary>
+        /// Evaluates the chi-square quantile (inverse CDF) at probability with degreesOfFreedom.
+        /// </summary>
         private static double ChiSquareQuantile(double probability, double degreesOfFreedom)
         {
             return Quantile(probability, value => ChiSquareCdf(value, degreesOfFreedom));
         }
 
+        /// <summary>
+        /// Numerically inverts cdf by bisection to find the value whose cumulative probability equals probability.
+        /// </summary>
         private static double Quantile(double probability, Func<double, double> cdf)
         {
             if (probability <= 0.0)
@@ -1125,6 +1263,9 @@ namespace OPEN_LRD.Skills
             return lower + (upper - lower) * 0.5;
         }
 
+        /// <summary>
+        /// Evaluates the standard normal quantile using a rational approximation refined by one Newton step.
+        /// </summary>
         private static double StandardNormalQuantile(double probability)
         {
             EnsureProbability(probability, nameof(probability));
@@ -1168,6 +1309,9 @@ namespace OPEN_LRD.Skills
             return result - error / NormalPdf(result, 0.0, 1.0);
         }
 
+        /// <summary>
+        /// Evaluates the complementary error function for value using a rational approximation.
+        /// </summary>
         private static double ErfcPositive(double value)
         {
             if (value == 0.0)
@@ -1188,6 +1332,9 @@ namespace OPEN_LRD.Skills
             return t * Math.Exp(-value * value + polynomial);
         }
 
+        /// <summary>
+        /// Evaluates the regularized upper incomplete gamma function Q(a, x) using its continued fraction expansion.
+        /// </summary>
         private static double GammaContinuedFractionQ(double a, double x)
         {
             double b = x + 1.0 - a;
@@ -1219,6 +1366,9 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("Regularized gamma continued fraction did not converge.");
         }
 
+        /// <summary>
+        /// Evaluates the continued fraction expansion used by the regularized incomplete beta function.
+        /// </summary>
         private static double BetaContinuedFraction(double a, double b, double x)
         {
             const double tiny = 1e-300;
@@ -1249,6 +1399,9 @@ namespace OPEN_LRD.Skills
             throw new InvalidOperationException("Incomplete beta continued fraction did not converge.");
         }
 
+        /// <summary>
+        /// Applies one step of the modified Lentz continued fraction update and returns the delta factor.
+        /// </summary>
         private static double UpdateBetaFraction(ref double c, ref double d, double coefficient)
         {
             const double tiny = 1e-300;
@@ -1266,11 +1419,17 @@ namespace OPEN_LRD.Skills
             return d * c;
         }
 
+        /// <summary>
+        /// Evaluates the natural logarithm of the beta function B(a, b).
+        /// </summary>
         private static double LogBeta(double a, double b)
         {
             return LogGamma(a) + LogGamma(b) - LogGamma(a + b);
         }
 
+        /// <summary>
+        /// Evaluates log(1 + value), using a series expansion for values near zero.
+        /// </summary>
         private static double LogOnePlus(double value)
         {
             if (value <= -1.0)
@@ -1291,6 +1450,9 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Evaluates exp(value) - 1, using a series expansion for values near zero.
+        /// </summary>
         private static double ExpMinusOne(double value)
         {
             if (Math.Abs(value) > 1e-5)
@@ -1307,16 +1469,25 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Evaluates the natural logarithm of the binomial coefficient n choose k.
+        /// </summary>
         private static double LogChoose(int n, int k)
         {
             return LogGamma(n + 1.0) - LogGamma(k + 1.0) - LogGamma(n - k + 1.0);
         }
 
+        /// <summary>
+        /// Computes the arithmetic mean of values.
+        /// </summary>
         private static double Mean(double[] values)
         {
             return Sum(values) / values.Length;
         }
 
+        /// <summary>
+        /// Computes the sum of values.
+        /// </summary>
         private static double Sum(double[] values)
         {
             double sum = 0.0;
@@ -1327,6 +1498,9 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Computes the sum of values, throwing on integer overflow.
+        /// </summary>
         private static int Sum(int[] values)
         {
             int sum = 0;
@@ -1337,6 +1511,9 @@ namespace OPEN_LRD.Skills
             return sum;
         }
 
+        /// <summary>
+        /// Computes the unbiased sample variance of values.
+        /// </summary>
         private static double SampleVariance(double[] values)
         {
             double mean = Mean(values);
@@ -1348,11 +1525,17 @@ namespace OPEN_LRD.Skills
             return sum / (values.Length - 1.0);
         }
 
+        /// <summary>
+        /// Computes the unbiased sample standard deviation of values.
+        /// </summary>
         private static double SampleStandardDeviation(double[] values)
         {
             return Math.Sqrt(SampleVariance(values));
         }
 
+        /// <summary>
+        /// Computes the logistic sigmoid of value in a numerically stable manner.
+        /// </summary>
         private static double StableSigmoid(double value)
         {
             if (value >= 0.0)
@@ -1364,6 +1547,9 @@ namespace OPEN_LRD.Skills
             return negativeExp / (1.0 + negativeExp);
         }
 
+        /// <summary>
+        /// Validates that values is non-null, has at least minimumLength elements, and contains only finite values.
+        /// </summary>
         private static void EnsureSample(double[] values, int minimumLength, string parameterName)
         {
             if (values == null)
@@ -1380,6 +1566,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates both samples and that they have equal lengths.
+        /// </summary>
         private static void EnsureSameLength(double[] first, double[] second, string firstName, string secondName, int minimumLength)
         {
             EnsureSample(first, minimumLength, firstName);
@@ -1390,6 +1579,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that every element of matrix is finite.
+        /// </summary>
         private static void EnsureMatrixFinite(double[,] matrix, string parameterName)
         {
             for (int row = 0; row < matrix.GetLength(0); row++)
@@ -1401,6 +1593,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates binomial arguments: non-negative trials, successes within [0, trials], and probability within [0, 1].
+        /// </summary>
         private static void ValidateBinomial(int successes, int trials, double probability)
         {
             if (trials < 0)
@@ -1414,6 +1609,9 @@ namespace OPEN_LRD.Skills
             EnsureProbability(probability, nameof(probability));
         }
 
+        /// <summary>
+        /// Validates that lower and upper are finite and that upper exceeds lower.
+        /// </summary>
         private static void ValidateUniform(double lower, double upper)
         {
             EnsureFinite(lower, nameof(lower));
@@ -1424,6 +1622,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates gamma function arguments: a must be positive and finite, and x must be finite and non-negative.
+        /// </summary>
         private static void ValidateGammaArguments(double a, double x)
         {
             EnsurePositiveFinite(a, nameof(a));
@@ -1434,6 +1635,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates beta function arguments: a and b must be positive and finite, and x must lie in [0, 1].
+        /// </summary>
         private static void ValidateBetaArguments(double a, double b, double x)
         {
             EnsurePositiveFinite(a, nameof(a));
@@ -1445,6 +1649,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that sampleSize is at least one.
+        /// </summary>
         private static void EnsureSampleSize(int sampleSize)
         {
             if (sampleSize < 1)
@@ -1453,6 +1660,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that confidenceLevel is finite and within (0, 1).
+        /// </summary>
         private static void EnsureConfidenceLevel(double confidenceLevel)
         {
             if (!double.IsFinite(confidenceLevel) || confidenceLevel <= 0.0 || confidenceLevel >= 1.0)
@@ -1461,6 +1671,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that probability is finite and within [0, 1].
+        /// </summary>
         private static void EnsureProbability(double probability, string parameterName)
         {
             if (!double.IsFinite(probability) || probability < 0.0 || probability > 1.0)
@@ -1469,6 +1682,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that value is finite and strictly positive.
+        /// </summary>
         private static void EnsurePositiveFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value) || value <= 0.0)
@@ -1477,6 +1693,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that value is finite.
+        /// </summary>
         private static void EnsureFinite(double value, string parameterName)
         {
             if (!double.IsFinite(value))
@@ -1485,6 +1704,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that random is not null.
+        /// </summary>
         private static void EnsureRandom(Random random)
         {
             if (random == null)
@@ -1493,6 +1715,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Validates that tail is a defined TailType value.
+        /// </summary>
         private static void EnsureTail(TailType tail)
         {
             if (tail != TailType.TwoSided && tail != TailType.Upper && tail != TailType.Lower)
@@ -1501,6 +1726,9 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>
+        /// Clamps value to the range [0, 1].
+        /// </summary>
         private static double ClampProbability(double value)
         {
             return Math.Clamp(value, 0.0, 1.0);
