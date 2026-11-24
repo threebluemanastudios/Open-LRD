@@ -16,6 +16,7 @@ namespace OPEN_LRD.SmokeTests
                 string.Equals(Environment.GetEnvironmentVariable("OPEN_LRD_RUN_SCALE_GATE"), "1", StringComparison.OrdinalIgnoreCase);
 
             CoreIdentityTests.RunAll();
+            GraphSynchronizationStressTests.RunAll();
             CoreNodeGraphTests.RunAll(runScaleGate);
             NodeDerivationTests.RunAll();
             CoreDiskStreamingTests.RunAll();

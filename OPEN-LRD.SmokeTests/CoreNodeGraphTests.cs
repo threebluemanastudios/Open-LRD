@@ -912,12 +912,21 @@ namespace OPEN_LRD.SmokeTests
             };
         }
 
+        // Pass/fail budgets for the 10k-node/100k-link scale gate. Calibrated from measured runs
+        // (provenance ~0.13ms, incremental ~0.6ms, full recalc ~290ms, checkpoint write ~1.6s) with
+        // roughly 3x headroom. Set OPEN_LRD_SCALE_BUDGET_MULTIPLIER (e.g. 2.0) to loosen them on slower hosts.
+        private const double ScaleProvenanceLookupBudgetMs = 5.0;
+        private const double ScaleIncrementalUpdateBudgetMs = 5.0;
+        private const double ScaleFullPresentationRecalcBudgetMs = 1000.0;
+        private const double ScaleCheckpointWriteBudgetMs = 5000.0;
+
         internal static Action RunSeededScaleCalibrationGate(int targetNodeCount = 10_000, int targetLinkCount = 100_000)
         {
             return () =>
             {
                 LRD_Core core = LRD_Core.Instance;
                 ResetCore();
+                int baselineLinkCount = core.GetTrustedLinkCount();
                 Random rng = new Random(42);
                 string directory = Path.Combine(Path.GetTempPath(), "open-lrd-scale-gate-" + Guid.NewGuid().ToString("N"));
                 try
@@ -967,6 +976,11 @@ namespace OPEN_LRD.SmokeTests
                         }
                     }
 
+                    Program.Assert(core.GetTrustedNodeCount() == targetNodeCount,
+                        $"Scale gate should seed exactly {targetNodeCount} trusted nodes.");
+                    Program.Assert(core.GetTrustedLinkCount() - baselineLinkCount == targetLinkCount,
+                        $"Scale gate should add exactly {targetLinkCount} seeded links on top of the baseline.");
+
                     // 1. O(1) link lookup & reverse provenance lookup
                     Stopwatch provenanceLookupTimer = Stopwatch.StartNew();
                     List<NodeLink> byProvenance = core.GetTrustedLinksByProvenanceTarget(primarySourceId);
@@ -992,11 +1006,28 @@ namespace OPEN_LRD.SmokeTests
                     core.StreamTrustedDictionariesToDisk(directory);
                     checkpointWriteTimer.Stop();
 
+                    Program.Assert(Directory.Exists(directory) && Directory.GetFiles(directory).Length > 0,
+                        "Scale gate checkpoint should be written to disk.");
+
+                    double multiplier = ScaleGateBudgetMultiplier();
+                    double provenanceMs = provenanceLookupTimer.Elapsed.TotalMilliseconds;
+                    double incrementalMs = incrementalUpdateTimer.Elapsed.TotalMilliseconds;
+                    double fullRecalcMs = fullRecalcTimer.Elapsed.TotalMilliseconds;
+                    double checkpointMs = checkpointWriteTimer.Elapsed.TotalMilliseconds;
+
                     Console.WriteLine($"SCALE GATE (Random(42)) nodes={core.GetTrustedNodeCount()} links={core.GetTrustedLinkCount()} " +
-                        $"provenanceLookupMs={provenanceLookupTimer.Elapsed.TotalMilliseconds:F3} " +
-                        $"incrementalUpdateMs={incrementalUpdateTimer.Elapsed.TotalMilliseconds:F3} " +
-                        $"fullPresentationRecalcMs={fullRecalcTimer.Elapsed.TotalMilliseconds:F3} " +
-                        $"checkpointWriteMs={checkpointWriteTimer.Elapsed.TotalMilliseconds:F3}");
+                        $"provenanceLookupMs={provenanceMs:F3}/{ScaleProvenanceLookupBudgetMs * multiplier:F1} " +
+                        $"incrementalUpdateMs={incrementalMs:F3}/{ScaleIncrementalUpdateBudgetMs * multiplier:F1} " +
+                        $"fullPresentationRecalcMs={fullRecalcMs:F3}/{ScaleFullPresentationRecalcBudgetMs * multiplier:F1} " +
+                        $"checkpointWriteMs={checkpointMs:F3}/{ScaleCheckpointWriteBudgetMs * multiplier:F1} (budgets, multiplier {multiplier:F2})");
+
+                    List<string> violations = new List<string>();
+                    AddBudgetViolation(violations, "provenance lookup", provenanceMs, ScaleProvenanceLookupBudgetMs * multiplier);
+                    AddBudgetViolation(violations, "incremental link weight update", incrementalMs, ScaleIncrementalUpdateBudgetMs * multiplier);
+                    AddBudgetViolation(violations, "full presentation recalculation", fullRecalcMs, ScaleFullPresentationRecalcBudgetMs * multiplier);
+                    AddBudgetViolation(violations, "checkpoint write", checkpointMs, ScaleCheckpointWriteBudgetMs * multiplier);
+                    Program.Assert(violations.Count == 0,
+                        "Scale gate budget exceeded: " + string.Join("; ", violations));
                 }
                 finally
                 {
@@ -1004,6 +1035,23 @@ namespace OPEN_LRD.SmokeTests
                     if (Directory.Exists(directory)) Directory.Delete(directory, true);
                 }
             };
+        }
+
+        private static double ScaleGateBudgetMultiplier()
+        {
+            string? raw = Environment.GetEnvironmentVariable("OPEN_LRD_SCALE_BUDGET_MULTIPLIER");
+            return double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value)
+                && value > 0 && !double.IsInfinity(value) && !double.IsNaN(value)
+                ? value
+                : 1.0;
+        }
+
+        private static void AddBudgetViolation(List<string> violations, string operation, double measuredMs, double budgetMs)
+        {
+            if (measuredMs > budgetMs)
+            {
+                violations.Add($"{operation} took {measuredMs:F3}ms (budget {budgetMs:F1}ms)");
+            }
         }
 
         private static LexicalFixture BuildLexicalChain()

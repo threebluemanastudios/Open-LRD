@@ -1,11 +1,14 @@
 Core Refinement Implementation
-Date: 2026-11-22
+Date: 2026-11-22 (progress updated 2026-11-23)
 Scope: source in OPEN-LRD / OPEN-LRD.SmokeTests
 
 STATUS
 ------
 Still not fully/properly implemented. Substantially implemented (~85-90%), 
 but several checklist items are only partially complete.
+Progress 2026-11-23: concurrency stress tests and enforced scale-gate budgets
+added (gap 2 / remaining work items 2-3). Smoke suite: 232 passed, 0 failed by
+default; 233 passed, 0 failed with --scale (scale gate included).
 
 
 CONFIRMED GAPS
@@ -36,15 +39,19 @@ Explicit Null Checks: Prevents NullReferenceException inside the lock block if a
 
 
 
-2. Concurrency and performance gates incomplete.
-   - No parallel read/query workload, mutation-burst, or snapshot-consumer stress
-     tests around GraphSynchronization. Only write-side races exist in
-     OPEN-LRD.SmokeTests/CoreIdentityTests.cs:74-81 and :373-435 (concurrent init,
-     32-way adds, duplicate promotions).
-   - The Random(42) 10k-node/100k-link harness exists
-     (OPEN-LRD.SmokeTests/CoreNodeGraphTests.cs:915-1007) but only PRINTS timings
-     (around :995-999). There is no assertion against any threshold/budget, so
-      "agree pass/fail thresholds" is not implemented.
+2. Concurrency and performance gates. [DONE]
+   - GraphSynchronization stress tests added in
+     OPEN-LRD.SmokeTests/GraphSynchronizationStressTests.cs: parallel readers,
+     mutation bursts (with monitor threads), snapshot consumers, and snapshot
+     immutability under mutation. Worker threads are joined with a timeout so a
+     deadlock fails the test instead of hanging. Verified to detect a removed lock
+     (3 of 4 tests fail; the read-only test is expected to pass).
+   - The Random(42) 10k-node/100k-link scale gate
+     (OPEN-LRD.SmokeTests/CoreNodeGraphTests.cs, RunSeededScaleCalibrationGate,
+     run with --scale) now enforces budgets: provenance lookup 5 ms, incremental
+     weight update 5 ms, full presentation recalc 1000 ms, checkpoint write 5000 ms.
+     OPEN_LRD_SCALE_BUDGET_MULTIPLIER scales the budgets. It also asserts exact
+     node/link counts and that the checkpoint was written.
 
 3. Compact/upgrade failure paths not exercised.
    - CompactTrustedDiskStore is simply FlushTrustedDiskStore
@@ -124,9 +131,9 @@ WHAT IS SOLID (verified in source and tests)
 RECOMMENDED REMAINING WORK (to make the plan truly complete)
 ------------------------------------------------------------
 1. Add thread-safety/mutability contracts (GraphSynchronization).
-2. Add GraphSynchronization concurrency stress tests: parallel readers, mutation
+2. [DONE] Add GraphSynchronization concurrency stress tests: parallel readers, mutation
    bursts, and snapshot consumers.
-3. Make the scale gate enforce pass/fail thresholds.
+3. [DONE] Make the scale gate enforce pass/fail thresholds.
 4. Add failed-compact and failed-upgrade original-store-preservation tests; add
    index/partition-header corruption tests.
 5. Finish incremental hashing for index partitions; extend paging to
