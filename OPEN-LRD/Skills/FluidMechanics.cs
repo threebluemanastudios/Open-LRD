@@ -13,32 +13,20 @@ namespace OPEN_LRD.Skills
             EnsurePositive(density, nameof(density));
             EnsureNonNegative(gravity, nameof(gravity));
             EnsureNonNegative(depth, nameof(depth));
-        /// <summary>
-        /// Computes buoyant force from fluidDensity, gravity, and displacedVolume.
-        /// </summary>
             return surfacePressure + density * gravity * depth;
         }
 
         public static double BuoyantForce(double fluidDensity, double gravity, double displacedVolume)
         {
-        /// <summary>
-        /// Computes mass flow rate from density and volumetricFlowRate.
-        /// </summary>
             EnsurePositive(fluidDensity, nameof(fluidDensity));
             EnsureNonNegative(gravity, nameof(gravity));
             EnsureNonNegative(displacedVolume, nameof(displacedVolume));
             return fluidDensity * gravity * displacedVolume;
-        /// <summary>
-        /// Computes outlet flow velocity from inletArea, inletVelocity, and outletArea.
-        /// </summary>
         }
 
         public static double MassFlowRate(double density, double volumetricFlowRate)
         {
             EnsurePositive(density, nameof(density));
-        /// <summary>
-        /// Computes pressure via Bernoulli's equation from referencePressure, density, referenceSpeed, speed, elevationChange, and gravity.
-        /// </summary>
             EnsureNonNegative(volumetricFlowRate, nameof(volumetricFlowRate));
             return density * volumetricFlowRate;
         }
@@ -53,36 +41,24 @@ namespace OPEN_LRD.Skills
 
         public static double BernoulliPressure(double referencePressure, double density, double referenceSpeed, double speed, double elevationChange, double gravity)
         {
-        /// <summary>
-        /// Computes Reynolds number from density, speed, characteristicLength, and dynamicViscosity.
-        /// </summary>
             EnsureNonNegative(referencePressure, nameof(referencePressure));
             EnsurePositive(density, nameof(density));
             EnsureNonNegative(referenceSpeed, nameof(referenceSpeed));
             EnsureNonNegative(speed, nameof(speed));
             EnsureFinite(elevationChange, nameof(elevationChange));
             EnsureNonNegative(gravity, nameof(gravity));
-        /// <summary>
-        /// Computes Hagen-Poiseuille laminar flow rate from radius, pressureDrop, pipeLength, and dynamicViscosity.
-        /// </summary>
             double pressure = referencePressure + 0.5 * density * (referenceSpeed * referenceSpeed - speed * speed)
                 - density * gravity * elevationChange;
             if (!double.IsFinite(pressure) || pressure < 0.0)
             {
                 throw new InvalidOperationException("Bernoulli model produced a negative or non-finite absolute pressure.");
             }
-        /// <summary>
-        /// Computes drag force from dragCoefficient, density, speed, and referenceArea.
-        /// </summary>
             return pressure;
         }
 
         public static double ReynoldsNumber(double density, double speed, double characteristicLength, double dynamicViscosity)
         {
             EnsurePositive(density, nameof(density));
-        /// <summary>
-        /// Computes Darcy-Weisbach pressure drop from frictionFactor, density, speed, pipeLength, and diameter.
-        /// </summary>
             EnsureNonNegative(speed, nameof(speed));
             EnsurePositive(characteristicLength, nameof(characteristicLength));
             EnsurePositive(dynamicViscosity, nameof(dynamicViscosity));

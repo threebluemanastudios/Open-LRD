@@ -111,7 +111,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="firstVariable">The first variable.</param>
         /// <param name="secondVariable">The second variable.</param>
@@ -152,7 +151,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="xVariable">The x variable.</param>
         /// <param name="yVariable">The y variable.</param>
@@ -172,7 +170,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="xVariable">The x variable.</param>
@@ -382,7 +379,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -403,7 +399,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -1191,7 +1186,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="field">The field.</param>
         /// <param name="curve">The curve.</param>
         /// <param name="lower">The lower.</param>
@@ -1203,7 +1197,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="function">The function.</param>
         /// <param name="x">The x.</param>
@@ -1249,7 +1242,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="derivative">The derivative.</param>
         /// <param name="xStart">The x start.</param>
         /// <param name="yStart">The y start.</param>
@@ -1277,7 +1269,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="derivative">The derivative.</param>
         /// <param name="xStart">The x start.</param>
@@ -1310,7 +1301,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="derivative">The derivative.</param>
         /// <param name="xStart">The x start.</param>
         /// <param name="yStart">The y start.</param>
@@ -1342,7 +1332,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="derivative">The derivative.</param>
         /// <param name="start">The start.</param>

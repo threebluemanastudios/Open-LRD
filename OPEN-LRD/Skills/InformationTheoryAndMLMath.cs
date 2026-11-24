@@ -53,9 +53,6 @@ namespace OPEN_LRD.Skills
                     result -= probability * Math.Log2(probability);
                 }
             }
-        /// <summary>
-        /// Computes joint Shannon entropy from jointProbabilities.
-        /// </summary>
             return result;
         }
 
@@ -67,9 +64,6 @@ namespace OPEN_LRD.Skills
             {
                 if (probability > 0.0)
                 {
-        /// <summary>
-        /// Computes conditional entropy from jointProbabilities.
-        /// </summary>
                     entropy -= probability * Math.Log2(probability);
                 }
             }
@@ -83,9 +77,6 @@ namespace OPEN_LRD.Skills
             int columns = jointProbabilities.GetLength(1);
             double[] rowMarginals = new double[rows];
             for (int row = 0; row < rows; row++)
-        /// <summary>
-        /// Computes mutual information from jointProbabilities.
-        /// </summary>
             {
                 for (int column = 0; column < columns; column++)
                 {
@@ -113,9 +104,6 @@ namespace OPEN_LRD.Skills
             double result = 0.0;
             for (int row = 0; row < rows; row++)
             {
-        /// <summary>
-        /// Computes Kullback-Leibler divergence between first and second distributions.
-        /// </summary>
                 for (int column = 0; column < columns; column++)
                 {
                     double probability = jointProbabilities[row, column];
@@ -134,9 +122,6 @@ namespace OPEN_LRD.Skills
             ValidateProbabilityVector(second, nameof(second));
             EnsureSameLength(first, second, nameof(second));
             double result = 0.0;
-        /// <summary>
-        /// Computes Jensen-Shannon divergence between first and second distributions.
-        /// </summary>
             for (int index = 0; index < first.Length; index++)
             {
                 if (first[index] == 0.0)
@@ -147,9 +132,6 @@ namespace OPEN_LRD.Skills
                 {
                     throw new ArgumentException("KL divergence is infinite when the first distribution assigns mass where the second assigns zero.", nameof(second));
                 }
-        /// <summary>
-        /// Computes cross-entropy between actual and predicted distributions.
-        /// </summary>
                 result += first[index] * Math.Log2(first[index] / second[index]);
             }
             return Math.Max(0.0, result);
@@ -163,9 +145,6 @@ namespace OPEN_LRD.Skills
             double[] midpoint = new double[first.Length];
             for (int index = 0; index < midpoint.Length; index++)
             {
-        /// <summary>
-        /// Evaluates the logistic sigmoid function at value.
-        /// </summary>
                 midpoint[index] = 0.5 * (first[index] + second[index]);
             }
             return 0.5 * KlDivergence(first, midpoint) + 0.5 * KlDivergence(second, midpoint);
@@ -175,9 +154,6 @@ namespace OPEN_LRD.Skills
         {
             ValidateProbabilityVector(actual, nameof(actual));
             ValidateProbabilityVector(predicted, nameof(predicted));
-        /// <summary>
-        /// Evaluates the logistic sigmoid function at value.
-        /// </summary>
             EnsureSameLength(actual, predicted, nameof(predicted));
             double result = 0.0;
             for (int index = 0; index < actual.Length; index++)
@@ -186,9 +162,6 @@ namespace OPEN_LRD.Skills
                 {
                     result -= actual[index] * Math.Log2(Math.Max(predicted[index], CrossEntropyFloor));
                 }
-        /// <summary>
-        /// Computes softmax probabilities across values.
-        /// </summary>
             }
             return result;
         }
@@ -208,15 +181,9 @@ namespace OPEN_LRD.Skills
         public static double[] Sigmoid(double[] values)
         {
             EnsureVector(values, nameof(values));
-        /// <summary>
-        /// Evaluates the ReLU activation function at value.
-        /// </summary>
             double[] result = new double[values.Length];
             for (int index = 0; index < values.Length; index++)
             {
-        /// <summary>
-        /// Evaluates the Leaky ReLU activation function at value with negative slope alpha.
-        /// </summary>
                 result[index] = Sigmoid(values[index]);
             }
             return result;
@@ -224,28 +191,16 @@ namespace OPEN_LRD.Skills
 
         public static double[] Softmax(double[] values)
         {
-        /// <summary>
-        /// Evaluates the hyperbolic tangent activation function at value.
-        /// </summary>
             EnsureVector(values, nameof(values));
             double maximum = values[0];
             foreach (double value in values)
-        /// <summary>
-        /// Evaluates the GELU activation function at value.
-        /// </summary>
             {
                 maximum = Math.Max(maximum, value);
             }
             double[] result = new double[values.Length];
-        /// <summary>
-        /// Evaluates the softplus activation function at value.
-        /// </summary>
             double sum = 0.0;
             for (int index = 0; index < values.Length; index++)
             {
-        /// <summary>
-        /// Computes mean squared error between actual and predicted arrays.
-        /// </summary>
                 result[index] = Math.Exp(values[index] - maximum);
                 sum += result[index];
             }
@@ -266,17 +221,11 @@ namespace OPEN_LRD.Skills
         }
 
         public static double LeakyRelu(double value, double alpha)
-        /// <summary>
-        /// Computes binary cross-entropy loss for scalar actual and predicted values.
-        /// </summary>
         {
             EnsureFinite(value, nameof(value));
             if (!double.IsFinite(alpha) || alpha < 0.0)
             {
                 throw new ArgumentOutOfRangeException(nameof(alpha));
-        /// <summary>
-        /// Computes categorical cross-entropy loss between actual and predicted vectors.
-        /// </summary>
             }
             return value >= 0.0 ? value : alpha * value;
         }
@@ -290,9 +239,6 @@ namespace OPEN_LRD.Skills
         public static double Gelu(double value)
         {
             EnsureFinite(value, nameof(value));
-        /// <summary>
-        /// Computes hinge loss with margin for actual and predicted values.
-        /// </summary>
             double scale = Math.Sqrt(2.0 / Math.PI);
             return 0.5 * value * (1.0 + Math.Tanh(scale * (value + 0.044715 * value * value * value)));
         }
@@ -333,9 +279,6 @@ namespace OPEN_LRD.Skills
         {
             EnsureProbability(actual, nameof(actual));
             EnsureProbability(predicted, nameof(predicted));
-        /// <summary>
-        /// Computes binary classification metrics from actual and predicted labels for positiveLabel.
-        /// </summary>
             double bounded = Math.Clamp(predicted, CrossEntropyFloor, 1.0 - CrossEntropyFloor);
             return -(actual * Math.Log(bounded) + (1.0 - actual) * Math.Log(1.0 - bounded));
         }
@@ -344,9 +287,6 @@ namespace OPEN_LRD.Skills
         {
             ValidateProbabilityVector(actual, nameof(actual));
             ValidateProbabilityVector(predicted, nameof(predicted));
-        /// <summary>
-        /// Computes ROC-AUC from scores and labels.
-        /// </summary>
             EnsureSameLength(actual, predicted, nameof(predicted));
             double result = 0.0;
             for (int index = 0; index < actual.Length; index++)
@@ -423,9 +363,6 @@ namespace OPEN_LRD.Skills
                 {
                     throw new ArgumentOutOfRangeException(nameof(labels), "ROC labels must be zero or one.");
                 }
-        /// <summary>
-        /// Computes cosine similarity between vectors first and second.
-        /// </summary>
                 positives += label;
             }
             int negatives = labels.Length - positives;
@@ -478,9 +415,6 @@ namespace OPEN_LRD.Skills
                 {
                     double maximum = 0.0;
                     for (int index = 0; index < first.Length; index++)
-        /// <summary>
-        /// Standardizes columns or features of data to zero mean and unit variance.
-        /// </summary>
                     {
                         maximum = Math.Max(maximum, Math.Abs(first[index] - second[index]));
                     }
@@ -514,9 +448,6 @@ namespace OPEN_LRD.Skills
             }
             double dot = 0.0;
             double firstNorm = 0.0;
-        /// <summary>
-        /// Computes Principal Component Analysis on data for components principal axes.
-        /// </summary>
             double secondNorm = 0.0;
             for (int index = 0; index < first.Length; index++)
             {

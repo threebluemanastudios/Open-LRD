@@ -28,6 +28,7 @@ namespace OPEN_LRD.Skills
     }
 
     /// <summary>Describes the deterministic capability and signature metadata of a dispatchable function.</summary>
+    internal readonly record struct FunctionCapabilityMetadata(
         string FunctionKey,
         string MethodName,
         IReadOnlyList<Type> ParameterTypes,
@@ -76,19 +77,19 @@ namespace OPEN_LRD.Skills
         private static readonly IReadOnlyList<FunctionDescriptor> ScalarFunctions = BuildScalarFunctionRegistry();
 
         /// <summary>Returns stable diagnostics for allowlisted methods excluded from function dispatch.</summary>
-        /// <summary>Returns stable diagnostics for allowlisted methods excluded from function dispatch.</summary>
         public static IReadOnlyList<string> GetDiscoveryDiagnostics() => DiscoveryRejections.AsReadOnly();
 
         /// <summary>Returns deterministic capability metadata for all registered dispatchable functions.</summary>
+        public static IReadOnlyList<FunctionCapabilityMetadata> GetFunctionCapabilities() =>
             Functions.Select(f => new FunctionCapabilityMetadata(f.Key, f.Name, f.ParameterTypes, f.ReturnType, IsDeterministicFunctionKey(f.Key, f.Method)))
                      .ToList()
                      .AsReadOnly();
 
         /// <summary>Returns whether a function key resolves to a deterministic function eligible for trust promotion.</summary>
-        /// <summary>Returns whether a function key resolves to a deterministic function eligible for trust promotion.</summary>
         public static bool IsDeterministicFunction(string? functionKey) => IsDeterministicFunctionKey(functionKey);
 
         /// <summary>Configures deterministic capability override for a function key during runtime or staged reasoning workflows.</summary>
+        public static void ConfigureDeterministicFunction(string functionKey, bool isDeterministic)
         {
             if (string.IsNullOrWhiteSpace(functionKey))
                 throw new ArgumentException("A function key is required.", nameof(functionKey));
@@ -112,7 +113,6 @@ namespace OPEN_LRD.Skills
             }
         }
 
-        /// <summary>Dispatches a FunctionBox definition and stores the successful result if its revision is unchanged.</summary>
         /// <summary>Dispatches a FunctionBox definition and stores the successful result if its revision is unchanged.</summary>
         public static FunctionResult Dispatch(FunctionBox functionBox)
         {
@@ -292,6 +292,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>Resolves an alias or unqualified function name to its stable registry key.</summary>
+        public static string ResolveFunctionKey(
             string? functionKey,
             IReadOnlyList<FunctionVariable> variables,
             Type expectedResultType,
@@ -303,7 +304,6 @@ namespace OPEN_LRD.Skills
                 NormalizeOptionalText(expectedResultUnitTitle)).Key;
         }
 
-        /// <summary>Dispatches the best matching registered overload for typed arguments and expected output.</summary>
         /// <summary>Dispatches the best matching registered overload for typed arguments and expected output.</summary>
         public static FunctionResult Dispatch(
             string functionKey,
@@ -333,6 +333,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>Dispatches a named overload using runtime argument types; null arguments require typed variables.</summary>
+        public static FunctionResult Dispatch(string functionKey, Type expectedResultType, params object?[] values)
         {
             if (values == null)
             {
@@ -352,7 +353,6 @@ namespace OPEN_LRD.Skills
             return Dispatch(functionKey, variables, expectedResultType);
         }
 
-        /// <summary>Dispatches a named overload and returns its value as <typeparamref name="T"/>.</summary>
         /// <summary>Dispatches a named overload and returns its value as <typeparamref name="T"/>.</summary>
         public static T Dispatch<T>(string functionKey, params object?[] values)
         {

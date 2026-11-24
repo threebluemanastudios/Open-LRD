@@ -410,7 +410,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="launchHeight">The launch height.</param>
         /// <param name="verticalSpeed">The vertical speed.</param>
         /// <param name="horizontalSpeed">The horizontal speed.</param>

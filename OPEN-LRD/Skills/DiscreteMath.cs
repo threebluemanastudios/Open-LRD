@@ -539,7 +539,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="remainders">The remainders.</param>
         /// <param name="moduli">The moduli.</param>
         /// <returns>The result.</returns>
@@ -550,7 +549,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="remainders">The remainders.</param>
         /// <param name="moduli">The moduli.</param>

@@ -248,7 +248,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the inverse hyperbolic tangent of a double-precision value (|value| < 1).
+        /// Computes the inverse hyperbolic tangent of a double-precision value (|value| &lt; 1).
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -262,7 +262,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the inverse hyperbolic tangent of a single-precision value (|value| < 1).
+        /// Computes the inverse hyperbolic tangent of a single-precision value (|value| &lt; 1).
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -557,7 +557,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngle">The known angle.</param>
         /// <param name="targetSide">The target side.</param>
@@ -573,7 +572,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngle">The known angle.</param>
         /// <param name="targetSide">The target side.</param>
@@ -585,7 +583,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngleDegrees">The known angle degrees.</param>
         /// <param name="targetSide">The target side.</param>
@@ -596,7 +593,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="knownSide">The known side.</param>
         /// <param name="knownAngleDegrees">The known angle degrees.</param>
@@ -1323,7 +1319,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="baseLength">The base length.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -1336,7 +1331,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="baseLength">The base length.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -1346,7 +1340,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -1360,7 +1353,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
         /// <returns>The result.</returns>
@@ -1370,7 +1362,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="baseA">The base a.</param>
         /// <param name="baseB">The base b.</param>
@@ -1386,7 +1377,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="baseA">The base a.</param>
         /// <param name="baseB">The base b.</param>
         /// <param name="height">The height.</param>
@@ -1397,7 +1387,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="diagonalA">The diagonal a.</param>
         /// <param name="diagonalB">The diagonal b.</param>
@@ -1411,7 +1400,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="diagonalA">The diagonal a.</param>
         /// <param name="diagonalB">The diagonal b.</param>
         /// <returns>The result.</returns>
@@ -1421,7 +1409,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -1433,7 +1420,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
         public static float CalculateRhombusPerimeter(float side)
@@ -1442,7 +1428,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1456,7 +1441,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
         /// <returns>The result.</returns>
@@ -1466,7 +1450,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1480,7 +1463,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
         /// <returns>The result.</returns>
@@ -1490,7 +1472,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
@@ -1504,7 +1485,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="sides">The sides.</param>
         /// <param name="sideLength">The side length.</param>
         /// <returns>The result.</returns>
@@ -1514,7 +1494,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="semiMajorAxis">The semi major axis.</param>
         /// <param name="semiMinorAxis">The semi minor axis.</param>
@@ -1528,7 +1507,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="semiMajorAxis">The semi major axis.</param>
         /// <param name="semiMinorAxis">The semi minor axis.</param>
         /// <returns>The result.</returns>
@@ -1538,7 +1516,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="semiMajorAxis">The semi major axis.</param>
         /// <param name="semiMinorAxis">The semi minor axis.</param>
@@ -1552,7 +1529,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="semiMajorAxis">The semi major axis.</param>
         /// <param name="semiMinorAxis">The semi minor axis.</param>
         /// <returns>The result.</returns>
@@ -1562,7 +1538,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
@@ -1585,7 +1560,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="sideA">The side a.</param>
         /// <param name="sideB">The side b.</param>
         /// <param name="sideC">The side c.</param>
@@ -1597,7 +1571,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1613,7 +1586,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
         /// <param name="x2">The x2.</param>
@@ -1625,7 +1597,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1644,7 +1615,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
         /// <param name="z1">The z1.</param>
@@ -1659,7 +1629,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
         /// <param name="x2">The x2.</param>
@@ -1672,7 +1641,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
         /// <param name="x2">The x2.</param>
@@ -1684,7 +1652,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1700,7 +1667,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
         /// <param name="z1">The z1.</param>
@@ -1714,7 +1680,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1732,7 +1697,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
         /// <param name="x2">The x2.</param>
@@ -1744,7 +1708,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1759,7 +1722,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
         /// <param name="x2">The x2.</param>
@@ -1771,7 +1733,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x1">The first x coordinate.</param>
         /// <param name="y1">The first y coordinate.</param>
@@ -1792,7 +1753,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The first x coordinate.</param>
         /// <param name="y1">The first y coordinate.</param>
         /// <param name="x2">The second x coordinate.</param>
@@ -1804,7 +1764,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -1823,7 +1782,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
         /// <param name="a">The a.</param>
@@ -1836,7 +1794,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
@@ -1851,7 +1808,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x1">The x1.</param>
         /// <param name="y1">The y1.</param>
         /// <param name="x2">The x2.</param>
@@ -1864,7 +1820,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1881,7 +1836,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
         /// <returns>The result.</returns>
@@ -1891,7 +1845,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1903,7 +1856,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
         /// <returns>The result.</returns>
@@ -1913,7 +1865,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1926,7 +1877,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
         /// <param name="tolerance">The tolerance.</param>
@@ -1937,7 +1887,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
@@ -1950,7 +1899,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="slopeA">The slope a.</param>
         /// <param name="slopeB">The slope b.</param>
         /// <param name="tolerance">The tolerance.</param>
@@ -1961,7 +1909,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vertices">The vertices.</param>
         /// <returns>The result.</returns>
@@ -1983,7 +1930,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vertices">The vertices.</param>
         /// <returns>The result.</returns>
         public static double CalculatePolygonPerimeter(List<Vector2> vertices)
@@ -2003,7 +1949,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vertices">The vertices.</param>
         /// <returns>The result.</returns>
@@ -2035,7 +1980,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="point">The point.</param>
         /// <param name="angleRadians">The angle radians.</param>
         /// <returns>The result.</returns>
@@ -2048,7 +1992,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="point">The point.</param>
         /// <param name="angleDegrees">The angle degrees.</param>
         /// <returns>The result.</returns>
@@ -2058,7 +2001,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="point">The point.</param>
         /// <param name="deltaX">The delta x.</param>
@@ -2071,7 +2013,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="point">The point.</param>
         /// <param name="scale">The scale.</param>
         /// <returns>The result.</returns>
@@ -2081,7 +2022,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="point1">The first point.</param>
         /// <param name="point2">The second point.</param>
@@ -2106,7 +2046,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
         public static double CalculateSphereVolume(double radius)
@@ -2117,7 +2056,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
         public static float CalculateSphereVolume(float radius)
@@ -2126,7 +2064,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2138,7 +2075,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
         public static float CalculateSphereSurfaceArea(float radius)
@@ -2147,7 +2083,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2159,7 +2094,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
         public static float CalculateHemisphereVolume(float radius)
@@ -2168,7 +2102,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
@@ -2180,7 +2113,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <returns>The result.</returns>
         public static float CalculateHemisphereSurfaceArea(float radius)
@@ -2189,7 +2121,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2201,7 +2132,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
         public static float CalculateCubeVolume(float side)
@@ -2210,7 +2140,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2222,7 +2151,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
         public static float CalculateCubeSurfaceArea(float side)
@@ -2231,7 +2159,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
@@ -2243,7 +2170,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="side">The side.</param>
         /// <returns>The result.</returns>
         public static float CalculateCubeSpaceDiagonal(float side)
@@ -2252,7 +2178,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2268,7 +2193,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
         /// <param name="height">The height.</param>
@@ -2279,7 +2203,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2295,7 +2218,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
         /// <param name="height">The height.</param>
@@ -2306,7 +2228,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
@@ -2322,7 +2243,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="length">The length.</param>
         /// <param name="width">The width.</param>
         /// <param name="height">The height.</param>
@@ -2333,7 +2253,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2347,7 +2266,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2357,7 +2275,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2371,7 +2288,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2381,7 +2297,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2395,7 +2310,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2405,7 +2319,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2419,7 +2332,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2429,7 +2341,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2443,7 +2354,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2453,7 +2363,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2466,7 +2375,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2476,7 +2384,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
@@ -2489,7 +2396,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radius">The radius.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2499,7 +2405,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="baseSide">The base side.</param>
         /// <param name="height">The height.</param>
@@ -2513,7 +2418,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="baseSide">The base side.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2523,7 +2427,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="baseSide">The base side.</param>
         /// <param name="height">The height.</param>
@@ -2538,7 +2441,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="baseSide">The base side.</param>
         /// <param name="height">The height.</param>
         /// <returns>The result.</returns>
@@ -2548,7 +2450,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="majorRadius">The major radius.</param>
         /// <param name="minorRadius">The minor radius.</param>
@@ -2562,7 +2463,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="majorRadius">The major radius.</param>
         /// <param name="minorRadius">The minor radius.</param>
         /// <returns>The result.</returns>
@@ -2572,7 +2472,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="majorRadius">The major radius.</param>
         /// <param name="minorRadius">The minor radius.</param>
@@ -2586,7 +2485,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="majorRadius">The major radius.</param>
         /// <param name="minorRadius">The minor radius.</param>
         /// <returns>The result.</returns>
@@ -2596,7 +2494,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
@@ -2617,7 +2514,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
         /// <param name="z">The z.</param>
@@ -2633,7 +2529,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
         public static double CalculateVectorMagnitude(Vector2 vector)
@@ -2643,7 +2538,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
         public static double CalculateVectorMagnitude(Vector3 vector)
@@ -2652,7 +2546,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2664,7 +2557,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
         /// <returns>The result.</returns>
@@ -2674,7 +2566,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2686,7 +2577,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
         /// <returns>The result.</returns>
@@ -2696,7 +2586,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <param name="scale">The scale.</param>
@@ -2708,7 +2597,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vector">The vector.</param>
         /// <param name="scale">The scale.</param>
         /// <returns>The result.</returns>
@@ -2718,7 +2606,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2730,7 +2617,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
         /// <returns>The result.</returns>
@@ -2740,7 +2626,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2754,7 +2639,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
@@ -2770,7 +2654,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
         public static Vector3 NormalizeVector(Vector3 vector)
@@ -2784,7 +2667,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
@@ -2803,7 +2685,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
         /// <returns>The result.</returns>
@@ -2821,7 +2702,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
         /// <returns>The result.</returns>
@@ -2832,7 +2712,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
         /// <returns>The result.</returns>
@@ -2842,7 +2721,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vector">The vector.</param>
         /// <param name="onto">The onto.</param>
@@ -2859,7 +2737,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vector">The vector.</param>
         /// <param name="onto">The onto.</param>
         /// <returns>The result.</returns>
@@ -2875,7 +2752,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>
         /// <returns>The result.</returns>
@@ -2885,7 +2761,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="vectorA">The vector a.</param>
         /// <param name="vectorB">The vector b.</param>

@@ -73,7 +73,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
         /// <returns>The result.</returns>
@@ -150,7 +149,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
         /// <returns>The result.</returns>
@@ -223,7 +221,6 @@ namespace OPEN_LRD.Skills
             return a / b;
         }
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -911,7 +908,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="fraction1">The fraction1.</param>
         /// <param name="fraction2">The fraction2.</param>
         /// <returns>The result.</returns>
@@ -1408,7 +1404,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double SquareDouble(double value)
@@ -1418,7 +1413,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static float SquareFloat(float value)
@@ -1427,7 +1421,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1442,7 +1435,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double SqrtDouble(double value)
@@ -1455,7 +1447,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1470,7 +1461,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double CbrtInt(int value)
@@ -1479,7 +1469,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1490,7 +1479,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static float CbrtFloat(float value)
@@ -1499,7 +1487,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="exponent">The exponent.</param>
@@ -1511,7 +1498,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="exponent">The exponent.</param>
         /// <returns>The result.</returns>
@@ -1522,7 +1508,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static int FloorInt(int value)
@@ -1531,7 +1516,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1542,7 +1526,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static float FloorFloat(float value)
@@ -1551,7 +1534,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1562,7 +1544,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double CeilingDouble(double value)
@@ -1571,7 +1552,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1582,7 +1562,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static int RoundInt(int value)
@@ -1592,7 +1571,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double RoundDouble(double value)
@@ -1601,7 +1579,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="digits">The digits.</param>
@@ -1613,7 +1590,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static float RoundFloat(float value)
@@ -1622,7 +1598,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="digits">The digits.</param>
@@ -1634,7 +1609,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static int TruncateInt(int value)
@@ -1643,7 +1617,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1654,7 +1627,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static float TruncateFloat(float value)
@@ -1663,7 +1635,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1674,7 +1645,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static int SignDouble(double value)
@@ -1684,7 +1654,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static int SignFloat(float value)
@@ -1693,7 +1662,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1708,7 +1676,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static float LogFloat(float value)
@@ -1721,7 +1688,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1736,7 +1702,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static float Log10Float(float value)
@@ -1749,7 +1714,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="baseValue">The base value.</param>
@@ -1769,7 +1733,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="baseValue">The base value.</param>
         /// <returns>The result.</returns>
@@ -1788,7 +1751,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double ExpDouble(double value)
@@ -1797,7 +1759,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1808,7 +1769,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
         public static double SinDouble(double radians)
@@ -1817,7 +1777,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1828,7 +1787,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
         public static double TanDouble(double radians)
@@ -1837,7 +1795,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
@@ -1848,7 +1805,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
         public static float CosFloat(float radians)
@@ -1858,7 +1814,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
         public static float TanFloat(float radians)
@@ -1867,7 +1822,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="y">The y.</param>
         /// <param name="x">The x.</param>
@@ -1879,7 +1833,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="y">The y.</param>
         /// <param name="x">The x.</param>
         /// <returns>The result.</returns>
@@ -1890,7 +1843,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="degrees">The degrees.</param>
         /// <returns>The result.</returns>
         public static double DegreesToRadians(double degrees)
@@ -1899,7 +1851,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="degrees">The degrees.</param>
         /// <returns>The result.</returns>
@@ -1910,7 +1861,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
         public static double RadiansToDegrees(double radians)
@@ -1920,7 +1870,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="radians">The radians.</param>
         /// <returns>The result.</returns>
         public static float RadiansToDegrees(float radians)
@@ -1929,7 +1878,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -1952,7 +1900,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static double CalculateMin(List<double> numbers)
@@ -1973,7 +1920,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -1996,7 +1942,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static int CalculateMax(List<int> numbers)
@@ -2017,7 +1962,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2040,7 +1984,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static float CalculateMax(List<float> numbers)
@@ -2062,7 +2005,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static int CalculateSum(List<int> numbers)
@@ -2080,7 +2022,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2100,7 +2041,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static float CalculateSum(List<float> numbers)
@@ -2118,7 +2058,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2138,7 +2077,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static double CalculateProduct(List<double> numbers)
@@ -2157,7 +2095,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static float CalculateProduct(List<float> numbers)
@@ -2175,7 +2112,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2197,7 +2133,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static List<double> CalculateCumulativeSum(List<double> numbers)
@@ -2218,7 +2153,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static List<float> CalculateCumulativeSum(List<float> numbers)
@@ -2238,7 +2172,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <param name="windowSize">The window size.</param>
@@ -2268,7 +2201,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <param name="windowSize">The window size.</param>
         /// <returns>The result.</returns>
@@ -2278,7 +2210,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2298,7 +2229,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <param name="trimPercentage">The trim percentage.</param>
@@ -2326,7 +2256,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="actual">The actual.</param>
         /// <param name="predicted">The predicted.</param>
         /// <returns>The result.</returns>
@@ -2345,7 +2274,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
@@ -2366,7 +2294,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="numbers">The numbers.</param>
         /// <returns>The result.</returns>
         public static float CalculateSampleStandardDeviation(List<float> numbers)
@@ -2375,7 +2302,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -2425,7 +2351,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
         public static bool IsEven(int number)
@@ -2435,7 +2360,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
         public static bool IsOdd(int number)
@@ -2444,7 +2368,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2459,7 +2382,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2482,7 +2404,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="n">The n.</param>
         /// <param name="r">The r.</param>
@@ -2511,7 +2432,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="n">The n.</param>
         /// <param name="r">The r.</param>
         /// <returns>The result.</returns>
@@ -2534,7 +2454,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2563,7 +2482,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
         public static int SumOfDigits(int number)
@@ -2579,7 +2497,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The result.</returns>
@@ -2605,7 +2522,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="baseValue">The base value.</param>
         /// <param name="exponent">The exponent.</param>
         /// <returns>The result.</returns>
@@ -2625,7 +2541,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="total">The total.</param>
         /// <returns>The result.</returns>
@@ -2639,7 +2554,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="oldValue">The old value.</param>
         /// <param name="newValue">The new value.</param>
@@ -2655,7 +2569,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="percentage">The percentage.</param>
         /// <returns>The result.</returns>
@@ -2666,7 +2579,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="percentage">The percentage.</param>
         /// <returns>The result.</returns>
@@ -2676,7 +2588,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="fraction1">The fraction1.</param>
         /// <param name="fraction2">The fraction2.</param>
@@ -2689,7 +2600,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -2704,7 +2614,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="fraction">The fraction.</param>
         /// <returns>The result.</returns>

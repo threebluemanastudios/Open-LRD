@@ -37,9 +37,6 @@ namespace OPEN_LRD.Skills
                 }
                 result[frequency] = sum;
             }
-        /// <summary>
-        /// Computes the inverse Discrete Fourier Transform of spectrum.
-        /// </summary>
             return result;
         }
 
@@ -55,9 +52,6 @@ namespace OPEN_LRD.Skills
                 {
                     double angle = 2.0 * Math.PI * frequency * sample / length;
                     sum += spectrum[frequency] * new Complex(Math.Cos(angle), Math.Sin(angle));
-        /// <summary>
-        /// Computes the Fast Fourier Transform of samples.
-        /// </summary>
                 }
                 result[sample] = sum.Real / length;
             }
@@ -71,9 +65,6 @@ namespace OPEN_LRD.Skills
             {
                 throw new ArgumentException("FFT length must be a power of two.", nameof(samples));
             }
-        /// <summary>
-        /// Computes the inverse Fast Fourier Transform of spectrum.
-        /// </summary>
             Complex[] result = new Complex[samples.Count];
             for (int index = 0; index < result.Length; index++)
             {
@@ -87,9 +78,6 @@ namespace OPEN_LRD.Skills
         {
             ValidateComplexSequence(spectrum, nameof(spectrum), MaximumFftSize);
             if (!IsPowerOfTwo(spectrum.Count))
-        /// <summary>
-        /// Computes the real-input Fast Fourier Transform of samples.
-        /// </summary>
             {
                 throw new ArgumentException("FFT length must be a power of two.", nameof(spectrum));
             }
@@ -121,9 +109,6 @@ namespace OPEN_LRD.Skills
         }
 
         public static Complex[] FftShift(Complex[] values)
-        /// <summary>
-        /// Computes the next power of two greater than or equal to value.
-        /// </summary>
         {
             if (values == null)
             {
@@ -139,9 +124,6 @@ namespace OPEN_LRD.Skills
             {
                 shifted[index] = values[(index + offset) % values.Length];
             }
-        /// <summary>
-        /// Computes discrete convolution of signal with kernel.
-        /// </summary>
             return shifted;
         }
 
@@ -154,9 +136,6 @@ namespace OPEN_LRD.Skills
             if (value > MaximumFftSize)
             {
                 throw new ArgumentOutOfRangeException(nameof(value), $"FFT size must not exceed {MaximumFftSize}.");
-        /// <summary>
-        /// Computes convolution of signal with kernel using FFT.
-        /// </summary>
             }
             int result = 1;
             while (result < value)
@@ -185,9 +164,6 @@ namespace OPEN_LRD.Skills
         {
             ValidateRealSequence(signal, nameof(signal), MaximumFftSize);
             ValidateRealSequence(kernel, nameof(kernel), MaximumFftSize);
-        /// <summary>
-        /// Computes cross-correlation between first and second.
-        /// </summary>
             int outputLength = checked(signal.Length + kernel.Length - 1);
             int transformLength = NextPowerOfTwo(outputLength);
             Complex[] first = new Complex[transformLength];
@@ -209,15 +185,9 @@ namespace OPEN_LRD.Skills
             Complex[] convolution = InverseFft(firstSpectrum);
             double[] result = new double[outputLength];
             for (int index = 0; index < outputLength; index++)
-        /// <summary>
-        /// Computes autocorrelation of signal.
-        /// </summary>
             {
                 result[index] = convolution[index].Real;
             }
-        /// <summary>
-        /// Creates a window function array of length with type.
-        /// </summary>
             return result;
         }
 
@@ -279,9 +249,6 @@ namespace OPEN_LRD.Skills
                     WindowType.Hamming => 0.54 - 0.46 * Math.Cos(phase),
                     WindowType.Blackman => 0.42 - 0.5 * Math.Cos(phase) + 0.08 * Math.Cos(2.0 * phase),
                     _ => 1.0
-        /// <summary>
-        /// Filters signal with a moving average of windowSize.
-        /// </summary>
                 };
             }
             return result;
@@ -291,9 +258,6 @@ namespace OPEN_LRD.Skills
         {
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
             double[] window = CreateWindow(signal.Length, type);
-        /// <summary>
-        /// Applies a one-pole low-pass filter with smoothing factor alpha to signal.
-        /// </summary>
             double[] result = new double[signal.Length];
             for (int index = 0; index < signal.Length; index++)
             {
@@ -304,9 +268,6 @@ namespace OPEN_LRD.Skills
 
         public static double[] ApplyFirFilter(double[] signal, FirFilter filter)
         {
-        /// <summary>
-        /// Applies a one-pole high-pass filter with smoothing factor alpha to signal.
-        /// </summary>
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
             if (filter == null)
             {
@@ -317,9 +278,6 @@ namespace OPEN_LRD.Skills
             for (int sample = 0; sample < signal.Length; sample++)
             {
                 double sum = 0.0;
-        /// <summary>
-        /// Applies a biquad filter with coefficients b0, b1, b2, a1, and a2 to signal.
-        /// </summary>
                 int available = Math.Min(sample + 1, filter.Coefficients.Length);
                 for (int tap = 0; tap < available; tap++)
                 {
@@ -374,9 +332,6 @@ namespace OPEN_LRD.Skills
         public static double[] BiquadFilter(double[] signal, double b0, double b1, double b2, double a1, double a2)
         {
             ValidateRealSequence(signal, nameof(signal), int.MaxValue);
-        /// <summary>
-        /// Reconstructs value at x over period from coefficients.
-        /// </summary>
             EnsureFinite(b0, nameof(b0));
             EnsureFinite(b1, nameof(b1));
             EnsureFinite(b2, nameof(b2));

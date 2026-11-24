@@ -4,18 +4,37 @@ Scope: source in OPEN-LRD / OPEN-LRD.SmokeTests
 
 STATUS
 ------
-Not fully/properly implemented. Substantially implemented (~85-90%), but several
-checklist items are only partial.
+Still not fully/properly implemented. Substantially implemented (~85-90%), 
+but several checklist items are only partially complete.
 
 
 CONFIRMED GAPS
 ------------------------------
 
-1. Documentation — NOT done
+1. Documentation NOT done
+   - OPEN-LRD/Foundations/GraphSynchronization.cs:
 
-   Actual state:
-   - OPEN-LRD/Foundations/GraphSynchronization.cs: undocumented; no explicit
-     thread-safety contract.
+GraphSynchronization.cs uses a process-wide static Monitor lock (private static readonly object _syncRoot = new object();) to serialize synchronous operations across the assembly.
+
+Because a static global lock creates subtle hazards around reentrancy, lock-ordering deadlocks, and async code, an explicit thread-safety contract should clearly define guarantees, caller obligations, and prohibitions.
+
+Key Risks in the Current Implementation
+Reentrancy: Monitor (lock) is reentrant on the same thread. Nested calls to Execute on the same thread will succeed silently, which can violate invariant assumptions if an outer call expects exclusive, un-interleaved mutation state.
+
+Deadlock via Lock Inversion: Because _syncRoot is static and global, any delegate passed to Execute that acquires a secondary lock (or blocks on a Task.Result / Task.Wait()) risks a classic AB-BA deadlock if another thread acquires that secondary lock first and then enters GraphSynchronization.Execute.
+
+Async / await Incompatibility: lock cannot span await boundaries (enforced by the C# compiler for async lambdas, though passing a Func<Task> to Execute<T> compiles and immediately releases the lock when the first incomplete Task is returned, silently breaking thread safety).
+
+Exposed References: Returning mutable graph nodes or collections from Execute<T> leaves those references unprotected once the lock exits.
+
+Summary of Recommended Additions
+Runtime Task Guard (typeof(Task).IsAssignableFrom(typeof(T))): Prevents the single most common bug with generic Execute<T> lock wrappers, where Execute(async () => ...) silently compiles as Execute<Task> and drops the lock before the task finishes.
+
+IsHeldByCurrentThread Helper (Monitor.IsEntered(_syncRoot)): Allows internal graph methods to assert preconditions (Debug.Assert(GraphSynchronization.IsHeldByCurrentThread)) without forcing callers to redundantly re-acquire the lock.
+
+Explicit Null Checks: Prevents NullReferenceException inside the lock block if a null delegate is passed.
+
+
 
 2. Concurrency and performance gates incomplete.
    - No parallel read/query workload, mutation-burst, or snapshot-consumer stress

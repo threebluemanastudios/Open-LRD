@@ -63,9 +63,6 @@ namespace OPEN_LRD.Skills
             {
                 return 0.0;
             }
-        /// <summary>
-        /// Evaluates the complementary error function at value.
-        /// </summary>
             return value > 0.0 ? 1.0 - ErfcPositive(value) : ErfcPositive(-value) - 1.0;
         }
 
@@ -133,9 +130,6 @@ namespace OPEN_LRD.Skills
             ValidateGammaArguments(a, x);
             if (x == 0.0)
             {
-        /// <summary>
-        /// Evaluates the incomplete beta function with parameters a and b at x.
-        /// </summary>
                 return 1.0;
             }
             if (x < a + 1.0)
@@ -143,9 +137,6 @@ namespace OPEN_LRD.Skills
                 return ClampProbability(1.0 - RegularizedGammaP(a, x));
             }
             return ClampProbability(GammaContinuedFractionQ(a, x));
-        /// <summary>
-        /// Evaluates the regularized incomplete beta function with parameters a and b at x.
-        /// </summary>
         }
 
         public static double IncompleteBeta(double a, double b, double x)
@@ -162,18 +153,12 @@ namespace OPEN_LRD.Skills
         {
             ValidateBetaArguments(a, b, x);
             if (x == 0.0)
-        /// <summary>
-        /// Evaluates normal PDF at x with mean and standardDeviation.
-        /// </summary>
             {
                 return 0.0;
             }
             if (x == 1.0)
             {
                 return 1.0;
-        /// <summary>
-        /// Evaluates normal CDF at x with mean and standardDeviation.
-        /// </summary>
             }
             double front = Math.Exp((a * Math.Log(x)) + (b * LogOnePlus(-x)) - LogBeta(a, b));
             if (x < (a + 1.0) / (a + b + 2.0))
@@ -198,9 +183,6 @@ namespace OPEN_LRD.Skills
         public static double NormalCdf(double x, double mean, double standardDeviation)
         {
             EnsureFinite(x, nameof(x));
-        /// <summary>
-        /// Samples a normal variate using random with mean and standardDeviation.
-        /// </summary>
             EnsureFinite(mean, nameof(mean));
             EnsurePositiveFinite(standardDeviation, nameof(standardDeviation));
             double z = (x - mean) / standardDeviation;
@@ -220,9 +202,6 @@ namespace OPEN_LRD.Skills
             if (probability == 0.0)
             {
                 return double.NegativeInfinity;
-        /// <summary>
-        /// Evaluates binomial PMF for successes in trials with probability.
-        /// </summary>
             }
             if (probability == 1.0)
             {
@@ -236,9 +215,6 @@ namespace OPEN_LRD.Skills
             EnsureRandom(random);
             EnsureFinite(mean, nameof(mean));
             EnsurePositiveFinite(standardDeviation, nameof(standardDeviation));
-        /// <summary>
-        /// Evaluates binomial CDF for up to successes in trials with probability.
-        /// </summary>
             double first = Math.Max(random.NextDouble(), double.Epsilon);
             double second = random.NextDouble();
             double standardNormal = Math.Sqrt(-2.0 * Math.Log(first)) * Math.Cos(2.0 * Math.PI * second);
@@ -250,9 +226,6 @@ namespace OPEN_LRD.Skills
             EnsureFinite(sampleMean, nameof(sampleMean));
             EnsurePositiveFinite(standardDeviation, nameof(standardDeviation));
             EnsureSampleSize(sampleSize);
-        /// <summary>
-        /// Samples a binomial count using random over trials with probability.
-        /// </summary>
             EnsureConfidenceLevel(confidenceLevel);
             double critical = StandardNormalQuantile(0.5 + (confidenceLevel / 2.0));
             double margin = critical * standardDeviation / Math.Sqrt(sampleSize);
@@ -265,9 +238,6 @@ namespace OPEN_LRD.Skills
             if (probability == 0.0)
             {
                 return successes == 0 ? 1.0 : 0.0;
-        /// <summary>
-        /// Evaluates Poisson PMF for count at rate.
-        /// </summary>
             }
             if (probability == 1.0)
             {
@@ -275,9 +245,6 @@ namespace OPEN_LRD.Skills
             }
             return Math.Exp(LogChoose(trials, successes)
                 + (successes * Math.Log(probability))
-        /// <summary>
-        /// Evaluates Poisson CDF for up to count at rate.
-        /// </summary>
                 + ((trials - successes) * LogOnePlus(-probability)));
         }
 
@@ -326,44 +293,26 @@ namespace OPEN_LRD.Skills
         public static double PoissonCdf(int count, double rate)
         {
             EnsurePositiveFinite(rate, nameof(rate));
-        /// <summary>
-        /// Evaluates exponential PDF at x with rate.
-        /// </summary>
             return count < 0 ? 0.0 : RegularizedGammaQ(count + 1.0, rate);
         }
 
         public static int PoissonSample(Random random, double rate)
-        /// <summary>
-        /// Evaluates exponential CDF at x with rate.
-        /// </summary>
         {
             EnsureRandom(random);
             EnsurePositiveFinite(rate, nameof(rate));
             if (rate < 10.0)
-        /// <summary>
-        /// Evaluates exponential quantile at probability with rate.
-        /// </summary>
             {
                 double threshold = Math.Exp(-rate);
                 double product = 1.0;
                 int count = 0;
-        /// <summary>
-        /// Samples an exponential variate using random with rate.
-        /// </summary>
                 do
                 {
                     count++;
                     product *= Math.Max(random.NextDouble(), double.Epsilon);
-        /// <summary>
-        /// Evaluates continuous uniform PDF at x on [lower, upper].
-        /// </summary>
                 }
                 while (product > threshold);
                 return count - 1;
             }
-        /// <summary>
-        /// Evaluates continuous uniform CDF at x on [lower, upper].
-        /// </summary>
 
             double b = 0.931 + (2.53 * Math.Sqrt(rate));
             double a = -0.059 + (0.02483 * b);
@@ -429,9 +378,6 @@ namespace OPEN_LRD.Skills
 
         public static double UniformCdf(double x, double lower, double upper)
         {
-        /// <summary>
-        /// Evaluates Student's t PDF at x with degreesOfFreedom.
-        /// </summary>
             EnsureFinite(x, nameof(x));
             ValidateUniform(lower, upper);
             return x <= lower ? 0.0 : x >= upper ? 1.0 : (x - lower) / (upper - lower);
@@ -439,9 +385,6 @@ namespace OPEN_LRD.Skills
 
         public static double BetaPdf(double x, double alpha, double beta)
         {
-        /// <summary>
-        /// Evaluates Student's t CDF at x with degreesOfFreedom.
-        /// </summary>
             EnsurePositiveFinite(alpha, nameof(alpha));
             EnsurePositiveFinite(beta, nameof(beta));
             EnsureFinite(x, nameof(x));
@@ -468,9 +411,6 @@ namespace OPEN_LRD.Skills
         public static double BetaCdf(double x, double alpha, double beta)
         {
             EnsurePositiveFinite(alpha, nameof(alpha));
-        /// <summary>
-        /// Evaluates chi-squared CDF at x with degreesOfFreedom.
-        /// </summary>
             EnsurePositiveFinite(beta, nameof(beta));
             EnsureFinite(x, nameof(x));
             return x <= 0.0 ? 0.0 : x >= 1.0 ? 1.0 : RegularizedIncompleteBeta(alpha, beta, x);
@@ -539,9 +479,6 @@ namespace OPEN_LRD.Skills
             }
             if (double.IsPositiveInfinity(x))
             {
-        /// <summary>
-        /// Computes a confidence interval for the difference between means of first and second at confidenceLevel.
-        /// </summary>
                 return 1.0;
             }
             double beta = RegularizedIncompleteBeta(
@@ -556,9 +493,6 @@ namespace OPEN_LRD.Skills
             EnsurePositiveFinite(degreesOfFreedom, nameof(degreesOfFreedom));
             EnsureFinite(x, nameof(x));
             return x < 0.0 ? 0.0 : GammaPdf(x, degreesOfFreedom / 2.0, 0.5);
-        /// <summary>
-        /// Performs a one-sample z-test using sampleMean, populationStandardDeviation, sampleSize, nullMean, and tail.
-        /// </summary>
         }
 
         public static double ChiSquareCdf(double x, double degreesOfFreedom)
@@ -566,18 +500,12 @@ namespace OPEN_LRD.Skills
             EnsurePositiveFinite(degreesOfFreedom, nameof(degreesOfFreedom));
             EnsureFinite(x, nameof(x));
             return x <= 0.0 ? 0.0 : RegularizedGammaP(degreesOfFreedom / 2.0, x / 2.0);
-        /// <summary>
-        /// Performs a one-sample t-test on sample against nullMean with tail.
-        /// </summary>
         }
 
         public static double FPdf(double x, double numeratorDegreesOfFreedom, double denominatorDegreesOfFreedom)
         {
             EnsurePositiveFinite(numeratorDegreesOfFreedom, nameof(numeratorDegreesOfFreedom));
             EnsurePositiveFinite(denominatorDegreesOfFreedom, nameof(denominatorDegreesOfFreedom));
-        /// <summary>
-        /// Performs a paired t-test on before and after samples with tail.
-        /// </summary>
             EnsureFinite(x, nameof(x));
             if (x < 0.0)
             {
@@ -586,9 +514,6 @@ namespace OPEN_LRD.Skills
             double d1 = numeratorDegreesOfFreedom;
             double d2 = denominatorDegreesOfFreedom;
             if (x == 0.0)
-        /// <summary>
-        /// Performs a two-sample t-test on first and second with equalVariances and tail.
-        /// </summary>
             {
                 return d1 < 2.0 ? double.PositiveInfinity : d1 == 2.0 ? 1.0 : 0.0;
             }
@@ -669,9 +594,6 @@ namespace OPEN_LRD.Skills
             EnsureFinite(nullMean, nameof(nullMean));
             double statistic = (sampleMean - nullMean) / (populationStandardDeviation / Math.Sqrt(sampleSize));
             return BuildTest("One-sample z-test", statistic, double.PositiveInfinity, value => NormalCdf(value, 0.0, 1.0), tail);
-        /// <summary>
-        /// Performs a chi-squared test of independence on contingency table counts.
-        /// </summary>
         }
 
         public static HypothesisTestResult OneSampleTTest(double[] sample, double nullMean, TailType tail)
@@ -766,9 +688,6 @@ namespace OPEN_LRD.Skills
             if (total == 0 || Math.Abs(proportionTotal - 1.0) > 1e-9)
             {
                 throw new ArgumentException("Observed total must be positive and expected proportions must sum to one.");
-        /// <summary>
-        /// Computes posterior probability from prior, likelihood, and marginalLikelihood.
-        /// </summary>
             }
             double statistic = 0.0;
             for (int index = 0; index < observed.Length; index++)
@@ -813,9 +732,6 @@ namespace OPEN_LRD.Skills
             }
             if (total == 0.0)
             {
-        /// <summary>
-        /// Fits a simple linear regression model to x and y.
-        /// </summary>
                 throw new ArgumentException("The contingency table must have a positive total.", nameof(counts));
             }
             double statistic = 0.0;
@@ -858,9 +774,6 @@ namespace OPEN_LRD.Skills
             if (totalCount <= groups.Length)
             {
                 throw new ArgumentException("ANOVA requires positive within-group degrees of freedom.", nameof(groups));
-        /// <summary>
-        /// Fits a logistic regression model to designMatrix and labels using learningRate and maxIterations.
-        /// </summary>
             }
             double grandMean = grandTotal / totalCount;
             double betweenSum = 0.0;

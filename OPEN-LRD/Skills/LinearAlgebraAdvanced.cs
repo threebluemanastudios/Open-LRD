@@ -111,9 +111,6 @@ namespace OPEN_LRD.Skills
                     }
                 }
             }
-        /// <summary>
-        /// Computes QR decomposition of matrix.
-        /// </summary>
             return new LuDecompositionResult(lower, upper, permutation, sign);
         }
 
@@ -182,9 +179,6 @@ namespace OPEN_LRD.Skills
                 r[column, column] = alpha;
                 for (int row = column + 1; row < rows; row++)
                 {
-        /// <summary>
-        /// Attempts Cholesky decomposition of matrix, outputting lower-triangular lower factor.
-        /// </summary>
                     r[row, column] = 0.0;
                 }
             }
@@ -324,9 +318,6 @@ namespace OPEN_LRD.Skills
             });
             double[] eigenvalues = new double[size];
             double[,] eigenvectors = new double[size, size];
-        /// <summary>
-        /// Computes eigenvalues of matrix.
-        /// </summary>
             for (int column = 0; column < size; column++)
             {
                 int source = order[column];
@@ -350,9 +341,6 @@ namespace OPEN_LRD.Skills
                 working = Algebra.MatrixMultiply(matrix, working);
                 double coefficient = -Algebra.MatrixTrace(working) / iteration;
                 coefficients[size - iteration] = coefficient;
-        /// <summary>
-        /// Computes singular value decomposition of matrix.
-        /// </summary>
                 for (int index = 0; index < size; index++)
                 {
                     working[index, index] += coefficient;
@@ -554,9 +542,6 @@ namespace OPEN_LRD.Skills
                         double sum = 0.0;
                         for (int column = 0; column < columns; column++)
                         {
-        /// <summary>
-        /// Computes the condition number of matrix.
-        /// </summary>
                             sum += Math.Abs(matrix[row, column]);
                         }
                         maximum = Math.Max(maximum, sum);
@@ -571,9 +556,6 @@ namespace OPEN_LRD.Skills
                 default:
                 {
                     throw new ArgumentOutOfRangeException(nameof(type), "The matrix norm type is not supported.");
-        /// <summary>
-        /// Computes product of matrix and vector.
-        /// </summary>
                 }
             }
         }

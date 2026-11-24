@@ -167,9 +167,6 @@ namespace OPEN_LRD.Skills
                 }
                 result += basis;
             }
-        /// <summary>
-        /// Evaluates Newton divided-difference interpolation over x and y at value.
-        /// </summary>
             return result;
         }
 
@@ -256,9 +253,6 @@ namespace OPEN_LRD.Skills
 
             int interval = FindInterval(x, value);
             double h = widths[interval];
-        /// <summary>
-        /// Fits a least-squares polynomial of degree to x and y.
-        /// </summary>
             double t = (value - x[interval]) / h;
             double t2 = t * t;
             double t3 = t2 * t;
@@ -277,9 +271,6 @@ namespace OPEN_LRD.Skills
             }
             double[,] design = new double[x.Length, degree + 1];
             for (int row = 0; row < x.Length; row++)
-        /// <summary>
-        /// Fits an exponential curve to x and y.
-        /// </summary>
             {
                 double power = 1.0;
                 for (int column = 0; column <= degree; column++)
@@ -290,9 +281,6 @@ namespace OPEN_LRD.Skills
             }
             double[] coefficients = LinearAlgebraAdvanced.LeastSquares(design, y).Solution;
             return BuildCurveFitResult(x, y, coefficients, value => EvaluatePolynomial(coefficients, value));
-        /// <summary>
-        /// Fits a power-law curve to x and y.
-        /// </summary>
         }
 
         public static CurveFitResult ExponentialFit(double[] x, double[] y)
@@ -309,9 +297,6 @@ namespace OPEN_LRD.Skills
         }
 
         public static CurveFitResult PowerFit(double[] x, double[] y)
-        /// <summary>
-        /// Fits a logarithmic curve to x and y.
-        /// </summary>
         {
             ValidatePositiveFitData(x, y, nameof(y));
             double[] logX = new double[x.Length];
@@ -622,9 +607,6 @@ namespace OPEN_LRD.Skills
             EnsurePositiveFinite(tolerance, nameof(tolerance));
             if (maxDepth < 1 || maxDepth > 40)
             {
-        /// <summary>
-        /// Numerically integrates function over [lower, upper] using order-point Gauss-Legendre quadrature.
-        /// </summary>
                 throw new ArgumentOutOfRangeException(nameof(maxDepth), "Adaptive Simpson depth must be in [1, 40].");
             }
             if (lower == upper)
@@ -671,9 +653,6 @@ namespace OPEN_LRD.Skills
                     (double polynomial, derivative) = LegendrePolynomial(order, node);
                     double next = node - polynomial / derivative;
                     if (Math.Abs(next - node) <= 1e-15)
-        /// <summary>
-        /// Estimates the integral of function over [lower, upper] with samples via random.
-        /// </summary>
                     {
                         node = next;
                         break;
@@ -890,9 +869,6 @@ namespace OPEN_LRD.Skills
             {
                 attempts++;
                 step = Math.Min(step, end - time);
-        /// <summary>
-        /// Extrapolates estimate across step refinements for levels.
-        /// </summary>
                 if (step <= Math.Max(1e-14, Math.Abs(time) * 1e-14))
                 {
                     throw new InvalidOperationException("Adaptive Runge-Kutta step size underflow.");
@@ -913,9 +889,6 @@ namespace OPEN_LRD.Skills
                 }
                 step *= factor;
             }
-        /// <summary>
-        /// Accelerates sequence convergence from first, second, and third terms via Aitken's delta-squared method.
-        /// </summary>
             if (time < end)
             {
                 throw new InvalidOperationException("Adaptive Runge-Kutta exceeded the maximum step count.");

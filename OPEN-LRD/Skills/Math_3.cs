@@ -738,7 +738,7 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// Computes the infinite geometric series sum a / (1 - r) when |r| < 1.
+        /// Computes the infinite geometric series sum a / (1 - r) when |r| &lt; 1.
         /// </summary>
         /// <param name="firstTerm">The first term.</param>
         /// <param name="ratio">The ratio.</param>
@@ -1275,7 +1275,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
         /// <param name="lower">The lower.</param>
@@ -1291,7 +1290,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
         /// <param name="lower">The lower.</param>
@@ -1304,7 +1302,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1321,7 +1318,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
         /// <param name="lower">The lower.</param>
@@ -1334,7 +1330,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -1368,7 +1363,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>

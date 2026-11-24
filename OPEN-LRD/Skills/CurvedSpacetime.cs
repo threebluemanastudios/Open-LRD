@@ -17,7 +17,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="coordinates">The coordinates.</param>
         /// <returns>The result.</returns>
         public static double[,] MinkowskiMetric(double[] coordinates)
@@ -33,7 +32,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="massLength">The mass length.</param>
         /// <param name="coordinates">The coordinates.</param>
@@ -114,7 +112,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="metric">The metric.</param>
         /// <param name="coordinates">The coordinates.</param>

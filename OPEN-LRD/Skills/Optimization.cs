@@ -541,9 +541,6 @@ namespace OPEN_LRD.Skills
                     return new OptimizationResult(point, EvaluateFinite(objective, point), norm, iteration, false);
                 }
             }
-        /// <summary>
-        /// Solves linear program defined by constraintMatrix, rightHandSide, and objective via simplex.
-        /// </summary>
             return new OptimizationResult(point, EvaluateFinite(objective, point), Norm(NumericalGradient(Penalized, point)), maxIterations, false);
         }
 
@@ -554,15 +551,9 @@ namespace OPEN_LRD.Skills
             {
                 if (rightHandSide[index] < 0.0)
                 {
-        /// <summary>
-        /// Solves linear program defined by constraintMatrix, rightHandSide, and objective via two-phase simplex.
-        /// </summary>
                     throw new ArgumentOutOfRangeException(nameof(rightHandSide), "Simplex standard form requires non-negative right-hand sides.");
                 }
             }
-        /// <summary>
-        /// Solves minimum-cost assignment for costMatrix using the Hungarian algorithm.
-        /// </summary>
             return SolveLinearProgram(constraintMatrix, rightHandSide, objective, false);
         }
 

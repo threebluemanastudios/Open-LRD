@@ -49,9 +49,6 @@ namespace OPEN_LRD.Skills
             {
                 throw new OverflowException("Log magnitude cannot be normalized.");
             }
-        /// <summary>
-        /// Computes the logarithmic magnitude of a ScaledScalar value.
-        /// </summary>
             return Normalize(significand, exponent);
         }
 
@@ -59,9 +56,6 @@ namespace OPEN_LRD.Skills
         {
             Validate(value, nameof(value));
             if (value.Significand == 0.0)
-        /// <summary>
-        /// Converts a ScaledScalar value to a standard double representation.
-        /// </summary>
             {
                 return double.NegativeInfinity;
             }
@@ -78,9 +72,6 @@ namespace OPEN_LRD.Skills
             if (value.BinaryExponent > 1024 || value.BinaryExponent < -1074)
             {
                 throw new OverflowException("Scaled value is outside the representable range of Double.");
-        /// <summary>
-        /// Attempts to convert a ScaledScalar value into a double output without overflow or precision failure.
-        /// </summary>
             }
             double result = Math.ScaleB(value.Significand, (int)value.BinaryExponent);
             if (!double.IsFinite(result) || result == 0.0)
@@ -100,9 +91,6 @@ namespace OPEN_LRD.Skills
             }
             if (value.BinaryExponent > 1024 || value.BinaryExponent < -1074)
             {
-        /// <summary>
-        /// Computes the sum of two ScaledScalar values (first + second).
-        /// </summary>
                 result = 0.0;
                 return false;
             }
@@ -123,15 +111,9 @@ namespace OPEN_LRD.Skills
             {
                 return second;
             }
-        /// <summary>
-        /// Computes the difference between two ScaledScalar values (first - second).
-        /// </summary>
             if (second.Significand == 0.0)
             {
                 return first;
-        /// <summary>
-        /// Computes the product of two ScaledScalar values (first * second).
-        /// </summary>
             }
             ScaledScalar larger = first.BinaryExponent >= second.BinaryExponent ? first : second;
             ScaledScalar smaller = first.BinaryExponent >= second.BinaryExponent ? second : first;
@@ -141,9 +123,6 @@ namespace OPEN_LRD.Skills
                 return larger;
             }
             double alignedSmall = Math.ScaleB(smaller.Significand, -(int)exponentGap);
-        /// <summary>
-        /// Divides a ScaledScalar numerator by a ScaledScalar denominator.
-        /// </summary>
             return Normalize(larger.Significand + alignedSmall, larger.BinaryExponent);
         }
 
@@ -191,47 +170,26 @@ namespace OPEN_LRD.Skills
             if (value.Significand == 0.0)
             {
                 if (exponent < 0)
-        /// <summary>
-        /// Returns the arithmetic negation of a ScaledScalar value.
-        /// </summary>
                 {
                     throw new DivideByZeroException("Zero cannot be raised to a negative power.");
                 }
-        /// <summary>
-        /// Returns the absolute magnitude of a ScaledScalar value.
-        /// </summary>
                 return default;
             }
             long power = exponent;
-        /// <summary>
-        /// Evaluates the quadratic scalar field potential for field with massSquared.
-        /// </summary>
             ScaledScalar factor = exponent < 0 ? Divide(FromDouble(1.0), value) : value;
             ulong count = (ulong)Math.Abs(power);
             ScaledScalar result = FromDouble(1.0);
-        /// <summary>
-        /// Evaluates the quartic scalar field potential for field with self-interaction coupling.
-        /// </summary>
             while (count > 0)
             {
                 if ((count & 1UL) != 0)
-        /// <summary>
-        /// Evaluates the double-well scalar potential for field with coupling and vacuumExpectationValue.
-        /// </summary>
                 {
                     result = Multiply(result, factor);
                 }
                 count >>= 1;
                 if (count > 0)
-        /// <summary>
-        /// Computes the first derivative (dV/d?) of the quadratic scalar potential for field and massSquared.
-        /// </summary>
                 {
                     factor = Multiply(factor, factor);
                 }
-        /// <summary>
-        /// Computes the first derivative (dV/d?) of the quartic scalar potential for field and coupling.
-        /// </summary>
             }
             return result;
         }

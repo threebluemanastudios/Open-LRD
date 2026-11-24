@@ -11,9 +11,6 @@ namespace OPEN_LRD.Skills
         /// </summary>
         public static bool IsLeapYear(int year)
         {
-        /// <summary>
-        /// Computes the number of days in month of year.
-        /// </summary>
             return DateTime.IsLeapYear(year);
         }
         /// <summary>
@@ -27,9 +24,6 @@ namespace OPEN_LRD.Skills
 
         public static int DayOfYear(DateOnly date)
         {
-        /// <summary>
-        /// Computes the number of days between start and end.
-        /// </summary>
             return date.DayOfYear;
         }
 
@@ -72,9 +66,6 @@ namespace OPEN_LRD.Skills
             }
 
             int businessDays = 0;
-        /// <summary>
-        /// Computes age from birthDate as of asOfDate.
-        /// </summary>
             DateOnly current = start;
             while (current != end)
             {
@@ -92,9 +83,6 @@ namespace OPEN_LRD.Skills
         /// </summary>
         public static int Age(DateOnly birthDate, DateOnly asOfDate)
         {
-        /// <summary>
-        /// Converts Unix epoch seconds to a date/time value.
-        /// </summary>
             if (asOfDate < birthDate)
             {
                 throw new ArgumentOutOfRangeException(nameof(asOfDate), "The as-of date cannot be earlier than the birth date.");
@@ -119,9 +107,6 @@ namespace OPEN_LRD.Skills
         }
 
         public static DateTimeOffset ConvertTime(DateTimeOffset instant, TimeZoneInfo targetZone)
-        /// <summary>
-        /// Attempts to parse text using format, outputting a DateOnly value.
-        /// </summary>
         {
             if (targetZone == null)
             {
@@ -132,9 +117,6 @@ namespace OPEN_LRD.Skills
 
         public static TimeSpan ElapsedTime(TimeOnly start, TimeOnly end, bool crossesMidnight = false)
         {
-        /// <summary>
-        /// Formats date using format.
-        /// </summary>
             if (end >= start)
             {
                 return end - start;

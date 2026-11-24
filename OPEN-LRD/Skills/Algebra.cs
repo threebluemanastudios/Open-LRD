@@ -18,7 +18,6 @@ namespace OPEN_LRD.Skills
     {
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <returns>The result.</returns>
         public override string ToString()
         {
@@ -53,11 +52,9 @@ namespace OPEN_LRD.Skills
     {
         /// <summary>
         /// </summary>
-        /// </summary>
         public static Quaternion Identity => new Quaternion(1.0, 0.0, 0.0, 0.0);
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <returns>The result.</returns>
         public override string ToString()
@@ -647,7 +644,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="a">The quadratic coefficient.</param>
         /// <param name="b">The linear coefficient.</param>
         /// <param name="c">The constant coefficient.</param>
@@ -911,7 +907,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="size">The size.</param>
         /// <returns>The result.</returns>
         public static double[,] MatrixIdentity(int size)
@@ -929,7 +924,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <returns>The result.</returns>
@@ -950,7 +944,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -973,7 +966,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
         /// <returns>The result.</returns>
@@ -995,7 +987,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <param name="scale">The scale.</param>
         /// <returns>The result.</returns>
@@ -1016,7 +1007,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1050,7 +1040,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <param name="exponent">The exponent.</param>
@@ -1155,7 +1144,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <returns>The result.</returns>
@@ -1262,7 +1250,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <returns>The result.</returns>
@@ -1402,7 +1389,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <param name="rightHandSide">The right hand side.</param>
         /// <returns>The result.</returns>
@@ -1417,7 +1403,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
         /// <returns>The result.</returns>
@@ -1427,7 +1412,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1439,7 +1423,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
         /// <returns>The result.</returns>
@@ -1449,7 +1432,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1465,7 +1447,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static Complex NegateComplex(Complex value)
@@ -1474,7 +1455,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1485,7 +1465,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double ComplexModulus(Complex value)
@@ -1495,7 +1474,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double ComplexArgument(Complex value)
@@ -1504,7 +1482,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="exponent">The exponent.</param>
@@ -1516,7 +1493,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static Complex ComplexSquareRoot(Complex value)
@@ -1525,7 +1501,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1536,7 +1511,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static Complex ComplexLogarithm(Complex value)
@@ -1545,7 +1519,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1556,7 +1529,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static Complex ComplexCosine(Complex value)
@@ -1566,7 +1538,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static Complex ComplexTangent(Complex value)
@@ -1575,7 +1546,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="modulus">The modulus.</param>
         /// <param name="argument">The argument.</param>
@@ -1587,7 +1557,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The complex value.</param>
         /// <returns>The modulus and argument.</returns>
         public static (double Modulus, double Argument) ComplexToPolar(Complex value)
@@ -1596,7 +1565,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="degree">The degree.</param>
         /// <returns>The result.</returns>
@@ -1616,7 +1584,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
         /// <returns>The result.</returns>
@@ -1626,7 +1593,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1638,7 +1604,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static Quaternion NegateQuaternion(Quaternion value)
@@ -1647,7 +1612,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="scale">The scale.</param>
@@ -1658,7 +1622,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
@@ -1674,7 +1637,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static Quaternion ConjugateQuaternion(Quaternion value)
@@ -1683,7 +1645,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1694,7 +1655,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static double QuaternionNorm(Quaternion value)
@@ -1703,7 +1663,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
@@ -1719,7 +1678,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>The result.</returns>
         public static Quaternion InverseQuaternion(Quaternion value)
@@ -1734,7 +1692,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="left">The left.</param>
         /// <param name="right">The right.</param>
         /// <returns>The result.</returns>
@@ -1744,7 +1701,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="axis">The axis.</param>
         /// <param name="angleRadians">The angle radians.</param>
@@ -1767,7 +1723,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="x">The x.</param>
         /// <param name="y">The y.</param>
         /// <param name="z">The z.</param>
@@ -1779,7 +1734,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="axis">The axis.</param>
@@ -1800,7 +1754,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="rotation">The rotation.</param>
         /// <param name="vector">The vector.</param>
         /// <returns>The result.</returns>
@@ -1817,7 +1770,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="start">The start.</param>
         /// <param name="end">The end.</param>
@@ -1837,7 +1789,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="start">The start.</param>
         /// <param name="end">The end.</param>
@@ -1873,7 +1824,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="coefficient">The coefficient.</param>
         /// <param name="constant">The constant.</param>
         /// <param name="relation">The relation.</param>
@@ -1884,7 +1834,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="a">The a.</param>
         /// <param name="b">The b.</param>
@@ -1897,7 +1846,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="coefficients">The coefficients.</param>
         /// <param name="relation">The relation.</param>
@@ -1979,7 +1927,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <returns>The result.</returns>
         public static Expression Expand(Expression expression)
@@ -1996,7 +1943,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <returns>The result.</returns>
         public static Expression Expand(string expression)
@@ -2006,7 +1952,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <returns>The result.</returns>
         public static string ExpandToString(string expression)
@@ -2015,7 +1960,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2047,7 +1991,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
         /// <param name="value">The value.</param>
@@ -2059,7 +2002,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
         /// <param name="value">The value.</param>
@@ -2070,7 +2012,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2085,7 +2026,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
@@ -2114,7 +2054,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>
         /// <returns>The result.</returns>
@@ -2124,7 +2063,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="expression">The expression.</param>
         /// <param name="variable">The variable.</param>

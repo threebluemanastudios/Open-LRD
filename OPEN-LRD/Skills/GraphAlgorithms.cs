@@ -9,7 +9,6 @@ namespace OPEN_LRD.Skills
     {
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <returns>The result.</returns>
         public override string ToString()
         {
@@ -27,7 +26,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="directed">The directed.</param>
         public Graph(bool directed = true)
         {
@@ -42,16 +40,13 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         public IReadOnlyList<TNode> Nodes => new ReadOnlyCollection<TNode>(new List<TNode>(nodes));
 
         /// <summary>
         /// </summary>
-        /// </summary>
         public IReadOnlyList<GraphEdge<TNode>> Edges => new ReadOnlyCollection<GraphEdge<TNode>>(new List<GraphEdge<TNode>>(edges));
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="node">The node.</param>
         public void AddNode(TNode node)
@@ -92,6 +87,58 @@ namespace OPEN_LRD.Skills
             }
         }
 
+        /// <summary>Removes one matching edge instance and its reverse adjacency entry when undirected.</summary>
+        public bool RemoveEdge(TNode from, TNode to, double weight)
+        {
+            if (!outgoingEdges.ContainsKey(from) || !incomingEdges.ContainsKey(to)) return false;
+            int edgeIndex = edges.FindIndex(edge => EqualityComparer<TNode>.Default.Equals(edge.From, from) &&
+                EqualityComparer<TNode>.Default.Equals(edge.To, to) && edge.Weight.Equals(weight));
+            if (edgeIndex < 0) return false;
+            GraphEdge<TNode> edge = edges[edgeIndex];
+            edges.RemoveAt(edgeIndex);
+            outgoingEdges[from].Remove(edge);
+            incomingEdges[to].Remove(edge);
+            if (!IsDirected && !EqualityComparer<TNode>.Default.Equals(from, to))
+            {
+                GraphEdge<TNode> reverse = new GraphEdge<TNode>(to, from, weight, false);
+                outgoingEdges[to].Remove(reverse);
+                incomingEdges[from].Remove(reverse);
+            }
+            return true;
+        }
+
+        /// <summary>Removes a node together with every incident edge.</summary>
+        public bool RemoveNode(TNode node)
+        {
+            if (node is null || !outgoingEdges.ContainsKey(node)) return false;
+            for (int index = edges.Count - 1; index >= 0; index--)
+            {
+                GraphEdge<TNode> edge = edges[index];
+                if (!EqualityComparer<TNode>.Default.Equals(edge.From, node) &&
+                    !EqualityComparer<TNode>.Default.Equals(edge.To, node))
+                {
+                    continue;
+                }
+                edges.RemoveAt(index);
+                if (outgoingEdges.TryGetValue(edge.From, out List<GraphEdge<TNode>>? outgoing))
+                    outgoing.Remove(edge);
+                if (incomingEdges.TryGetValue(edge.To, out List<GraphEdge<TNode>>? incoming))
+                    incoming.Remove(edge);
+                if (!IsDirected && !EqualityComparer<TNode>.Default.Equals(edge.From, edge.To))
+                {
+                    GraphEdge<TNode> reverse = new GraphEdge<TNode>(edge.To, edge.From, edge.Weight, false);
+                    if (outgoingEdges.TryGetValue(edge.To, out List<GraphEdge<TNode>>? reverseOutgoing))
+                        reverseOutgoing.Remove(reverse);
+                    if (incomingEdges.TryGetValue(edge.From, out List<GraphEdge<TNode>>? reverseIncoming))
+                        reverseIncoming.Remove(reverse);
+                }
+            }
+            outgoingEdges.Remove(node);
+            incomingEdges.Remove(node);
+            nodes.Remove(node);
+            return true;
+        }
+
         /// <summary>
         /// Computes scalar weight from mass using standard gravitational acceleration.
         /// </summary>
@@ -108,7 +155,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="node">The node.</param>
         /// <returns>The result.</returns>
         public IReadOnlyList<GraphEdge<TNode>> GetOutgoingEdges(TNode node)
@@ -122,7 +168,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="node">The node.</param>
         /// <returns>The result.</returns>
         public IReadOnlyList<GraphEdge<TNode>> GetIncomingEdges(TNode node)
@@ -135,7 +180,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="node">The node.</param>
         /// <returns>The result.</returns>
@@ -158,7 +202,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="order">The order.</param>
         /// <param name="parents">The parents.</param>
         public GraphTraversal(IReadOnlyList<TNode> order, IReadOnlyDictionary<TNode, TNode> parents)
@@ -176,7 +219,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="distances">The distances.</param>
         /// <param name="previous">The previous.</param>
         /// <param name="hasNegativeCycle">The has negative cycle.</param>
@@ -190,7 +232,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="node">The node.</param>
         /// <param name="distance">The distance.</param>
         /// <returns>The result.</returns>
@@ -200,7 +241,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="target">The target.</param>
         /// <param name="path">The path.</param>
@@ -242,7 +282,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="distances">The distances.</param>
         /// <param name="hasNegativeCycle">The has negative cycle.</param>
         public AllPairsShortestPathResult(IReadOnlyDictionary<TNode, IReadOnlyDictionary<TNode, double>> distances, bool hasNegativeCycle)
@@ -255,7 +294,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="from">The from.</param>
         /// <param name="to">The to.</param>
@@ -279,7 +317,6 @@ namespace OPEN_LRD.Skills
         public IReadOnlyList<TNode> Order { get; }
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="success">The success.</param>
         /// <param name="order">The order.</param>
         public TopologicalSortResult(bool success, IReadOnlyList<TNode> order)
@@ -294,7 +331,6 @@ namespace OPEN_LRD.Skills
         public IReadOnlyList<GraphEdge<TNode>> Edges { get; }
         public double TotalWeight { get; }
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="edges">The edges.</param>
         /// <param name="totalWeight">The total weight.</param>
@@ -311,7 +347,6 @@ namespace OPEN_LRD.Skills
         public IReadOnlyDictionary<(TNode From, TNode To), double> Flows { get; }
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="maximumFlow">The maximum flow.</param>
         /// <param name="flows">The flows.</param>
         public MaximumFlowResult(double maximumFlow, IReadOnlyDictionary<(TNode From, TNode To), double> flows)
@@ -327,7 +362,6 @@ namespace OPEN_LRD.Skills
         private const int MaximumFloydWarshallNodes = 512;
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="start">The start.</param>
@@ -360,7 +394,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="start">The start.</param>
@@ -396,7 +429,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="start">The start.</param>
@@ -445,7 +477,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="start">The start.</param>
@@ -507,7 +538,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -580,7 +610,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
         public static TopologicalSortResult<TNode> TopologicalSort<TNode>(Graph<TNode> graph)
@@ -622,7 +651,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -666,7 +694,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
         public static IReadOnlyList<IReadOnlyList<TNode>> ConnectedComponents<TNode>(Graph<TNode> graph)
@@ -703,7 +730,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
@@ -778,7 +804,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="graph">The graph.</param>
         /// <returns>The result.</returns>
         public static MinimumSpanningTreeResult<TNode> MinimumSpanningTree<TNode>(Graph<TNode> graph)
@@ -820,7 +845,6 @@ namespace OPEN_LRD.Skills
         }
 
         /// <summary>
-        /// </summary>
         /// </summary>
         /// <param name="graph">The graph.</param>
         /// <param name="source">The source.</param>
@@ -933,11 +957,112 @@ namespace OPEN_LRD.Skills
             outgoing[to] = outgoing.TryGetValue(to, out double existing) ? existing + amount : amount;
         }
 
-        /// <summary>
-        /// Computes scalar weight from mass using standard gravitational acceleration.
-        /// </summary>
+        /// <summary>Computes PageRank; optionally treats non-negative edge weights as transition confidence.</summary>
         /// <param name="graph">The graph.</param>
-        /// <returns>The result.</returns>
+        /// <param name="dampingFactor">The damping factor in [0, 1).</param>
+        /// <param name="tolerance">The convergence tolerance.</param>
+        /// <param name="maxIterations">The maximum iteration count.</param>
+        /// <param name="confidenceWeighted">Whether edge weights are used as transition confidence.</param>
+        public static IReadOnlyDictionary<TNode, double> PageRank<TNode>(
+            Graph<TNode> graph,
+            double dampingFactor = 0.85,
+            double tolerance = 1e-9,
+            int maxIterations = 100,
+            bool confidenceWeighted = false)
+            where TNode : notnull
+        {
+            EnsureGraph(graph, nameof(graph));
+            if (dampingFactor < 0.0 || dampingFactor >= 1.0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(dampingFactor), "The damping factor must be in the range [0, 1).");
+            }
+            if (tolerance <= 0.0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(tolerance), "The tolerance must be positive.");
+            }
+            if (maxIterations < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxIterations), "The iteration count must be positive.");
+            }
+            int count = graph.NodeCount;
+            if (count == 0)
+            {
+                return new ReadOnlyDictionary<TNode, double>(new Dictionary<TNode, double>());
+            }
+            Dictionary<TNode, int> indices = BuildNodeIndices(graph);
+            IReadOnlyList<TNode> nodes = graph.Nodes;
+            double[] outgoingWeight = new double[count];
+            double[] ranks = new double[count];
+            for (int index = 0; index < count; index++)
+            {
+                IReadOnlyList<GraphEdge<TNode>> outgoing = graph.GetOutgoingEdges(nodes[index]);
+                if (!confidenceWeighted)
+                {
+                    outgoingWeight[index] = outgoing.Count;
+                }
+                else
+                {
+                    foreach (GraphEdge<TNode> edge in outgoing)
+                    {
+                        if (edge.Weight < 0.0)
+                            throw new InvalidOperationException("Confidence-weighted PageRank requires non-negative edge weights.");
+                        outgoingWeight[index] += edge.Weight;
+                    }
+                }
+                ranks[index] = 1.0 / count;
+            }
+            double initial = (1.0 - dampingFactor) / count;
+            for (int iteration = 0; iteration < maxIterations; iteration++)
+            {
+                double[] next = new double[count];
+                for (int index = 0; index < count; index++)
+                {
+                    next[index] = initial;
+                }
+                double dangling = 0.0;
+                for (int index = 0; index < count; index++)
+                {
+                    if (outgoingWeight[index] <= Tolerance)
+                    {
+                        dangling += ranks[index];
+                    }
+                }
+                double danglingShare = dampingFactor * dangling / count;
+                for (int index = 0; index < count; index++)
+                {
+                    next[index] += danglingShare;
+                }
+                for (int index = 0; index < count; index++)
+                {
+                    if (outgoingWeight[index] <= Tolerance)
+                    {
+                        continue;
+                    }
+                    foreach (GraphEdge<TNode> edge in graph.GetOutgoingEdges(nodes[index]))
+                    {
+                        double transition = confidenceWeighted ? edge.Weight / outgoingWeight[index] : 1.0 / outgoingWeight[index];
+                        next[indices[edge.To]] += dampingFactor * ranks[index] * transition;
+                    }
+                }
+                double difference = 0.0;
+                for (int index = 0; index < count; index++)
+                {
+                    difference += Math.Abs(next[index] - ranks[index]);
+                }
+                ranks = next;
+                if (difference <= tolerance)
+                {
+                    break;
+                }
+            }
+            Dictionary<TNode, double> result = new Dictionary<TNode, double>();
+            for (int index = 0; index < count; index++)
+            {
+                result[nodes[index]] = ranks[index];
+            }
+            return new ReadOnlyDictionary<TNode, double>(result);
+        }
+
         public static bool IsBipartite<TNode>(Graph<TNode> graph)
             where TNode : notnull
         {
@@ -1025,7 +1150,6 @@ namespace OPEN_LRD.Skills
 
             /// <summary>
             /// </summary>
-            /// </summary>
             /// <param name="size">The size.</param>
             public UnionFind(int size)
             {
@@ -1039,7 +1163,6 @@ namespace OPEN_LRD.Skills
 
             /// <summary>
             /// </summary>
-            /// </summary>
             /// <param name="value">The value.</param>
             /// <returns>The result.</returns>
             public int Find(int value)
@@ -1052,7 +1175,6 @@ namespace OPEN_LRD.Skills
             }
 
             /// <summary>
-            /// </summary>
             /// </summary>
             /// <param name="first">The first.</param>
             /// <param name="second">The second.</param>

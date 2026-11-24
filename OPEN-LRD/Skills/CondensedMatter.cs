@@ -80,7 +80,6 @@ namespace OPEN_LRD.Skills
 
         /// <summary>
         /// </summary>
-        /// </summary>
         /// <param name="first">The first direct-lattice vector.</param>
         /// <param name="second">The second direct-lattice vector.</param>
         /// <param name="third">The third direct-lattice vector.</param>
