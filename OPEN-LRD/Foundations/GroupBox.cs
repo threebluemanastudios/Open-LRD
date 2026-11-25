@@ -13,6 +13,8 @@ namespace OPEN_LRD.Foundations
         private List<Guid> _sentences;
         private HashSet<Guid> _sentenceSet;
         private bool _identityFrozen;
+        private readonly Dictionary<Guid, ConversationSymbolic> _symbolicConversations = new Dictionary<Guid, ConversationSymbolic>();
+        private readonly Dictionary<Guid, ConversationText> _textConversations = new Dictionary<Guid, ConversationText>();
 
         public GroupBox()
         {
@@ -141,6 +143,120 @@ namespace OPEN_LRD.Foundations
         public string? GetGroupingName()
         {
             return GraphSynchronization.Execute(() => GroupingName);
+        }
+
+        /// <summary>Adds a symbolic conversation to this group. Fails if the identifier is already present.</summary>
+        /// <param name="conversationId">Conversation identifier.</param>
+        /// <param name="conversation">Symbolic conversation to store.</param>
+        /// <returns><see langword="true"/> if added; otherwise <see langword="false"/>.</returns>
+        public bool AddSymbolicConversation(Guid conversationId, ConversationSymbolic conversation)
+        {
+            ValidateIdentityId(conversationId, nameof(conversationId));
+            ArgumentNullException.ThrowIfNull(conversation);
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureIdentityMutable();
+                if (_symbolicConversations.ContainsKey(conversationId))
+                {
+                    return false;
+                }
+                _symbolicConversations.Add(conversationId, conversation);
+                return true;
+            });
+        }
+
+        /// <summary>Adds a text conversation to this group. Fails if the identifier is already present.</summary>
+        /// <param name="conversationId">Conversation identifier.</param>
+        /// <param name="conversation">Text conversation to store.</param>
+        /// <returns><see langword="true"/> if added; otherwise <see langword="false"/>.</returns>
+        public bool AddTextConversation(Guid conversationId, ConversationText conversation)
+        {
+            ValidateIdentityId(conversationId, nameof(conversationId));
+            ArgumentNullException.ThrowIfNull(conversation);
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureIdentityMutable();
+                if (_textConversations.ContainsKey(conversationId))
+                {
+                    return false;
+                }
+                _textConversations.Add(conversationId, conversation);
+                return true;
+            });
+        }
+
+        /// <summary>Gets a symbolic conversation by identifier.</summary>
+        /// <param name="conversationId">Conversation identifier.</param>
+        /// <returns>The stored conversation, or <see langword="null"/> if absent.</returns>
+        public ConversationSymbolic? GetSymbolicConversation(Guid conversationId)
+        {
+            return GraphSynchronization.Execute(() =>
+                _symbolicConversations.TryGetValue(conversationId, out ConversationSymbolic? conversation) ? conversation : null);
+        }
+
+        /// <summary>Gets a text conversation by identifier.</summary>
+        /// <param name="conversationId">Conversation identifier.</param>
+        /// <returns>The stored conversation, or <see langword="null"/> if absent.</returns>
+        public ConversationText? GetTextConversation(Guid conversationId)
+        {
+            return GraphSynchronization.Execute(() =>
+                _textConversations.TryGetValue(conversationId, out ConversationText? conversation) ? conversation : null);
+        }
+
+        /// <summary>Returns a snapshot of all symbolic conversations keyed by identifier.</summary>
+        public Dictionary<Guid, ConversationSymbolic> GetSymbolicConversations()
+        {
+            return GraphSynchronization.Execute(() => new Dictionary<Guid, ConversationSymbolic>(_symbolicConversations));
+        }
+
+        /// <summary>Returns a snapshot of all text conversations keyed by identifier.</summary>
+        public Dictionary<Guid, ConversationText> GetTextConversations()
+        {
+            return GraphSynchronization.Execute(() => new Dictionary<Guid, ConversationText>(_textConversations));
+        }
+
+        public bool ContainsSymbolicConversation(Guid conversationId)
+        {
+            return GraphSynchronization.Execute(() => _symbolicConversations.ContainsKey(conversationId));
+        }
+
+        public bool ContainsTextConversation(Guid conversationId)
+        {
+            return GraphSynchronization.Execute(() => _textConversations.ContainsKey(conversationId));
+        }
+
+        public int GetSymbolicConversationCount()
+        {
+            return GraphSynchronization.Execute(() => _symbolicConversations.Count);
+        }
+
+        public int GetTextConversationCount()
+        {
+            return GraphSynchronization.Execute(() => _textConversations.Count);
+        }
+
+        /// <summary>Removes a symbolic conversation from this group.</summary>
+        /// <param name="conversationId">Conversation identifier.</param>
+        /// <returns><see langword="true"/> if removed; otherwise <see langword="false"/>.</returns>
+        public bool RemoveSymbolicConversation(Guid conversationId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureIdentityMutable();
+                return _symbolicConversations.Remove(conversationId);
+            });
+        }
+
+        /// <summary>Removes a text conversation from this group.</summary>
+        /// <param name="conversationId">Conversation identifier.</param>
+        /// <returns><see langword="true"/> if removed; otherwise <see langword="false"/>.</returns>
+        public bool RemoveTextConversation(Guid conversationId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureIdentityMutable();
+                return _textConversations.Remove(conversationId);
+            });
         }
 
         private static List<Guid> ExtractSentenceIds(Dictionary<Guid, SentenceBox> sentences)

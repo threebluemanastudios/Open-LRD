@@ -14,6 +14,7 @@
     <Compile Include="../OPEN-LRD/LRD_Core.cs" />
     <Compile Include="../OPEN-LRD/Foundations/ConversationSymbolic.cs" />
     <Compile Include="../OPEN-LRD/Foundations/ConversationText.cs" />
+    <Compile Include="../OPEN-LRD/Foundations/ConversationCodec.cs" />
     <Compile Include="../OPEN-LRD/Foundations/GraphSynchronization.cs" />
     <Compile Include="../OPEN-LRD/Foundations/GroupBox.cs" />
     <Compile Include="../OPEN-LRD/Foundations/Node.cs" />

@@ -50,7 +50,11 @@ namespace OPEN_LRD.Foundations
         /// Represents a value.
         /// </summary>
         Value,
-
+        /// <summary>
+        /// Placeholder for a word whose part of speech has not been determined yet. Words with this value cannot be trusted.
+        /// Appended last so existing persisted values keep their meaning.
+        /// </summary>
+        Unknown,
     }
     internal class WordBox
     {

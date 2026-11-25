@@ -26,6 +26,14 @@ namespace OPEN_LRD.SmokeTests
             Program.Run("Expression AST limits are exact at node, depth, and literal boundaries", ExpressionLimitsAreExactAtBoundaries());
             Program.Run("Repeated-element promotion and GetWordByGuid", RepeatedElementPromotionAndWordLookup());
             Program.Run("Trusted link weight updates keep assertion-key state consistent", TrustedLinkWeightUpdateConsistency());
+            Program.Run("Untrusted sentence identity index stays in sync", UntrustedSentenceIdentityIndexStaysInSync());
+            Program.Run("GroupBox conversation stores add, read, remove, and freeze", GroupBoxConversationStores());
+            Program.Run("Conversation codec round-trips spacing and deduplicates", ConversationCodecRoundTripAndDeduplication());
+            Program.Run("Conversation codec caller sense and rejections", ConversationCodecCallerSenseAndRejections());
+            Program.Run("Word promotion rejects placeholder sense, usage, and part of speech", WordPromotionRejectsPlaceholders());
+            Program.Run("Default sense blocks symbol and sentence promotion", DefaultSenseBlocksSymbolAndSentencePromotion());
+            Program.Run("Staged batch commit rejects default-sense symbols and sentences", BatchCommitRejectsDefaultSense());
+            Program.Run("Conversation codec tokenization and file ingestion", ConversationCodecTokenizationAndFileIngestion());
             Program.Run("Extended function scalar checkpoint payloads round-trip", ExtendedFunctionScalarPersistence());
         }
 
@@ -471,6 +479,433 @@ namespace OPEN_LRD.SmokeTests
                     Guid? promotedSentence = core.ResolveOrPromoteUntrustedSentenceSubgraph(sentenceId);
                     Program.Assert(promotedSentence == sentenceId && core.GetTrustedSentenceBox(sentenceId) != null,
                         "Repeated-word sentences should promote without deduplication failure.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static Action ConversationCodecRoundTripAndDeduplication()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    Program.Assert(!core.AddTrustedSense(new SenseBox(LRD_Core.DefaultSenseId, true)),
+                        "Default sense should be pre-registered by InitializeCore.");
+                    Program.Assert(!core.AddTrustedUsage(new UsageBox(LRD_Core.DefaultUsageId, true)),
+                        "Default usage should be pre-registered by InitializeCore.");
+
+                    // Spacing, tabs, punctuation and digits must survive the round trip exactly.
+                    string[] rows =
+                    {
+                        "The cat's  hat, 42!\tok",
+                        "  leading and trailing  ",
+                        "",
+                        "The cat's  hat, 42!\tok"
+                    };
+                    ConversationText text = new ConversationText(Guid.NewGuid());
+                    foreach (string row in rows) text.AddText(row);
+
+                    ConversationSymbolic symbolic = ConversationCodec.TextToSymbolic(text);
+                    Dictionary<UInt128, List<Guid>> symbolicRows = symbolic.GetSymbolicArray();
+                    Program.Assert(symbolicRows.Count == rows.Length,
+                        "Each text row should map to exactly one symbolic row.");
+                    Program.Assert(symbolicRows.Values.All(sentences => sentences.Count == 1),
+                        "Each symbolic row should hold exactly one sentence Guid.");
+                    Program.Assert(symbolic.GetConversationID() == text.GetConversationID(),
+                        "Symbolic conversation should keep the source conversation identifier.");
+
+                    ConversationText rebuilt = ConversationCodec.SymbolicToText(symbolic);
+                    for (int index = 0; index < rows.Length; index++)
+                    {
+                        Program.Assert(rebuilt.GetTextById((UInt128)(ulong)index) == rows[index],
+                            $"Row {index} should round-trip with its original spacing.");
+                    }
+
+                    // Identical rows resolve to the same sentence Guid through the untrusted registry.
+                    Program.Assert(symbolicRows[0][0] == symbolicRows[3][0],
+                        "Identical rows should deduplicate to one staged sentence.");
+                    Program.Assert(core.GetUntrustedSentenceBox(symbolicRows[0][0]) != null,
+                        "New sentences should be staged as untrusted.");
+
+                    // Placeholder words (default sense, default usage, Unknown part of speech) block promotion,
+                    // so the sentence subgraph cannot be trusted yet.
+                    Guid stagedSentence = symbolicRows[0][0];
+                    Program.Assert(core.ResolveOrPromoteUntrustedSentenceSubgraph(stagedSentence) == null &&
+                                   core.GetTrustedSentenceBox(stagedSentence) == null,
+                        "Sentences built from placeholder words should not promote.");
+                    ConversationSymbolic again = ConversationCodec.TextToSymbolic(text);
+                    Program.Assert(again.GetSymbolicArray()[0][0] == stagedSentence,
+                        "Staged sentence should be reused on re-conversion.");
+                    Program.Assert(ConversationCodec.SymbolicToText(again).GetTextById(0) == rows[0],
+                        "Staged sentence should still rebuild its text.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static Action WordPromotionRejectsPlaceholders()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    Guid senseId = Guid.NewGuid();
+                    Guid usageId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    Program.Assert(core.AddTrustedUsage(new UsageBox(usageId)), "Usage should be trusted.");
+                    Guid symbolId = Guid.NewGuid();
+                    SymbolBox symbol = new SymbolBox(symbolId, 'q');
+                    symbol.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(symbol), "Symbol should be trusted.");
+                    List<Guid> symbols = new List<Guid> { symbolId };
+
+                    // Each placeholder alone must block promotion.
+                    Guid unknownPos = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedWord(new WordBox(unknownPos, senseId, usageId, symbols, PartOfSpeech.Unknown)),
+                        "Unknown part-of-speech word should stage.");
+                    Program.Assert(!core.ConvertUntrustedWordToTrusted(unknownPos) && core.ResolveOrPromoteUntrustedWord(unknownPos) == null,
+                        "Unknown part of speech should block promotion.");
+
+                    Guid defaultSense = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedWord(new WordBox(defaultSense, LRD_Core.DefaultSenseId, usageId, symbols, PartOfSpeech.Noun)),
+                        "Default-sense word should stage.");
+                    Program.Assert(!core.ConvertUntrustedWordToTrusted(defaultSense),
+                        "Default sense should block promotion.");
+
+                    Guid defaultUsage = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedWord(new WordBox(defaultUsage, senseId, LRD_Core.DefaultUsageId, symbols, PartOfSpeech.Noun)),
+                        "Default-usage word should stage.");
+                    Program.Assert(!core.ConvertUntrustedWordToTrusted(defaultUsage),
+                        "Default usage should block promotion.");
+
+                    // A fully classified word promotes.
+                    Guid finalWord = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedWord(new WordBox(finalWord, senseId, usageId, symbols, PartOfSpeech.Verb)),
+                        "Classified word should stage.");
+                    Program.Assert(core.ConvertUntrustedWordToTrusted(finalWord) && core.GetTrustedWordBox(finalWord) != null,
+                        "Fully classified word should promote.");
+
+                    // Only the default sense/usage and Unknown are placeholders; the sentinel is still a valid enum value.
+                    Program.Assert(Enum.IsDefined(PartOfSpeech.Unknown), "Unknown should be a defined part of speech.");
+                    Program.Assert((int)PartOfSpeech.Unknown == 10 && (int)PartOfSpeech.Noun == 0,
+                        "Existing part-of-speech values must keep their numbers for persisted data.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static Action DefaultSenseBlocksSymbolAndSentencePromotion()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    Guid senseId = Guid.NewGuid();
+                    Guid usageId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    Program.Assert(core.AddTrustedUsage(new UsageBox(usageId)), "Usage should be trusted.");
+
+                    // Symbols on the default sense: single-item and batch-free paths refuse to trust them.
+                    SymbolBox placeholderSymbol = new SymbolBox(Guid.NewGuid(), 'z');
+                    placeholderSymbol.SetSenseID(LRD_Core.DefaultSenseId);
+                    Program.Assert(!core.AddTrustedSymbol(placeholderSymbol), "Default-sense symbol should not be added as trusted.");
+                    Guid stagedSymbolId = placeholderSymbol.GetSymbolID();
+                    Program.Assert(core.SetUntrustedSymbol(placeholderSymbol), "Default-sense symbol should stage.");
+                    Program.Assert(!core.ConvertUntrustedSymbolToTrusted(stagedSymbolId) && core.GetTrustedSymbolBox(stagedSymbolId) == null,
+                        "Default-sense symbol should not promote.");
+
+                    // Sentence on the default sense over a classified word: refused on its own.
+                    SymbolBox goodSymbol = new SymbolBox(Guid.NewGuid(), 'y');
+                    goodSymbol.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(goodSymbol), "Symbol should be trusted.");
+                    Guid wordId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedWord(new WordBox(wordId, senseId, usageId,
+                        new List<Guid> { goodSymbol.GetSymbolID() }, PartOfSpeech.Noun)), "Word should be trusted.");
+
+                    Guid placeholderSentence = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedSentence(new SentenceBox(placeholderSentence, LRD_Core.DefaultSenseId,
+                        new List<Guid> { wordId })), "Default-sense sentence should stage.");
+                    Program.Assert(!core.ConvertUntrustedSentenceToTrusted(placeholderSentence) &&
+                                   core.GetTrustedSentenceBox(placeholderSentence) == null,
+                        "Default-sense sentence should not promote.");
+                    Program.Assert(core.ResolveOrPromoteUntrustedSentenceSubgraph(placeholderSentence) == null,
+                        "Default-sense sentence should not promote through the subgraph path.");
+
+                    // Trusted sentence creation with the default sense is refused.
+                    Program.Assert(!core.AddTrustedSentence(new SentenceBox(Guid.NewGuid(), LRD_Core.DefaultSenseId,
+                        new List<Guid> { wordId })), "Default-sense sentence should not be added as trusted.");
+
+                    // The same shape on a real sense does promote, so the gate is the sense alone.
+                    Guid realSentence = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedSentence(new SentenceBox(realSentence, senseId, new List<Guid> { wordId })),
+                        "Classified sentence should stage.");
+                    Program.Assert(core.ConvertUntrustedSentenceToTrusted(realSentence),
+                        "Classified sentence should promote.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static Action BatchCommitRejectsDefaultSense()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    Guid senseId = Guid.NewGuid();
+                    Guid usageId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    Program.Assert(core.AddTrustedUsage(new UsageBox(usageId)), "Usage should be trusted.");
+                    SymbolBox goodSymbol = new SymbolBox(Guid.NewGuid(), 'k');
+                    goodSymbol.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(goodSymbol), "Symbol should be trusted.");
+                    Guid trustedWordId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedWord(new WordBox(trustedWordId, senseId, usageId,
+                        new List<Guid> { goodSymbol.GetSymbolID() }, PartOfSpeech.Noun)), "Word should be trusted.");
+
+                    // Case 1: a symbol staged on the default sense aborts the whole batch.
+                    SymbolBox placeholderSymbol = new SymbolBox(Guid.NewGuid(), 'm');
+                    placeholderSymbol.SetSenseID(LRD_Core.DefaultSenseId);
+                    using (LRD_Core.ReasoningWriteBatch symbolBatch = core.BeginReasoningWriteBatch())
+                    {
+                        symbolBatch.StageSymbol(placeholderSymbol);
+                        Program.AssertThrows<InvalidOperationException>(symbolBatch.Commit,
+                            "Batch with a default-sense symbol should fail the sense check.");
+                    }
+                    Program.Assert(core.GetTrustedSymbolBox(placeholderSymbol.GetSymbolID()) == null,
+                        "Failed batch should not trust the default-sense symbol.");
+
+                    // Case 2: a sentence on the default sense aborts the batch even over a trusted word.
+                    Guid placeholderSentenceId = Guid.NewGuid();
+                    using (LRD_Core.ReasoningWriteBatch sentenceBatch = core.BeginReasoningWriteBatch())
+                    {
+                        sentenceBatch.StageSentence(new SentenceBox(placeholderSentenceId, LRD_Core.DefaultSenseId,
+                            new List<Guid> { trustedWordId }));
+                        Program.AssertThrows<InvalidOperationException>(sentenceBatch.Commit,
+                            "Batch with a default-sense sentence should fail the sense check.");
+                    }
+                    Program.Assert(core.GetTrustedSentenceBox(placeholderSentenceId) == null,
+                        "Failed batch should not trust the default-sense sentence.");
+
+                    // Case 3 (control): the same shape on a sense staged in the same batch commits.
+                    SenseBox batchSense = new SenseBox(Guid.NewGuid());
+                    SymbolBox batchSymbol = new SymbolBox(Guid.NewGuid(), 'n');
+                    batchSymbol.SetSenseID(batchSense.GetSenseID());
+                    using (LRD_Core.ReasoningWriteBatch okBatch = core.BeginReasoningWriteBatch())
+                    {
+                        okBatch.StageSense(batchSense);
+                        okBatch.StageSymbol(batchSymbol);
+                        okBatch.Commit();
+                    }
+                    Program.Assert(core.GetTrustedSymbolBox(batchSymbol.GetSymbolID()) != null,
+                        "Symbol on a sense trusted in the same batch should commit.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static Action ConversationCodecCallerSenseAndRejections()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    Guid callerSense = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(callerSense)), "Caller sense should be trusted.");
+                    ConversationText text = new ConversationText(Guid.NewGuid());
+                    text.AddText("sense check");
+                    ConversationSymbolic symbolic = ConversationCodec.TextToSymbolic(text, callerSense);
+                    Program.Assert(core.GetUntrustedSentenceBox(symbolic.GetSymbolicArray()[0][0])?.GetSenseID() == callerSense,
+                        "Caller-supplied sense should be applied to the staged sentence.");
+                    Program.Assert(ConversationCodec.SymbolicToText(symbolic).GetTextById(0) == "sense check",
+                        "Caller-sense conversion should round-trip.");
+
+                    Program.AssertThrows<ArgumentException>(() => ConversationCodec.TextToSymbolic(text, Guid.Empty),
+                        "Guid.Empty sense should be rejected.");
+
+                    ConversationSymbolic unknown = new ConversationSymbolic(Guid.NewGuid());
+                    unknown.AddSymbolic(new List<Guid> { Guid.NewGuid() });
+                    Program.AssertThrows<InvalidOperationException>(() => ConversationCodec.SymbolicToText(unknown),
+                        "Unregistered sentence references should fail to rebuild.");
+                }
+                finally
+                {
+                    core.ResetCore();
+                }
+            };
+        }
+
+        private static Action ConversationCodecTokenizationAndFileIngestion()
+        {
+            return () =>
+            {
+                List<string> tokens = ConversationCodec.Tokenize("a, b\t c");
+                Program.Assert(tokens.SequenceEqual(new[] { "a", ",", " ", "b", "\t ", "c" }),
+                    "Tokens should be word runs, single punctuation, and whitespace runs.");
+                Program.Assert(string.Concat(tokens) == "a, b\t c", "Tokens should concatenate back to the input.");
+
+                string path = Path.Combine(Path.GetTempPath(), $"codec-{Guid.NewGuid():N}.txt");
+                try
+                {
+                    File.WriteAllText(path, "line one\nline  two\n");
+                    ConversationText text = ConversationCodec.ReadFileToTextConversation(path);
+                    // The grid reader keeps each line terminator inside its row, so rows are exact raw content.
+                    Program.Assert(text.GetTextById(0) == "line one\n" && text.GetTextById(1) == "line  two\n",
+                        "Each file row should become one text row, with its original spacing and terminator.");
+                    Program.Assert(text.GetEntryCount() == 2, "A trailing newline should not create an extra row.");
+                }
+                finally
+                {
+                    File.Delete(path);
+                }
+            };
+        }
+
+        private static Action GroupBoxConversationStores()
+        {
+            return () =>
+            {
+                GroupBox group = new GroupBox(Guid.NewGuid(), new List<Guid>());
+                Guid textId = Guid.NewGuid();
+                Guid symbolicId = Guid.NewGuid();
+                ConversationText text = new ConversationText();
+                ConversationSymbolic symbolic = new ConversationSymbolic();
+
+                Program.Assert(group.AddTextConversation(textId, text) && group.ContainsTextConversation(textId),
+                    "Text conversation should be stored.");
+                Program.Assert(!group.AddTextConversation(textId, new ConversationText()),
+                    "Duplicate text conversation id should be rejected.");
+                Program.Assert(ReferenceEquals(group.GetTextConversation(textId), text),
+                    "Text conversation lookup should return the stored instance.");
+                Program.Assert(group.AddSymbolicConversation(symbolicId, symbolic) &&
+                               ReferenceEquals(group.GetSymbolicConversation(symbolicId), symbolic),
+                    "Symbolic conversation should be stored and retrievable.");
+                Program.Assert(group.GetTextConversationCount() == 1 && group.GetSymbolicConversationCount() == 1,
+                    "Store counts should reflect added conversations.");
+                Program.AssertThrows<ArgumentNullException>(() => group.AddSymbolicConversation(Guid.NewGuid(), null!),
+                    "Null symbolic conversations should be rejected.");
+
+                Program.Assert(group.RemoveTextConversation(textId) && group.GetTextConversation(textId) == null,
+                    "Text conversation should be removable.");
+
+                group.FreezeIdentity();
+                Program.AssertThrows<InvalidOperationException>(() => group.AddTextConversation(Guid.NewGuid(), new ConversationText()),
+                    "Frozen group should reject text conversation additions.");
+                Program.AssertThrows<InvalidOperationException>(() => group.RemoveSymbolicConversation(symbolicId),
+                    "Frozen group should reject symbolic conversation removals.");
+                Program.Assert(group.ContainsSymbolicConversation(symbolicId),
+                    "Frozen group should keep existing symbolic conversations.");
+            };
+        }
+
+        private static Action UntrustedSentenceIdentityIndexStaysInSync()
+        {
+            return () =>
+            {
+                LRD_Core core = LRD_Core.Instance;
+                core.ResetCore();
+                core.InitializeCore();
+                try
+                {
+                    Guid senseId = Guid.NewGuid();
+                    Guid usageId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedSense(new SenseBox(senseId)), "Sense should be trusted.");
+                    Program.Assert(core.AddTrustedUsage(new UsageBox(usageId)), "Usage should be trusted.");
+                    Guid symbolId = Guid.NewGuid();
+                    SymbolBox symbol = new SymbolBox(symbolId, 'x');
+                    symbol.SetSenseID(senseId);
+                    Program.Assert(core.AddTrustedSymbol(symbol), "Symbol should be trusted.");
+                    Guid wordId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedWord(new WordBox(wordId, senseId, usageId, new List<Guid> { symbolId }, PartOfSpeech.Noun)),
+                        "Word should be trusted.");
+                    Guid otherWordId = Guid.NewGuid();
+                    Program.Assert(core.AddTrustedWord(new WordBox(otherWordId, senseId, usageId, new List<Guid> { symbolId, symbolId }, PartOfSpeech.Noun)),
+                        "Second word should be trusted.");
+
+                    // Stage with identity; lookup by content finds it, duplicate identity is rejected.
+                    Guid firstId = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedSentence(new SentenceBox(firstId, senseId, new List<Guid> { wordId })),
+                        "First sentence should stage.");
+                    Program.Assert(core.GetUntrustedSentenceBoxByIdentity(new List<Guid> { wordId }, senseId)?.GetSentenceID() == firstId,
+                        "Identity lookup should find the staged sentence.");
+                    Program.Assert(!core.SetUntrustedSentence(new SentenceBox(Guid.NewGuid(), senseId, new List<Guid> { wordId })),
+                        "Duplicate identity under a different Guid should be rejected.");
+
+                    // Incomplete identity is not indexed until its sense is assigned.
+                    Guid pendingId = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedSentence(new SentenceBox(pendingId, new List<Guid> { otherWordId })),
+                        "Sentence without sense should stage.");
+                    Program.Assert(core.GetUntrustedSentenceBoxByIdentity(new List<Guid> { otherWordId }, senseId) == null,
+                        "Incomplete identity should not be indexed.");
+                    Program.Assert(core.SetUntrustedSentenceSenseID(pendingId, senseId) &&
+                                   core.GetUntrustedSentenceBoxByIdentity(new List<Guid> { otherWordId }, senseId)?.GetSentenceID() == pendingId,
+                        "Assigning sense should index the sentence.");
+
+                    // Removal drops the index entry.
+                    Program.Assert(core.RemoveUntrustedSentence(firstId), "Removal should succeed.");
+                    Program.Assert(core.GetUntrustedSentenceBoxByIdentity(new List<Guid> { wordId }, senseId) == null,
+                        "Removed sentence should leave the identity index.");
+                    Guid replacementId = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedSentence(new SentenceBox(replacementId, senseId, new List<Guid> { wordId })),
+                        "Identity should be reusable after removal.");
+
+                    // Changing identity through the core must reindex; conflicting changes are refused without mutation.
+                    Program.Assert(!core.SetUntrustedSentenceWords(pendingId, new List<Guid> { wordId }),
+                        "Changing words to an existing identity should be refused.");
+                    Program.Assert(core.GetUntrustedSentenceBox(pendingId)?.GetWords()?.Single() == otherWordId,
+                        "Refused identity change should leave the sentence unchanged.");
+                    Program.Assert(core.GetUntrustedSentenceBoxByIdentity(new List<Guid> { otherWordId }, senseId)?.GetSentenceID() == pendingId,
+                        "Refused identity change should keep the original index entry.");
+
+                    // Compression lookup: flag off ignores staged sentences, flag on finds them.
+                    Program.Assert(core.GetNewSentenceBox(new List<Guid> { wordId }, senseId).GetSentenceID() != replacementId,
+                        "Default lookup should not consult untrusted sentences.");
+                    Program.Assert(core.GetNewSentenceBox(new List<Guid> { wordId }, senseId, checkUntrusted: true).GetSentenceID() == replacementId,
+                        "checkUntrusted lookup should return the staged sentence.");
+
+                    // Promotion moves the sentence out of the untrusted index.
+                    Program.Assert(core.ConvertUntrustedSentenceToTrusted(replacementId) &&
+                                   core.GetUntrustedSentenceBoxByIdentity(new List<Guid> { wordId }, senseId) == null,
+                        "Promoted sentence should leave the untrusted index.");
+
+                    // Clear resets the index.
+                    Guid clearedId = Guid.NewGuid();
+                    Program.Assert(core.SetUntrustedSentence(new SentenceBox(clearedId, senseId, new List<Guid> { otherWordId, wordId })),
+                        "Sentence should stage before clearing.");
+                    core.ClearUntrustedSentences();
+                    Program.Assert(core.GetUntrustedSentenceBoxByIdentity(new List<Guid> { otherWordId, wordId }, senseId) == null,
+                        "Clearing untrusted sentences should clear the identity index.");
                 }
                 finally
                 {

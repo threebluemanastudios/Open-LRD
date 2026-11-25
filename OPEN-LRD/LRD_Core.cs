@@ -289,6 +289,10 @@ namespace OPEN_LRD
         private readonly Dictionary<Guid, FunctionBox> TrustedFunctionDictionary = new Dictionary<Guid, FunctionBox>();
         private readonly Dictionary<WordIdentityKey, Guid> TrustedWordIdentityIndex = new Dictionary<WordIdentityKey, Guid>();
         private readonly Dictionary<SentenceIdentityKey, Guid> TrustedSentenceIdentityIndex = new Dictionary<SentenceIdentityKey, Guid>();
+        /// <summary>Maps untrusted sentence identity keys to their staged sentence identifiers. Mirrors <see cref="TrustedSentenceIdentityIndex"/>.</summary>
+        private readonly Dictionary<SentenceIdentityKey, Guid> UntrustedSentenceIdentityIndex = new Dictionary<SentenceIdentityKey, Guid>();
+        /// <summary>Records the identity key each indexed untrusted sentence was registered under, so removal does not depend on the box's current state.</summary>
+        private readonly Dictionary<Guid, SentenceIdentityKey> UntrustedSentenceIndexedKeyById = new Dictionary<Guid, SentenceIdentityKey>();
         private readonly Dictionary<SymbolIdentityKey, Guid> TrustedSymbolIdentityIndex = new Dictionary<SymbolIdentityKey, Guid>();
         private readonly Dictionary<char, OrderedGuidIndexList> TrustedSymbolCharIndex = new Dictionary<char, OrderedGuidIndexList>();
         private readonly Dictionary<Guid, OrderedGuidIndexList> SymbolsBySenseIndex = new Dictionary<Guid, OrderedGuidIndexList>();
@@ -311,6 +315,10 @@ namespace OPEN_LRD
 
         /// <summary>Gets the current monotonic trusted graph epoch counter.</summary>
         public long CurrentGraphEpoch => GraphSynchronization.Execute(() => { EnsureCoreInitialized(); return _graphEpoch; });
+        /// <summary>Well-known trusted sense used when a caller does not supply one. Registered by <see cref="InitializeCore"/>.</summary>
+        public static readonly Guid DefaultSenseId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000301");
+        /// <summary>Well-known trusted usage used for words created by text conversion. Registered by <see cref="InitializeCore"/>.</summary>
+        public static readonly Guid DefaultUsageId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000302");
         private static readonly Guid DefaultDictionarySourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000001");
         private static readonly Guid DefaultUserSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000002");
         private static readonly Guid DefaultImportSourceId = Guid.Parse("f4c4b814-5eed-4d1c-8ac3-000000000003");
@@ -387,6 +395,15 @@ namespace OPEN_LRD
 
         private void InitializeDefaultSources()
         {
+            if (!AddTrustedSense(new SenseBox(DefaultSenseId, true)))
+            {
+                throw new InvalidOperationException("Failed to initialize default sense.");
+            }
+            if (!AddTrustedUsage(new UsageBox(DefaultUsageId, true)))
+            {
+                throw new InvalidOperationException("Failed to initialize default usage.");
+            }
+
             GroupBox[] defaultGroups =
             {
                 new GroupBox(DefaultGcideGroupId, "GCIDE", Array.Empty<Guid>(), true),
@@ -1610,6 +1627,8 @@ namespace OPEN_LRD
                 UntrustedSymbolDictionary.Clear();
                 UntrustedWordDictionary.Clear();
                 UntrustedSentenceDictionary.Clear();
+                UntrustedSentenceIdentityIndex.Clear();
+                UntrustedSentenceIndexedKeyById.Clear();
                 UntrustedFunctionDictionary.Clear();
                 _graphEpoch = 0;
                 _initialized = false;
@@ -1672,6 +1691,8 @@ namespace OPEN_LRD
                     RemoveUntrustedNodeForTarget(NodeTargetKind.Sentence, sentenceId);
                 }
                 UntrustedSentenceDictionary.Clear();
+                UntrustedSentenceIdentityIndex.Clear();
+                UntrustedSentenceIndexedKeyById.Clear();
             });
         }
 
@@ -1741,7 +1762,12 @@ namespace OPEN_LRD
                 EnsureMutableStorageMode();
                 if (UntrustedSentenceDictionary.TryGetValue(sentenceId, out SentenceBox? sentenceBox))
                 {
+                    if (WouldConflictUntrustedSentenceIdentity(sentenceId, sentenceBox, null, senseId))
+                    {
+                        return false;
+                    }
                     sentenceBox.SetSenseID(senseId);
+                    ReindexUntrustedSentence(sentenceId, sentenceBox);
                     RecalculateAllNodePresentationsInternal();
                     return true;
                 }
@@ -1779,7 +1805,12 @@ namespace OPEN_LRD
                 EnsureMutableStorageMode();
                 if (UntrustedSentenceDictionary.TryGetValue(sentenceId, out SentenceBox? sentenceBox))
                 {
+                    if (WouldConflictUntrustedSentenceIdentity(sentenceId, sentenceBox, words, null))
+                    {
+                        return false;
+                    }
                     sentenceBox.SetWords(words);
+                    ReindexUntrustedSentence(sentenceId, sentenceBox);
                     RecalculateAllNodePresentationsInternal();
                     return true;
                 }
@@ -2213,11 +2244,129 @@ namespace OPEN_LRD
                     return false;
                 }
 
+                SentenceIdentityKey? newKey = sentenceBox.HasCompleteIdentity ? sentenceBox.GetIdentityKey() : null;
+                if (newKey != null &&
+                    UntrustedSentenceIdentityIndex.TryGetValue(newKey, out Guid conflictingId) &&
+                    conflictingId != sentenceId)
+                {
+                    // Identity is already staged under another Guid; callers should reuse that Guid.
+                    return false;
+                }
+
+                RemoveUntrustedSentenceEntry(sentenceId);
                 UntrustedSentenceDictionary[sentenceId] = sentenceBox;
+                if (newKey != null)
+                {
+                    IndexUntrustedSentenceKey(sentenceId, newKey);
+                }
                 if (!EnsureUntrustedNode(NodeTargetKind.Sentence, sentenceId))
                     RecalculateAllNodePresentationsInternal();
                 return true;
             });
+        }
+
+        /// <summary>Returns the staged untrusted sentence whose identity (word sequence and sense) matches, if any.</summary>
+        /// <param name="words">Ordered word identifiers.</param>
+        /// <param name="senseId">Sense identifier.</param>
+        /// <returns>The staged <see cref="SentenceBox"/> with that identity, or <see langword="null"/>.</returns>
+        internal SentenceBox? GetUntrustedSentenceBoxByIdentity(IEnumerable<Guid> words, Guid senseId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                SentenceIdentityKey identityKey = new SentenceIdentityKey(words, senseId);
+                if (!UntrustedSentenceIdentityIndex.TryGetValue(identityKey, out Guid sentenceId) ||
+                    !UntrustedSentenceDictionary.TryGetValue(sentenceId, out SentenceBox? sentenceBox))
+                {
+                    return null;
+                }
+                return sentenceBox.HasCompleteIdentity && sentenceBox.GetIdentityKey().Equals(identityKey) ? sentenceBox : null;
+            });
+        }
+
+        /// <summary>Finds a staged untrusted symbol with the given character and sense. Linear scan over staged symbols.</summary>
+        internal SymbolBox? FindUntrustedSymbolByIdentity(char symbolChar, Guid senseId)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                foreach (SymbolBox symbol in UntrustedSymbolDictionary.Values)
+                {
+                    if (symbol.GetSymbolChar() == symbolChar && symbol.GetSenseID() == senseId)
+                    {
+                        return symbol;
+                    }
+                }
+                return null;
+            });
+        }
+
+        /// <summary>Finds a staged untrusted word with the given identity. Linear scan over staged words.</summary>
+        internal WordBox? FindUntrustedWordByIdentity(List<Guid> symbols, Guid senseId, Guid usageId, PartOfSpeech partOfSpeech)
+        {
+            return GraphSynchronization.Execute(() =>
+            {
+                EnsureCoreInitialized();
+                WordIdentityKey identityKey = new WordIdentityKey(symbols, senseId, usageId, partOfSpeech);
+                foreach (WordBox word in UntrustedWordDictionary.Values)
+                {
+                    if (word.HasCompleteIdentity && word.GetIdentityKey().Equals(identityKey))
+                    {
+                        return word;
+                    }
+                }
+                return null;
+            });
+        }
+
+        /// <summary>Adds an identity key for a staged untrusted sentence. Caller must have checked for conflicts.</summary>
+        private void IndexUntrustedSentenceKey(Guid sentenceId, SentenceIdentityKey identityKey)
+        {
+            UntrustedSentenceIdentityIndex[identityKey] = sentenceId;
+            UntrustedSentenceIndexedKeyById[sentenceId] = identityKey;
+        }
+
+        /// <summary>Removes a staged untrusted sentence's identity key from the index, leaving the dictionary entry in place.</summary>
+        private void UnindexUntrustedSentence(Guid sentenceId)
+        {
+            if (UntrustedSentenceIndexedKeyById.TryGetValue(sentenceId, out SentenceIdentityKey? indexedKey))
+            {
+                if (UntrustedSentenceIdentityIndex.TryGetValue(indexedKey, out Guid indexedId) && indexedId == sentenceId)
+                {
+                    UntrustedSentenceIdentityIndex.Remove(indexedKey);
+                }
+                UntrustedSentenceIndexedKeyById.Remove(sentenceId);
+            }
+        }
+
+        /// <summary>Re-derives the identity key for a staged sentence after its identity changed.</summary>
+        private void ReindexUntrustedSentence(Guid sentenceId, SentenceBox sentenceBox)
+        {
+            UnindexUntrustedSentence(sentenceId);
+            if (sentenceBox.HasCompleteIdentity)
+            {
+                IndexUntrustedSentenceKey(sentenceId, sentenceBox.GetIdentityKey());
+            }
+        }
+
+        /// <summary>Returns true if applying the given words or sense would make the sentence's identity collide with another staged sentence.</summary>
+        private bool WouldConflictUntrustedSentenceIdentity(Guid sentenceId, SentenceBox sentenceBox, List<Guid>? words, Guid? senseId)
+        {
+            List<Guid>? projectedWords = words ?? sentenceBox.GetWords();
+            Guid? projectedSense = senseId ?? sentenceBox.GetSenseID();
+            if (projectedWords == null || !projectedSense.HasValue)
+            {
+                return false;
+            }
+            SentenceIdentityKey projectedKey = new SentenceIdentityKey(projectedWords, projectedSense.Value);
+            return UntrustedSentenceIdentityIndex.TryGetValue(projectedKey, out Guid otherId) && otherId != sentenceId;
+        }
+
+        /// <summary>Removes a staged untrusted sentence from its dictionary and identity index. Returns whether it was present.</summary>
+        private bool RemoveUntrustedSentenceEntry(Guid sentenceId)
+        {
+            UnindexUntrustedSentence(sentenceId);
+            return UntrustedSentenceDictionary.Remove(sentenceId);
         }
 
         /// <summary>Removes a staged untrusted symbol box and cleans up any canonical or labeled untrusted nodes targeting it.</summary>
@@ -2256,7 +2405,7 @@ namespace OPEN_LRD
             return GraphSynchronization.Execute(() =>
             {
                 EnsureMutableStorageMode();
-                bool removed = UntrustedSentenceDictionary.Remove(sentenceId);
+                bool removed = RemoveUntrustedSentenceEntry(sentenceId);
                 RemoveUntrustedNodeForTarget(NodeTargetKind.Sentence, sentenceId);
                 return removed;
             });
@@ -2361,7 +2510,7 @@ namespace OPEN_LRD
                 {
                     AddIndex(SentencesByWordIndex, wordId, sentenceId);
                 }
-                UntrustedSentenceDictionary.Remove(sentenceId);
+                RemoveUntrustedSentenceEntry(sentenceId);
                 EnsureTrustedNode(NodeTargetKind.Sentence, sentenceId);
                 return true;
             });
@@ -2534,13 +2683,28 @@ namespace OPEN_LRD
                     return ConvertUntrustedWordToTrusted(wordId) ? wordId : null;
                 }
 
-                List<SentenceBox> referencingSentences = UntrustedSentenceDictionary.Values
-                    .Where(sentence => (sentence.GetWords() ?? new List<Guid>()).Contains(wordId))
+                List<KeyValuePair<Guid, SentenceBox>> referencingSentences = UntrustedSentenceDictionary
+                    .Where(entry => (entry.Value.GetWords() ?? new List<Guid>()).Contains(wordId))
                     .ToList();
-                if (referencingSentences.Any(sentence => sentence.IsIdentityFrozen)) return null;
-                foreach (SentenceBox sentence in referencingSentences)
+                if (referencingSentences.Any(entry => entry.Value.IsIdentityFrozen)) return null;
+
+                // Check for identity collisions before rewriting, since word replacement cannot be undone.
+                HashSet<SentenceIdentityKey> projectedKeys = new HashSet<SentenceIdentityKey>();
+                foreach (KeyValuePair<Guid, SentenceBox> entry in referencingSentences)
                 {
-                    sentence.ReplaceWordReference(wordId, canonicalWordId);
+                    if (!entry.Value.HasCompleteIdentity) continue;
+                    List<Guid> projectedWords = (entry.Value.GetWords() ?? new List<Guid>())
+                        .Select(id => id == wordId ? canonicalWordId : id)
+                        .ToList();
+                    SentenceIdentityKey projectedKey = new SentenceIdentityKey(projectedWords, entry.Value.GetSenseID()!.Value);
+                    if (!projectedKeys.Add(projectedKey)) return null;
+                    if (UntrustedSentenceIdentityIndex.TryGetValue(projectedKey, out Guid otherId) && otherId != entry.Key) return null;
+                }
+
+                foreach (KeyValuePair<Guid, SentenceBox> entry in referencingSentences)
+                {
+                    entry.Value.ReplaceWordReference(wordId, canonicalWordId);
+                    ReindexUntrustedSentence(entry.Key, entry.Value);
                 }
                 UntrustedWordDictionary.Remove(wordId);
                 RemoveUntrustedNodeForTarget(NodeTargetKind.Word, wordId);
@@ -2583,7 +2747,7 @@ namespace OPEN_LRD
                 SentenceIdentityKey identityKey = sentenceBox.GetIdentityKey();
                 if (TrustedSentenceIdentityIndex.TryGetValue(identityKey, out Guid canonicalSentenceId))
                 {
-                    UntrustedSentenceDictionary.Remove(sentenceId);
+                    RemoveUntrustedSentenceEntry(sentenceId);
                     RemoveUntrustedNodeForTarget(NodeTargetKind.Sentence, sentenceId);
                     return canonicalSentenceId;
                 }
@@ -2859,6 +3023,10 @@ namespace OPEN_LRD
                     {
                         throw new InvalidOperationException($"Staged WordBox '{id}' has an incomplete, unresolved, or duplicate identity.");
                     }
+                    if (!HasFinalWordClassification(box.GetSenseID(), box.GetUsageID(), box.GetPartOfSpeech()))
+                    {
+                        throw new InvalidOperationException($"Staged WordBox '{id}' has a placeholder sense, usage, or part of speech and cannot be trusted.");
+                    }
                     WordIdentityKey key = box.GetIdentityKey();
                     if (TrustedWordIdentityIndex.ContainsKey(key) || !newWordKeys.Add(key))
                         throw new InvalidOperationException($"Staged WordBox '{id}' conflicts with an existing or duplicate word identity.");
@@ -3120,7 +3288,7 @@ namespace OPEN_LRD
                     foreach (SentenceBox box in stagedSentences)
                     {
                         Guid id = box.GetSentenceID();
-                        bool wasUntrusted = UntrustedSentenceDictionary.Remove(id);
+                        bool wasUntrusted = RemoveUntrustedSentenceEntry(id);
                         SentenceIdentityKey key = box.GetIdentityKey();
                         box.FreezeIdentity();
                         TrustedSentenceDictionary.Add(id, box);
@@ -3134,7 +3302,11 @@ namespace OPEN_LRD
                             RemoveFromIndex(SentencesBySenseIndex, key.SenseId, id);
                             TrustedSentenceIdentityIndex.Remove(key);
                             TrustedSentenceDictionary.Remove(id);
-                            if (wasUntrusted) UntrustedSentenceDictionary.Add(id, box);
+                            if (wasUntrusted)
+                            {
+                                UntrustedSentenceDictionary.Add(id, box);
+                                if (box.HasCompleteIdentity) IndexUntrustedSentenceKey(id, box.GetIdentityKey());
+                            }
                         });
                         RegisterCanonicalOrStagedNode(NodeTargetKind.Sentence, id);
                     }
@@ -3824,7 +3996,7 @@ namespace OPEN_LRD
             foreach (Guid id in new List<Guid>(UntrustedWordDictionary.Keys))
                 if (TrustedWordDictionary.ContainsKey(id)) UntrustedWordDictionary.Remove(id);
             foreach (Guid id in new List<Guid>(UntrustedSentenceDictionary.Keys))
-                if (TrustedSentenceDictionary.ContainsKey(id)) UntrustedSentenceDictionary.Remove(id);
+                if (TrustedSentenceDictionary.ContainsKey(id)) RemoveUntrustedSentenceEntry(id);
             foreach (Guid id in new List<Guid>(UntrustedFunctionDictionary.Keys))
                 if (TrustedFunctionDictionary.ContainsKey(id)) UntrustedFunctionDictionary.Remove(id);
 
@@ -5134,9 +5306,14 @@ namespace OPEN_LRD
             }
         }
 
+        /// <summary>
+        /// Returns true if the sense can be used as a trust prerequisite. The default sense is registered so that
+        /// placeholder boxes can exist, but it is never a valid basis for promoting a symbol, word, or sentence.
+        /// Every caller is a promotion gate.
+        /// </summary>
         private bool HasTrustedSense(Guid? senseId)
         {
-            return senseId.HasValue && TrustedSenseDictionary.ContainsKey(senseId.Value);
+            return senseId.HasValue && senseId.Value != DefaultSenseId && TrustedSenseDictionary.ContainsKey(senseId.Value);
         }
 
         private bool HasTrustedTarget(NodeTargetKind kind, Guid targetId)
@@ -5156,8 +5333,23 @@ namespace OPEN_LRD
         }
 
 
+        /// <summary>
+        /// Returns true if a word's classification is final enough to trust: no placeholder part of speech,
+        /// and neither the default sense nor the default usage (both are placeholders until assigned).
+        /// </summary>
+        private static bool HasFinalWordClassification(Guid? senseId, Guid? usageId, PartOfSpeech? partOfSpeech)
+        {
+            return partOfSpeech.HasValue && partOfSpeech.Value != PartOfSpeech.Unknown &&
+                   senseId != DefaultSenseId && usageId != DefaultUsageId;
+        }
+
         private bool CanTrustWord(WordBox wordBox)
         {
+            if (!HasFinalWordClassification(wordBox.GetSenseID(), wordBox.GetUsageID(), wordBox.GetPartOfSpeech()))
+            {
+                return false;
+            }
+
             if (!wordBox.HasCompleteIdentity ||
                 !HasTrustedSense(wordBox.GetSenseID()) ||
                 !wordBox.GetUsageID().HasValue ||
@@ -6115,8 +6307,9 @@ namespace OPEN_LRD
         /// <summary>Returns an existing trusted sentence box with matching identity, or creates a new untrusted sentence box.</summary>
         /// <param name="words">Constituent word identifiers.</param>
         /// <param name="senseId">Sense identifier.</param>
-        /// <returns>The canonical trusted <see cref="SentenceBox"/> if registered, otherwise a new untrusted instance.</returns>
-        public SentenceBox GetNewSentenceBox(List<Guid> words, Guid senseId)
+        /// <param name="checkUntrusted">When true, a staged untrusted sentence with the same identity is returned after the trusted check.</param>
+        /// <returns>The canonical trusted or matching staged <see cref="SentenceBox"/> if found, otherwise a new unregistered untrusted instance.</returns>
+        public SentenceBox GetNewSentenceBox(List<Guid> words, Guid senseId, bool checkUntrusted = false)
         {
             return GraphSynchronization.Execute(() =>
             {
@@ -6126,6 +6319,15 @@ namespace OPEN_LRD
                     GetTrustedSentenceBox(existingSentenceId) is SentenceBox existingSentence)
                 {
                     return existingSentence;
+                }
+
+                if (checkUntrusted)
+                {
+                    SentenceBox? stagedSentence = GetUntrustedSentenceBoxByIdentity(words, senseId);
+                    if (stagedSentence != null)
+                    {
+                        return stagedSentence;
+                    }
                 }
 
                 return new SentenceBox(GenerateUntrustedId(NodeTargetKind.Sentence), senseId, words);
