@@ -1,0 +1,27 @@
+== Phase 1 benchmark (production inference code) ==
+Process arch: X64, cores: 16
+AVX2: True
+Correctness (FFN shape): max abs err AVX2 vs scalar = 2.766E-005 (max output 1.928E+001), parallel bit-identical to serial: True
+Building decoder (random int8 weights)...
+Params: 2.009 B, int8 weight bytes: 2.011 GB, build 13.6s
+KV mode: Fp32, KV bytes 1.88 GB
+Process working set: 2.08 GB
+Matvec throughput:
+  FFN (6912x2560) scalar               16.197 ms/matvec     1.1 GB/s (int8 weights)
+  FFN (6912x2560) AVX2                  2.120 ms/matvec     8.3 GB/s (int8 weights)
+  FFN (6912x2560) parallel AVX2         0.759 ms/matvec    23.3 GB/s (int8 weights)
+  LM (32000x2560) AVX2                 11.624 ms/matvec     7.0 GB/s (int8 weights)
+  LM (32000x2560) parallel AVX2         2.810 ms/matvec    29.1 GB/s (int8 weights)
+Decode throughput (full forward, KV cache):
+  AVX2 serial matvec, scalar attention           pos     0..31       3.34 tok/s  (299.3 ms/token)
+      attention 2.4 ms/token (0.8% of forward), non-attention 296.9 ms/token
+  AVX2 parallel matvec, scalar attention         pos     0..31      10.82 tok/s  (92.4 ms/token)
+      attention 2.3 ms/token (2.5% of forward), non-attention 90.1 ms/token
+  Scalar matvec, scalar attention                pos     0..3        0.34 tok/s  (2908.3 ms/token)
+      attention 0.6 ms/token (0.0% of forward), non-attention 2907.7 ms/token
+  AVX2 parallel matvec, scalar attention         pos  1024..1055     3.33 tok/s  (300.7 ms/token)
+      attention 196.6 ms/token (65.4% of forward), non-attention 104.1 ms/token
+  AVX2 parallel matvec, FusedFp32 attention      pos  1024..1055    12.76 tok/s  (78.4 ms/token)
+      attention 6.5 ms/token (8.2% of forward), non-attention 71.9 ms/token
+Peak working set: 2.22 GB
+== done ==

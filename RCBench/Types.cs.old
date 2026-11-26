@@ -109,20 +109,30 @@ static class Kernels
     }
 
     // Row-parallel AVX2. Each row is still reduced in fixed order, so output is deterministic.
+    // A1.10: x and y use preallocated scratch, and the parallel body is a cached delegate with
+    // its parameters in static fields, so a call does not allocate.
+    static float[] parX = new float[Hidden], parY = new float[Vocab];
+    static QMat parM; static int parRows, parBlock;
+    static readonly Action<int> parBody = ParallelMatVecBody;
+
+    static void ParallelMatVecBody(int ci)
+    {
+        int r0 = ci * parBlock;
+        int r1 = Math.Min(parRows, r0 + parBlock);
+        if (r0 >= r1) return;
+        SubMatVecAvx2(parM, parX, parY, r0, r1);
+    }
+
     public static void MatVecAvx2Parallel(QMat m, ReadOnlySpan<float> x, Span<float> y, int chunks)
     {
-        // Parallel over row blocks; x is shared read-only.
-        float[] xCopy = x.ToArray();
-        float[] yArr = new float[m.Rows];
-        int block = (m.Rows + chunks - 1) / chunks;
-        Parallel.For(0, chunks, new ParallelOptions { MaxDegreeOfParallelism = chunks }, ci =>
-        {
-            int r0 = ci * block;
-            int r1 = Math.Min(m.Rows, r0 + block);
-            if (r0 >= r1) return;
-            SubMatVecAvx2(m, xCopy, yArr, r0, r1);
-        });
-        yArr.AsSpan().CopyTo(y);
+        if (parX.Length < x.Length) parX = new float[x.Length];
+        if (parY.Length < m.Rows) parY = new float[m.Rows];
+        x.CopyTo(parX);
+        parM = m;
+        parRows = m.Rows;
+        parBlock = (m.Rows + chunks - 1) / chunks;
+        Parallel.For(0, chunks, parBody);
+        parY.AsSpan(0, m.Rows).CopyTo(y);
     }
 
     static unsafe void SubMatVecAvx2(QMat m, float[] x, float[] y, int r0, int r1)
@@ -158,7 +168,8 @@ sealed class Model
 {
     public readonly QMat[] Wq, Wk, Wv, Wo, W1, W3, W2; // per layer
     public readonly QMat Lm;                             // tied embedding / lm head [Vocab, Hidden]
-    public readonly float[][] Kc, Vc;                    // per layer KV cache [MaxSeq, KvHeads*HeadDim]
+    public readonly KvCache Kv;                          // KV cache (Attention.cs)
+    public static AttnKernel Kernel = AttnKernel.Scalar; // attention kernel used by DecodeStep
     public readonly float[] Cos, Sin;                    // RoPE tables [MaxSeq, HeadDim/2]
     public readonly float[] Norm1, Norm2;                // per layer RMSNorm gains (simplified shared)
     public readonly float[] NormF;
@@ -166,7 +177,7 @@ sealed class Model
     // scratch
     public readonly float[] X, Xn, Q, K, V, Att, Ctx, Gate, Up, Hid, Logits;
 
-    public Model(Random rng)
+    public Model(Random rng, KvMode kvMode = KvMode.Fp32)
     {
         Wq = new QMat[Layers]; Wk = new QMat[Layers]; Wv = new QMat[Layers]; Wo = new QMat[Layers];
         W1 = new QMat[Layers]; W3 = new QMat[Layers]; W2 = new QMat[Layers];
@@ -182,12 +193,7 @@ sealed class Model
             W2[l] = new QMat(Hidden, Ffn, rng);
         }
         Lm = new QMat(Vocab, Hidden, rng);
-        Kc = new float[Layers][]; Vc = new float[Layers][];
-        for (int l = 0; l < Layers; l++)
-        {
-            Kc[l] = new float[MaxSeq * kvDim];
-            Vc[l] = new float[MaxSeq * kvDim];
-        }
+        Kv = new KvCache(kvMode);
         Cos = new float[MaxSeq * HeadDim / 2];
         Sin = new float[MaxSeq * HeadDim / 2];
         for (int p = 0; p < MaxSeq; p++)
@@ -231,48 +237,11 @@ sealed class Model
 
     // One decode step at position pos. Returns argmax token (keeps the work observable).
 
-    public static bool VecAttn = false;
-
-    static float AttnDotScalar(float[] q, int qOff, float[] k, int kOff)
-    {
-        float dot = 0f;
-        for (int d = 0; d < HeadDim; d++) dot += q[qOff + d] * k[kOff + d];
-        return dot;
-    }
-
-    static unsafe float AttnDotAvx2(float[] q, int qOff, float[] k, int kOff)
-    {
-        Vector256<float> acc = Vector256<float>.Zero;
-        fixed (float* qp = q)
-        fixed (float* kp = k)
-        {
-            for (int d = 0; d < HeadDim; d += 8)
-                acc = Fma.MultiplyAdd(Avx.LoadVector256(qp + qOff + d), Avx.LoadVector256(kp + kOff + d), acc);
-        }
-        Vector128<float> s = Sse.Add(acc.GetLower(), acc.GetUpper());
-        s = Sse.Add(s, Sse.MoveHighToLow(s, s));
-        s = Sse.Add(s, Sse.Shuffle(s, s, 0x55));
-        return s.ToScalar();
-    }
-
-    static unsafe void AttnAxpyAvx2(float[] ctx, int cOff, float a, float[] v, int vOff)
-    {
-        Vector256<float> av = Vector256.Create(a);
-        fixed (float* cp = ctx)
-        fixed (float* vp = v)
-        {
-            for (int d = 0; d < HeadDim; d += 8)
-                Avx.Store(cp + cOff + d, Fma.MultiplyAdd(av, Avx.LoadVector256(vp + vOff + d), Avx.LoadVector256(cp + cOff + d)));
-        }
-    }
-
     public static long AttnTicks, TotalTicks;
     public int DecodeStep(int token, int pos, MatVec mv)
     {
         long tStart = Stopwatch.GetTimestamp();
         int kvDim = KvHeads * HeadDim;
-        int group = Heads / KvHeads;
-        float scaleAtt = 1f / MathF.Sqrt(HeadDim);
 
         // embedding lookup (int8 row dequant)
         for (int i = 0; i < Hidden; i++) X[i] = Lm.W[token * Hidden + i] * Lm.Scale[token];
@@ -285,28 +254,15 @@ sealed class Model
             mv(Wv[l], Xn, V);
             Rope(Q, Heads, pos);
             Rope(K, KvHeads, pos);
-            Array.Copy(K, 0, Kc[l], pos * kvDim, kvDim);
-            Array.Copy(V, 0, Vc[l], pos * kvDim, kvDim);
+            Kv.Write(l, pos, K, V);
 
             long tAttn = Stopwatch.GetTimestamp();
-            // attention over pos+1 cached positions
-            Array.Clear(Ctx);
-            for (int h = 0; h < Heads; h++)
+            unsafe
             {
-                int kvh = h / group;
-                int qOff = h * HeadDim;
-                for (int t = 0; t <= pos; t++)
+                fixed (float* qp = Q)
+                fixed (float* cp = Ctx)
                 {
-                    int kOff = t * kvDim + kvh * HeadDim;
-                    Att[t] = (VecAttn ? AttnDotAvx2(Q, qOff, Kc[l], kOff) : AttnDotScalar(Q, qOff, Kc[l], kOff)) * scaleAtt;
-                }
-                Softmax(Att, pos + 1);
-                for (int t = 0; t <= pos; t++)
-                {
-                    float a = Att[t];
-                    int vOff = t * kvDim + kvh * HeadDim;
-                    if (VecAttn) AttnAxpyAvx2(Ctx, qOff, a, Vc[l], vOff);
-                    else for (int d = 0; d < HeadDim; d++) Ctx[qOff + d] += a * Vc[l][vOff + d];
+                    Attention.Run(Kv, l, pos, qp, cp, Kernel, parallel: true);
                 }
             }
             AttnTicks += Stopwatch.GetTimestamp() - tAttn;

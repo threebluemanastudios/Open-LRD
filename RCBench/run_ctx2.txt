@@ -1,0 +1,17 @@
+== Phase 0 benchmark ==
+Process arch: X64, cores: 16
+AVX2: True, FMA: True, AVX-512F: True
+Correctness (Ffn x Hidden): max abs err AVX2 vs scalar = 2.766E-005, max rel err = 9.590E-003
+Parallel AVX2 bit-identical to serial AVX2: True
+Building model (random int8 weights)...
+Params: 2.009 B, int8 weight bytes: 2.011 GB, build 12.9s
+Process working set: 2.08 GB
+  vec attn, parallel matvec, ctx sweep     pos  1023..1026     6.92 tok/s  (144.6 ms/token)
+  attention 22.4% of step at pos 1023, 32.3 ms/token
+  vec attn, parallel matvec, ctx sweep     pos  4095..4098     5.04 tok/s  (198.5 ms/token)
+  attention 52.6% of step at pos 4095, 104.4 ms/token
+  vec attn, parallel matvec, ctx sweep     pos  8191..8194     3.45 tok/s  (289.8 ms/token)
+  attention 67.5% of step at pos 8191, 195.5 ms/token
+  vec attn, parallel matvec, ctx sweep     pos 15999..16002    2.14 tok/s  (468.4 ms/token)
+  attention 78.8% of step at pos 15999, 369.0 ms/token
+Peak working set: 2.10 GB

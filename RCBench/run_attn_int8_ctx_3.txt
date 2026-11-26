@@ -1,0 +1,27 @@
+== Phase 0 benchmark ==
+Process arch: X64, cores: 16
+AVX2: True, FMA: True, AVX-512F: True
+Correctness (Ffn x Hidden): max abs err AVX2 vs scalar = 2.766E-005, max rel err = 9.590E-003
+Parallel AVX2 bit-identical to serial AVX2: True
+Attention numerical check (A1.9):
+  pos      0: fused fp32 vs ref max abs 0.00E+000; int8 kernel vs int8 ref 0.00E+000; int8 vs fp32 max abs 3.93E-003, rel RMS 3.83E-003; parallel==serial True
+  pos      1: fused fp32 vs ref max abs 5.66E-007; int8 kernel vs int8 ref 2.68E-007; int8 vs fp32 max abs 6.85E-003, rel RMS 4.45E-003; parallel==serial True
+  pos   1023: fused fp32 vs ref max abs 1.49E-007; int8 kernel vs int8 ref 1.94E-007; int8 vs fp32 max abs 6.91E-004, rel RMS 5.73E-003; parallel==serial True
+  pos   1024: fused fp32 vs ref max abs 1.71E-007; int8 kernel vs int8 ref 1.56E-007; int8 vs fp32 max abs 8.05E-004, rel RMS 5.66E-003; parallel==serial True
+  pos   4095: fused fp32 vs ref max abs 1.42E-007; int8 kernel vs int8 ref 1.79E-007; int8 vs fp32 max abs 3.68E-004, rel RMS 5.71E-003; parallel==serial True
+  pos   8191: fused fp32 vs ref max abs 1.10E-007; int8 kernel vs int8 ref 1.27E-007; int8 vs fp32 max abs 2.02E-004, rel RMS 5.85E-003; parallel==serial True
+  pos  16383: fused fp32 vs ref max abs 1.94E-007; int8 kernel vs int8 ref 1.43E-007; int8 vs fp32 max abs 1.72E-004, rel RMS 5.55E-003; parallel==serial True
+  kernel tolerance 1E-005, int8 quality gate 2 % relative RMS: PASS
+Building model (random int8 weights)...
+Params: 2.009 B, int8 weight bytes: 2.011 GB, build 13.0s
+Process working set: 2.09 GB
+Kernel: FusedInt8, KV: Int8, KV bytes 0.48 GB
+  FusedInt8 attn, parallel matvec, ctx sweep pos  1023..1026     8.34 tok/s  (120.0 ms/token)
+  attention 13.7% of step at pos 1023, 16.4 ms/token
+  FusedInt8 attn, parallel matvec, ctx sweep pos  4095..4098    10.97 tok/s  (91.2 ms/token)
+  attention 17.4% of step at pos 4095, 15.8 ms/token
+  FusedInt8 attn, parallel matvec, ctx sweep pos  8191..8194     9.01 tok/s  (111.0 ms/token)
+  attention 22.2% of step at pos 8191, 24.6 ms/token
+  FusedInt8 attn, parallel matvec, ctx sweep pos 15999..16002    9.25 tok/s  (108.1 ms/token)
+  attention 31.4% of step at pos 15999, 33.9 ms/token
+Peak working set: 2.11 GB

@@ -1,0 +1,18 @@
+== Phase 1 benchmark (production inference code) ==
+Process arch: X64, cores: 16
+AVX2: True
+Correctness (FFN shape): max abs err AVX2 vs scalar = 2.766E-005 (max output 1.928E+001), parallel bit-identical to serial: True
+Building decoder (random int8 weights)...
+Params: 2.009 B, int8 weight bytes: 2.011 GB, build 13.9s
+KV mode: Fp32, KV bytes 1.88 GB
+Process working set: 2.08 GB
+  FusedFp32 attn, parallel matvec, ctx sweep     pos  1023..1026    11.09 tok/s  (90.1 ms/token)
+      attention 11.7 ms/token (13.0% of forward), non-attention 78.4 ms/token
+  FusedFp32 attn, parallel matvec, ctx sweep     pos  4095..4098    10.72 tok/s  (93.3 ms/token)
+      attention 19.3 ms/token (20.7% of forward), non-attention 74.0 ms/token
+  FusedFp32 attn, parallel matvec, ctx sweep     pos  8191..8194     8.76 tok/s  (114.1 ms/token)
+      attention 36.2 ms/token (31.7% of forward), non-attention 77.9 ms/token
+  FusedFp32 attn, parallel matvec, ctx sweep     pos 15999..16002    4.88 tok/s  (204.8 ms/token)
+      attention 83.7 ms/token (40.8% of forward), non-attention 121.2 ms/token
+GC gen0/1/2 collections: 5/4/4
+Peak working set: 3.93 GB

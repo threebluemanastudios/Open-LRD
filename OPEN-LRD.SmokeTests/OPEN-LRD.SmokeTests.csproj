@@ -64,6 +64,24 @@
     <Compile Include="../OPEN-LRD/Skills/ExtremeScalars.cs" />
     <Compile Include="../OPEN-LRD/Skills/GraphAlgorithms.cs" />
     <Compile Include="../OPEN-LRD/Skills/LinearAlgebraAdvanced.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/LinkLearning.cs" />
+    <Compile Include="../OPEN-LRD/PhysicsSim/Core/VecN.cs" />
+    <Compile Include="../OPEN-LRD/PhysicsSim/Numerics/Integrators.cs" />
+    <Compile Include="../OPEN-LRD/PhysicsSim/Numerics/Solvers.cs" />
+    <Compile Include="../OPEN-LRD/PhysicsSim/Laws/PairLaw.cs" />
+    <Compile Include="../OPEN-LRD/PhysicsSim/Modules/NBody.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/ModelConfig.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/QMat.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/Kernels.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/KvCache.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/Attention.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/Decoder.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/Sampler.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/ILocalModel.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/KvPolicy.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/PrefixCache.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/KvPaging.cs" />
+    <Compile Include="../OPEN-LRD/Reasoning/Inference/BatchDecoder.cs" />
   </ItemGroup>
 
 </Project>

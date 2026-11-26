@@ -1,0 +1,25 @@
+== Phase 0 benchmark ==
+Process arch: X64, cores: 16
+AVX2: True, FMA: True, AVX-512F: True
+Correctness (Ffn x Hidden): max abs err AVX2 vs scalar = 2.766E-005, max rel err = 9.590E-003
+Parallel AVX2 bit-identical to serial AVX2: True
+Building model (random int8 weights)...
+Params: 2.009 B, int8 weight bytes: 2.011 GB, build 13.0s
+Process working set: 2.08 GB
+Matvec throughput:
+  Ffn  W1 (6912x2560) scalar     16.575 ms/matvec     1.1 GB/s (int8 weights)
+  Ffn  W1 (6912x2560) AVX2        2.068 ms/matvec     8.6 GB/s (int8 weights)
+  Ffn  W1 parallel AVX2           0.939 ms/matvec    18.8 GB/s (int8 weights)
+  Lm   (32000x2560) AVX2          9.939 ms/matvec     8.2 GB/s (int8 weights)
+  Lm   (32000x2560) parallel AVX2    2.739 ms/matvec    29.9 GB/s (int8 weights)
+Decode throughput (single token, KV cache, full forward):
+  AVX2 serial                              pos     0..31       3.86 tok/s  (259.3 ms/token)
+  AVX2 parallel rows                       pos     0..31      12.21 tok/s  (81.9 ms/token)
+  Scalar reference                         pos     0..3        0.48 tok/s  (2088.7 ms/token)
+Filling KV cache to 1024 positions (untimed)...
+  AVX2 parallel rows, long ctx             pos  1024..1055     1.55 tok/s  (645.6 ms/token)
+  Breakdown at pos 1024: attention 83.7% of step, attention 540.3 ms/token, non-attention 105.3 ms/token
+  AVX2 parallel rows + AVX2 attention, long ctx pos  1024..1055     5.94 tok/s  (168.2 ms/token)
+  Breakdown at pos 1024 (vec attn): attention 53.4% of step, attention 89.8 ms/token, non-attention 78.4 ms/token
+Peak working set: 2.24 GB
+== done ==

@@ -1,0 +1,363 @@
+using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+using System.Threading.Tasks;
+
+// Phase 1 attention (A1.6-A1.10).
+//  - KV cache in native, 64-byte aligned, head-major memory: [layer][kvHead][position][headDim].
+//    Pointers are obtained once; no per-call pinning and no jagged arrays in the inner loop (A1.6).
+//  - Fused GQA kernel: each K/V row is read once and used by all query heads in its group (A1.6).
+//  - Work split into (kvHead x Chunk-position) tasks. Each task writes its own scratch slot, and the
+//    per-head merge runs in chunk order, so the result is deterministic (A1.7).
+//  - Optional int8 K/V with one float scale per (layer, kvHead, position) row (A1.8).
+
+namespace RcBench;
+
+using static RcBench.Cfg;
+
+public enum KvMode { Fp32, Int8 }
+
+public enum AttnKernel { Scalar, FusedFp32, FusedInt8 }
+
+public sealed unsafe class KvCache : IDisposable
+{
+    internal readonly KvMode Mode;
+    internal float* Kf, Vf;   // Fp32 mode: [layer][kvHead][pos][headDim]
+    internal sbyte* K8, V8;   // Int8 mode: same layout
+    internal float* Ks, Vs;   // Int8 mode: [layer][kvHead][pos]
+    private bool disposed;
+
+    public KvCache(KvMode mode)
+    {
+        Mode = mode;
+        long rows = (long)Layers * KvHeads * MaxSeq;
+        if (mode == KvMode.Fp32)
+        {
+            Kf = (float*)NativeMemory.AlignedAlloc((nuint)(rows * HeadDim * 4), 64);
+            Vf = (float*)NativeMemory.AlignedAlloc((nuint)(rows * HeadDim * 4), 64);
+        }
+        else
+        {
+            K8 = (sbyte*)NativeMemory.AlignedAlloc((nuint)(rows * HeadDim), 64);
+            V8 = (sbyte*)NativeMemory.AlignedAlloc((nuint)(rows * HeadDim), 64);
+            Ks = (float*)NativeMemory.AlignedAlloc((nuint)(rows * 4), 64);
+            Vs = (float*)NativeMemory.AlignedAlloc((nuint)(rows * 4), 64);
+        }
+    }
+
+    /// <summary>Bytes of native memory held by the cache.</summary>
+    public long Bytes => (long)Layers * KvHeads * MaxSeq * (Mode == KvMode.Fp32 ? HeadDim * 8L : HeadDim * 2L + 8L);
+
+    /// <summary>Writes K and V (KvHeads x HeadDim each, flat) at one position of one layer.</summary>
+    public void Write(int layer, int pos, float[] k, float[] v)
+    {
+        if ((uint)pos >= MaxSeq) throw new ArgumentOutOfRangeException(nameof(pos));
+        for (int g = 0; g < KvHeads; g++)
+        {
+            long row = ((long)layer * KvHeads + g) * MaxSeq + pos;
+            if (Mode == KvMode.Fp32)
+            {
+                new ReadOnlySpan<float>(k, g * HeadDim, HeadDim).CopyTo(new Span<float>(Kf + row * HeadDim, HeadDim));
+                new ReadOnlySpan<float>(v, g * HeadDim, HeadDim).CopyTo(new Span<float>(Vf + row * HeadDim, HeadDim));
+            }
+            else
+            {
+                Ks[row] = Quantize(k, g * HeadDim, K8 + row * HeadDim);
+                Vs[row] = Quantize(v, g * HeadDim, V8 + row * HeadDim);
+            }
+        }
+    }
+
+    // Symmetric int8 quantization. Returns the dequantization scale (max|x| / 127).
+    private static float Quantize(float[] src, int off, sbyte* dst)
+    {
+        float maxAbs = 0f;
+        for (int d = 0; d < HeadDim; d++) maxAbs = MathF.Max(maxAbs, MathF.Abs(src[off + d]));
+        if (maxAbs == 0f)
+        {
+            for (int d = 0; d < HeadDim; d++) dst[d] = 0;
+            return 0f;
+        }
+        float inv = 127f / maxAbs;
+        for (int d = 0; d < HeadDim; d++)
+        {
+            int q = (int)MathF.Round(src[off + d] * inv);
+            dst[d] = (sbyte)Math.Clamp(q, -127, 127);
+        }
+        return maxAbs / 127f;
+    }
+
+    public void Dispose()
+    {
+        if (disposed) return;
+        disposed = true;
+        foreach (IntPtr p in new[] { (IntPtr)Kf, (IntPtr)Vf, (IntPtr)K8, (IntPtr)V8, (IntPtr)Ks, (IntPtr)Vs })
+        {
+            if (p != IntPtr.Zero) NativeMemory.AlignedFree((void*)p);
+        }
+        Kf = Vf = null; K8 = V8 = null; Ks = Vs = null;
+    }
+}
+
+public static unsafe class Attention
+{
+    public const int Chunk = 1024;                 // positions per task
+    public const int MaxChunks = MaxSeq / Chunk;   // 16
+    public const int Group = Heads / KvHeads;      // query heads per KV head (5)
+    private const int Slots = KvHeads * MaxChunks;
+
+    private static readonly float* scores = Alloc<float>(Slots * Group * Chunk);
+    private static readonly float* accs = Alloc<float>(Slots * Group * HeadDim);
+    private static readonly float* meta = Alloc<float>(Slots * Group * 2);
+    private static readonly float* kbuf = Alloc<float>(Slots * HeadDim);
+    private static readonly float* vbuf = Alloc<float>(Slots * HeadDim);
+
+    // Parameters for the parallel body. Set before each call; the decoder is single-threaded.
+    private static KvCache curKv;
+    private static int curLayer, curPos, curChunks;
+    private static float* curQ;
+    private static float curScale;
+    private static bool curInt8;
+    private static readonly Action<int> body = TaskBody;
+
+    private static T* Alloc<T>(int count) where T : unmanaged
+    {
+        return (T*)NativeMemory.AlignedAlloc((nuint)((long)count * sizeof(T)), 64);
+    }
+
+    /// <summary>
+    /// Attention for one query position over cached positions 0..pos of one layer.
+    /// </summary>
+    /// <param name="kv">KV cache. Its mode must match the kernel (<see cref="AttnKernel.FusedInt8"/> needs Int8).</param>
+    /// <param name="layer">Layer index.</param>
+    /// <param name="pos">Current position. Must already be written to the cache.</param>
+    /// <param name="q">Query, Heads x HeadDim floats.</param>
+    /// <param name="ctx">Output, Heads x HeadDim floats. Overwritten.</param>
+    /// <param name="kernel">Kernel to run.</param>
+    /// <param name="parallel">Use the thread pool for the fused kernels.</param>
+    public static void Run(KvCache kv, int layer, int pos, float* q, float* ctx, AttnKernel kernel, bool parallel = true)
+    {
+        if (kernel == AttnKernel.Scalar)
+        {
+            ScalarReference(kv, layer, pos, q, ctx);
+            return;
+        }
+        bool wantInt8 = kernel == AttnKernel.FusedInt8;
+        if (wantInt8 != (kv.Mode == KvMode.Int8))
+        {
+            throw new InvalidOperationException($"Kernel {kernel} does not match KV mode {kv.Mode}.");
+        }
+        if (!Avx2.IsSupported || !Fma.IsSupported) throw new PlatformNotSupportedException("Fused attention needs AVX2 and FMA.");
+
+        int chunks = pos / Chunk + 1;
+        curKv = kv; curLayer = layer; curPos = pos; curChunks = chunks;
+        curQ = q; curScale = 1f / MathF.Sqrt(HeadDim); curInt8 = wantInt8;
+
+        int tasks = KvHeads * chunks;
+        if (parallel && tasks >= 8) Parallel.For(0, tasks, body);
+        else for (int t = 0; t < tasks; t++) TaskBody(t);
+
+        // Deterministic merge in chunk order, per KV head.
+        for (int g = 0; g < KvHeads; g++)
+        {
+            for (int qi = 0; qi < Group; qi++)
+            {
+                float maxAll = float.NegativeInfinity;
+                for (int c = 0; c < chunks; c++)
+                {
+                    float m = meta[((g * MaxChunks + c) * Group + qi) * 2];
+                    if (m > maxAll) maxAll = m;
+                }
+                float sumAll = 0f;
+                float* outRow = ctx + (g * Group + qi) * HeadDim;
+                for (int d = 0; d < HeadDim; d++) outRow[d] = 0f;
+                for (int c = 0; c < chunks; c++)
+                {
+                    int slot = g * MaxChunks + c;
+                    float m = meta[(slot * Group + qi) * 2];
+                    float s = meta[(slot * Group + qi) * 2 + 1];
+                    float w = MathF.Exp(m - maxAll);
+                    sumAll += s * w;
+                    float* acc = accs + (slot * Group + qi) * HeadDim;
+                    for (int d = 0; d < HeadDim; d++) outRow[d] += acc[d] * w;
+                }
+                float inv = 1f / sumAll;
+                for (int d = 0; d < HeadDim; d++) outRow[d] *= inv;
+            }
+        }
+    }
+
+    private static void TaskBody(int task)
+    {
+        int g = task / curChunks;
+        int c = task - g * curChunks;
+        ComputeChunk(g * MaxChunks + c, g, c);
+    }
+
+    // One (KV head, chunk) task. Writes per-query max, sum, and unnormalized accumulators into slot scratch.
+    private static void ComputeChunk(int slot, int g, int c)
+    {
+        int t0 = c * Chunk;
+        int t1 = Math.Min(curPos + 1, t0 + Chunk);
+        int n = t1 - t0;
+        KvCache kv = curKv;
+        long rowBase = ((long)curLayer * KvHeads + g) * MaxSeq;
+        float* qh = curQ + g * Group * HeadDim;
+        float* sc = scores + (long)slot * Group * Chunk;
+        float* kb = kbuf + (long)slot * HeadDim;
+        float* vb = vbuf + (long)slot * HeadDim;
+
+        // Scores: K row read once, dotted with all Group queries.
+        for (int t = t0; t < t1; t++)
+        {
+            long row = rowBase + t;
+            float* kr;
+            float f = curScale;
+            if (curInt8)
+            {
+                Convert128(kv.K8 + row * HeadDim, kb);
+                kr = kb;
+                f *= kv.Ks[row];
+            }
+            else
+            {
+                kr = kv.Kf + row * HeadDim;
+            }
+            for (int qi = 0; qi < Group; qi++)
+            {
+                sc[qi * Chunk + (t - t0)] = Dot128(qh + qi * HeadDim, kr) * f;
+            }
+        }
+
+        // Per-query max, exponentials, and sum over this chunk.
+        for (int qi = 0; qi < Group; qi++)
+        {
+            float* row = sc + qi * Chunk;
+            float m = float.NegativeInfinity;
+            for (int i = 0; i < n; i++) if (row[i] > m) m = row[i];
+            float s = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float e = MathF.Exp(row[i] - m);
+                row[i] = e;
+                s += e;
+            }
+            meta[(slot * Group + qi) * 2] = m;
+            meta[(slot * Group + qi) * 2 + 1] = s;
+        }
+
+        // Accumulate V: V row read once, applied to all Group queries.
+        float* acc = accs + (long)slot * Group * HeadDim;
+        for (int i = 0; i < Group * HeadDim; i++) acc[i] = 0f;
+        for (int t = t0; t < t1; t++)
+        {
+            long row = rowBase + t;
+            float* vr;
+            float wScale = 1f;
+            if (curInt8)
+            {
+                Convert128(kv.V8 + row * HeadDim, vb);
+                vr = vb;
+                wScale = kv.Vs[row];
+            }
+            else
+            {
+                vr = kv.Vf + row * HeadDim;
+            }
+            for (int qi = 0; qi < Group; qi++)
+            {
+                float w = sc[qi * Chunk + (t - t0)] * wScale;
+                Axpy128(acc + qi * HeadDim, w, vr);
+            }
+        }
+    }
+
+    // ---- AVX2 helpers over HeadDim = 128 ----
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float Dot128(float* a, float* b)
+    {
+        Vector256<float> acc = Vector256<float>.Zero;
+        for (int d = 0; d < HeadDim; d += 8)
+            acc = Fma.MultiplyAdd(Avx.LoadVector256(a + d), Avx.LoadVector256(b + d), acc);
+        Vector128<float> s = Sse.Add(acc.GetLower(), acc.GetUpper());
+        s = Sse.Add(s, Sse.MoveHighToLow(s, s));
+        s = Sse.Add(s, Sse.Shuffle(s, s, 0x55));
+        return s.ToScalar();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void Axpy128(float* acc, float w, float* v)
+    {
+        Vector256<float> wv = Vector256.Create(w);
+        for (int d = 0; d < HeadDim; d += 8)
+            Avx.Store(acc + d, Fma.MultiplyAdd(wv, Avx.LoadVector256(v + d), Avx.LoadVector256(acc + d)));
+    }
+
+    // int8 -> float, 8 values per step, same widening as the weight matvec.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void Convert128(sbyte* src, float* dst)
+    {
+        for (int d = 0; d < HeadDim; d += 8)
+        {
+            long packed = Unsafe.ReadUnaligned<long>(src + d);
+            Vector128<sbyte> b8 = Vector128.CreateScalarUnsafe(packed).AsSByte();
+            Avx.Store(dst + d, Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(b8)));
+        }
+    }
+
+    // ---- Scalar reference (A1.9): one query head at a time, straightforward loops. ----
+    // Works on either cache mode, so the int8 kernel can be checked against the same quantized data.
+    public static void ScalarReference(KvCache kv, int layer, int pos, float* q, float* ctx)
+    {
+        float scale = 1f / MathF.Sqrt(HeadDim);
+        float[] att = new float[pos + 1];
+        for (int h = 0; h < Heads; h++)
+        {
+            int g = h / Group;
+            float* qh = q + h * HeadDim;
+            for (int t = 0; t <= pos; t++)
+            {
+                long row = ((long)layer * KvHeads + g) * MaxSeq + t;
+                float dot = 0f;
+                if (kv.Mode == KvMode.Fp32)
+                {
+                    float* kr = kv.Kf + row * HeadDim;
+                    for (int d = 0; d < HeadDim; d++) dot += qh[d] * kr[d];
+                }
+                else
+                {
+                    sbyte* kr = kv.K8 + row * HeadDim;
+                    for (int d = 0; d < HeadDim; d++) dot += qh[d] * kr[d];
+                    dot *= kv.Ks[row];
+                }
+                att[t] = dot * scale;
+            }
+            float m = float.NegativeInfinity;
+            for (int t = 0; t <= pos; t++) if (att[t] > m) m = att[t];
+            float sum = 0f;
+            for (int t = 0; t <= pos; t++) { att[t] = MathF.Exp(att[t] - m); sum += att[t]; }
+
+            float* outRow = ctx + h * HeadDim;
+            for (int d = 0; d < HeadDim; d++) outRow[d] = 0f;
+            for (int t = 0; t <= pos; t++)
+            {
+                long row = ((long)layer * KvHeads + g) * MaxSeq + t;
+                float w = att[t] / sum;
+                if (kv.Mode == KvMode.Fp32)
+                {
+                    float* vr = kv.Vf + row * HeadDim;
+                    for (int d = 0; d < HeadDim; d++) outRow[d] += w * vr[d];
+                }
+                else
+                {
+                    sbyte* vr = kv.V8 + row * HeadDim;
+                    float ws = w * kv.Vs[row];
+                    for (int d = 0; d < HeadDim; d++) outRow[d] += ws * vr[d];
+                }
+            }
+        }
+    }
+}

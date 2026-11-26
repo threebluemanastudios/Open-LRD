@@ -48,6 +48,9 @@ namespace OPEN_LRD.SmokeTests
             ExtremeScalarsTests.RunAll();
             GraphAlgorithmsTests.RunAll();
             LinearAlgebraAdvancedTests.RunAll();
+            LinkLearningTests.RunAll();
+            PhysicsSimTests.RunAll();
+            ReasoningInferenceTests.RunAll();
 
             Console.WriteLine($"{passed} passed, {failed} failed");
             Environment.ExitCode = failed == 0 ? 0 : 1;

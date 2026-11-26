@@ -1,0 +1,85 @@
+using System;
+using static RcBench.Cfg;
+
+// A1.9: numerical checks for the attention kernels.
+//  1. Fused fp32 vs scalar fp32 reference: same math, different summation order. Tolerance 1e-5 absolute.
+//  2. Fused int8 vs scalar int8 reference: same quantized data, so this checks the kernel only. Tolerance 1e-5.
+//  3. Int8 vs fp32 reference: quality of the int8 KV cache (A1.8). Reported, with a loose gate.
+//  4. Fused parallel vs fused serial: must be bit-identical (fixed reduction order).
+
+namespace RcBench;
+
+public static unsafe class AttentionCheck
+{
+    public const double KernelTolerance = 1e-5;
+    public const double Int8RelativeGate = 0.02; // relative RMS error of int8 KV vs fp32, gate for A1.8
+
+    public static void Run()
+    {
+        Console.WriteLine("Attention numerical check (A1.9):");
+        Random rng = new Random(77);
+        int[] positions = { 0, 1, 1023, 1024, 4095, 8191, 16383 };
+        int maxPos = positions[^1];
+
+        using KvCache fp = new KvCache(KvMode.Fp32);
+        using KvCache i8 = new KvCache(KvMode.Int8);
+        float[] k = new float[KvHeads * HeadDim];
+        float[] v = new float[KvHeads * HeadDim];
+        for (int p = 0; p <= maxPos; p++)
+        {
+            Fill(rng, k, 1f);
+            Fill(rng, v, 1f);
+            fp.Write(0, p, k, v);
+            i8.Write(0, p, k, v);
+        }
+
+        float[] q = new float[Heads * HeadDim];
+        float[] refF = new float[q.Length], refI = new float[q.Length];
+        float[] outF = new float[q.Length], outI = new float[q.Length], outSerial = new float[q.Length];
+
+        foreach (int pos in positions)
+        {
+            // Scale queries so scores spread enough to exercise the softmax.
+            Fill(rng, q, 3f);
+            double errFused = 0, errInt8Kernel = 0, errInt8Quality = 0, refRms = 0, errRms = 0;
+            bool serialEqual = true;
+            fixed (float* qp = q)
+            fixed (float* rfp = refF)
+            fixed (float* rip = refI)
+            fixed (float* ofp = outF)
+            fixed (float* oip = outI)
+            fixed (float* osp = outSerial)
+            {
+                Attention.ScalarReference(fp, 0, pos, qp, rfp);
+                Attention.ScalarReference(i8, 0, pos, qp, rip);
+                Attention.Run(fp, 0, pos, qp, ofp, AttnKernel.FusedFp32, parallel: true);
+                Attention.Run(i8, 0, pos, qp, oip, AttnKernel.FusedInt8, parallel: true);
+                Attention.Run(fp, 0, pos, qp, osp, AttnKernel.FusedFp32, parallel: false);
+            }
+            for (int i = 0; i < q.Length; i++)
+            {
+                errFused = Math.Max(errFused, Math.Abs(outF[i] - refF[i]));
+                errInt8Kernel = Math.Max(errInt8Kernel, Math.Abs(outI[i] - refI[i]));
+                errInt8Quality = Math.Max(errInt8Quality, Math.Abs(refI[i] - refF[i]));
+                refRms += (double)refF[i] * refF[i];
+                double d = refI[i] - refF[i];
+                errRms += d * d;
+                if (BitConverter.SingleToInt32Bits(outF[i]) != BitConverter.SingleToInt32Bits(outSerial[i])) serialEqual = false;
+            }
+            double relRms = Math.Sqrt(errRms / Math.Max(refRms, 1e-30));
+            Console.WriteLine($"  pos {pos,6}: fused fp32 vs ref max abs {errFused:E2}; int8 kernel vs int8 ref {errInt8Kernel:E2}; " +
+                              $"int8 vs fp32 max abs {errInt8Quality:E2}, rel RMS {relRms:E2}; parallel==serial {serialEqual}");
+
+            if (errFused > KernelTolerance) throw new InvalidOperationException($"fused fp32 error {errFused:E3} at pos {pos}");
+            if (errInt8Kernel > KernelTolerance) throw new InvalidOperationException($"fused int8 error {errInt8Kernel:E3} at pos {pos}");
+            if (!serialEqual) throw new InvalidOperationException($"parallel and serial fused attention differ at pos {pos}");
+            if (relRms > Int8RelativeGate) throw new InvalidOperationException($"int8 KV relative RMS error {relRms:E3} at pos {pos} exceeds gate");
+        }
+        Console.WriteLine($"  kernel tolerance {KernelTolerance:E0}, int8 quality gate {Int8RelativeGate:P0} relative RMS: PASS");
+    }
+
+    private static void Fill(Random rng, float[] a, float scale)
+    {
+        for (int i = 0; i < a.Length; i++) a[i] = (float)((rng.NextDouble() * 2 - 1) * scale);
+    }
+}
